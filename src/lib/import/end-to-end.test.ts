@@ -38,6 +38,27 @@ describe('end-to-end ingestion of all reference workbooks', () => {
     expect(identified.length / rows.length).toBeGreaterThan(0.6);
   });
 
+  it('pins the measured block count and header/fingerprint split', async () => {
+    // Measured ground truth (not the brief's estimate): block detection
+    // under-segments 12 of the 19 sheets into a single block each, so the
+    // true total is 29, not ~50. 24 of those blocks carry a header row and
+    // get a fingerprint; the other 5 are headerless and always need manual
+    // mapping. Of the 24 fingerprints, exactly 20 are distinct — three are
+    // legitimately shared layouts. A regression that changes segmentation,
+    // header detection, or fingerprinting should fail here even if it
+    // happens to keep the sheet count and classification rate unchanged.
+    const rows = await db.select().from(blocks);
+    expect(rows).toHaveLength(29);
+
+    const withHeader = rows.filter((b) => b.headerRow !== null);
+    const withoutHeader = rows.filter((b) => b.headerRow === null);
+    expect(withHeader).toHaveLength(24);
+    expect(withoutHeader).toHaveLength(5);
+
+    const fingerprints = new Set(withHeader.map((b) => b.fingerprint));
+    expect(fingerprints.size).toBe(20);
+  });
+
   it('finds every archetype that the reference data actually contains', async () => {
     const rows = await db.select().from(blocks);
     const found = new Set(rows.map((b) => b.archetype));
