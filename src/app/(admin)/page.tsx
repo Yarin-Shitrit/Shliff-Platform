@@ -3,7 +3,7 @@ import Link from 'next/link';
 export default function OverviewPage() {
   return (
     <main>
-      <h1>קופת שליף</h1>
+      <h1>סקירה</h1>
       <p className="muted">
         ניהול הכספים של הקאמפ — תקציבים, אירועים, חובות וקיזוזים, במקום אחד.
       </p>
