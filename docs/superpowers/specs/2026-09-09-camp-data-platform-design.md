@@ -251,6 +251,22 @@ erDiagram
 
 Provenance columns (`source_block_id`, `source_cell_ref`, `origin`, `updated_by`, `updated_at`) sit on every canonical row.
 
+**Domain correction (2026-09-09, from the camp lead).** A year's camp budget is not an
+independent document: **`תקציב קאמפ ברן 26` is a forecast derived from the ברן 25 actuals plus
+buffers learned during that burn.** This reframes two things in the model above:
+
+- The rationale column is **derivation data, not commentary.** Entries like `תקציב ברן 25׳ בפועל`,
+  `תוספת של 70 ש״ח`, and `ירידה של 150 שקלים - יש ספיירים משנת 25׳` state which prior-year line a
+  forecast line came from and why it moved. `budget_line` therefore needs an explicit link to the
+  prior season's line (`derived_from_line_id`) and a `buffer_amount`, not just a free-text `note`.
+- The two conflicting `תקציב קאמפ ברן 26` revisions are most likely **successive revisions of one
+  forecast**, not two rival budgets. The revision model still holds, but the framing in §5 should
+  read as "which forecast revision is current" rather than "which budget is authoritative".
+
+Reconciliation that follows from this, and now verifiable: full ברן 25 actual 59,587 + net buffers
+4,788 = ברן 26 forecast 64,375. Six ברן 25 line items are not carried into 26 at all, and those
+must be surfaced, or the two totals cannot be reconciled against each other.
+
 **Recommendation:** Adopt as specified. Three consolidations are load-bearing and were chosen deliberately over the more granular alternative: merging people and suppliers into `party`, expressing loans/carry-overs/offsets as a transaction `kind`, and unifying three flavours of debt into `obligation`. Each reflects how the source data actually behaves rather than how a textbook ledger would model it. VAT is two columns on `budget_line` rather than its own table because only the `תקציב רחבה ברן 25` sheet uses it; if VAT spreads to other report types it should be promoted to its own table in a later phase.
 
 ### 5. Revision detection and conflict resolution
