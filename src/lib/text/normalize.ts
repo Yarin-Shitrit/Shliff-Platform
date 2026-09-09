@@ -1,7 +1,7 @@
 /** U+05F4 gershayim, U+201C/U+201D curly double quotes → ASCII `"`. */
 const DOUBLE_QUOTES = /[״“”"]/g;
 /** U+05F3 geresh, U+2018/U+2019 curly single quotes, U+02BC → ASCII `'`. */
-const SINGLE_QUOTES = /[׳‘’ʼ']/g;
+const SINGLE_QUOTES = /[׳’’ʼ]/g;
 /** Any run of whitespace including NBSP. */
 const WHITESPACE = /[\s ]+/g;
 
