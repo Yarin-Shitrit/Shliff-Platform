@@ -4078,6 +4078,104 @@ git add src/lib/import/seed.ts src/lib/import/seed.test.ts "src/app/(admin)/uplo
 git commit -m "feat: seed the historical workbooks into the database"
 ```
 
+---
+
+### Task 18: Unify token matching and recover slash-separated signal
+
+Two copies of the token-matching rule now exist: `src/lib/classify/rules.ts` (classification) and `src/lib/classify/match.ts` (column mapping). They were written separately, under separate fix rounds, to the same specification. Two independently-maintained copies of one rule drift, and when they do the failure is silent — the same term matches in classification but not in mapping.
+
+A corpus audit also showed the tokenizer discards real signal: single-word terms glued to a neighbour by `/` no longer match. Three live cases — `פירוט/תיאור תנועה`, `מזומן/אשראי`, `אתר ווייבז`.
+
+**Files:**
+- Modify: `src/lib/classify/match.ts` (becomes the single definition), `src/lib/classify/rules.ts` (imports it)
+- Test: `src/lib/classify/match.test.ts` (create), plus existing `rules.test.ts` and `map-columns.test.ts` must keep passing
+
+**Interfaces:**
+- Consumes: `normalizeHebrew`
+- Produces: `tokenize(text: string): Set<string>` and `termMatches(term: string, text: string): boolean` from `@/lib/classify/match`, used by both `rules.ts` and `map-columns.ts`
+
+- [ ] **Step 1: Write the failing test**
+
+Create `src/lib/classify/match.test.ts`:
+
+```ts
+import { describe, it, expect } from 'vitest';
+import { termMatches, tokenize } from '@/lib/classify/match';
+
+describe('tokenize', () => {
+  it('splits on whitespace', () => {
+    expect(tokenize('סוג הוצאה')).toEqual(new Set(['סוג', 'הוצאה']));
+  });
+
+  it('splits on a slash, which separates words in these sheets', () => {
+    expect(tokenize('מזומן/אשראי')).toEqual(new Set(['מזומן', 'אשראי']));
+    expect(tokenize('פירוט/תיאור תנועה')).toEqual(new Set(['פירוט', 'תיאור', 'תנועה']));
+  });
+
+  it('preserves internal quotes, which are part of the word', () => {
+    expect(tokenize('סה"כ')).toEqual(new Set(['סה"כ']));
+    expect(tokenize('עו"ש')).toEqual(new Set(['עו"ש']));
+  });
+
+  it('strips edge punctuation', () => {
+    expect(tokenize('(עו"ש)')).toEqual(new Set(['עו"ש']));
+    expect(tokenize('ספק,')).toEqual(new Set(['ספק']));
+  });
+});
+
+describe('termMatches', () => {
+  it('matches a single-word term only as a whole token', () => {
+    expect(termMatches('ביט', 'ביט')).toBe(true);
+    expect(termMatches('ביט', 'ביטים')).toBe(false);
+    expect(termMatches('שם', 'בושם')).toBe(false);
+    expect(termMatches('ספק', 'אספקה')).toBe(false);
+  });
+
+  it('recovers slash-glued terms', () => {
+    expect(termMatches('פירוט', 'פירוט/תיאור תנועה')).toBe(true);
+    expect(termMatches('מזומן', 'מזומן/אשראי')).toBe(true);
+  });
+
+  it('matches a multi-word term by substring', () => {
+    expect(termMatches('כמות יחידות', 'כמות יחידות בפועל')).toBe(true);
+  });
+
+  it('does not match a Hebrew conjunctive prefix glued to a term', () => {
+    // Deliberate: stripping single-letter prefixes would reintroduce the
+    // false-positive class that whole-token matching just eliminated.
+    expect(termMatches('וייבז', 'ווייבז')).toBe(false);
+  });
+});
+```
+
+- [ ] **Step 2: Run it and confirm it fails**
+
+Run: `./node_modules/.bin/vitest run src/lib/classify/match.test.ts`
+Expected: FAIL — the slash cases fail against the current tokenizer.
+
+- [ ] **Step 3: Add the slash separator in `match.ts`**
+
+Split on whitespace **and** `/`, keeping edge-punctuation stripping and internal punctuation intact. Do not strip Hebrew single-letter prefixes.
+
+- [ ] **Step 4: Make `rules.ts` import the shared definition**
+
+Delete `rules.ts`'s private `tokenize`/`matches` helpers and import `termMatches` from `@/lib/classify/match`. The two must not both define the rule.
+
+- [ ] **Step 5: Re-run every affected suite**
+
+```bash
+./node_modules/.bin/vitest run src/lib/classify/
+```
+
+Expected: `match`, `rules`, `map-columns` and `signature` suites all pass. Any classification change caused by the slash split must be explained in the report, not just accepted — name the block, the archetype before and after, and why the new answer is at least as correct.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/lib/classify/
+git commit -m "refactor: one tokenizer, and split on slashes to recover lost signal"
+```
+
 ## Definition of Done
 
 - [ ] `npm test` passes with no skipped tests
@@ -4090,6 +4188,7 @@ git commit -m "feat: seed the historical workbooks into the database"
 - [ ] The reference workbooks in `docs/reference-data/` are unmodified
 - [ ] The app reads as a **management site**: a persistent navigation shell where data exploration is one section among several, with member management and camp fees visible as planned sections rather than absent
 - [ ] The three historical workbooks can be seeded into the database from the UI, and seeding twice does not duplicate anything
+- [ ] Exactly one tokenizer definition exists, shared by classification and column mapping
 
 ## Follow-up plans
 
