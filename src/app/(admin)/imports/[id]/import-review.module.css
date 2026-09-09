@@ -1,13 +1,9 @@
+/*
+ * Page shell for the import-review screen. The black field and the 100vh it
+ * fills belong to the shared `(admin)` ground, not to this page; repeating
+ * them here stacked a second viewport height inside the first.
+ */
 .shell {
-  --ink: #000000;
-  --raised: #141210;
-  --line: #2b2724;
-  --sand: #f2ede6;
-  --dust: #98918a;
-  --gold: #eb7837;
-
-  min-block-size: 100vh;
-  background: var(--ink);
   color: var(--sand);
   padding-block-end: 5rem;
 }
@@ -61,8 +57,8 @@
   font-weight: 600;
   white-space: nowrap;
 }
-.badgeOk { color: var(--ink); background: var(--gold); }
-.badgeWarn { color: var(--gold); background: color-mix(in srgb, var(--gold) 18%, transparent); border: 1px solid color-mix(in srgb, var(--gold) 55%, transparent); }
+.badgeOk { color: var(--ground); background: var(--flare); }
+.badgeWarn { color: var(--flare); background: color-mix(in srgb, var(--flare) 18%, transparent); border: 1px solid color-mix(in srgb, var(--flare) 55%, transparent); }
 
 .tableWrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; margin-block-end: 0.9rem; }
 .tableWrap table { border-collapse: collapse; inline-size: 100%; font-size: 0.85rem; }
@@ -84,7 +80,7 @@
 .formLabel { color: var(--dust); font-size: 0.88rem; }
 
 .select {
-  background: var(--ink);
+  background: var(--ground);
   border: 1px solid var(--line);
   color: var(--sand);
   font: inherit;
@@ -92,13 +88,13 @@
   padding: 0.4rem 0.7rem;
   border-radius: 6px;
 }
-.select:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+.select:focus-visible { outline: 2px solid var(--flare); outline-offset: 1px; }
 
 .confirmButton {
   appearance: none;
-  border: 1px solid var(--gold);
-  background: var(--gold);
-  color: var(--ink);
+  border: 1px solid var(--flare);
+  background: var(--flare);
+  color: var(--ground);
   font: inherit;
   font-size: 0.9rem;
   font-weight: 600;
@@ -106,17 +102,17 @@
   border-radius: 6px;
   cursor: pointer;
 }
-.confirmButton:hover { background: color-mix(in srgb, var(--gold) 88%, black); }
+.confirmButton:hover { background: color-mix(in srgb, var(--flare) 88%, var(--ground)); }
 .confirmButton:disabled { cursor: progress; opacity: 0.6; }
 .confirmButton:focus-visible { outline: 2px solid var(--sand); outline-offset: 2px; }
 
-.confirmedNote { color: var(--gold); font-size: 0.85rem; margin-inline-start: auto; }
+.confirmedNote { color: var(--flare); font-size: 0.85rem; margin-inline-start: auto; }
 .errorNote {
   flex-basis: 100%;
-  color: var(--gold);
+  color: var(--flare);
   font-size: 0.85rem;
-  border: 1px solid color-mix(in srgb, var(--gold) 55%, transparent);
-  background: color-mix(in srgb, var(--gold) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--flare) 55%, transparent);
+  background: color-mix(in srgb, var(--flare) 12%, transparent);
   border-radius: 6px;
   padding: 0.4rem 0.7rem;
 }

@@ -1,42 +1,11 @@
+/*
+ * Page shell for /data. The black field and the 100vh it fills belong to the
+ * shared `(admin)` ground, not to this page; repeating them here stacked a
+ * second viewport height inside the first.
+ */
 .shell {
-  /* Camp brand: the logo is pure black, #EB7837 orange, and white. The palette
-     is held to those three so the orange stays the only loud thing on screen. */
-  --ink: #000000;
-  --raised: #141210;
-  --line: #2b2724;
-  --sand: #f2ede6;
-  --dust: #98918a;
-  --flare: #eb7837;
-  --gold: #eb7837;
-  --mint: #f2ede6;
-
-  min-block-size: 100vh;
-  background: var(--ink);
   color: var(--sand);
   padding-block-end: 5rem;
-}
-
-.bar {
-  position: sticky;
-  inset-block-start: 0;
-  z-index: 10;
-  display: flex;
-  align-items: baseline;
-  gap: 1.5rem;
-  flex-wrap: wrap;
-  padding: 1rem 2rem;
-  background: color-mix(in srgb, var(--ink) 92%, transparent);
-  backdrop-filter: blur(8px);
-  border-block-end: 1px solid var(--line);
-}
-
-.brand { display: flex; align-items: center; gap: 0.6rem; }
-.mark { inline-size: 1.9rem; block-size: 1.9rem; }
-.wordmark {
-  font-family: var(--font-display), Georgia, serif;
-  font-size: 1.3rem;
-  font-weight: 500;
-  letter-spacing: 0.01em;
 }
 
 .years { display: flex; gap: 0.25rem; margin-inline-start: auto; }
@@ -54,11 +23,11 @@
 }
 .year:hover { color: var(--sand); }
 .year[aria-pressed='true'] {
-  color: var(--ink);
+  color: var(--ground);
   background: var(--sand);
   font-weight: 600;
 }
-.year:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.year:focus-visible { outline: 2px solid var(--flare); outline-offset: 2px; }
 
 .page { max-inline-size: 74rem; margin-inline: auto; padding-inline: 2rem; }
 
@@ -119,7 +88,7 @@
   min-inline-size: 14rem;
 }
 .search::placeholder { color: var(--dust); }
-.search:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+.search:focus-visible { outline: 2px solid var(--flare); outline-offset: 1px; }
 
 .toggle {
   appearance: none;
@@ -132,8 +101,8 @@
   border-radius: 6px;
   cursor: pointer;
 }
-.toggle[aria-pressed='true'] { color: var(--ink); background: var(--gold); border-color: var(--gold); font-weight: 600; }
-.toggle:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.toggle[aria-pressed='true'] { color: var(--ground); background: var(--flare); border-color: var(--flare); font-weight: 600; }
+.toggle:focus-visible { outline: 2px solid var(--flare); outline-offset: 2px; }
 
 .tableWrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
 .tableWrap table { border-collapse: collapse; inline-size: 100%; font-size: 0.92rem; }
@@ -162,7 +131,7 @@
 
 .flag {
   border: 1px solid var(--line);
-  border-inline-start: 3px solid var(--gold);
+  border-inline-start: 3px solid var(--flare);
   border-radius: 6px;
   background: var(--raised);
   padding: 1rem 1.2rem;
@@ -187,7 +156,7 @@
   text-align: start;
 }
 .sheetHead:hover { background: color-mix(in srgb, var(--raised) 70%, var(--sand) 6%); }
-.sheetHead:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+.sheetHead:focus-visible { outline: 2px solid var(--flare); outline-offset: -2px; }
 .sheetName { font-weight: 600; }
 .sheetMeta { color: var(--dust); font-size: 0.85rem; margin-inline-start: auto; }
 .chev { color: var(--dust); transition: transform 0.18s ease; }

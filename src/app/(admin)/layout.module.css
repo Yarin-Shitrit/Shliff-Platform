@@ -1,5 +1,11 @@
+/**
+ * The shared admin ground. It owns the full-viewport black field and the body
+ * colour for every page under `(admin)`, so the page shells nested inside it
+ * must not repeat either — nesting a second `min-block-size: 100vh` inside
+ * this one forces 100vh plus the nav height on every page.
+ */
 .ground {
   min-block-size: 100vh;
-  background: #000000;
-  color: #f2ede6;
+  background: var(--ground);
+  color: var(--sand);
 }
