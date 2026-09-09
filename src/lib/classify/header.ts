@@ -36,6 +36,10 @@ function countRow(grid: SheetGrid, range: CellRange, row: number): RowCounts {
       continue;
     }
 
+    // Approximates "same merge range" as "adjacent, both merged, equal text" —
+    // there is no merge-range id on Cell to check directly, so two separately
+    // merged regions that happen to sit adjacent with identical text would be
+    // undercounted by one. Contrived, and absent from every known fixture.
     const isMergeContinuation = cell.isMerged && prevMerged && cell.text === prevText;
     if (!isMergeContinuation) {
       if (parseNumber(cell.value) === null) textCells += 1;
@@ -89,4 +93,29 @@ export function findHeaderRow(grid: SheetGrid, range: CellRange): number | null 
   }
 
   return best?.row ?? null;
+}
+
+/**
+ * Rightmost column of the leading contiguous run of non-blank cells in
+ * `headerRow`, starting at `range.left`. Falls back to `range.right` (the
+ * full range) when that run is empty, i.e. the very first header cell is
+ * itself blank — there is nothing meaningful to trim to.
+ *
+ * Mirrors `layoutFingerprint`'s definition of this run in `signature.ts`
+ * exactly (down to the same fallback), because a stored mapping must never
+ * disagree with the layout signature it was matched against: two blocks
+ * sharing a fingerprint must be layouts the same mapping fits. `detectBlocks`
+ * can bolt an unrelated table onto the right of a real one when a populated
+ * "notes" column prevents an empty-column cut — e.g. the ברן 26 budget block
+ * gains a trailing payment-tracker table in one workbook but not another —
+ * and this keeps that extra table's columns out of both the fingerprint and
+ * the mapping.
+ */
+export function headerRunEnd(grid: SheetGrid, range: CellRange, headerRow: number): number {
+  let col = range.left;
+  while (col <= range.right && (grid.cells[headerRow - 1]?.[col - 1]?.text ?? '') !== '') {
+    col += 1;
+  }
+  const runEnd = col - 1;
+  return runEnd >= range.left ? runEnd : range.right;
 }

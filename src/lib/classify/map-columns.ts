@@ -2,7 +2,8 @@ import type { SheetGrid } from '@/lib/xlsx/types';
 import type { CellRange } from '@/lib/blocks/types';
 import type { BlockArchetype } from './types';
 import { normalizeHebrew } from '@/lib/text/normalize';
-import { findHeaderRow } from './header';
+import { findHeaderRow, headerRunEnd } from './header';
+import { termMatches } from './match';
 
 export { findHeaderRow };
 
@@ -78,6 +79,16 @@ const FIELD_TERMS: Partial<Record<BlockArchetype, Record<string, string[]>>> = {
  * Matching is per column and order-independent, so the same archetype maps
  * correctly whether quantity precedes price (Gagarin) or follows it (Collabo).
  * A longer matching term wins over a shorter one, so "מחיר כרטיס" beats "מחיר".
+ * A single-word term must match a whole token of the header, never a mere
+ * substring (see match.ts) — otherwise e.g. "שם" would false-match inside
+ * "בושם". A multi-word term still matches as a substring of the header.
+ *
+ * Only the leading contiguous run of non-blank header cells is scanned — the
+ * same run signature.ts's layoutFingerprint hashes — so a block that
+ * detectBlocks bolted an unrelated table onto (e.g. the 2026 budget block's
+ * trailing payment-tracker columns) never has fields invented from that
+ * unrelated table, and a mapping always fits every block sharing its
+ * fingerprint.
  */
 export function mapColumns(
   grid: SheetGrid,
@@ -90,8 +101,9 @@ export function mapColumns(
 
   const mappings: ColumnMapping[] = [];
   const claimed = new Set<string>();
+  const lastCol = headerRunEnd(grid, range, headerRow);
 
-  for (let col = range.left; col <= range.right; col += 1) {
+  for (let col = range.left; col <= lastCol; col += 1) {
     const raw = grid.cells[headerRow - 1]?.[col - 1]?.text ?? '';
     if (raw === '') continue;
     const header = normalizeHebrew(raw).toLowerCase();
@@ -104,7 +116,7 @@ export function mapColumns(
       if (claimed.has(field)) continue;
       for (const candidate of candidates) {
         const needle = normalizeHebrew(candidate).toLowerCase();
-        if (header.includes(needle) && needle.length > bestLength) {
+        if (needle.length > bestLength && termMatches(header, candidate)) {
           bestField = field;
           bestTerm = needle;
           bestLength = needle.length;

@@ -3,7 +3,7 @@ import { extractWorkbook } from '@/lib/xlsx/extract';
 import { detectBlocks } from '@/lib/blocks/detect';
 import { mapColumns, findHeaderRow } from '@/lib/classify/map-columns';
 import type { CellRange } from '@/lib/blocks/types';
-import type { SheetGrid } from '@/lib/xlsx/types';
+import type { Cell, SheetGrid } from '@/lib/xlsx/types';
 import { FIXTURES, fixtureBuffer } from '@/test/fixtures';
 
 function blockAt(blocks: CellRange[], row: number, col: number): CellRange {
@@ -12,6 +12,25 @@ function blockAt(blocks: CellRange[], row: number, col: number): CellRange {
   );
   if (!found) throw new Error(`no block at r${row}c${col}`);
   return found;
+}
+
+/** Builds a minimal single-block SheetGrid from a row-major grid of cell text,
+ * for tests that need precise control over exactly what text is present
+ * rather than depending on fixture content. */
+function buildGrid(rows: string[][]): SheetGrid {
+  const rowCount = rows.length;
+  const colCount = rows.reduce((max, row) => Math.max(max, row.length), 0);
+  const cells: Cell[][] = rows.map((row, r) =>
+    Array.from({ length: colCount }, (_, c): Cell => {
+      const text = row[c] ?? '';
+      return { row: r + 1, col: c + 1, value: text === '' ? null : text, text, isMerged: false };
+    }),
+  );
+  return { name: 'synthetic', index: 0, rowCount, colCount, cells };
+}
+
+function fullRange(grid: SheetGrid): CellRange {
+  return { top: 1, left: 1, bottom: grid.rowCount, right: grid.colCount };
 }
 
 describe('mapColumns', () => {
@@ -92,5 +111,56 @@ describe('mapColumns', () => {
       ],
     };
     expect(findHeaderRow(grid, { top: 1, left: 1, bottom: 2, right: 2 })).toBeNull();
+  });
+
+  describe('single-word term matching', () => {
+    it('does not let a single-word FIELD_TERMS entry match as a substring of an unrelated word', () => {
+      // 'שם' (member_dues.person, obligations.party) must not match inside
+      // 'בושם' ("perfume"); 'ספק' (event_lines.supplier) must not match
+      // inside 'אספקה' ("supply"). Under plain substring matching both
+      // would false-positive.
+      const grid = buildGrid([
+        ['בושם', 'אספקה'],
+        ['100', '200'],
+      ]);
+
+      const memberDues = mapColumns(grid, fullRange(grid), 'member_dues');
+      expect(memberDues.mappings.find((m) => m.field === 'person')).toBeUndefined();
+
+      const eventLines = mapColumns(grid, fullRange(grid), 'event_lines');
+      expect(eventLines.mappings.find((m) => m.field === 'supplier')).toBeUndefined();
+    });
+
+    it('still matches a single-word FIELD_TERMS entry as a standalone token', () => {
+      const grid = buildGrid([
+        ['שם', 'ספק'],
+        ['100', '200'],
+      ]);
+
+      const memberDues = mapColumns(grid, fullRange(grid), 'member_dues');
+      expect(memberDues.mappings.find((m) => m.field === 'person')?.column).toBe(1);
+
+      const eventLines = mapColumns(grid, fullRange(grid), 'event_lines');
+      expect(eventLines.mappings.find((m) => m.field === 'supplier')?.column).toBe(2);
+    });
+  });
+
+  describe('header run alignment', () => {
+    it('maps only the columns in the leading contiguous run of non-blank header cells', () => {
+      // Column 3's header is blank, so column 4 sits outside the header run
+      // signature.ts's layoutFingerprint hashes — mapColumns must not map it
+      // either, even though its text ("הכנסות") would otherwise match.
+      const grid = buildGrid([
+        ['תאריך', 'הוצאות', '', 'הכנסות'],
+        ['100', '5000', '', '3000'],
+      ]);
+      const { mappings } = mapColumns(grid, fullRange(grid), 'ledger');
+      const field = (col: number) => mappings.find((m) => m.column === col)?.field;
+
+      expect(field(1)).toBe('date');
+      expect(field(2)).toBe('outflow');
+      expect(field(4)).toBeUndefined();
+      expect(mappings).toHaveLength(2);
+    });
   });
 });
