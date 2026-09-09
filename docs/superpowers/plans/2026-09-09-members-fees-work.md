@@ -748,6 +748,24 @@ describe('resolveName', () => {
     expect(result.candidates[0].exact).toBe(false);
   });
 
+  /**
+   * Hebrew has no regex word boundary, and naive substring matching is what
+   * bit the Phase 1 classifier (`ביט` inside `ביטים`, `בר` inside `ברגים`).
+   * Both pairs below are real: all four names appear in the workbooks.
+   */
+  it('does not match a name that is merely a substring of another', async () => {
+    await personWithAlias('נטלי', 'נטלי');
+    await personWithAlias('עמירם דהן', 'עמירם דהן');
+
+    // טלי is inside נטלי; עמי is inside עמירם. Neither is a match.
+    expect(await resolveName(db, 'טלי')).toMatchObject({
+      personId: null, candidates: [],
+    });
+    expect(await resolveName(db, 'עמי')).toMatchObject({
+      personId: null, candidates: [],
+    });
+  });
+
   it('returns nothing at all for an unknown name', async () => {
     await personWithAlias('יוסף', 'יוסף');
     const result = await resolveName(db, 'עמירם דהן');
@@ -910,7 +928,7 @@ export async function listUnlinkedNames(db: AnyDb): Promise<UnlinkedName[]> {
 - [ ] **Step 4: Run it and watch it pass**
 
 Run: `npx vitest run src/lib/members/identity.test.ts`
-Expected: PASS, 8 tests.
+Expected: PASS, 9 tests.
 
 - [ ] **Step 5: Commit**
 
