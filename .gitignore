@@ -29,8 +29,9 @@ out/
 # Excel lock files
 ~$*.xlsx
 
-# Local uploads / generated artifacts
+# Local uploads / generated artifacts (real camp financial workbooks — never commit)
 /uploads/
+.uploads/
 /tmp/
 coverage/
 
@@ -40,4 +41,3 @@ coverage/
 
 # Playwright MCP artifacts from live verification
 .playwright-mcp/
-*.png
