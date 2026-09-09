@@ -118,4 +118,31 @@ describe('parseDate', () => {
     expect(parsed.ok).toBe(true);
     expect(parsed.date?.getUTCFullYear()).toBe(2025);
   });
+
+  it('rejects calendar-invalid dates instead of rolling them into the next month', () => {
+    const day31Feb = parseDate('31/02/2024');
+    expect(day31Feb.ok).toBe(false);
+    expect(day31Feb.date).toBeNull();
+    expect(day31Feb.raw).toBe('31/02/2024');
+
+    const month13 = parseDate('13/13/2024');
+    expect(month13.ok).toBe(false);
+    expect(month13.date).toBeNull();
+
+    const day32 = parseDate('32/01/2024');
+    expect(day32.ok).toBe(false);
+    expect(day32.date).toBeNull();
+
+    const isoFeb30 = parseDate('2025-02-30');
+    expect(isoFeb30.ok).toBe(false);
+    expect(isoFeb30.date).toBeNull();
+  });
+
+  it('still parses a valid leap-day date', () => {
+    const parsed = parseDate('29/02/2024');
+    expect(parsed.ok).toBe(true);
+    expect(parsed.date?.getUTCFullYear()).toBe(2024);
+    expect(parsed.date?.getUTCMonth()).toBe(1);
+    expect(parsed.date?.getUTCDate()).toBe(29);
+  });
 });
