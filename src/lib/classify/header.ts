@@ -1,6 +1,7 @@
 import type { SheetGrid } from '@/lib/xlsx/types';
 import type { CellRange } from '@/lib/blocks/types';
 import { parseNumber } from '@/lib/coerce/number';
+import { normalizeHebrew } from '@/lib/text/normalize';
 
 /** How many leading rows may be considered as the header. */
 const MAX_HEADER_SCAN = 3;
@@ -101,6 +102,12 @@ export function findHeaderRow(grid: SheetGrid, range: CellRange): number | null 
  * full range) when that run is empty, i.e. the very first header cell is
  * itself blank — there is nothing meaningful to trim to.
  *
+ * Blankness is judged on the cell text after `normalizeHebrew`, not the raw
+ * text: a header cell holding only a directional mark (LRM/RLM, common in
+ * this corpus) or bare whitespace normalizes to `''` and must terminate the
+ * run exactly as an actually-empty cell does, or a stray mark could silently
+ * pull an unrelated block's columns into the run.
+ *
  * Mirrors `layoutFingerprint`'s definition of this run in `signature.ts`
  * exactly (down to the same fallback), because a stored mapping must never
  * disagree with the layout signature it was matched against: two blocks
@@ -113,7 +120,9 @@ export function findHeaderRow(grid: SheetGrid, range: CellRange): number | null 
  */
 export function headerRunEnd(grid: SheetGrid, range: CellRange, headerRow: number): number {
   let col = range.left;
-  while (col <= range.right && (grid.cells[headerRow - 1]?.[col - 1]?.text ?? '') !== '') {
+  while (col <= range.right) {
+    const text = grid.cells[headerRow - 1]?.[col - 1]?.text ?? '';
+    if (normalizeHebrew(text) === '') break;
     col += 1;
   }
   const runEnd = col - 1;
