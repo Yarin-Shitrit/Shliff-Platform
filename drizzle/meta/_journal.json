@@ -8,6 +8,13 @@
       "when": 1788976971815,
       "tag": "0000_burly_red_skull",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788978441507,
+      "tag": "0001_silent_prism",
+      "breakpoints": true
     }
   ]
 }
