@@ -3,7 +3,7 @@
 A digital platform for organizing MidBurn camp data — replacing the ad-hoc Excel/CSV
 workflow used to track camp finances, events, budgets and members.
 
-Status: **design phase**. See `docs/superpowers/specs/` for the design specification.
+Status: **design phase**. See [the Phase 1 design spec](docs/superpowers/specs/2026-09-09-camp-data-platform-design.md).
 
 ## Repository layout
 
