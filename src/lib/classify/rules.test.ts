@@ -3,8 +3,27 @@ import { extractWorkbook } from '@/lib/xlsx/extract';
 import { detectBlocks } from '@/lib/blocks/detect';
 import { classifyBlock } from '@/lib/classify/rules';
 import type { CellRange } from '@/lib/blocks/types';
-import type { SheetGrid } from '@/lib/xlsx/types';
+import type { Cell, SheetGrid } from '@/lib/xlsx/types';
 import { FIXTURES, fixtureBuffer } from '@/test/fixtures';
+
+/** Builds a minimal single-block SheetGrid from a row-major grid of cell text,
+ * for tests that need precise control over exactly what text is present
+ * rather than depending on fixture content. */
+function buildGrid(rows: string[][]): SheetGrid {
+  const rowCount = rows.length;
+  const colCount = rows.reduce((max, row) => Math.max(max, row.length), 0);
+  const cells: Cell[][] = rows.map((row, r) =>
+    Array.from({ length: colCount }, (_, c): Cell => {
+      const text = row[c] ?? '';
+      return { row: r + 1, col: c + 1, value: text === '' ? null : text, text, isMerged: false };
+    }),
+  );
+  return { name: 'synthetic', index: 0, rowCount, colCount, cells };
+}
+
+function fullRange(grid: SheetGrid): CellRange {
+  return { top: 1, left: 1, bottom: grid.rowCount, right: grid.colCount };
+}
 
 function blockAt(blocks: CellRange[], row: number, col: number): CellRange {
   const found = blocks.find(
@@ -79,5 +98,49 @@ describe('classifyBlock', () => {
     const result = classifyBlock(summary, blockAt(detectBlocks(summary), 1, 1));
     expect(result.confidence).toBeGreaterThanOrEqual(0);
     expect(result.confidence).toBeLessThanOrEqual(1);
+  });
+
+  describe('single-word term matching', () => {
+    it('does not let a single-word term match as a substring of an unrelated word', () => {
+      // 'ביט' (income_channels, weight 3) must not match inside 'ביטים'
+      // ("drill bits"); 'בר' (weight 1) must not match inside 'ברגים'
+      // ("screws") or 'חבר' ("member"). Under plain substring matching all
+      // three would false-positive.
+      const grid = buildGrid([['ביטים', 'ברגים', 'חבר']]);
+      const result = classifyBlock(grid, fullRange(grid));
+      expect(result.scores.income_channels).toBe(0);
+    });
+
+    it('still matches a single-word term as a standalone token', () => {
+      const grid = buildGrid([['ביט', 'תיאור', 'סכום']]);
+      const result = classifyBlock(grid, fullRange(grid));
+      expect(result.scores.income_channels).toBeGreaterThan(0);
+      expect(result.archetype).toBe('income_channels');
+    });
+  });
+
+  describe('confidence calibration', () => {
+    it('keeps confidence below the pre-confirm threshold for a single weak signal', () => {
+      // 'פירוט' alone (ledger, weight 1): uncontested, but almost no evidence.
+      const grid = buildGrid([['פירוט']]);
+      const result = classifyBlock(grid, fullRange(grid));
+      expect(result.archetype).toBe('ledger');
+      expect(result.confidence).toBeLessThan(0.5);
+    });
+
+    it('keeps confidence below the pre-confirm threshold when the top two archetypes tie', () => {
+      // 'פירוט' (ledger, weight 1) vs 'שולם' (event_lines, weight 1): exact tie.
+      const grid = buildGrid([['פירוט', 'שולם']]);
+      const result = classifyBlock(grid, fullRange(grid));
+      expect(result.confidence).toBeLessThan(0.5);
+    });
+
+    it('reaches the pre-confirm threshold when corroborating signals dominate', () => {
+      // ledger: תאריך(3) + תיאור תנועה(4) + הוצאות(1) = 8, uncontested.
+      const grid = buildGrid([['תאריך', 'תיאור תנועה', 'הוצאות']]);
+      const result = classifyBlock(grid, fullRange(grid));
+      expect(result.archetype).toBe('ledger');
+      expect(result.confidence).toBeGreaterThanOrEqual(0.5);
+    });
   });
 });

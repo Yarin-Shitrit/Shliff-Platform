@@ -67,14 +67,15 @@ export const LEXICON: Record<Exclude<BlockArchetype, 'unknown'>, Signal[]> = {
     { term: 'ביט', weight: 3 },
     { term: 'מזומן', weight: 2 },
     { term: 'הכנסות', weight: 2 },
-    // Dropped 'בר' (weight 1, "bar"/beverage sales): a bare two-letter
-    // substring that false-matches inside common unrelated words (ברגים
-    // "screws", חבר "member", כבר "already", עבר "past"...). It contributed
-    // just enough, combined with 'ביט' false-matching inside ביטים ("drill
-    // bits") on an unrelated supply list, to push a vendor-expense block
-    // above the confidence threshold as a wrongly-confident income_channels
-    // guess. Its true-positive value was marginal next to its false-positive
-    // rate, so it is removed rather than reweighted.
+    // 'בר' ("bar"/beverage sales) was previously dropped because, under
+    // plain substring matching, this bare two-letter term false-matched
+    // inside common unrelated words (ברגים "screws", חבר "member", כבר
+    // "already"...) — combined with 'ביט' false-matching inside ביטים
+    // ("drill bits"), it pushed an unrelated vendor-expense block to a
+    // confident income_channels guess. rules.ts now requires single-word
+    // terms to match a whole token rather than a substring, which makes both
+    // terms safe again, so both are restored at their original weights.
+    { term: 'בר', weight: 1 },
   ],
   member_dues: [
     { term: 'דמי קאמפ', weight: 5 },
