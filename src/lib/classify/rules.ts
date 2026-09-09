@@ -1,6 +1,7 @@
 import type { SheetGrid } from '@/lib/xlsx/types';
 import type { CellRange } from '@/lib/blocks/types';
 import { normalizeHebrew } from '@/lib/text/normalize';
+import { termMatches } from './match';
 import { LEXICON } from './lexicon';
 import {
   BLOCK_ARCHETYPES,
@@ -12,30 +13,11 @@ import {
 /** How many leading rows of a block count as potential headers. */
 const HEADER_ROWS = 3;
 
-/** Leading/trailing characters stripped off a token before comparing it to a
- * single-word lexicon term. Only letters and digits survive at the edges, so
- * `סה"כ` and `עו"ש` keep their *internal* punctuation (they are never split,
- * since we only ever strip the leading and trailing run), while a token like
- * `(1000)` or `שולם.` loses its wrapping punctuation. */
-const EDGE_PUNCTUATION = /^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu;
-
-/**
- * Splits normalized cell text into whole words for single-word lexicon
- * matching. Splits on whitespace ONLY — never on internal punctuation — so
- * `סה"כ קיזוז` yields the two tokens `סה"כ` and `קיזוז`, not four fragments.
- */
-function tokenize(text: string): string[] {
-  return text
-    .split(/\s+/)
-    .map((token) => token.replace(EDGE_PUNCTUATION, ''))
-    .filter((token) => token !== '');
-}
-
 interface Candidates {
-  /** Normalized, lowercased full cell text — used for multi-word (phrase) matching. */
+  /** Normalized, lowercased full cell text — one entry per candidate cell,
+   * used for both phrase (multi-word) and token (single-word) matching via
+   * `termMatches`. */
   texts: string[];
-  /** Whole tokens out of every candidate cell — used for single-word matching. */
-  tokens: Set<string>;
 }
 
 /**
@@ -45,13 +27,10 @@ interface Candidates {
  */
 function candidateText(grid: SheetGrid, range: CellRange): Candidates {
   const texts: string[] = [];
-  const tokens = new Set<string>();
 
   const addCell = (raw: string): void => {
     if (raw === '') return;
-    const normalized = normalizeHebrew(raw).toLowerCase();
-    texts.push(normalized);
-    for (const token of tokenize(normalized)) tokens.add(token);
+    texts.push(normalizeHebrew(raw).toLowerCase());
   };
 
   const lastHeaderRow = Math.min(range.bottom, range.top + HEADER_ROWS - 1);
@@ -65,27 +44,16 @@ function candidateText(grid: SheetGrid, range: CellRange): Candidates {
     addCell(grid.cells[row - 1]?.[range.left - 1]?.text ?? '');
   }
 
-  return { texts, tokens };
+  return { texts };
 }
 
 /**
- * Whether a lexicon term is found among the block's candidate text.
- *
- * Single-word terms (no space, e.g. `חוב`, `ביט`) must equal a whole token —
- * plain substring matching let short Hebrew roots false-match inside
- * unrelated words (`ביט` inside `ביטים` "drill bits", `בר` inside `ברגים`
- * "screws" or `חבר` "member"). Multi-word terms (e.g. `כמות יחידות`) keep
- * substring matching against the full cell text: they are long enough that
- * accidental containment is not a realistic risk, and splitting them into
- * tokens would require the words to be adjacent-and-exact anyway.
+ * Whether a lexicon term is found among the block's candidate text, using the
+ * shared matching rule from `match.ts` (see its docs for why single-word
+ * terms must equal a whole token rather than matching as a substring).
  */
 function matches(candidates: Candidates, term: string): boolean {
-  const needle = normalizeHebrew(term).toLowerCase();
-  if (needle.includes(' ')) {
-    return candidates.texts.some((text) => text.includes(needle));
-  }
-  const [needleToken] = tokenize(needle);
-  return needleToken !== undefined && candidates.tokens.has(needleToken);
+  return candidates.texts.some((text) => termMatches(term, text));
 }
 
 function emptyScores(): Record<BlockArchetype, number> {

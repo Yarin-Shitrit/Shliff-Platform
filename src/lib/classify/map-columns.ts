@@ -116,7 +116,7 @@ export function mapColumns(
       if (claimed.has(field)) continue;
       for (const candidate of candidates) {
         const needle = normalizeHebrew(candidate).toLowerCase();
-        if (needle.length > bestLength && termMatches(header, candidate)) {
+        if (needle.length > bestLength && termMatches(candidate, header)) {
           bestField = field;
           bestTerm = needle;
           bestLength = needle.length;
