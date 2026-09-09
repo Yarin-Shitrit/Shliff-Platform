@@ -4,9 +4,17 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { users } from '@/db/schema/auth';
 import { verifyPassword } from './password';
+import { authConfig } from './edge-config';
 
+/**
+ * Node-runtime NextAuth instance. Spreads the edge-safe shared config
+ * (session shape, `authorized`/jwt/session callbacks, sign-in page) and adds
+ * the Credentials provider, whose `authorize` needs the database and argon2
+ * — neither of which the Edge runtime supports. Used by route handlers,
+ * server actions, and `guard.ts`; never by `src/middleware.ts`.
+ */
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  session: { strategy: 'jwt' },
+  ...authConfig,
   providers: [
     Credentials({
       credentials: { email: {}, password: {} },
@@ -23,16 +31,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-  callbacks: {
-    jwt({ token, user }) {
-      if (user) token.role = (user as { role?: string }).role;
-      return token;
-    },
-    session({ session, token }) {
-      if (session.user) {
-        (session.user as { role?: string }).role = token.role as string | undefined;
-      }
-      return session;
-    },
-  },
 });
