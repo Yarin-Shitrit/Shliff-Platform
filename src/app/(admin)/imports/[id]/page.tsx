@@ -47,7 +47,7 @@ export default async function ImportReviewPage(
     <div className={styles.shell}>
       <div className={styles.page}>
         <section className={styles.hero}>
-          <h1 className={styles.title}>סקירת ייבוא — {upload.filename}</h1>
+          <h1 className={styles.title}>סקירת ייבוא — <bdi>{upload.filename}</bdi></h1>
           <p className={styles.summary}>
             <strong>{rows.length}</strong> טבלאות זוהו · <strong>{reviewCount}</strong> דורשות בדיקה
           </p>

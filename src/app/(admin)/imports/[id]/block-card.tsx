@@ -95,7 +95,7 @@ export function BlockCard(props: BlockCardProps) {
     <section className={styles.card}>
       <div className={styles.cardHead}>
         <h2 className={styles.sheetName}>{props.sheetName}</h2>
-        <span className={styles.range}>{range}</span>
+        <span className={styles.range}><bdi>{range}</bdi></span>
       </div>
 
       <div className={styles.meta}>
@@ -129,9 +129,11 @@ export function BlockCard(props: BlockCardProps) {
       {props.columnMap.length > 0 ? (
         <p className={styles.mapping}>
           עמודות:{' '}
-          {props.columnMap
-            .map((m) => `${colLabel(m.column)} → ${m.field}`)
-            .join(' · ')}
+          <bdi>
+            {props.columnMap
+              .map((m) => `${colLabel(m.column)} → ${m.field}`)
+              .join(' · ')}
+          </bdi>
         </p>
       ) : (
         <p className={styles.mapping}>לא זוהו עמודות באופן אוטומטי.</p>
@@ -164,8 +166,10 @@ export function BlockCard(props: BlockCardProps) {
         </button>
         {props.confirmedBy ? (
           <span className={styles.confirmedNote}>
-            אושר ע״י {props.confirmedBy}
-            {props.confirmedAt ? ` · ${formatConfirmedAt(props.confirmedAt)}` : ''}
+            אושר ע״י <bdi>{props.confirmedBy}</bdi>
+            {props.confirmedAt ? (
+              <> · <bdi>{formatConfirmedAt(props.confirmedAt)}</bdi></>
+            ) : null}
           </span>
         ) : null}
         {error ? <p className={styles.errorNote}>{error}</p> : null}

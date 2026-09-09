@@ -80,7 +80,7 @@ export function DataExplorer({
             <div className={styles.spineItem}>
               <span className={styles.spineLabel}>הפרש</span>
               <span className={`${styles.spineValue} ${shift > 0 ? styles.up : styles.down}`}>
-                {shift > 0 ? '+' : ''}{ils(shift)}
+                <bdi>{shift > 0 ? '+' : ''}{ils(shift)}</bdi>
               </span>
             </div>
             <span className={styles.spineArrow} aria-hidden="true">←</span>
@@ -136,7 +136,9 @@ export function DataExplorer({
                       <td className={styles.num}>{ils(row.forecast)}</td>
                       <td className={`${styles.bufferCell} ${tone}`}>
                         <span className={styles.num} style={{ display: 'block' }}>
-                          {row.forecast === null ? 'ירד' : row.buffer === null ? 'סעיף חדש' : `${row.buffer > 0 ? '+' : ''}${Math.round(row.buffer).toLocaleString('he-IL')}`}
+                          {row.forecast === null ? 'ירד' : row.buffer === null ? 'סעיף חדש' : (
+                            <bdi>{row.buffer > 0 ? '+' : ''}{Math.round(row.buffer).toLocaleString('he-IL')}</bdi>
+                          )}
                         </span>
                         {row.buffer ? (
                           <span
@@ -226,14 +228,14 @@ export function DataExplorer({
                   <span className={`${styles.chev} ${isOpen ? styles.chevOpen : ''}`} aria-hidden="true">›</span>
                   <span className={styles.sheetName}>{sheet.name}</span>
                   <span className={styles.sheetMeta}>
-                    {sheet.blocks.length} טבלאות · {sheet.rowCount}×{sheet.colCount}
+                    {sheet.blocks.length} טבלאות · <bdi>{sheet.rowCount}×{sheet.colCount}</bdi>
                   </span>
                 </button>
                 {isOpen && (
                   <div className={styles.sheetBody}>
                     {sheet.blocks.map((block) => (
                       <div key={block.label}>
-                        <p className={styles.blockLabel}>{block.label} · {block.totalRows} שורות</p>
+                        <p className={styles.blockLabel}><bdi>{block.label}</bdi> · {block.totalRows} שורות</p>
                         <div className={styles.tableWrap}>
                           <table className={styles.grid}>
                             <tbody>
