@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { createTestDb, type TestDb } from '@/test/db';
-import { uploads, sheets, blocks, layoutSignatures } from '@/db/schema/source';
+import {
+  uploads, sheets, blocks, blockMappings, layoutSignatures,
+} from '@/db/schema/source';
 
 describe('source schema', () => {
   let db: TestDb;
@@ -62,6 +64,37 @@ describe('source schema', () => {
 
     expect(await db.select().from(sheets)).toHaveLength(0);
     expect(await db.select().from(blocks)).toHaveLength(0);
+  });
+
+  it('rejects a second mapping for the same block', async () => {
+    const [upload] = await db.insert(uploads).values({
+      filename: 'z.xlsx',
+      sha256: 'e'.repeat(64),
+      storageKey: 'uploads/z.xlsx',
+      sizeBytes: 10,
+      uploadedBy: 'admin@example.com',
+    }).returning();
+
+    const [sheet] = await db.insert(sheets).values({
+      uploadId: upload.id, name: 'סיכום כללי', index: 0, rowCount: 44, colCount: 14,
+    }).returning();
+
+    const [block] = await db.insert(blocks).values({
+      sheetId: sheet.id,
+      top: 1, left: 1, bottom: 13, right: 4,
+      archetype: 'ledger',
+      confidence: '0.87',
+      pipelineVersion: 1,
+      rawGrid: [['תאריך', 'הוצאות']],
+    }).returning();
+
+    const mapping = {
+      blockId: block.id,
+      columnMap: [{ column: 1, field: 'date', confidence: 1 }],
+      source: 'rules',
+    };
+    await db.insert(blockMappings).values(mapping);
+    await expect(db.insert(blockMappings).values(mapping)).rejects.toThrow();
   });
 
   it('stores a layout signature keyed by fingerprint', async () => {
