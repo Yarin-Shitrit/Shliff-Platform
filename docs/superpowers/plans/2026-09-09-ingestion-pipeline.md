@@ -3728,8 +3728,11 @@ with the brand's pure black remapped to the off-white text colour, because the o
 artwork's black linework is invisible on a dark surface:
 
 ```tsx
+'use client';
+
 import Image from 'next/image';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import styles from './nav.module.css';
 
 interface Section {
@@ -3747,7 +3750,8 @@ const SECTIONS: Section[] = [
   { href: '/fees', label: 'דמי קאמפ', planned: true },
 ];
 
-export function Nav({ current }: { current: string }) {
+export function Nav() {
+  const current = usePathname();
   return (
     <nav className={styles.nav} aria-label="ניווט ראשי">
       <span className={styles.brand}>
@@ -3833,22 +3837,35 @@ focus rings, nothing else.
 
 - [ ] **Step 5: Implement the layout and landing page**
 
-Create `src/app/(admin)/layout.tsx`:
+Create `src/app/(admin)/layout.tsx`. It renders the nav above every admin page and supplies
+the one dark ground the whole admin area sits on — without it, pages inherit `globals.css`'s
+light theme and a black nav bar floats above a cream page:
 
 ```tsx
-import { headers } from 'next/headers';
 import { Nav } from './nav';
+import styles from './layout.module.css';
 
-export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const pathname = (await headers()).get('x-pathname') ?? '/';
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
-    <>
-      <Nav current={pathname} />
+    <div className={styles.ground}>
+      <Nav />
       {children}
-    </>
+    </div>
   );
 }
 ```
+
+Create `src/app/(admin)/layout.module.css`:
+
+```css
+.ground {
+  min-block-size: 100vh;
+  background: #000000;
+  color: #f2ede6;
+}
+```
+
+`min-block-size` rather than `block-size`, so longer pages grow instead of clipping.
 
 Create `src/app/(admin)/page.tsx` — the landing screen, which names what the platform does and what is not built yet rather than showing an empty dashboard:
 
@@ -3878,7 +3895,10 @@ export default function OverviewPage() {
 }
 ```
 
-Note: `x-pathname` is not a header Next sets by itself. Add it in `src/middleware.ts` (created in Task 12) by setting it on the forwarded request headers. If Task 12 has not run yet, make `AdminLayout` fall back to `'/'` as written above — the test covers `Nav` directly, so the layout's current-section highlight is a progressive enhancement, not a tested behaviour.
+`Nav` is a **client** component reading `usePathname()`. An earlier draft had `AdminLayout`
+read `headers().get('x-pathname')` — Next never sets that header, so the active section would
+have silently never highlighted. Mock `usePathname` in the test (`vi.mock('next/navigation', ...)`)
+to supply the current path.
 
 - [ ] **Step 6: Remove the duplicated header from the data explorer**
 
