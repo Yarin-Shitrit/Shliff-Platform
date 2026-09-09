@@ -111,6 +111,18 @@ export async function runImport(
     let autoRecognized = 0;
 
     await runInTransaction(db, async (tx) => {
+      /**
+       * Clear anything a previous run left for this upload before inserting.
+       *
+       * `runImport` is reachable twice for one `uploadId`: the upload route
+       * reuses a row that is not yet `parsed` so a failed import can be
+       * retried, and two near-simultaneous uploads of byte-identical content
+       * both see it as `pending`. Without this delete the second run appends a
+       * second set of sheets and blocks instead of replacing the first, and
+       * nothing surfaces the duplication. `blocks` cascades from `sheets`.
+       */
+      await tx.delete(sheets).where(eq(sheets.uploadId, uploadId));
+
       for (const grid of grids) {
         const [sheetRow] = await tx.insert(sheets).values({
           uploadId,
@@ -182,7 +194,9 @@ export async function runImport(
     });
 
     await db.update(uploads)
-      .set({ status: 'parsed' })
+      // Clear any error text a previous failed run left, or a successful retry
+      // still reads as failed.
+      .set({ status: 'parsed', error: null })
       .where(eq(uploads.id, uploadId));
 
     return {

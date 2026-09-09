@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { PgDatabase } from 'drizzle-orm/pg-core';
 import { createTestDb, type TestDb } from '@/test/db';
 import { uploads, sheets, blocks, layoutSignatures } from '@/db/schema/source';
@@ -158,5 +159,40 @@ describe('runImport', () => {
     const [row] = await db.select().from(uploads);
     expect(row.status).toBe('failed');
     expect(row.error).toBeTruthy();
+  });
+
+  /**
+   * The upload route reuses a row that is not yet `parsed`, so `runImport` can
+   * legitimately run twice for one `uploadId` — a retry after a failure, or two
+   * near-simultaneous uploads of byte-identical content that both see it as
+   * `pending`. It must replace what the previous run left, not append to it.
+   */
+  it('replaces a previous run rather than appending a second set of rows', async () => {
+    const db = await createTestDb();
+    const uploadId = await seedUpload(db, 'sha-rerun');
+
+    await runImport(db, uploadId, fixtureBuffer(FIXTURES.y26));
+    const firstSheets = await db.select().from(sheets);
+    const firstBlocks = await db.select().from(blocks);
+    expect(firstSheets.length).toBeGreaterThan(0);
+
+    await runImport(db, uploadId, fixtureBuffer(FIXTURES.y26));
+
+    expect(await db.select().from(sheets)).toHaveLength(firstSheets.length);
+    expect(await db.select().from(blocks)).toHaveLength(firstBlocks.length);
+  });
+
+  it('clears stale error text when a retry succeeds', async () => {
+    const db = await createTestDb();
+    const uploadId = await seedUpload(db, 'sha-retry');
+    await db.update(uploads)
+      .set({ status: 'failed', error: 'קובץ פגום' })
+      .where(eq(uploads.id, uploadId));
+
+    await runImport(db, uploadId, fixtureBuffer(FIXTURES.y26));
+
+    const [row] = await db.select().from(uploads);
+    expect(row.status).toBe('parsed');
+    expect(row.error).toBeNull();
   });
 });

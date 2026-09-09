@@ -17,6 +17,8 @@
   --line: #2b2724;
   --sand: #f2ede6;
   --dust: #98918a;
+  /* 4.69:1 on --ground only. Fails AA on --raised (4.17:1) — do not use it
+     on a raised panel. */
   --dust-dim: #7d766e;
   --flare: #EB7837;
 
