@@ -3664,6 +3664,407 @@ git commit -m "test: verify ingestion end to end across all reference workbooks"
 
 ---
 
+---
+
+### Task 16: Management shell and navigation
+
+The product is a management site for running a camp, not a parser with a page bolted on. Data exploration is one section; member management and camp-fee tracking are coming. The shell has to make that shape legible from the first screen.
+
+**Files:**
+- Create: `src/app/(admin)/layout.tsx`, `src/app/(admin)/nav.tsx`, `src/app/(admin)/nav.module.css`, `src/app/(admin)/page.tsx`
+- Modify: `src/app/(admin)/data/page.tsx` (drop its own `<header>`; the shell owns navigation now)
+- Test: `src/app/(admin)/nav.test.tsx`
+
+**Interfaces:**
+- Consumes: nothing beyond React and `next/link` / `next/navigation`
+- Produces: `<Nav current={pathname} />`; an `(admin)` layout wrapping every admin route
+
+- [ ] **Step 1: Write the failing test**
+
+Create `src/app/(admin)/nav.test.tsx`:
+
+```tsx
+/**
+ * @vitest-environment jsdom
+ */
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { Nav } from '@/app/(admin)/nav';
+
+describe('Nav', () => {
+  it('links to the sections that are built', () => {
+    render(<Nav current="/data" />);
+    expect(screen.getByRole('link', { name: 'נתונים' })).toHaveProperty('href');
+    expect(screen.getByRole('link', { name: 'ייבוא' })).toHaveProperty('href');
+  });
+
+  it('marks the current section for assistive technology', () => {
+    render(<Nav current="/data" />);
+    expect(screen.getByRole('link', { name: 'נתונים' }).getAttribute('aria-current')).toBe('page');
+    expect(screen.getByRole('link', { name: 'ייבוא' }).getAttribute('aria-current')).toBeNull();
+  });
+
+  it('shows planned sections as disabled rather than hiding them', () => {
+    render(<Nav current="/data" />);
+    // Planned sections communicate where the product is going; they must be
+    // visible but must not be links, so nobody clicks into a dead end.
+    const members = screen.getByText('חברי מחנה');
+    expect(members.tagName).not.toBe('A');
+    expect(members.getAttribute('aria-disabled')).toBe('true');
+  });
+});
+```
+
+- [ ] **Step 2: Run it and confirm it fails**
+
+Run: `./node_modules/.bin/vitest run "src/app/(admin)/nav.test.tsx"`
+Expected: FAIL — cannot find module `nav`
+
+- [ ] **Step 3: Implement the nav**
+
+Create `src/app/(admin)/nav.tsx`:
+
+```tsx
+import Link from 'next/link';
+import styles from './nav.module.css';
+
+interface Section {
+  href: string;
+  label: string;
+  /** Planned but not built: shown, never linked. */
+  planned?: boolean;
+}
+
+const SECTIONS: Section[] = [
+  { href: '/', label: 'סקירה' },
+  { href: '/data', label: 'נתונים' },
+  { href: '/upload', label: 'ייבוא' },
+  { href: '/members', label: 'חברי מחנה', planned: true },
+  { href: '/fees', label: 'דמי קאמפ', planned: true },
+];
+
+export function Nav({ current }: { current: string }) {
+  return (
+    <nav className={styles.nav} aria-label="ניווט ראשי">
+      <span className={styles.wordmark}>קופת שליף</span>
+      <ul className={styles.list}>
+        {SECTIONS.map((section) =>
+          section.planned ? (
+            <li key={section.href}>
+              <span className={styles.planned} aria-disabled="true">
+                {section.label}
+                <span className={styles.soon}>בקרוב</span>
+              </span>
+            </li>
+          ) : (
+            <li key={section.href}>
+              <Link
+                href={section.href}
+                className={styles.link}
+                aria-current={current === section.href ? 'page' : undefined}
+              >
+                {section.label}
+              </Link>
+            </li>
+          ),
+        )}
+      </ul>
+    </nav>
+  );
+}
+```
+
+- [ ] **Step 4: Implement the nav styles**
+
+Create `src/app/(admin)/nav.module.css`. Reuse the palette established in `data.module.css` so the shell and the explorer read as one product, and keep every property logical (`inline`/`block`), never `left`/`right`:
+
+```css
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  padding: 0.9rem 2rem;
+  background: #101526;
+  border-block-end: 1px solid #29324e;
+  color: #e9e3d5;
+}
+.wordmark { font-family: var(--font-display), Georgia, serif; font-size: 1.2rem; }
+.list { display: flex; gap: 0.35rem; list-style: none; margin: 0; padding: 0; }
+.link {
+  display: block;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  color: #8b93aa;
+  text-decoration: none;
+  font-size: 0.92rem;
+}
+.link:hover { color: #e9e3d5; }
+.link[aria-current='page'] { background: #e9e3d5; color: #101526; font-weight: 600; }
+.link:focus-visible { outline: 2px solid #e8b64c; outline-offset: 2px; }
+.planned {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.85rem;
+  color: #4b5570;
+  font-size: 0.92rem;
+  cursor: not-allowed;
+}
+.soon {
+  font-size: 0.7rem;
+  border: 1px solid #29324e;
+  border-radius: 999px;
+  padding: 0.05rem 0.4rem;
+}
+```
+
+- [ ] **Step 5: Implement the layout and landing page**
+
+Create `src/app/(admin)/layout.tsx`:
+
+```tsx
+import { headers } from 'next/headers';
+import { Nav } from './nav';
+
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  const pathname = (await headers()).get('x-pathname') ?? '/';
+  return (
+    <>
+      <Nav current={pathname} />
+      {children}
+    </>
+  );
+}
+```
+
+Create `src/app/(admin)/page.tsx` — the landing screen, which names what the platform does and what is not built yet rather than showing an empty dashboard:
+
+```tsx
+import Link from 'next/link';
+
+export default function OverviewPage() {
+  return (
+    <main>
+      <h1>קופת שליף</h1>
+      <p className="muted">
+        ניהול הכספים של הקאמפ — תקציבים, אירועים, חובות וקיזוזים, במקום אחד.
+      </p>
+      <ul>
+        <li>
+          <Link href="/data">נתונים</Link> — כל מה שזוהה בקבצי האקסל, לפי שנה
+        </li>
+        <li>
+          <Link href="/upload">ייבוא</Link> — העלאת קובץ חדש וזיהוי הטבלאות שבו
+        </li>
+      </ul>
+      <p className="muted">
+        חברי מחנה ודמי קאמפ עדיין לא נבנו. הם השלב הבא אחרי שהנתונים יושבים במסד.
+      </p>
+    </main>
+  );
+}
+```
+
+Note: `x-pathname` is not a header Next sets by itself. Add it in `src/middleware.ts` (created in Task 12) by setting it on the forwarded request headers. If Task 12 has not run yet, make `AdminLayout` fall back to `'/'` as written above — the test covers `Nav` directly, so the layout's current-section highlight is a progressive enhancement, not a tested behaviour.
+
+- [ ] **Step 6: Remove the duplicated header from the data explorer**
+
+In `src/app/(admin)/data/data-explorer.tsx`, delete the `<header className={styles.bar}>` block and its wordmark, keeping the year tabs. Move the year tabs into the page body above the hero. The shell now owns the top bar; two stacked bars is the bug this step prevents.
+
+- [ ] **Step 7: Run tests and confirm they pass**
+
+Run: `./node_modules/.bin/vitest run "src/app/(admin)/nav.test.tsx"`
+Expected: PASS — 3 tests
+
+Then load `http://localhost:3000/` and `http://localhost:3000/data` and confirm one navigation bar appears, the current section is highlighted, and the planned sections are visible but not clickable.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add "src/app/(admin)"
+git commit -m "feat: add management shell with section navigation"
+```
+
+---
+
+### Task 17: Seed the reference workbooks into the database
+
+Until this task, `/data` reparses three `.xlsx` files on every request. That is fine for a preview and wrong for a product: nothing is stored, nothing can be edited, and no later feature can build on it. Seeding moves the workbooks into the database through the real import pipeline.
+
+**Files:**
+- Create: `src/lib/import/seed.ts`, `src/app/(admin)/upload/seed-button.tsx`
+- Modify: `src/app/(admin)/upload/page.tsx` (add the seed control)
+- Test: `src/lib/import/seed.test.ts`
+
+**Interfaces:**
+- Consumes: `runImport` (Task 10), `uploads` schema (Task 9), `sha256Hex` (Task 11), `FIXTURES`/`fixtureBuffer` (Task 3)
+- Produces: `seedReferenceWorkbooks(db): Promise<SeedResult>` where `interface SeedResult { imported: string[]; skipped: string[] }`
+
+- [ ] **Step 1: Write the failing test**
+
+Create `src/lib/import/seed.test.ts`:
+
+```ts
+import { describe, it, expect, beforeEach } from 'vitest';
+import { createTestDb, type TestDb } from '@/test/db';
+import { uploads, sheets } from '@/db/schema/source';
+import { seedReferenceWorkbooks } from '@/lib/import/seed';
+
+describe('seedReferenceWorkbooks', () => {
+  let db: TestDb;
+
+  beforeEach(async () => {
+    db = await createTestDb();
+  });
+
+  it('imports all three reference workbooks', async () => {
+    const result = await seedReferenceWorkbooks(db);
+    expect(result.imported).toHaveLength(3);
+    expect(result.skipped).toHaveLength(0);
+    expect(await db.select().from(uploads)).toHaveLength(3);
+    expect(await db.select().from(sheets)).toHaveLength(19);
+  });
+
+  it('is idempotent — seeding twice does not duplicate anything', async () => {
+    await seedReferenceWorkbooks(db);
+    const second = await seedReferenceWorkbooks(db);
+
+    expect(second.imported).toHaveLength(0);
+    expect(second.skipped).toHaveLength(3);
+    expect(await db.select().from(uploads)).toHaveLength(3);
+    expect(await db.select().from(sheets)).toHaveLength(19);
+  });
+});
+```
+
+- [ ] **Step 2: Run it and confirm it fails**
+
+Run: `./node_modules/.bin/vitest run src/lib/import/seed.test.ts`
+Expected: FAIL — cannot find module `seed`
+
+- [ ] **Step 3: Implement**
+
+Create `src/lib/import/seed.ts`:
+
+```ts
+import { eq } from 'drizzle-orm';
+import type { Db } from '@/db';
+import type { TestDb } from '@/test/db';
+import { uploads } from '@/db/schema/source';
+import { sha256Hex } from '@/lib/storage';
+import { FIXTURES, fixtureBuffer } from '@/test/fixtures';
+import { runImport } from './run-import';
+
+export interface SeedResult {
+  imported: string[];
+  skipped: string[];
+}
+
+/**
+ * Loads the camp's historical workbooks into the database through the normal
+ * import pipeline — the same path an uploaded file takes, so seeded data is
+ * indistinguishable from imported data.
+ *
+ * Idempotent by content hash: re-seeding skips workbooks already present.
+ */
+export async function seedReferenceWorkbooks(db: Db | TestDb): Promise<SeedResult> {
+  const result: SeedResult = { imported: [], skipped: [] };
+
+  for (const filename of [FIXTURES.y2324, FIXTURES.y25, FIXTURES.y26]) {
+    const buffer = fixtureBuffer(filename);
+    const sha256 = sha256Hex(buffer);
+
+    const existing = await db.select().from(uploads).where(eq(uploads.sha256, sha256));
+    if (existing.length > 0) {
+      result.skipped.push(filename);
+      continue;
+    }
+
+    const [row] = await db.insert(uploads).values({
+      filename,
+      sha256,
+      storageKey: `seed/${sha256}.xlsx`,
+      sizeBytes: buffer.byteLength,
+      uploadedBy: 'seed',
+    }).returning();
+
+    await runImport(db, row.id, buffer);
+    result.imported.push(filename);
+  }
+
+  return result;
+}
+```
+
+- [ ] **Step 4: Run tests and confirm they pass**
+
+Run: `./node_modules/.bin/vitest run src/lib/import/seed.test.ts`
+Expected: PASS — 2 tests
+
+- [ ] **Step 5: Add the seed control to the import screen**
+
+Create `src/app/(admin)/upload/seed-button.tsx`:
+
+```tsx
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { seedAction } from './actions';
+
+export function SeedButton() {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function onSeed() {
+    setBusy(true);
+    const result = await seedAction();
+    setBusy(false);
+    setMessage(
+      result.imported.length > 0
+        ? `נטענו ${result.imported.length} קבצים`
+        : 'כל הקבצים כבר במסד',
+    );
+    router.refresh();
+  }
+
+  return (
+    <div>
+      <button type="button" onClick={onSeed} disabled={busy}>
+        {busy ? 'טוען…' : 'טען את קבצי העבר'}
+      </button>
+      {message ? <p className="muted">{message}</p> : null}
+    </div>
+  );
+}
+```
+
+Create `src/app/(admin)/upload/actions.ts`:
+
+```ts
+'use server';
+
+import { db } from '@/db';
+import { requireAdmin } from '@/lib/auth/guard';
+import { seedReferenceWorkbooks, type SeedResult } from '@/lib/import/seed';
+
+export async function seedAction(): Promise<SeedResult> {
+  const admin = await requireAdmin();
+  if (!admin.ok) throw new Error('unauthorized');
+  return seedReferenceWorkbooks(db);
+}
+```
+
+Add `<SeedButton />` to `src/app/(admin)/upload/page.tsx` beneath the upload form, under a heading `טעינת נתוני עבר`.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/lib/import/seed.ts src/lib/import/seed.test.ts "src/app/(admin)/upload"
+git commit -m "feat: seed the historical workbooks into the database"
+```
+
 ## Definition of Done
 
 - [ ] `npm test` passes with no skipped tests
@@ -3674,9 +4075,14 @@ git commit -m "test: verify ingestion end to end across all reference workbooks"
 - [ ] Confirming a block stores a layout signature, and re-importing a file with that layout marks the block auto-recognized
 - [ ] No route is reachable without authentication
 - [ ] The reference workbooks in `docs/reference-data/` are unmodified
+- [ ] The app reads as a **management site**: a persistent navigation shell where data exploration is one section among several, with member management and camp fees visible as planned sections rather than absent
+- [ ] The three historical workbooks can be seeded into the database from the UI, and seeding twice does not duplicate anything
 
 ## Follow-up plans
 
 - **Plan 02** — LLM classification fallback (spec §3), canonical model, commit pipeline, append-only audit log (spec step 1c, requirements 15–19 and 32)
 - **Plan 03** — Revisions, three-way merge, conflict UI, the six validation rules (spec steps 1d and §6)
 - **Plan 04** — Events, ticket rounds, dues, obligations (spec steps 1e–1f)
+- **Plan 05** — Camp member management: roster, roles, contact details, per-season membership
+- **Plan 06** — Camp fee management and tracking: dues per member per season, payment status,
+  exceptions (the `חריגים` block in ברן 25), reminders, and reconciliation against the ledger
