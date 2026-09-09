@@ -12,38 +12,6 @@
   padding-block-end: 5rem;
 }
 
-.bar {
-  position: sticky;
-  inset-block-start: 0;
-  z-index: 10;
-  display: flex;
-  align-items: baseline;
-  gap: 1.5rem;
-  flex-wrap: wrap;
-  padding: 1rem 2rem;
-  background: color-mix(in srgb, var(--ink) 92%, transparent);
-  backdrop-filter: blur(8px);
-  border-block-end: 1px solid var(--line);
-}
-
-.brand { display: flex; align-items: center; gap: 0.6rem; }
-.mark { inline-size: 1.9rem; block-size: 1.9rem; }
-.wordmark {
-  font-family: var(--font-display), Georgia, serif;
-  font-size: 1.3rem;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-}
-
-.back {
-  margin-inline-start: auto;
-  color: var(--dust);
-  font-size: 0.9rem;
-  text-decoration: none;
-}
-.back:hover { color: var(--sand); }
-.back:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
-
 .page { max-inline-size: 74rem; margin-inline: auto; padding-inline: 2rem; }
 
 .hero { padding-block: 2.5rem 1.5rem; }

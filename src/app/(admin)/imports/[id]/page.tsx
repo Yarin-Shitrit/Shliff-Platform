@@ -1,7 +1,5 @@
 import { eq } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
-import Image from 'next/image';
-import Link from 'next/link';
 import { Frank_Ruhl_Libre, Heebo } from 'next/font/google';
 import { db } from '@/db';
 import { uploads, sheets, blocks, blockMappings } from '@/db/schema/source';
@@ -51,14 +49,6 @@ export default async function ImportReviewPage(
 
   return (
     <div className={`${display.variable} ${body.variable} ${styles.shell}`}>
-      <header className={styles.bar}>
-        <span className={styles.brand}>
-          <Image className={styles.mark} src="/logo-dark.png" alt="" width={64} height={64} priority />
-          <span className={styles.wordmark}>קופת שליף</span>
-        </span>
-        <Link href="/upload" className={styles.back}>העלאה נוספת</Link>
-      </header>
-
       <div className={styles.page}>
         <section className={styles.hero}>
           <h1 className={styles.title}>סקירת ייבוא — {upload.filename}</h1>
