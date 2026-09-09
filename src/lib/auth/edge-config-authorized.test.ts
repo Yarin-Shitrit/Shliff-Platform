@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { NextRequest } from 'next/server';
+import type { Session } from 'next-auth';
 import { authConfig } from '@/lib/auth/edge-config';
 
 /**
@@ -12,17 +14,24 @@ import { authConfig } from '@/lib/auth/edge-config';
 describe('authConfig.callbacks.authorized (wiring)', () => {
   const authorized = authConfig.callbacks!.authorized!;
 
+  /**
+   * Calls the callback exactly as NextAuth does — the session under test plus
+   * the request being authorized. Only `auth` decides the outcome, but the
+   * request is part of the callback's contract, so a real `NextRequest` is
+   * passed rather than casting the argument away.
+   */
+  const authorize = (auth: Session | null) =>
+    authorized({ auth, request: new NextRequest('https://shliff.test/data') });
+
   it('refuses an anonymous request (no session)', async () => {
-    expect(await authorized({ auth: null } as any)).toBe(false);
+    expect(await authorize(null)).toBe(false);
   });
 
   it('refuses a session with no user', async () => {
-    expect(await authorized({ auth: { user: undefined, expires: '' } } as any)).toBe(false);
+    expect(await authorize({ user: undefined, expires: '' })).toBe(false);
   });
 
   it('allows a signed-in user', async () => {
-    expect(await authorized({
-      auth: { user: { email: 'admin@example.com' }, expires: '' },
-    } as any)).toBe(true);
+    expect(await authorize({ user: { email: 'admin@example.com' }, expires: '' })).toBe(true);
   });
 });
