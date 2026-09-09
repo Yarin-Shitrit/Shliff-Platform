@@ -35,7 +35,7 @@
 
 | sheet | range | archetype | confidence |
 | --- | --- | --- | --- |
-| סיכום כללי | A1:D9 | ledger | 0.89 |
+| סיכום כללי | A1:D9 | ledger | 0.90 |
 | סיכום כללי | G1:I4 | account_balances | 0.63 |
 | סיכום כללי | A38:D38 | unknown | 0.00 |
 | תקציב קאמפ ברן 26 | A1:E26 | budget_lines | 0.96 |
@@ -56,7 +56,7 @@
 | sheet | range | archetype | confidence |
 | --- | --- | --- | --- |
 | סיכום כללי | G1:H16 | obligations | 0.72 |
-| סיכום כללי | A1:E13 | ledger | 0.89 |
+| סיכום כללי | A1:E13 | ledger | 0.90 |
 | סיכום כללי | A38:D38 | unknown | 0.00 |
 | תקציב קאמפ ברן 26 | A1:J39 | budget_lines | 0.89 |
 | תקציב קאמפ ברן 25 | A1:F32 | budget_lines | 0.96 |
