@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import { useMemo, useState } from 'react';
 import styles from './data.module.css';
 
@@ -50,21 +49,7 @@ export function DataExplorer({
 
   return (
     <div className={styles.shell}>
-      <header className={styles.bar}>
-        <span className={styles.brand}>
-          <Image
-            className={styles.mark}
-            src="/logo-dark.png"
-            alt=""
-            width={64}
-            height={64}
-            priority
-          />
-          <span className={styles.wordmark}>קופת שליף</span>
-        </span>
-        <span style={{ color: 'var(--dust)', fontSize: '0.85rem' }}>
-          {workbooks.reduce((n, w) => n + w.sheets.length, 0)} גיליונות מתוך {workbooks.length} קבצים
-        </span>
+      <div className={styles.page}>
         <nav className={styles.years} aria-label="בחירת שנה">
           {workbooks.map((w) => (
             <button
@@ -78,9 +63,7 @@ export function DataExplorer({
             </button>
           ))}
         </nav>
-      </header>
 
-      <div className={styles.page}>
         <section className={styles.hero}>
           <h1 className={styles.heroTitle}>התקציב לברן 26 בנוי על מה שקרה בברן 25</h1>
           <p className={styles.heroLede}>
