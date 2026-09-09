@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { PgDatabase } from 'drizzle-orm/pg-core';
 import { createTestDb, type TestDb } from '@/test/db';
 import { uploads, sheets, blocks, layoutSignatures } from '@/db/schema/source';
 import { runImport } from '@/lib/import/run-import';
@@ -95,6 +96,65 @@ describe('runImport', () => {
       runImport(db, uploadId, Buffer.from('not a workbook')),
     ).rejects.toThrow();
 
+    const [row] = await db.select().from(uploads);
+    expect(row.status).toBe('failed');
+    expect(row.error).toBeTruthy();
+  });
+
+  it('rethrows the original error even when recording the failure also fails', async () => {
+    const uploadId = await seedUpload(db, '2'.repeat(64));
+
+    // Simulate the status-write itself failing (e.g. a dropped connection)
+    // while the pipeline is already failing for an unrelated reason.
+    const updateSpy = vi.spyOn(db, 'update').mockImplementation(() => {
+      throw new Error('secondary write failure');
+    });
+
+    let caught: unknown;
+    try {
+      await runImport(db, uploadId, Buffer.from('not a workbook'));
+    } catch (error) {
+      caught = error;
+    }
+    updateSpy.mockRestore();
+
+    // The original parsing failure must win, not the secondary write failure.
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).not.toBe('secondary write failure');
+  });
+
+  it('rolls back all rows when a later sheet fails mid-import', async () => {
+    const uploadId = await seedUpload(db, '3'.repeat(64));
+
+    // `insert` lives once on the shared drizzle PgDatabase base class, so
+    // spying on it there intercepts both the top-level db and any
+    // transaction object created from it. Fail on the 3rd sheet insert
+    // (the 2026 fixture has 5 sheets), after two sheets' worth of sheets
+    // and blocks would already be written without a transaction.
+    const originalInsert = PgDatabase.prototype.insert;
+    let sheetInsertCount = 0;
+    const insertSpy = vi.spyOn(PgDatabase.prototype, 'insert').mockImplementation(
+      function (this: unknown, table: unknown) {
+        if (table === sheets) {
+          sheetInsertCount += 1;
+          if (sheetInsertCount === 3) {
+            throw new Error('simulated mid-import failure');
+          }
+        }
+        return originalInsert.call(this as never, table as never);
+      } as typeof PgDatabase.prototype.insert,
+    );
+
+    try {
+      await expect(
+        runImport(db, uploadId, fixtureBuffer(FIXTURES.y26)),
+      ).rejects.toThrow('simulated mid-import failure');
+    } finally {
+      insertSpy.mockRestore();
+    }
+
+    expect(await db.select().from(sheets)).toHaveLength(0);
+    expect(await db.select().from(blocks)).toHaveLength(0);
     const [row] = await db.select().from(uploads);
     expect(row.status).toBe('failed');
     expect(row.error).toBeTruthy();
