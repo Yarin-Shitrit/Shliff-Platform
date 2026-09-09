@@ -36,3 +36,8 @@ coverage/
 
 # Vitest JSON reporter output (rtk hook)
 .vitest/
+.env.local
+
+# Playwright MCP artifacts from live verification
+.playwright-mcp/
+*.png
