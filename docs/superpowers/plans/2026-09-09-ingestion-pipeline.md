@@ -3722,9 +3722,13 @@ Expected: FAIL — cannot find module `nav`
 
 - [ ] **Step 3: Implement the nav**
 
-Create `src/app/(admin)/nav.tsx`:
+Create `src/app/(admin)/nav.tsx`. It carries the camp's logo, which lives at
+`public/logo-dark.png` — a transparent variant generated from `docs/brand/shliff_logo.jpeg`
+with the brand's pure black remapped to the off-white text colour, because the original
+artwork's black linework is invisible on a dark surface:
 
 ```tsx
+import Image from 'next/image';
 import Link from 'next/link';
 import styles from './nav.module.css';
 
@@ -3746,7 +3750,10 @@ const SECTIONS: Section[] = [
 export function Nav({ current }: { current: string }) {
   return (
     <nav className={styles.nav} aria-label="ניווט ראשי">
-      <span className={styles.wordmark}>קופת שליף</span>
+      <span className={styles.brand}>
+        <Image src="/logo-dark.png" alt="" width={64} height={64} className={styles.mark} />
+        <span className={styles.wordmark}>קופת שליף</span>
+      </span>
       <ul className={styles.list}>
         {SECTIONS.map((section) =>
           section.planned ? (
@@ -3776,7 +3783,11 @@ export function Nav({ current }: { current: string }) {
 
 - [ ] **Step 4: Implement the nav styles**
 
-Create `src/app/(admin)/nav.module.css`. Reuse the palette established in `data.module.css` so the shell and the explorer read as one product, and keep every property logical (`inline`/`block`), never `left`/`right`:
+Create `src/app/(admin)/nav.module.css`. Use the **camp brand palette** — pure black `#000000`
+and `#EB7837` orange, sampled from the logo — matching `data.module.css` so the shell and the
+explorer read as one product. Keep every property logical (`inline`/`block`), never
+`left`/`right`. Hold the orange as the only loud colour: it marks the current section and
+focus rings, nothing else.
 
 ```css
 .nav {
@@ -3784,35 +3795,37 @@ Create `src/app/(admin)/nav.module.css`. Reuse the palette established in `data.
   align-items: center;
   gap: 2rem;
   padding: 0.9rem 2rem;
-  background: #101526;
-  border-block-end: 1px solid #29324e;
-  color: #e9e3d5;
+  background: #000000;
+  border-block-end: 1px solid #2b2724;
+  color: #f2ede6;
 }
+.brand { display: flex; align-items: center; gap: 0.6rem; }
+.mark { inline-size: 1.9rem; block-size: 1.9rem; }
 .wordmark { font-family: var(--font-display), Georgia, serif; font-size: 1.2rem; }
 .list { display: flex; gap: 0.35rem; list-style: none; margin: 0; padding: 0; }
 .link {
   display: block;
   padding: 0.35rem 0.85rem;
   border-radius: 999px;
-  color: #8b93aa;
+  color: #98918a;
   text-decoration: none;
   font-size: 0.92rem;
 }
-.link:hover { color: #e9e3d5; }
-.link[aria-current='page'] { background: #e9e3d5; color: #101526; font-weight: 600; }
-.link:focus-visible { outline: 2px solid #e8b64c; outline-offset: 2px; }
+.link:hover { color: #f2ede6; }
+.link[aria-current='page'] { background: #eb7837; color: #000000; font-weight: 600; }
+.link:focus-visible { outline: 2px solid #eb7837; outline-offset: 2px; }
 .planned {
   display: flex;
   align-items: center;
   gap: 0.4rem;
   padding: 0.35rem 0.85rem;
-  color: #4b5570;
+  color: #5c554e;
   font-size: 0.92rem;
   cursor: not-allowed;
 }
 .soon {
   font-size: 0.7rem;
-  border: 1px solid #29324e;
+  border: 1px solid #2b2724;
   border-radius: 999px;
   padding: 0.05rem 0.4rem;
 }
