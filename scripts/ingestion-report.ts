@@ -2,23 +2,9 @@ import { createTestDb } from '@/test/db';
 import { uploads, sheets, blocks } from '@/db/schema/source';
 import { runImport } from '@/lib/import/run-import';
 import { FIXTURES, fixtureBuffer } from '@/test/fixtures';
+import { colLabel } from '@/lib/xlsx/col-label';
 import { eq } from 'drizzle-orm';
 import { writeFileSync } from 'node:fs';
-
-/**
- * 1-indexed column number to spreadsheet letters (1 -> A, 27 -> AA), matching
- * the `colLabel` helper in `src/app/(admin)/data/page.tsx` so a block's range
- * reads the same way here as it does in the review UI.
- */
-function colLabel(index: number): string {
-  let n = index;
-  let out = '';
-  while (n > 0) {
-    out = String.fromCharCode(65 + ((n - 1) % 26)) + out;
-    n = Math.floor((n - 1) / 26);
-  }
-  return out;
-}
 
 function a1Range(top: number, left: number, bottom: number, right: number): string {
   return `${colLabel(left)}${top}:${colLabel(right)}${bottom}`;

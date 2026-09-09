@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { BLOCK_ARCHETYPES, CONFIDENCE_THRESHOLD, type BlockArchetype } from '@/lib/classify/types';
 import type { ColumnMapping } from '@/lib/classify/map-columns';
+import { colLabel } from '@/lib/xlsx/col-label';
 import { confirmBlock } from './actions';
 import styles from './import-review.module.css';
 
@@ -19,19 +20,10 @@ const ARCHETYPE_LABELS: Record<BlockArchetype, string> = {
   unknown: 'לא זוהה',
 };
 
+/** This card previews fewer rows than the data explorer: it stacks many
+ * cards on one screen, where the explorer shows one block at a time. */
 const MAX_PREVIEW_ROWS = 8;
 const MAX_CELL_CHARS = 34;
-
-function columnLabel(index: number): string {
-  let n = index;
-  let label = '';
-  while (n > 0) {
-    const rem = (n - 1) % 26;
-    label = String.fromCharCode(65 + rem) + label;
-    n = Math.floor((n - 1) / 26);
-  }
-  return label;
-}
 
 function truncate(text: string): string {
   return text.length > MAX_CELL_CHARS ? `${text.slice(0, MAX_CELL_CHARS)}…` : text;
@@ -81,7 +73,7 @@ export function BlockCard(props: BlockCardProps) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const range = `${columnLabel(props.left)}${props.top}:${columnLabel(props.right)}${props.bottom}`;
+  const range = `${colLabel(props.left)}${props.top}:${colLabel(props.right)}${props.bottom}`;
   const autoRecognized = props.mappingSource === 'signature';
   const confident = props.confidence >= CONFIDENCE_THRESHOLD;
   const previewRows = props.rawGrid.slice(0, MAX_PREVIEW_ROWS);
@@ -138,7 +130,7 @@ export function BlockCard(props: BlockCardProps) {
         <p className={styles.mapping}>
           עמודות:{' '}
           {props.columnMap
-            .map((m) => `${columnLabel(m.column)} → ${m.field}`)
+            .map((m) => `${colLabel(m.column)} → ${m.field}`)
             .join(' · ')}
         </p>
       ) : (

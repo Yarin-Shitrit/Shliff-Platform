@@ -5,6 +5,7 @@ import { detectBlocks } from '@/lib/blocks/detect';
 import { parseNumber } from '@/lib/coerce/number';
 import { normalizeHebrew } from '@/lib/text/normalize';
 import type { SheetGrid } from '@/lib/xlsx/types';
+import { colLabel } from '@/lib/xlsx/col-label';
 import { DataExplorer, type Workbook, type DerivationRow, type RevisionRow } from './data-explorer';
 
 export const dynamic = 'force-dynamic';
@@ -17,16 +18,7 @@ const FILES = [
 ];
 
 const MAX_PREVIEW_ROWS = 10;
-
-function colLabel(index: number): string {
-  let n = index;
-  let out = '';
-  while (n > 0) {
-    out = String.fromCharCode(65 + ((n - 1) % 26)) + out;
-    n = Math.floor((n - 1) / 26);
-  }
-  return out;
-}
+const MAX_CELL_CHARS = 34;
 
 interface BudgetLine {
   item: string;
@@ -164,7 +156,7 @@ export default async function DataPage() {
             const line: string[] = [];
             for (let c = range.left; c <= range.right; c += 1) {
               const text = grid.cells[r - 1]?.[c - 1]?.text ?? '';
-              line.push(text.length > 34 ? `${text.slice(0, 34)}…` : text);
+              line.push(text.length > MAX_CELL_CHARS ? `${text.slice(0, MAX_CELL_CHARS)}…` : text);
             }
             rows.push(line);
           }
