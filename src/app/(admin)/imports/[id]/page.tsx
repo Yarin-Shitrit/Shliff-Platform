@@ -1,15 +1,11 @@
 import { eq } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
-import { Frank_Ruhl_Libre, Heebo } from 'next/font/google';
 import { db } from '@/db';
 import { uploads, sheets, blocks, blockMappings } from '@/db/schema/source';
 import { CONFIDENCE_THRESHOLD } from '@/lib/classify/types';
 import { requireAdmin } from '@/lib/auth/guard';
 import { BlockCard } from './block-card';
 import styles from './import-review.module.css';
-
-const display = Frank_Ruhl_Libre({ subsets: ['hebrew', 'latin'], weight: ['500'], variable: '--font-display' });
-const body = Heebo({ subsets: ['hebrew', 'latin'], weight: ['400', '500', '600'], variable: '--font-body' });
 
 type BlockRow = typeof blocks.$inferSelect;
 type MappingRow = typeof blockMappings.$inferSelect;
@@ -48,7 +44,7 @@ export default async function ImportReviewPage(
   const reviewCount = rows.filter((r) => needsReview(r.block, r.mapping)).length;
 
   return (
-    <div className={`${display.variable} ${body.variable} ${styles.shell}`}>
+    <div className={styles.shell}>
       <div className={styles.page}>
         <section className={styles.hero}>
           <h1 className={styles.title}>סקירת ייבוא — {upload.filename}</h1>

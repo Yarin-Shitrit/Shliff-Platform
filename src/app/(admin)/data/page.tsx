@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Frank_Ruhl_Libre, Heebo } from 'next/font/google';
 import { extractWorkbook } from '@/lib/xlsx/extract';
 import { detectBlocks } from '@/lib/blocks/detect';
 import { parseNumber } from '@/lib/coerce/number';
@@ -9,9 +8,6 @@ import type { SheetGrid } from '@/lib/xlsx/types';
 import { DataExplorer, type Workbook, type DerivationRow, type RevisionRow } from './data-explorer';
 
 export const dynamic = 'force-dynamic';
-
-const display = Frank_Ruhl_Libre({ subsets: ['hebrew', 'latin'], weight: ['500'], variable: '--font-display' });
-const body = Heebo({ subsets: ['hebrew', 'latin'], weight: ['400', '500', '600'], variable: '--font-body' });
 
 const DIR = join(process.cwd(), 'docs', 'reference-data');
 const FILES = [
@@ -186,16 +182,14 @@ export default async function DataPage() {
   const forecastTotal = forecastLines.reduce((n, l) => n + (l.total ?? 0), 0);
 
   return (
-    <div className={`${display.variable} ${body.variable}`}>
-      <DataExplorer
-        workbooks={workbooks}
-        derivation={derivation}
-        revisions={revisions}
-        revisionYears={revisionYears}
-        arithmetic={arithmetic}
-        actualTotal={actualTotal}
-        forecastTotal={forecastTotal}
-      />
-    </div>
+    <DataExplorer
+      workbooks={workbooks}
+      derivation={derivation}
+      revisions={revisions}
+      revisionYears={revisionYears}
+      arithmetic={arithmetic}
+      actualTotal={actualTotal}
+      forecastTotal={forecastTotal}
+    />
   );
 }

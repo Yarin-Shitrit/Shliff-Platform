@@ -30,7 +30,7 @@ body {
   margin: 0;
   background: var(--ground);
   color: var(--sand);
-  font-family: system-ui, 'Segoe UI', Arial, sans-serif;
+  font-family: var(--font-body), system-ui, 'Segoe UI', Arial, sans-serif;
   line-height: 1.6;
 }
 
