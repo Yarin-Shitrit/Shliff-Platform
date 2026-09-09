@@ -4169,11 +4169,43 @@ Delete `rules.ts`'s private `tokenize`/`matches` helpers and import `termMatches
 
 Expected: `match`, `rules`, `map-columns` and `signature` suites all pass. Any classification change caused by the slash split must be explained in the report, not just accepted — name the block, the archetype before and after, and why the new answer is at least as correct.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Guard the drizzle schema list against omissions**
+
+`drizzle.config.ts` names schema files explicitly, which removes a dependency on glob
+behaviour but relies on every future author remembering to append their file. A `pgTable`
+in an unlisted file never reaches `drizzle-kit`, and the failure is a missing table at
+runtime with no build-time signal.
+
+Create `src/db/config.test.ts`:
+
+```ts
+import { describe, it, expect } from 'vitest';
+import { readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import config from '../../drizzle.config';
+
+describe('drizzle schema configuration', () => {
+  it('lists every schema file in the directory', () => {
+    const dir = join(process.cwd(), 'src', 'db', 'schema');
+    const onDisk = readdirSync(dir)
+      .filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))
+      .map((f) => `./src/db/schema/${f}`)
+      .sort();
+
+    const configured = [config.schema].flat().sort();
+    expect(configured).toEqual(onDisk);
+  });
+});
+```
+
+Run it and confirm it passes against the current config. If it fails, the config is already
+missing a file — fix the config, not the test.
+
+- [ ] **Step 7: Commit**
 
 ```bash
-git add src/lib/classify/
-git commit -m "refactor: one tokenizer, and split on slashes to recover lost signal"
+git add src/lib/classify/ src/db/config.test.ts
+git commit -m "refactor: one tokenizer, and guard the drizzle schema list"
 ```
 
 ## Definition of Done
