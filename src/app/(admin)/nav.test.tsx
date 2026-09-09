@@ -1,18 +1,14 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/data',
 }));
 
 import { Nav } from '@/app/(admin)/nav';
-
-afterEach(() => {
-  cleanup();
-});
 
 describe('Nav', () => {
   it('links to the sections that are built', () => {

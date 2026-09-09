@@ -6,6 +6,7 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     testTimeout: 20_000,
+    setupFiles: ['./src/test/setup.ts'],
     server: {
       deps: { inline: [/next-auth/, /^next\//] },
     },
