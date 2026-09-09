@@ -9,11 +9,31 @@ describe('normalizeHebrew', () => {
 
   it('unifies geresh and apostrophe variants', () => {
     expect(normalizeHebrew('ברן 25׳')).toBe(normalizeHebrew("ברן 25'"));
-    expect(normalizeHebrew('קופת קאמפ 25’')).toBe(normalizeHebrew("קופת קאמפ 25'"));
+    // U+2019 on the left, U+0027 on the right
+    expect(normalizeHebrew('קופת קאמפ 25' + '’')).toBe(normalizeHebrew("קופת קאמפ 25'"));
+  });
+
+  it('unifies left single quotation mark with apostrophe', () => {
+    // U+2018 (left single quotation mark) should normalize to ASCII apostrophe
+    const leftQuote = '‘';
+    expect(normalizeHebrew('test' + leftQuote)).toBe(normalizeHebrew("test'"));
+  });
+
+  it('removes directional and zero-width marks', () => {
+    // LRM (U+200E), RLM (U+200F), ZWS (U+200B), ZWJ (U+200D)
+    const base = 'סה״כ';
+    const lrm = '‎';
+    const rlm = '‏';
+    const zws = '​';
+    const zwj = '‍';
+    expect(normalizeHebrew(base + lrm)).toBe(normalizeHebrew(base));
+    expect(normalizeHebrew(base + rlm)).toBe(normalizeHebrew(base));
+    expect(normalizeHebrew(base + zws)).toBe(normalizeHebrew(base));
+    expect(normalizeHebrew(base + zwj)).toBe(normalizeHebrew(base));
   });
 
   it('collapses whitespace and non-breaking spaces', () => {
-    expect(normalizeHebrew('  סוג   הוצאה  ')).toBe('סוג הוצאה');
+    expect(normalizeHebrew('  סוג   הוצאה  ')).toBe('סוג הוצאה');
   });
 
   it('returns empty string for empty input', () => {
