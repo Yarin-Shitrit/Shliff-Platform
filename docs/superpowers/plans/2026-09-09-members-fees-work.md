@@ -882,8 +882,12 @@ export async function recordUnlinkedName(
   );
   if (existing) return existing.id;
 
+  // Store the spelling as it was seen, not the normalized form: `normalized`
+  // exists for comparison, `alias` is the evidence. normalizeHebrew maps the
+  // geresh ׳ to an ASCII apostrophe, so storing it here would silently rewrite
+  // `ראנצ׳ו ונטלי` into a spelling that appears in no sheet.
   const [row] = await db.insert(personAliases)
-    .values({ personId: null, alias: normalized, normalized, source })
+    .values({ personId: null, alias: rawName.trim(), normalized, source })
     .returning();
   return row.id;
 }
@@ -5356,8 +5360,10 @@ git commit -m "test: the camp's year end to end, from seed to a settled season"
 ## Notes for the executor
 
 **Task order matters.** Tasks 1–11 build a dependency chain: each one's tests
-import the previous ones' modules. Tasks 12–15 (UI) depend on 1–11 but not on
-each other, so they may be reordered. Task 16 must be last.
+import the previous ones' modules. Task 12 must precede Tasks 13 and 14 — it
+creates `src/lib/action-result.ts`, which both of their action files import.
+Task 15 must follow 12–14, since it links to pages they create. Task 16 must
+be last.
 
 **When a reviewer's finding contradicts this plan,** the spec
 (`docs/superpowers/specs/2026-09-09-camp-members-fees-design.md`) is the
