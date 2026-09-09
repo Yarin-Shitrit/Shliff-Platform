@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useMemo, useState } from 'react';
 import styles from './data.module.css';
 
@@ -50,7 +51,17 @@ export function DataExplorer({
   return (
     <div className={styles.shell}>
       <header className={styles.bar}>
-        <span className={styles.wordmark}>קופת שליף</span>
+        <span className={styles.brand}>
+          <Image
+            className={styles.mark}
+            src="/logo-dark.png"
+            alt=""
+            width={64}
+            height={64}
+            priority
+          />
+          <span className={styles.wordmark}>קופת שליף</span>
+        </span>
         <span style={{ color: 'var(--dust)', fontSize: '0.85rem' }}>
           {workbooks.reduce((n, w) => n + w.sheets.length, 0)} גיליונות מתוך {workbooks.length} קבצים
         </span>

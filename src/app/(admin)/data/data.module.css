@@ -1,12 +1,14 @@
 .shell {
-  --ink: #101526;
-  --raised: #182036;
-  --line: #29324e;
-  --sand: #e9e3d5;
-  --dust: #8b93aa;
-  --flare: #ff5c39;
-  --mint: #46d39a;
-  --gold: #e8b64c;
+  /* Camp brand: the logo is pure black, #EB7837 orange, and white. The palette
+     is held to those three so the orange stays the only loud thing on screen. */
+  --ink: #000000;
+  --raised: #141210;
+  --line: #2b2724;
+  --sand: #f2ede6;
+  --dust: #98918a;
+  --flare: #eb7837;
+  --gold: #eb7837;
+  --mint: #f2ede6;
 
   min-block-size: 100vh;
   background: var(--ink);
@@ -28,6 +30,8 @@
   border-block-end: 1px solid var(--line);
 }
 
+.brand { display: flex; align-items: center; gap: 0.6rem; }
+.mark { inline-size: 1.9rem; block-size: 1.9rem; }
 .wordmark {
   font-family: var(--font-display), Georgia, serif;
   font-size: 1.3rem;
@@ -147,7 +151,7 @@
 
 .num { font-variant-numeric: tabular-nums; text-align: end; white-space: nowrap; }
 .up { color: var(--flare); }
-.down { color: var(--mint); }
+.down { color: var(--sand); }
 .flat { color: var(--dust); }
 
 /* Buffer magnitude, drawn from the centre so direction is visible without colour. */
