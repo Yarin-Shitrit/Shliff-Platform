@@ -33,3 +33,6 @@ out/
 /uploads/
 /tmp/
 coverage/
+
+# Vitest JSON reporter output (rtk hook)
+.vitest/
