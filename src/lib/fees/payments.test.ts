@@ -141,6 +141,50 @@ describe('payments', () => {
     }
   });
 
+  it('refuses an offset with no entries', async () => {
+    await expect(recordOffset(db, {
+      entries: [], note: 'קיזוז מול חוב יוסף', paidOn: WHEN, recordedBy: LEAD,
+    })).rejects.toThrow(/at least one due/);
+  });
+
+  /**
+   * Reached through recordOffset itself, not recordPayment. The two callers
+   * validate the note separately, and only recordPayment's path was covered.
+   */
+  it('refuses an offset whose note is missing entirely', async () => {
+    const { dueId } = await dueFor('יוסף');
+    await expect(recordOffset(db, {
+      entries: [{ dueId, amount: 1200 }],
+      note: undefined as unknown as string,
+      paidOn: WHEN,
+      recordedBy: LEAD,
+    })).rejects.toThrow(/note/);
+  });
+
+  it('stores a fractional amount to the agora', async () => {
+    const { dueId } = await dueFor('דניאל פינטו');
+    // 555.55 is a real figure from the ברן 25 sheet. 555.55 * 100 is
+    // 55554.999999999996 in IEEE 754, so this only works because toAgorot
+    // rounds rather than truncates.
+    await recordPayment(db, {
+      dueId, amount: 555.55, channel: 'אשראי', paidOn: WHEN, recordedBy: LEAD,
+    });
+    const [payment] = await listPayments(db, dueId);
+    expect(payment.amountAgorot).toBe(55555);
+  });
+
+  /**
+   * An amount that is not a number must be refused by the money layer rather
+   * than reaching the database as the string 'NaN'. This is what makes the
+   * agorot round-trip load-bearing rather than decorative.
+   */
+  it('refuses an amount that is not a number', async () => {
+    const { dueId } = await dueFor('אופק');
+    await expect(recordPayment(db, {
+      dueId, amount: Number.NaN, channel: 'מזומן', paidOn: WHEN, recordedBy: LEAD,
+    })).rejects.toThrow(/not a number/);
+  });
+
   it('deletes a payment and reopens the due', async () => {
     const { dueId } = await dueFor('אופק');
     const id = await recordPayment(db, {

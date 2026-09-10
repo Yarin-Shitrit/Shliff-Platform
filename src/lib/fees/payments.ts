@@ -80,7 +80,11 @@ export async function recordPayment(db: AnyDb, input: PaymentInput): Promise<str
  * same note instead of looking like five unrelated cash payments.
  */
 export async function recordOffset(db: AnyDb, input: OffsetInput): Promise<string[]> {
-  if (!normalizeHebrew(input.note)) {
+  // `?? ''` for the same reason validate() has it: `note` is typed as required,
+  // but the real callers are server actions building this from a request body,
+  // where TypeScript guarantees nothing. Without it an omitted note degrades to
+  // a raw TypeError instead of the module's own message.
+  if (!normalizeHebrew(input.note ?? '')) {
     throw new Error('an offset must carry a note saying what it was set against');
   }
   if (input.entries.length === 0) throw new Error('an offset needs at least one due');
