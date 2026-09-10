@@ -1277,7 +1277,12 @@ git commit -m "feat(members): link, merge and unmerge people"
 - Produces: `issueFlatDues(db, seasonId): Promise<number>`, `setException(db, input): Promise<void>`, `clearException(db, personId, seasonId): Promise<void>`, `listDues(db, seasonId): Promise<DueRow[]>`, `type DueRow`, `type ExceptionInput`.
 
 **The rule this task exists to enforce:** an exception with a blank reason or
-no decider is **refused on write**. `עמירם דהן 0`, recorded with neither, is
+no decider is **refused on write**. *(Amended after review, commit `0e92548`:
+blankness is judged with `normalizeHebrew`, not `.trim()`. `.trim()` leaves
+LRM, RLM and zero-width marks standing, and in an RTL UI a browser injects
+those invisibly on copy-paste — a reason made only of them looked blank to a
+human and passed. `clearException` likewise refuses rather than silently
+no-opping when no due exists.)* `עמירם דהן 0`, recorded with neither, is
 the failure the whole subsystem was commissioned to prevent. This is not the
 "warn, never block" rule — that governs *ingested* data; a lead typing into
 the UI is not ingestion.
