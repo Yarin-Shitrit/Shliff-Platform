@@ -37,3 +37,6 @@
 
 .queueActions button:hover:not(:disabled) { border-color: var(--flare); }
 .queueActions button:disabled { opacity: 0.5; cursor: default; }
+
+.exportLinks { color: var(--dust); font-size: 0.875rem; }
+.exportLinks a { margin-inline-start: 0.25rem; }

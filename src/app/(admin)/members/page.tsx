@@ -4,6 +4,7 @@ import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import { listPeople } from '@/lib/members/dossier';
 import { listUnlinkedNames, resolveName } from '@/lib/members/identity';
+import { listSeasons } from '@/lib/members/roster';
 import { formatILS } from '@/lib/money';
 import { UnlinkedQueue, type QueuedName } from './unlinked-queue';
 import styles from './members.module.css';
@@ -16,6 +17,7 @@ export default async function MembersPage() {
 
   const people = await listPeople(db);
   const unlinked = await listUnlinkedNames(db);
+  const seasons = await listSeasons(db);
 
   const queue: QueuedName[] = [];
   for (const name of unlinked) {
@@ -48,12 +50,25 @@ export default async function MembersPage() {
         <div className={styles.sectionHead}>
           <h2>אנשים</h2>
           {/*
-            A plain anchor, deliberately: this is a file download from a
-            Route Handler, not a page to navigate to client-side — `Link`
-            would prefetch the CSV response on hover/viewport for nothing.
+            One plain anchor per season, deliberately: this is a file download
+            from a Route Handler, not a page to navigate to client-side —
+            `Link` would prefetch the CSV response on hover/viewport for
+            nothing. The season used to be implicit (whichever the route
+            defaulted to), so a lead exporting for one season silently got a
+            different one's roster with nothing saying so — naming every
+            season here and carrying it through the query string is the fix.
           */}
-          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-          <a href="/members/export">ייצוא לקובץ CSV</a>
+          {seasons.length > 0 && (
+            <span className={styles.exportLinks}>
+              ייצוא לקובץ CSV:{' '}
+              {seasons.map((season, index) => (
+                <span key={season.id}>
+                  {index > 0 && ' · '}
+                  <a href={`/members/export?season=${season.id}`}>{season.name}</a>
+                </span>
+              ))}
+            </span>
+          )}
         </div>
         <div className="scroll-x">
           <table>
