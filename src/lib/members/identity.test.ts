@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { createTestDb, type TestDb } from '@/test/db';
 import { persons, personAliases } from '@/db/schema/camp';
 import {
@@ -74,6 +75,26 @@ describe('resolveName', () => {
     expect(result.personId).toBeNull();
     expect(result.candidates).toEqual([]);
     expect(result.normalized).toBe('עמירם דהן');
+  });
+
+  /**
+   * `resolveName` filters on `isNull(persons.mergedIntoId)`. Without this test
+   * nothing would catch that filter being dropped or the join being flipped,
+   * and a person folded into someone else would start answering to their old
+   * name again — quietly re-splitting an identity a lead had already merged.
+   */
+  it('ignores a person who was merged into someone else', async () => {
+    const survivor = await personWithAlias('אופק', 'אופק');
+    // A name that shares no prefix with the survivor, so the only thing that
+    // could make it resolve is the merged-away row itself.
+    const folded = await personWithAlias('עמירם דהן', 'עמירם דהן');
+    await db.update(persons)
+      .set({ mergedIntoId: survivor.id })
+      .where(eq(persons.id, folded.id));
+
+    const result = await resolveName(db, 'עמירם דהן');
+    expect(result.personId).toBeNull();
+    expect(result.candidates).toEqual([]);
   });
 
   it('ignores aliases that are not linked to anyone', async () => {
