@@ -57,6 +57,12 @@ describe('tasks', () => {
     expect(task.startsAt).toBeInstanceOf(Date);
   });
 
+  it('refuses a title that is only invisible directional marks', async () => {
+    await expect(createTask(db, {
+      seasonId, kind: 'build', title: '\u200e\u200f\u200b',
+    })).rejects.toThrow(/title/);
+  });
+
   it('refuses a shift with no time window', async () => {
     await expect(createTask(db, {
       seasonId, kind: 'shift', title: 'משמרת בר', peopleNeeded: 4,

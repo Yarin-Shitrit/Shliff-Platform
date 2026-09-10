@@ -3,6 +3,7 @@ import type { AnyDb } from '@/lib/db-types';
 import { tasks, campEvents } from '@/db/schema/camp';
 import type { TaskKind, TaskStatus } from '@/db/schema/camp';
 import { toAgorot, fromAgorot } from '@/lib/money';
+import { normalizeHebrew } from '@/lib/text/normalize';
 
 export interface NewTask {
   seasonId: string;
@@ -41,7 +42,12 @@ export interface TaskRow {
  * else stays optional: the רחבה sheet has owned line items with no deadline.
  */
 function validate(input: NewTask): void {
-  if (!input.title.trim()) throw new Error('a task needs a title');
+  // Blankness judged with normalizeHebrew, not `.trim()`, for the same reason
+  // as the exception reason and the offset note: `.trim()` leaves LRM, RLM and
+  // zero-width marks standing, and an RTL browser injects those invisibly on
+  // copy-paste. A task titled with nothing but those would be invisible in the
+  // coverage report while still counting toward it.
+  if (!normalizeHebrew(input.title)) throw new Error('a task needs a title');
   if (input.kind === 'shift') {
     if (!input.startsAt || !input.endsAt) {
       throw new Error('a shift needs a time window');
