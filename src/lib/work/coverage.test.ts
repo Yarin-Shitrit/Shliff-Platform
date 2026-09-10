@@ -102,6 +102,52 @@ describe('coverage', () => {
     expect((await coverageFor(db, seasonId))[0].uncovered).toBe(true);
   });
 
+  /**
+   * mergePersons refuses to merge someone who already has an assignment, but
+   * nothing stopped a NEW assignment landing on the merged-away id afterwards.
+   * Such a row is counted as staffed on the board yet invisible on every page
+   * a lead would look at, because listPeople and resolveName both hide merged
+   * rows — the work would be quietly covered and quietly unreachable.
+   */
+  it('refuses to assign work to a person who was merged away', async () => {
+    const { mergePersons } = await import('@/lib/members/link');
+    const taskId = await shift('משמרת בר', 1);
+    const survivor = await createPerson(db, 'אופק', LEAD);
+    const folded = await createPerson(db, 'אופק כהן', LEAD);
+    expect((await mergePersons(db, folded, survivor, LEAD)).ok).toBe(true);
+
+    await expect(assignPerson(db, taskId, folded, LEAD))
+      .rejects.toThrow(/merged into another/);
+    await expect(assignPerson(db, taskId, survivor, LEAD)).resolves.toBeDefined();
+  });
+
+  /**
+   * The task board renders budget and timing straight off the coverage row.
+   * Before these fields travelled with it, the page had to query listTasks for
+   * the same season a second time just to show a budget, and a recurring shift
+   * was indistinguishable from another with the same title.
+   */
+  it('carries the budget and timing the board needs, without a second query', async () => {
+    await createTask(db, {
+      seasonId, kind: 'deliverable', title: 'חשמל', budgetAmount: 12950,
+    });
+    await createTask(db, {
+      seasonId, kind: 'shift', title: 'משמרת בר', peopleNeeded: 2,
+      startsAt: new Date('2026-10-01T20:00:00Z'),
+      endsAt: new Date('2026-10-02T00:00:00Z'),
+    });
+
+    const coverage = await coverageFor(db, seasonId);
+    const deliverable = coverage.find((t) => t.title === 'חשמל')!;
+    const bar = coverage.find((t) => t.title === 'משמרת בר')!;
+
+    expect(deliverable.budgetAgorot).toBe(1295000);
+    expect(deliverable.startsAt).toBeNull();
+    expect(bar.budgetAgorot).toBeNull();
+    expect(bar.startsAt).toBeInstanceOf(Date);
+    expect(bar.endsAt).toBeInstanceOf(Date);
+  });
+
   it('refuses to assign the same person to a task twice', async () => {
     const taskId = await shift('משמרת בר', 4);
     const ofek = await createPerson(db, 'אופק', LEAD);
@@ -169,6 +215,9 @@ describe('coverage', () => {
     }
 
     const owned = await responsibilitiesOf(db, ofek);
+    // A person's own list must be able to say WHEN, or it does not answer
+    // "what am I responsible for" in any useful sense.
+    expect(owned.every((r) => 'startsAt' in r && 'dueOn' in r)).toBe(true);
     expect(owned).toHaveLength(3);
     expect(owned.map((r) => r.title).sort()).toEqual(['הובלה', 'חשמל', 'כניסה']);
     expect(owned.find((r) => r.title === 'חשמל')?.budgetAgorot).toBe(1295000);

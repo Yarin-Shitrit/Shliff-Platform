@@ -28,6 +28,16 @@ export interface TaskCoverage {
   accepted: number;
   uncovered: boolean;
   eventName: string | null;
+  /**
+   * The kind-specific columns travel with the coverage row on purpose. Without
+   * them the task board has to query listTasks for the same season a second
+   * time just to show a budget, and a shift is unreadable — you cannot tell a
+   * recurring `משמרת בר` apart from another except by when it runs.
+   */
+  budgetAgorot: number | null;
+  startsAt: Date | null;
+  endsAt: Date | null;
+  dueOn: Date | null;
   assignees: Assignee[];
 }
 
@@ -38,13 +48,35 @@ export interface Responsibility {
   seasonName: string;
   eventName: string | null;
   budgetAgorot: number | null;
+  /** So a person's own list can say *when* — a shift with no time on it does
+   *  not answer "what am I responsible for" in any useful sense. */
+  startsAt: Date | null;
+  endsAt: Date | null;
+  dueOn: Date | null;
   status: AssignmentStatus;
 }
 
+/**
+ * Assigns one person to one task.
+ *
+ * Refuses a person who was merged away. `mergePersons` already refuses to
+ * merge someone who has an assignment, but nothing stopped a *new* assignment
+ * landing on the merged-away id afterwards — and such a row is the worst of
+ * both worlds: counted as staffed on the board, yet invisible on every page a
+ * lead would look at, because `listPeople` and `resolveName` both hide merged
+ * rows. The work would be quietly covered and quietly unreachable.
+ */
 export async function assignPerson(
   db: AnyDb, taskId: string, personId: string, email: string,
   status: AssignmentStatus = 'proposed',
 ): Promise<string> {
+  const [person] = await db.select({ mergedIntoId: persons.mergedIntoId })
+    .from(persons).where(eq(persons.id, personId));
+  if (!person) throw new Error(`unknown person ${personId}`);
+  if (person.mergedIntoId) {
+    throw new Error('that person was merged into another — assign the survivor');
+  }
+
   const [row] = await db.insert(taskAssignments)
     .values({ taskId, personId, status, assignedBy: email })
     .returning();
@@ -71,11 +103,17 @@ export async function coverageFor(db: AnyDb, seasonId: string): Promise<TaskCove
       status: tasks.status,
       peopleNeeded: tasks.peopleNeeded,
       eventName: campEvents.name,
+      budgetAmount: tasks.budgetAmount,
+      startsAt: tasks.startsAt,
+      endsAt: tasks.endsAt,
+      dueOn: tasks.dueOn,
     })
     .from(tasks)
     .leftJoin(campEvents, eq(campEvents.id, tasks.eventId))
     .where(eq(tasks.seasonId, seasonId))
-    .orderBy(asc(tasks.kind), asc(tasks.title));
+    // `tasks.id` breaks ties: title is not unique, and recurring shifts share
+    // one. Without it Postgres may reorder equal keys between calls.
+    .orderBy(asc(tasks.kind), asc(tasks.title), asc(tasks.id));
 
   const assignmentRows = await db
     .select({
@@ -103,12 +141,13 @@ export async function coverageFor(db: AnyDb, seasonId: string): Promise<TaskCove
     byTask.set(row.taskId, list);
   }
 
-  return taskRows.map((task) => {
+  return taskRows.map(({ budgetAmount, ...task }) => {
     const assignees = byTask.get(task.taskId) ?? [];
     const accepted = assignees
       .filter((a) => COUNTS_AS_COVERED.includes(a.status)).length;
     return {
       ...task,
+      budgetAgorot: budgetAmount === null ? null : toAgorot(budgetAmount),
       accepted,
       uncovered: task.status === 'open' && accepted < task.peopleNeeded,
       assignees,
@@ -139,6 +178,9 @@ export async function responsibilitiesOf(
       seasonName: seasons.name,
       eventName: campEvents.name,
       budgetAmount: tasks.budgetAmount,
+      startsAt: tasks.startsAt,
+      endsAt: tasks.endsAt,
+      dueOn: tasks.dueOn,
       status: taskAssignments.status,
     })
     .from(taskAssignments)
@@ -149,7 +191,7 @@ export async function responsibilitiesOf(
       eq(taskAssignments.personId, personId),
       ne(taskAssignments.status, 'dropped'),
     ))
-    .orderBy(asc(seasons.year), asc(tasks.title));
+    .orderBy(asc(seasons.year), asc(tasks.title), asc(tasks.id));
 
   return rows.map((row) => ({
     taskId: row.taskId,
@@ -158,6 +200,9 @@ export async function responsibilitiesOf(
     seasonName: row.seasonName,
     eventName: row.eventName,
     budgetAgorot: row.budgetAmount === null ? null : toAgorot(row.budgetAmount),
+    startsAt: row.startsAt,
+    endsAt: row.endsAt,
+    dueOn: row.dueOn,
     status: row.status,
   }));
 }

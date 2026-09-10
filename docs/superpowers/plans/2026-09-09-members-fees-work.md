@@ -2461,6 +2461,25 @@ git commit -m "feat(work): events and the four kinds of task"
 - Consumes: `AnyDb`; `tasks`, `taskAssignments`, `persons`, `seasons`, `campEvents`, `type AssignmentStatus`; `TaskRow` from `@/lib/work/tasks`.
 - Produces: `assignPerson(db, taskId, personId, email, status?): Promise<string>`, `setAssignmentStatus(db, assignmentId, status): Promise<void>`, `removeAssignment(db, assignmentId): Promise<void>`, `coverageFor(db, seasonId): Promise<TaskCoverage[]>`, `uncoveredTasks(db, seasonId): Promise<TaskCoverage[]>`, `responsibilitiesOf(db, personId): Promise<Responsibility[]>`, `type TaskCoverage`, `type Assignee`, `type Responsibility`.
 
+**Amended after the Task 9 design review** (three findings, all in this plan):
+
+1. **`TaskCoverage` and `Responsibility` must carry `startsAt`, `endsAt` and
+   `dueOn`, and `TaskCoverage` must carry `budgetAgorot`.** The reviewer read
+   the unbuilt Task 12 and 14 briefs and found the omission already biting
+   both: Task 14's page calls `coverageFor` *and* `listTasks` for the same
+   season purely to backfill budgets, and Task 12's person page renders a
+   `shift` responsibility with no way to say when the shift starts — which
+   defeats the module's own stated purpose of answering what one person is on
+   the hook for.
+2. **`assignPerson` must refuse a person who was merged away.** `mergePersons`
+   refuses to merge someone who already has an assignment, but nothing stopped
+   a *new* assignment landing on the merged-away id afterwards. Such a row is
+   counted as staffed on the board while being invisible on every page a lead
+   would look at, because `listPeople` and `resolveName` both hide merged rows.
+3. **Both orderings need a stable tiebreaker.** `title` is not unique, and
+   recurring shifts realistically share one. Ties have no defined order in
+   Postgres and can silently reorder between calls.
+
 **Ruling on what counts as covered:** only `accepted` and `done` assignments
 count toward `peopleNeeded`. A `proposed` assignment is a lead's intention, not
 a commitment, and counting it would report a shift as staffed when nobody has
@@ -4889,7 +4908,6 @@ import { notFound } from 'next/navigation';
 import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import { listSeasons } from '@/lib/members/roster';
-import { listTasks } from '@/lib/work/tasks';
 import { coverageFor } from '@/lib/work/coverage';
 import { listPeople } from '@/lib/members/dossier';
 import { formatILS } from '@/lib/money';
@@ -4923,9 +4941,9 @@ export default async function TasksPage(
 
   const { season: requested } = await searchParams;
   const season = seasons.find((s) => s.id === requested) ?? seasons[0];
+  // `coverageFor` carries budgetAgorot and the timing fields since the Task 9
+  // amendment — do NOT re-query listTasks here just to backfill them.
   const coverage = await coverageFor(db, season.id);
-  const tasks = await listTasks(db, season.id);
-  const budgets = new Map(tasks.map((task) => [task.taskId, task.budgetAgorot]));
   const people = await listPeople(db);
   const roster = people.map((p) => ({ personId: p.personId, displayName: p.displayName }));
 
@@ -4978,9 +4996,8 @@ export default async function TasksPage(
               <h3>{task.title}</h3>
               <p className="muted">
                 {task.eventName && <><bdi>{task.eventName}</bdi>{' · '}</>}
-                {budgets.get(task.taskId) !== null
-                  && budgets.get(task.taskId) !== undefined && (
-                  <>תקציב <bdi>{formatILS(budgets.get(task.taskId)!)} ₪</bdi></>
+                {task.budgetAgorot !== null && (
+                  <>תקציב <bdi>{formatILS(task.budgetAgorot)} ₪</bdi></>
                 )}
               </p>
               <AssignControl
