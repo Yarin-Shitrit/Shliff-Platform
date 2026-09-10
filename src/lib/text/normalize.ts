@@ -18,3 +18,21 @@ export function normalizeHebrew(input: string): string {
     .replace(WHITESPACE, ' ')
     .trim();
 }
+
+/**
+ * True when a string a person typed carries no visible content.
+ *
+ * Use this for every blankness check on user input. `.trim()` is not enough:
+ * it leaves LRM, RLM and zero-width marks standing, and in this RTL admin UI a
+ * browser injects those invisibly on copy-paste — so a field that looks empty
+ * to a human passes a trim check and gets stored. That defect was found three
+ * separate times (an exception reason, an offset note, a task title) before it
+ * got a name.
+ *
+ * This is for validating input only. Never normalize the value you store: the
+ * original spelling is evidence, and rewriting it loses information — the
+ * geresh in `ראנצ׳ו` becomes an ASCII apostrophe that appears in no sheet.
+ */
+export function isBlank(value: string | null | undefined): boolean {
+  return !normalizeHebrew(value ?? '');
+}

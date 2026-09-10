@@ -3,7 +3,7 @@ import type { AnyDb } from '@/lib/db-types';
 import { dues, payments, PAYMENT_CHANNELS } from '@/db/schema/camp';
 import type { PaymentChannel } from '@/db/schema/camp';
 import { toAgorot, fromAgorot } from '@/lib/money';
-import { normalizeHebrew } from '@/lib/text/normalize';
+import { isBlank } from '@/lib/text/normalize';
 
 export interface PaymentInput {
   dueId: string;
@@ -56,7 +56,7 @@ function validate(input: PaymentInput): void {
    * the only thing tying an offset back to the debt it settled, and losing
    * that link is exactly what the source workbook already did.
    */
-  if (input.channel === 'קיזוז' && !normalizeHebrew(input.note ?? '')) {
+  if (input.channel === 'קיזוז' && isBlank(input.note)) {
     throw new Error('an offset must carry a note saying what it was set against');
   }
 }
@@ -84,7 +84,7 @@ export async function recordOffset(db: AnyDb, input: OffsetInput): Promise<strin
   // but the real callers are server actions building this from a request body,
   // where TypeScript guarantees nothing. Without it an omitted note degrades to
   // a raw TypeError instead of the module's own message.
-  if (!normalizeHebrew(input.note ?? '')) {
+  if (isBlank(input.note)) {
     throw new Error('an offset must carry a note saying what it was set against');
   }
   if (input.entries.length === 0) throw new Error('an offset needs at least one due');

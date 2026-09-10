@@ -3,7 +3,7 @@ import type { AnyDb } from '@/lib/db-types';
 import { dues, seasons, memberships, persons } from '@/db/schema/camp';
 import type { DueKind } from '@/db/schema/camp';
 import { toAgorot, fromAgorot } from '@/lib/money';
-import { normalizeHebrew } from '@/lib/text/normalize';
+import { isBlank } from '@/lib/text/normalize';
 
 export interface DueRow {
   dueId: string;
@@ -72,10 +72,10 @@ export async function setException(db: AnyDb, input: ExceptionInput): Promise<vo
    * were real, which is the exact failure this refusal exists to prevent.
    * The original text is what gets stored; only the check is normalized.
    */
-  if (!normalizeHebrew(input.reason)) {
+  if (isBlank(input.reason)) {
     throw new Error('an exception must carry a reason');
   }
-  if (!normalizeHebrew(input.decidedBy)) {
+  if (isBlank(input.decidedBy)) {
     throw new Error('an exception must record who decided it');
   }
   if (input.amount < 0) throw new Error('an exception amount may not be negative');
