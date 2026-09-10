@@ -88,6 +88,56 @@ describe('seasonFeeSummary', () => {
     expect(summary.unpaidCount).toBe(2);
   });
 
+  /**
+   * The clamp exists so a season total can never read negative. Without it,
+   * one member paying more than they owe would subtract from what the rest of
+   * the camp still owes and print a nonsense figure.
+   */
+  it('never reports a negative season total when someone overpays', async () => {
+    const season = await createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1200 });
+    for (const name of ['אופק', 'יוסף']) {
+      const id = await createPerson(db, name, LEAD);
+      await addMember(db, id, season.id);
+    }
+    await issueFlatDues(db, season.id);
+    const rows = await listDues(db, season.id);
+    // 2,400 against a 1,200 due, plus a second member paying in full.
+    await recordPayment(db, {
+      dueId: rows[0].dueId, amount: 2400, channel: 'העברה', paidOn: WHEN, recordedBy: LEAD,
+    });
+    await recordPayment(db, {
+      dueId: rows[1].dueId, amount: 1200, channel: 'מזומן', paidOn: WHEN, recordedBy: LEAD,
+    });
+
+    const summary = await seasonFeeSummary(db, season.id);
+    expect(summary.expectedAgorot).toBe(240000);
+    expect(summary.collectedAgorot).toBe(360000);
+    expect(summary.outstandingAgorot).toBe(0);
+  });
+
+  /**
+   * An overpayment makes the season total read zero while a member still owes.
+   * That is not a bug in the total — it is arithmetic — but it means the total
+   * alone cannot be trusted to show whether everyone has paid. unpaidCount is
+   * the figure that survives it, and this test pins that relationship.
+   */
+  it('still counts an unpaid member when an overpayment hides them in the total', async () => {
+    const season = await createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1200 });
+    for (const name of ['אופק', 'יוסף']) {
+      const id = await createPerson(db, name, LEAD);
+      await addMember(db, id, season.id);
+    }
+    await issueFlatDues(db, season.id);
+    const rows = await listDues(db, season.id);
+    await recordPayment(db, {
+      dueId: rows[0].dueId, amount: 2400, channel: 'העברה', paidOn: WHEN, recordedBy: LEAD,
+    });
+
+    const summary = await seasonFeeSummary(db, season.id);
+    expect(summary.outstandingAgorot).toBe(0);
+    expect(summary.unpaidCount).toBe(1);
+  });
+
   it('names roster members who have no due at all rather than hiding them', async () => {
     const season = await createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1200 });
     const withDue = await createPerson(db, 'אופק', LEAD);
@@ -100,5 +150,21 @@ describe('seasonFeeSummary', () => {
     const summary = await seasonFeeSummary(db, season.id);
     expect(summary.memberCount).toBe(2);
     expect(summary.missingDues).toEqual(['עמירם דהן']);
+  });
+
+  it('sorts the missing-dues names rather than returning insertion order', async () => {
+    const season = await createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1200 });
+    const withDue = await createPerson(db, 'אופק', LEAD);
+    await addMember(db, withDue, season.id);
+    await issueFlatDues(db, season.id);
+
+    // Added deliberately out of order, so insertion order and sorted order differ.
+    for (const name of ['תומר גולן', 'דנה שרון', 'איתן']) {
+      const id = await createPerson(db, name, LEAD);
+      await addMember(db, id, season.id);
+    }
+
+    const summary = await seasonFeeSummary(db, season.id);
+    expect(summary.missingDues).toEqual(['איתן', 'דנה שרון', 'תומר גולן']);
   });
 });
