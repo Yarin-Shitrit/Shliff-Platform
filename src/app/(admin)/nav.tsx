@@ -16,7 +16,7 @@ const SECTIONS: Section[] = [
   { href: '/', label: 'סקירה' },
   { href: '/data', label: 'נתונים' },
   { href: '/upload', label: 'ייבוא' },
-  { href: '/members', label: 'חברי מחנה', planned: true },
+  { href: '/members', label: 'חברי מחנה' },
   { href: '/fees', label: 'דמי קאמפ', planned: true },
 ];
 

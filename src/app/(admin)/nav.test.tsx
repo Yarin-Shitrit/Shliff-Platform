@@ -27,8 +27,16 @@ describe('Nav', () => {
     render(<Nav />);
     // Planned sections communicate where the product is going; they must be
     // visible but must not be links, so nobody clicks into a dead end.
-    const members = screen.getByText('חברי מחנה');
-    expect(members.tagName).not.toBe('A');
-    expect(members.getAttribute('aria-disabled')).toBe('true');
+    const fees = screen.getByText('דמי קאמפ');
+    expect(fees.tagName).not.toBe('A');
+    expect(fees.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('links חברי מחנה now that the section is built', () => {
+    render(<Nav />);
+    // Flipped ahead of Task 15: the page exists and renders real data, and a
+    // built section left behind a בקרוב badge is worse than not shipping it.
+    const members = screen.getByRole('link', { name: 'חברי מחנה' });
+    expect(members.getAttribute('href')).toBe('/members');
   });
 });
