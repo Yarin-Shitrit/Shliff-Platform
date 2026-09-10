@@ -15,6 +15,13 @@
       "when": 1788978441507,
       "tag": "0001_silent_prism",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789017138982,
+      "tag": "0002_glossy_xorn",
+      "breakpoints": true
     }
   ]
 }
