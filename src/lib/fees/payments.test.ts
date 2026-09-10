@@ -87,6 +87,20 @@ describe('payments', () => {
     })).rejects.toThrow(/note/);
   });
 
+  /**
+   * Same hole as the exception reason in Task 5: `.trim()` does not strip
+   * directional or zero-width marks, which an RTL browser injects invisibly.
+   * It matters more here — the note is the only thing tying an offset back to
+   * the debt it settled, which is precisely the link the source workbook lost.
+   */
+  it('refuses an offset note that is only invisible directional marks', async () => {
+    const { dueId } = await dueFor('יוסף');
+    await expect(recordPayment(db, {
+      dueId, amount: 1200, channel: 'קיזוז', paidOn: WHEN,
+      note: '\u200e\u200f\u200b', recordedBy: LEAD,
+    })).rejects.toThrow(/note/);
+  });
+
   it('refuses an unknown channel', async () => {
     const { dueId } = await dueFor('אופק');
     await expect(recordPayment(db, {

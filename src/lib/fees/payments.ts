@@ -3,6 +3,7 @@ import type { AnyDb } from '@/lib/db-types';
 import { dues, payments, PAYMENT_CHANNELS } from '@/db/schema/camp';
 import type { PaymentChannel } from '@/db/schema/camp';
 import { toAgorot, fromAgorot } from '@/lib/money';
+import { normalizeHebrew } from '@/lib/text/normalize';
 
 export interface PaymentInput {
   dueId: string;
@@ -47,7 +48,15 @@ function validate(input: PaymentInput): void {
     throw new Error(`unknown payment channel: ${input.channel}`);
   }
   if (input.amount <= 0) throw new Error('a payment amount must be positive');
-  if (input.channel === 'קיזוז' && !input.note?.trim()) {
+  /*
+   * Blankness is judged with normalizeHebrew, not `.trim()`. `.trim()` leaves
+   * LRM, RLM and zero-width marks standing, and in an RTL UI a browser injects
+   * those invisibly on copy-paste — a note made only of them looks blank to a
+   * human and would pass. That matters here more than anywhere: the note is
+   * the only thing tying an offset back to the debt it settled, and losing
+   * that link is exactly what the source workbook already did.
+   */
+  if (input.channel === 'קיזוז' && !normalizeHebrew(input.note ?? '')) {
     throw new Error('an offset must carry a note saying what it was set against');
   }
 }
@@ -71,7 +80,7 @@ export async function recordPayment(db: AnyDb, input: PaymentInput): Promise<str
  * same note instead of looking like five unrelated cash payments.
  */
 export async function recordOffset(db: AnyDb, input: OffsetInput): Promise<string[]> {
-  if (!input.note.trim()) {
+  if (!normalizeHebrew(input.note)) {
     throw new Error('an offset must carry a note saying what it was set against');
   }
   if (input.entries.length === 0) throw new Error('an offset needs at least one due');
