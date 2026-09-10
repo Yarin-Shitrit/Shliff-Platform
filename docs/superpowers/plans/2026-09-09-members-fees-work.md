@@ -978,6 +978,26 @@ exactly reversible from `person_aliases.merged_from_person_id`, with no audit
 table. The real-world case — "this unlinked name is the same as that person" —
 always has an alias-only source.
 
+**Amended after the Task 4 review** (commit `07e7ee1`), which probed that
+reversibility claim and broke it twice. Two further refusals are required to
+make the claim true rather than merely plausible:
+
+- **`'מיזוג קודם'` — a person who has themselves absorbed someone cannot be
+  merged onward.** `merged_from_person_id` records one origin per alias, not a
+  chain. Merging X into A and then A into B restamps X's alias with A and
+  destroys the only pointer back to X, so `unmergePerson(X)` matches nothing
+  and silently does nothing while reporting success. Refusing the chain keeps
+  the no-audit-table design honest; a lead unmerges X first.
+- **`'כינוי זהה קיים'` — two people who already own the same spelling cannot be
+  merged.** `person_aliases` is unique on `(person_id, normalized)` but
+  deliberately NOT on `normalized` alone, because two real people may share a
+  Hebrew first name — `דניאל פינטו` and `דניאל ענבר` are both in these
+  workbooks. That makes the collision reachable, and the alias UPDATE would
+  throw a raw database error instead of a `MergeResult` a lead can read.
+
+Both guards are mutation-checked in the shipped tests. Do not remove either
+without replacing the reversibility design wholesale.
+
 - [ ] **Step 1: Write the failing test**
 
 Create `src/lib/members/link.test.ts`:
