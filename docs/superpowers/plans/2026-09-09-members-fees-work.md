@@ -70,7 +70,7 @@
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: `toAgorot(value: string | number): number`, `fromAgorot(agorot: number): string`, `sumAgorot(values: Array<string | number>): number`, `formatILS(agorot: number): string`. Tables `persons`, `personAliases`, `seasons`, `memberships`, `dues`, `payments`, `campEvents`, `tasks`, `taskAssignments`, and the union types `DueKind`, `PaymentChannel`, `TaskKind`, `TaskStatus`, `AssignmentStatus`, `PAYMENT_CHANNELS`.
+- Produces: `toAgorot(value: string | number): number`, `fromAgorot(agorot: number): string`, `sumAgorot(values: Array<string | number>): number`, `formatILS(agorot: number): string`. Tables `persons`, `personAliases`, `seasons`, `memberships`, `dues`, `payments`, `campEvents`, `tasks`, `taskAssignments`, and the union types `DueKind`, `PaymentChannel`, `TaskKind`, `TaskStatus`, `AssignmentStatus`, `EventKind`, `PAYMENT_CHANNELS`.
 
 - [ ] **Step 1: Write the failing money test**
 
