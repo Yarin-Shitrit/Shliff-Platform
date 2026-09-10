@@ -5,7 +5,7 @@ import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import type { ActionResult } from '@/lib/action-result';
 import { issueFlatDues, setException, clearException } from '@/lib/fees/dues';
-import { recordPayment } from '@/lib/fees/payments';
+import { recordPayment, deletePayment } from '@/lib/fees/payments';
 import type { PaymentChannel } from '@/db/schema/camp';
 
 function failed(error: unknown): ActionResult {
@@ -51,6 +51,23 @@ export async function clearExceptionAction(
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await clearException(db, personId, seasonId);
+  } catch (error) {
+    return failed(error);
+  }
+  revalidatePath('/fees');
+  return { ok: true };
+}
+
+/**
+ * Undoes a payment recorded against the wrong person or with the wrong
+ * amount — the most likely data-entry mistake on this page. Without this the
+ * only repair is SQL.
+ */
+export async function deletePaymentAction(paymentId: string): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+  try {
+    await deletePayment(db, paymentId);
   } catch (error) {
     return failed(error);
   }

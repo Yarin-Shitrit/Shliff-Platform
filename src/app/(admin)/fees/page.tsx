@@ -3,11 +3,10 @@ import Link from 'next/link';
 import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import { listSeasons } from '@/lib/members/roster';
-import { listDues } from '@/lib/fees/dues';
-import { settlementFor } from '@/lib/fees/payments';
+import { listSeasonFees } from '@/lib/fees/season-fees';
 import { seasonFeeSummary } from '@/lib/fees/summary';
 import { formatILS } from '@/lib/money';
-import { ExceptionForm } from './exception-form';
+import { MemberFeeRow, IssueMissingDuesButton } from './member-fee-row';
 import styles from './fees.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -31,10 +30,8 @@ export default async function FeesPage(
   const { season: requested } = await searchParams;
   const season = seasons.find((s) => s.id === requested) ?? seasons[0];
   const summary = await seasonFeeSummary(db, season.id);
-  const rows = await listDues(db, season.id);
-
-  const settled = new Map<string, Awaited<ReturnType<typeof settlementFor>>>();
-  for (const row of rows) settled.set(row.dueId, await settlementFor(db, row.dueId));
+  const rows = await listSeasonFees(db, season.id);
+  const missingCount = rows.filter((row) => row.dueId === null).length;
 
   return (
     <main>
@@ -73,52 +70,38 @@ export default async function FeesPage(
             </dd>
           </div>
         </dl>
-        {summary.missingDues.length > 0 && (
-          <p className="badge-warn">
-            חברים ללא חיוב: {summary.missingDues.join(', ')}
-          </p>
-        )}
       </section>
 
-      <div className="scroll-x">
-        <table>
-          <thead>
-            <tr>
-              <th>שם</th><th>לתשלום</th><th>שולם</th><th>יתרה</th><th>סוג</th><th>שינוי</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              const settlement = settled.get(row.dueId)!;
-              return (
-                <tr key={row.dueId}>
-                  <td>
-                    <Link href={`/members/${row.personId}`}>{row.displayName}</Link>
-                  </td>
-                  <td><bdi>{formatILS(row.amountAgorot)} ₪</bdi></td>
-                  <td><bdi>{formatILS(settlement.paidAgorot)} ₪</bdi></td>
-                  <td className={settlement.settled ? undefined : 'badge-warn'}>
-                    <bdi>{formatILS(settlement.outstandingAgorot)} ₪</bdi>
-                  </td>
-                  <td>
-                    {row.kind === 'exception'
-                      ? <span title={row.exceptionReason ?? ''}>חריג</span>
-                      : <span className="muted">רגיל</span>}
-                  </td>
-                  <td>
-                    <ExceptionForm
-                      personId={row.personId}
-                      seasonId={season.id}
-                      displayName={row.displayName}
-                      currentAgorot={row.amountAgorot}
-                    />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <IssueMissingDuesButton seasonId={season.id} missingCount={missingCount} />
+
+      {rows.length === 0 ? (
+        /*
+         * Name the season, matching the fix on the task board: the default is
+         * the newest season, which early in a planning year legitimately has
+         * no members on it yet — but an unnamed "nothing here" reads as a
+         * broken page, and the reader has no reason to suspect the picker
+         * above holds the answer.
+         */
+        <p className="muted">
+          אין עדיין חברים רשומים ל<bdi>{season.name}</bdi>. אם חיפשתם שנה אחרת,
+          בחרו אותה למעלה.
+        </p>
+      ) : (
+        <div className="scroll-x">
+          <table>
+            <thead>
+              <tr>
+                <th>שם</th><th>לתשלום</th><th>שולם</th><th>יתרה</th><th>סוג</th><th>שינוי</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <MemberFeeRow key={row.personId} row={row} seasonId={season.id} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </main>
   );
 }
