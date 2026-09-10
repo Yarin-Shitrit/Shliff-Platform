@@ -3,6 +3,7 @@ import type { AnyDb } from '@/lib/db-types';
 import { dues, seasons, memberships, persons } from '@/db/schema/camp';
 import type { DueKind } from '@/db/schema/camp';
 import { toAgorot, fromAgorot } from '@/lib/money';
+import { normalizeHebrew } from '@/lib/text/normalize';
 
 export interface DueRow {
   dueId: string;
@@ -62,8 +63,21 @@ export async function issueFlatDues(db: AnyDb, seasonId: string): Promise<number
  */
 export async function setException(db: AnyDb, input: ExceptionInput): Promise<void> {
   const reason = input.reason.trim();
-  if (!reason) throw new Error('an exception must carry a reason');
-  if (!input.decidedBy.trim()) throw new Error('an exception must record who decided it');
+  /*
+   * Emptiness is judged on the normalized form, not a bare `.trim()`.
+   * `.trim()` does not strip LRM, RLM or zero-width marks, and this is a
+   * Hebrew RTL admin UI where a browser or OS routinely injects those
+   * invisibly during a copy-paste. A reason made only of them would pass a
+   * trim check and be stored — recording a materially blank reason as if it
+   * were real, which is the exact failure this refusal exists to prevent.
+   * The original text is what gets stored; only the check is normalized.
+   */
+  if (!normalizeHebrew(input.reason)) {
+    throw new Error('an exception must carry a reason');
+  }
+  if (!normalizeHebrew(input.decidedBy)) {
+    throw new Error('an exception must record who decided it');
+  }
   if (input.amount < 0) throw new Error('an exception amount may not be negative');
 
   const updated = await db.update(dues)
@@ -88,14 +102,22 @@ export async function clearException(
   const [season] = await db.select().from(seasons).where(eq(seasons.id, seasonId));
   if (!season) throw new Error(`unknown season ${seasonId}`);
 
-  await db.update(dues)
+  const updated = await db.update(dues)
     .set({
       amount: season.flatRate,
       kind: 'flat',
       exceptionReason: null,
       decidedBy: null,
     })
-    .where(and(eq(dues.personId, personId), eq(dues.seasonId, seasonId)));
+    .where(and(eq(dues.personId, personId), eq(dues.seasonId, seasonId)))
+    .returning();
+
+  // Refuse as loudly as setException does. A mistyped person or season would
+  // otherwise report success having changed nothing — the silent-failure shape
+  // this module deliberately avoids one function over.
+  if (updated.length === 0) {
+    throw new Error('no due for that person in that season — nothing to clear');
+  }
 }
 
 export async function listDues(db: AnyDb, seasonId: string): Promise<DueRow[]> {

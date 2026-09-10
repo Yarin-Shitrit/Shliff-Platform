@@ -82,6 +82,22 @@ describe('dues', () => {
     })).rejects.toThrow(/decided/);
   });
 
+  /**
+   * `.trim()` does not strip LRM, RLM or zero-width marks, and this is an RTL
+   * admin UI where a browser injects those invisibly on copy-paste. A reason
+   * made only of them looks blank to a human and passes a trim check — which
+   * would record a materially empty reason as if it were real, the exact
+   * failure this refusal exists to prevent.
+   */
+  it('refuses a reason that is only invisible directional marks', async () => {
+    const person = await member('עמירם דהן');
+    await issueFlatDues(db, seasonId);
+    await expect(setException(db, {
+      personId: person, seasonId, amount: 0,
+      reason: '\u200e\u200f\u200b', decidedBy: LEAD,
+    })).rejects.toThrow(/reason/);
+  });
+
   it('refuses a negative amount', async () => {
     const person = await member('אופק');
     await issueFlatDues(db, seasonId);
@@ -102,6 +118,16 @@ describe('dues', () => {
     expect(row.kind).toBe('flat');
     expect(row.amountAgorot).toBe(150000);
     expect(row.exceptionReason).toBeNull();
+    // The decider must go too — an exception's approver has no meaning once
+    // the person is back on the flat rate.
+    expect(row.decidedBy).toBeNull();
+  });
+
+  it('refuses to clear an exception that does not exist', async () => {
+    const person = await member('אופק');
+    // No issueFlatDues, so there is no due row to clear.
+    await expect(clearException(db, person, seasonId))
+      .rejects.toThrow(/nothing to clear/);
   });
 
   it('reproduces ברן 25: 38 flat + 5 exceptions = 60,955', async () => {
