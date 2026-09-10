@@ -132,7 +132,17 @@ export default async function TasksPage(
       ))}
 
       {coverage.length === 0 && (
-        <p className="muted">אין משימות לשנה הזו.</p>
+        /*
+         * Name the season. The default is the newest one, which early in a
+         * planning year legitimately has no work on it yet — but an unnamed
+         * "no tasks" reads as a broken page rather than an empty year, and
+         * the reader has no reason to suspect the picker above holds the
+         * answer.
+         */
+        <p className="muted">
+          אין עדיין משימות ל<bdi>{season.name}</bdi>. אם חיפשתם שנה אחרת,
+          בחרו אותה למעלה.
+        </p>
       )}
     </main>
   );
