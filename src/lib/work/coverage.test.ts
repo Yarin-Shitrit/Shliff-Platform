@@ -74,6 +74,24 @@ describe('coverage', () => {
     expect(coverage.uncovered).toBe(true);
   });
 
+  /**
+   * After the burn a lead marks shifts done. If `done` stopped counting as
+   * covered, every completed shift would reappear as a staffing gap — the
+   * report would be at its most wrong exactly when the work is finished.
+   */
+  it('keeps counting someone who has finished the work', async () => {
+    const taskId = await shift('משמרת בר', 1);
+    const ofek = await createPerson(db, 'אופק', LEAD);
+    const assignmentId = await assignPerson(db, taskId, ofek, LEAD);
+    await setAssignmentStatus(db, assignmentId, 'accepted');
+    await setAssignmentStatus(db, assignmentId, 'done');
+
+    const [coverage] = await coverageFor(db, seasonId);
+    expect(coverage.accepted).toBe(1);
+    expect(coverage.uncovered).toBe(false);
+    expect(await uncoveredTasks(db, seasonId)).toEqual([]);
+  });
+
   it('stops counting someone who dropped', async () => {
     const taskId = await shift('משמרת בר', 1);
     const ofek = await createPerson(db, 'אופק', LEAD);
@@ -104,6 +122,28 @@ describe('coverage', () => {
     const { setTaskStatus } = await import('@/lib/work/tasks');
     await setTaskStatus(db, taskId, 'cancelled');
     expect(await uncoveredTasks(db, seasonId)).toEqual([]);
+  });
+
+  /**
+   * Someone who dropped out is no longer responsible, but someone merely
+   * proposed still is — a lead needs to see what they have offered and not yet
+   * had answered.
+   */
+  it('drops the dropped from responsibilities but keeps the merely proposed', async () => {
+    const ofek = await createPerson(db, 'אופק', LEAD);
+    await createTask(db, { seasonId, kind: 'deliverable', title: 'חשמל' });
+    await createTask(db, { seasonId, kind: 'deliverable', title: 'הגברה' });
+
+    const all = await listTasks(db, seasonId);
+    const kept = all.find((t) => t.title === 'חשמל')!;
+    const gone = all.find((t) => t.title === 'הגברה')!;
+    await assignPerson(db, kept.taskId, ofek, LEAD); // stays 'proposed'
+    const dropped = await assignPerson(db, gone.taskId, ofek, LEAD);
+    await setAssignmentStatus(db, dropped, 'dropped');
+
+    const owned = await responsibilitiesOf(db, ofek);
+    expect(owned.map((r) => r.title)).toEqual(['חשמל']);
+    expect(owned[0].status).toBe('proposed');
   });
 
   it('answers "everything אופק is responsible for" across kinds and events', async () => {
