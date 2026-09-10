@@ -9,6 +9,8 @@ export type MergeResult =
   | { ok: true; movedAliases: number }
   | { ok: false; conflicts: string[] };
 
+/** Creates a person and their first alias together, so a new person is
+ *  immediately findable by `resolveName`. */
 export async function createPerson(
   db: AnyDb, displayName: string, email: string,
 ): Promise<string> {
@@ -42,6 +44,8 @@ export async function createPersonFromAlias(
   return person.id;
 }
 
+/** Attaches a queued name to an existing person. Stamps who decided and when:
+ *  identity decisions are never anonymous. */
 export async function linkAlias(
   db: AnyDb, aliasId: string, personId: string, email: string,
 ): Promise<void> {
@@ -50,6 +54,8 @@ export async function linkAlias(
     .where(eq(personAliases.id, aliasId));
 }
 
+/** Detaches an alias, putting it back in the leads' queue and clearing the
+ *  previous confirmation so the row does not claim an approval it no longer has. */
 export async function unlinkAlias(db: AnyDb, aliasId: string): Promise<void> {
   await db.update(personAliases)
     .set({ personId: null, confirmedBy: null, confirmedAt: null })
@@ -63,6 +69,9 @@ export async function unlinkAlias(db: AnyDb, aliasId: string): Promise<void> {
  * a membership could silently combine two people's money, and refusing keeps
  * the merge exactly reversible from `merged_from_person_id` without an audit
  * table. Callers get the blockers back so a lead can resolve them by hand.
+ *
+ * Two further refusals exist to keep that reversibility claim honest rather
+ * than merely plausible — see the comments on each below.
  */
 export async function mergePersons(
   db: AnyDb, sourceId: string, targetId: string, email: string,
@@ -81,6 +90,38 @@ export async function mergePersons(
   const [assignment] = await db.select().from(taskAssignments)
     .where(eq(taskAssignments.personId, sourceId)).limit(1);
   if (assignment) conflicts.push('שיבוץ למשימה');
+
+  /*
+   * Refuse to merge a person who has themselves absorbed someone.
+   *
+   * `merged_from_person_id` holds one origin per alias, so it can record one
+   * level of merge, not a chain. Merging X into A and then A into B would
+   * restamp X's alias with A and destroy the only pointer back to X, leaving
+   * `unmergePerson(X)` to match nothing and silently do nothing. Rather than
+   * grow an audit table for a case a camp of this size hits once a year, the
+   * chain is refused: unmerge X first, then merge A into B.
+   */
+  const [absorbed] = await db.select().from(persons)
+    .where(eq(persons.mergedIntoId, sourceId)).limit(1);
+  if (absorbed) conflicts.push('מיזוג קודם');
+
+  /*
+   * Refuse when both people own the same spelling.
+   *
+   * `person_aliases` is unique on (person_id, normalized) but deliberately NOT
+   * on `normalized` alone, because two real people may share a Hebrew first
+   * name. That makes this collision reachable, and moving the source's alias
+   * onto the target would violate the constraint and throw a raw database
+   * error instead of a MergeResult a lead can read.
+   */
+  const sourceAliases = await db.select({ normalized: personAliases.normalized })
+    .from(personAliases).where(eq(personAliases.personId, sourceId));
+  const targetAliases = await db.select({ normalized: personAliases.normalized })
+    .from(personAliases).where(eq(personAliases.personId, targetId));
+  const targetSet = new Set(targetAliases.map((row) => row.normalized));
+  if (sourceAliases.some((row) => targetSet.has(row.normalized))) {
+    conflicts.push('כינוי זהה קיים');
+  }
 
   if (conflicts.length > 0) return { ok: false, conflicts };
 

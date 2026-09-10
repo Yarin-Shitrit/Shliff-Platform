@@ -42,6 +42,27 @@ describe('linking', () => {
     expect(alias.confirmedAt).toBeInstanceOf(Date);
   });
 
+  it('refuses to promote an alias that is already linked', async () => {
+    const ofek = await createPerson(db, 'אופק', LEAD);
+    const aliasId = await recordUnlinkedName(db, 'אופק כהן', 'import');
+    await linkAlias(db, aliasId, ofek, LEAD);
+
+    await expect(createPersonFromAlias(db, aliasId, LEAD))
+      .rejects.toThrow(/already linked/);
+  });
+
+  it('clears the confirmation stamp when an alias is unlinked', async () => {
+    const ofek = await createPerson(db, 'אופק', LEAD);
+    const aliasId = await recordUnlinkedName(db, 'אופק כהן', 'import');
+    await linkAlias(db, aliasId, ofek, LEAD);
+    await unlinkAlias(db, aliasId);
+
+    const [alias] = await db.select().from(personAliases)
+      .where(eq(personAliases.id, aliasId));
+    expect(alias.confirmedBy).toBeNull();
+    expect(alias.confirmedAt).toBeNull();
+  });
+
   it('unlinks an alias back into the queue', async () => {
     const ofek = await createPerson(db, 'אופק', LEAD);
     const aliasId = await recordUnlinkedName(db, 'אופק כהן', 'import');
@@ -103,6 +124,51 @@ describe('merging', () => {
     const person = await createPerson(db, 'אופק', LEAD);
     const result = await mergePersons(db, person, person, LEAD);
     expect(result.ok).toBe(false);
+  });
+
+  /**
+   * `merged_from_person_id` records one origin per alias, not a chain. Merging
+   * X into A and then A into B would restamp X's alias with A and destroy the
+   * only pointer back to X — `unmergePerson(X)` would then match nothing and
+   * silently do nothing, while the UI reported a successful unmerge. The chain
+   * is refused so the reversibility claim stays true.
+   */
+  it('refuses to merge a person who has themselves absorbed someone', async () => {
+    const x = await createPerson(db, 'אופק כהן', LEAD);
+    const a = await createPerson(db, 'אופק', LEAD);
+    const b = await createPerson(db, 'אופק לוי', LEAD);
+    expect((await mergePersons(db, x, a, LEAD)).ok).toBe(true);
+
+    const chained = await mergePersons(db, a, b, LEAD);
+    expect(chained.ok).toBe(false);
+    if (!chained.ok) expect(chained.conflicts).toContain('מיזוג קודם');
+
+    // X is still recoverable, which is the whole point of refusing.
+    await unmergePerson(db, x);
+    expect((await resolveName(db, 'אופק כהן')).personId).toBe(x);
+  });
+
+  /**
+   * The schema is unique on (person_id, normalized), NOT on normalized alone —
+   * two real people may share a Hebrew first name. That makes this collision
+   * reachable, and moving the alias would throw a raw database error instead
+   * of a MergeResult a lead can read.
+   */
+  it('refuses when both people already own the same spelling', async () => {
+    const target = await createPerson(db, 'דניאל', LEAD);
+    const source = await createPerson(db, 'דניאל פינטו', LEAD);
+    const aliasId = await recordUnlinkedName(db, 'דניאל', 'import');
+    await unlinkAlias(db, aliasId);
+    // Give the source an alias the target already owns.
+    await db.insert(personAliases).values({
+      personId: source, alias: 'דניאל', normalized: 'דניאל', source: 'manual',
+    });
+
+    const result = await mergePersons(db, source, target, LEAD);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.conflicts).toContain('כינוי זהה קיים');
+    // Nothing moved.
+    expect((await resolveName(db, 'דניאל פינטו')).personId).toBe(source);
   });
 
   it('unmerges exactly, putting every alias back where it came from', async () => {
