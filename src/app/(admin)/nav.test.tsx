@@ -27,16 +27,18 @@ describe('Nav', () => {
     render(<Nav />);
     // Planned sections communicate where the product is going; they must be
     // visible but must not be links, so nobody clicks into a dead end.
-    const fees = screen.getByText('דמי קאמפ');
-    expect(fees.tagName).not.toBe('A');
-    expect(fees.getAttribute('aria-disabled')).toBe('true');
+    const tasks = screen.getByText('משימות');
+    expect(tasks.tagName).not.toBe('A');
+    expect(tasks.getAttribute('aria-disabled')).toBe('true');
   });
 
-  it('links חברי מחנה now that the section is built', () => {
+  it.each([
+    ['חברי מחנה', '/members'],
+    ['דמי קאמפ', '/fees'],
+  ])('links %s now that the section is built', (label, href) => {
     render(<Nav />);
-    // Flipped ahead of Task 15: the page exists and renders real data, and a
+    // Flipped ahead of Task 15: these pages exist and render real data, and a
     // built section left behind a בקרוב badge is worse than not shipping it.
-    const members = screen.getByRole('link', { name: 'חברי מחנה' });
-    expect(members.getAttribute('href')).toBe('/members');
+    expect(screen.getByRole('link', { name: label }).getAttribute('href')).toBe(href);
   });
 });
