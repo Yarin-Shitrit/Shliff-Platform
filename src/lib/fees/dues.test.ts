@@ -3,7 +3,7 @@ import { createTestDb, type TestDb } from '@/test/db';
 import { createSeason, addMember } from '@/lib/members/roster';
 import { createPerson } from '@/lib/members/link';
 import {
-  issueFlatDues, setException, clearException, listDues,
+  issueFlatDues, issueFlatDueFor, setException, clearException, listDues,
 } from '@/lib/fees/dues';
 
 const LEAD = 'lead@shliff.camp';
@@ -128,6 +128,31 @@ describe('dues', () => {
     // No issueFlatDues, so there is no due row to clear.
     await expect(clearException(db, person, seasonId))
       .rejects.toThrow(/nothing to clear/);
+  });
+
+  it('issues a due to one member without touching anyone else', async () => {
+    const ofek = await member('אופק');
+    await member('יוסף');
+
+    expect(await issueFlatDueFor(db, ofek, seasonId)).toBe(true);
+
+    const rows = await listDues(db, seasonId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].displayName).toBe('אופק');
+    expect(rows[0].amountAgorot).toBe(150000);
+  });
+
+  it('is a no-op when that member already has a due', async () => {
+    const ofek = await member('אופק');
+    await issueFlatDueFor(db, ofek, seasonId);
+    expect(await issueFlatDueFor(db, ofek, seasonId)).toBe(false);
+    expect(await listDues(db, seasonId)).toHaveLength(1);
+  });
+
+  it('refuses to issue a due to someone not on the roster', async () => {
+    const stranger = await createPerson(db, 'זר', LEAD);
+    await expect(issueFlatDueFor(db, stranger, seasonId))
+      .rejects.toThrow(/not on this season roster/);
   });
 
   it('reproduces ברן 25: 38 flat + 5 exceptions = 60,955', async () => {

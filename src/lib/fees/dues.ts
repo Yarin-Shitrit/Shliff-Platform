@@ -61,6 +61,43 @@ export async function issueFlatDues(db: AnyDb, seasonId: string): Promise<number
  * from a spreadsheet, and a lead typing here is not that. A zero due with no
  * recorded reason is exactly what the camp lost last year.
  */
+/**
+ * Issues the season's flat rate to ONE member.
+ *
+ * Exists because the row-level control in the dues table says "issue this
+ * member's due", and wiring it to the season-wide `issueFlatDues` made it
+ * quietly issue everyone's — a button describing a smaller action than it
+ * performs, which is the kind of thing a lead only discovers after it has
+ * happened.
+ *
+ * Idempotent, and refuses a person who is not on that season's roster: a due
+ * for someone who was never a member has nothing to reconcile against.
+ * Returns true when a due was created, false when one already existed.
+ */
+export async function issueFlatDueFor(
+  db: AnyDb, personId: string, seasonId: string,
+): Promise<boolean> {
+  const [season] = await db.select().from(seasons).where(eq(seasons.id, seasonId));
+  if (!season) throw new Error(`unknown season ${seasonId}`);
+
+  const [membership] = await db.select().from(memberships).where(
+    and(eq(memberships.personId, personId), eq(memberships.seasonId, seasonId)),
+  );
+  if (!membership) {
+    throw new Error('that person is not on this season roster');
+  }
+
+  const [existing] = await db.select().from(dues).where(
+    and(eq(dues.personId, personId), eq(dues.seasonId, seasonId)),
+  );
+  if (existing) return false;
+
+  await db.insert(dues).values({
+    personId, seasonId, amount: season.flatRate, kind: 'flat',
+  });
+  return true;
+}
+
 export async function setException(db: AnyDb, input: ExceptionInput): Promise<void> {
   const reason = input.reason.trim();
   /*

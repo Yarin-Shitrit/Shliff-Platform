@@ -11,7 +11,8 @@ import { PAYMENT_CHANNELS } from '@/db/schema/camp';
 import type { PaymentChannel } from '@/db/schema/camp';
 import type { MemberFeeRow as MemberFeeRowData } from '@/lib/fees/season-fees';
 import {
-  issueDuesAction, clearExceptionAction, recordPaymentAction, deletePaymentAction,
+  issueDuesAction, issueDueForAction, clearExceptionAction, recordPaymentAction,
+  deletePaymentAction,
 } from './actions';
 import { ExceptionForm } from './exception-form';
 import styles from './fees.module.css';
@@ -103,7 +104,11 @@ export function MemberFeeRow({
   }
 
   function issue() {
-    run(() => issueDuesAction(seasonId));
+    // Per-person, not season-wide. The button sits on one member's row and
+    // says "issue a due at the flat rate"; wiring it to issueDuesAction made
+    // it fill in every member missing one, which is a larger action than the
+    // label promises and not one a lead would notice until afterwards.
+    run(() => issueDueForAction(row.personId, seasonId));
   }
 
   function clear() {

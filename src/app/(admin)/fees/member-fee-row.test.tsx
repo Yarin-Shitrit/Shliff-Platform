@@ -23,10 +23,11 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => {} }) }))
  * `src/app/(admin)/members/unlinked-queue.test.tsx`).
  */
 const {
-  issueDuesAction, setExceptionAction, clearExceptionAction,
+  issueDuesAction, issueDueForAction, setExceptionAction, clearExceptionAction,
   recordPaymentAction, deletePaymentAction,
 } = vi.hoisted(() => ({
   issueDuesAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
+  issueDueForAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
   setExceptionAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
   clearExceptionAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
   recordPaymentAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
@@ -34,7 +35,7 @@ const {
 }));
 /** `./actions` is a `'use server'` module whose graph reaches `@/db`. */
 vi.mock('./actions', () => ({
-  issueDuesAction, setExceptionAction, clearExceptionAction,
+  issueDuesAction, issueDueForAction, setExceptionAction, clearExceptionAction,
   recordPaymentAction, deletePaymentAction,
 }));
 
@@ -99,10 +100,17 @@ describe('MemberFeeRow', () => {
     expect(screen.queryByLabelText('סכום התשלום')).toBeNull();
   });
 
-  it('issues the due for the right season when the issue control is clicked', () => {
+  /**
+   * The control sits on ONE member's row and says "issue a due at the flat
+   * rate". Wired to the season-wide action it filled in every member missing
+   * one — a larger action than the label promises, and not one a lead would
+   * notice until after it happened.
+   */
+  it('issues the due for that member alone, not the whole season', () => {
     renderRow(NO_DUE);
     fireEvent.click(screen.getByRole('button', { name: 'הנפק חיוב לפי התעריף הרגיל' }));
-    expect(issueDuesAction).toHaveBeenCalledWith('s1');
+    expect(issueDueForAction).toHaveBeenCalledWith('p1', 's1');
+    expect(issueDuesAction).not.toHaveBeenCalled();
   });
 
   it('will not save a changed amount with a blank reason', () => {

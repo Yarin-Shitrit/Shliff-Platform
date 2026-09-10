@@ -4,7 +4,9 @@ import { revalidatePath } from 'next/cache';
 import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import type { ActionResult } from '@/lib/action-result';
-import { issueFlatDues, setException, clearException } from '@/lib/fees/dues';
+import {
+  issueFlatDues, issueFlatDueFor, setException, clearException,
+} from '@/lib/fees/dues';
 import { recordPayment, deletePayment } from '@/lib/fees/payments';
 import type { PaymentChannel } from '@/db/schema/camp';
 
@@ -20,6 +22,20 @@ export async function issueDuesAction(seasonId: string): Promise<ActionResult> {
   } catch (error) {
     return failed(error);
   }
+  revalidatePath('/fees');
+  return { ok: true };
+}
+
+/** Issues one member's due. Distinct from issueDuesAction, which fills in
+ *  every member missing one — the row control must not silently do that. */
+export async function issueDueForAction(
+  personId: string, seasonId: string,
+): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+  try {
+    await issueFlatDueFor(db, personId, seasonId);
+  } catch (error) { return failed(error); }
   revalidatePath('/fees');
   return { ok: true };
 }
