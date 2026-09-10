@@ -24,6 +24,21 @@ describe('events', () => {
     expect(events).toHaveLength(2);
     expect(events.map((e) => e.kind).sort()).toEqual(['burn', 'fundraiser']);
   });
+
+  it('orders events by date, not by insertion', async () => {
+    // Inserted latest-first so insertion order and date order differ.
+    await createEvent(db, {
+      seasonId, name: 'SuperNature 3.10', kind: 'fundraiser',
+      heldOn: new Date('2026-10-03T00:00:00Z'),
+    });
+    await createEvent(db, {
+      seasonId, name: 'מסיבת פקאנים', kind: 'fundraiser',
+      heldOn: new Date('2026-07-18T00:00:00Z'),
+    });
+
+    const names = (await listEvents(db, seasonId)).map((e) => e.name);
+    expect(names).toEqual(['מסיבת פקאנים', 'SuperNature 3.10']);
+  });
 });
 
 describe('tasks', () => {
@@ -77,6 +92,24 @@ describe('tasks', () => {
     })).rejects.toThrow(/before/);
   });
 
+  it('refuses a shift that starts and ends at the same instant', async () => {
+    const at = new Date('2026-10-01T20:00:00Z');
+    await expect(createTask(db, {
+      seasonId, kind: 'shift', title: 'משמרת בר', startsAt: at, endsAt: at,
+    })).rejects.toThrow(/before it starts/);
+  });
+
+  /**
+   * A task needing zero people can never be uncovered, so it would vanish from
+   * the report that exists to answer "what is not staffed yet" while still
+   * sitting in the list looking like work.
+   */
+  it('refuses a task that needs nobody', async () => {
+    await expect(createTask(db, {
+      seasonId, kind: 'build', title: 'סידור מחסן', peopleNeeded: 0,
+    })).rejects.toThrow(/at least one person/);
+  });
+
   it('refuses an event task with no event', async () => {
     await expect(createTask(db, {
       seasonId, kind: 'event_task', title: 'כניסה',
@@ -109,6 +142,16 @@ describe('tasks', () => {
     });
     const [task] = await listTasks(db, seasonId);
     expect(task.eventName).toBe('מסיבת פקאנים');
+  });
+
+  it('orders by kind then title, not by insertion', async () => {
+    await createTask(db, { seasonId, kind: 'deliverable', title: 'תאורה' });
+    await createTask(db, { seasonId, kind: 'build', title: 'סידור מחסן' });
+    await createTask(db, { seasonId, kind: 'deliverable', title: 'הגברה' });
+
+    const titles = (await listTasks(db, seasonId)).map((t) => t.title);
+    // build sorts before deliverable; within deliverable, ה before ת.
+    expect(titles).toEqual(['סידור מחסן', 'הגברה', 'תאורה']);
   });
 
   it('closes a task', async () => {
