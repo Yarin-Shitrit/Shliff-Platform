@@ -5056,7 +5056,11 @@ git commit -m "feat(work): task board built around the coverage gap"
 
 **Files:**
 - Modify: `src/app/(admin)/nav.tsx`
-- Create: `src/app/(admin)/nav.test.tsx`
+- Modify: `src/app/(admin)/nav.test.tsx` — **it already exists** (Phase 1). Its
+  third case, `shows planned sections as disabled rather than hiding them`,
+  asserts that `חברי מחנה` renders as a non-anchor with `aria-disabled`. That
+  assertion becomes false in this task and must be replaced, not left to fail.
+  The `planned` branch in `nav.tsx` stays in place for future sections.
 - Modify: `src/app/(admin)/page.tsx`
 - Modify: `src/app/(admin)/upload/page.tsx` (add the camp-baseline seed button)
 - Modify: `src/app/(admin)/upload/actions.ts` (add `seedCampAction`)
