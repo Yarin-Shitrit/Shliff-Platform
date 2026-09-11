@@ -115,6 +115,9 @@ export const payments = pgTable('payments', {
   note: text('note'),
   recordedBy: text('recorded_by').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  /** Which קופה received this money. Null means unattributed — shown, never
+   *  guessed. A `קיזוז` payment moves no cash and must never carry one. */
+  accountId: uuid('account_id'),
 });
 
 /** A fundraising party, or the burn itself. Deliberately minimal this phase:
@@ -152,6 +155,9 @@ export const tasks = pgTable('tasks', {
   peopleNeeded: integer('people_needed').notNull().default(1),
   status: text('status').$type<TaskStatus>().notNull().default('open'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  /** The budget line this deliverable spends against. `budgetAmount` above is
+   *  deprecated in place: kept for existing rows, written by nothing. */
+  budgetLineId: uuid('budget_line_id'),
 });
 
 export const taskAssignments = pgTable('task_assignments', {

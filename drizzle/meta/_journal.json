@@ -22,6 +22,13 @@
       "when": 1789017138982,
       "tag": "0002_glossy_xorn",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789169288307,
+      "tag": "0003_fine_bruce_banner",
+      "breakpoints": true
     }
   ]
 }

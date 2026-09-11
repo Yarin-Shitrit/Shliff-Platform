@@ -4,8 +4,9 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import * as source from '@/db/schema/source';
 import * as camp from '@/db/schema/camp';
+import * as money from '@/db/schema/money';
 
-export type TestDb = ReturnType<typeof drizzle<typeof source & typeof camp>>;
+export type TestDb = ReturnType<typeof drizzle<typeof source & typeof camp & typeof money>>;
 
 /**
  * Creates a fresh in-memory Postgres with the current migrations applied.
@@ -24,5 +25,5 @@ export async function createTestDb(): Promise<TestDb> {
     }
   }
 
-  return drizzle(client, { schema: { ...source, ...camp } });
+  return drizzle(client, { schema: { ...source, ...camp, ...money } });
 }
