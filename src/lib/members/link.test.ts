@@ -20,6 +20,28 @@ describe('linking', () => {
     expect(resolution.personId).toBe(id);
   });
 
+  /**
+   * normalizeHebrew maps the geresh ׳ (U+05F3) to an ASCII apostrophe. Storing
+   * its output rewrote `ראנצ׳ו` into a spelling found in no sheet and showed it
+   * back to the lead who typed the real one. The written form is evidence; the
+   * normalized form is only the lookup key.
+   */
+  it('stores the spelling as typed, and normalizes only for lookup', async () => {
+    const id = await createPerson(db, 'ראנצ׳ו', LEAD);
+
+    const [person] = await db.select().from(persons).where(eq(persons.id, id));
+    expect(person.displayName).toBe('ראנצ׳ו');
+
+    const [alias] = await db.select().from(personAliases)
+      .where(eq(personAliases.personId, id));
+    expect(alias.alias).toBe('ראנצ׳ו');
+    expect(alias.normalized).toBe("ראנצ'ו");
+
+    // Both spellings still find them — that is what normalizing the key buys.
+    expect((await resolveName(db, 'ראנצ׳ו')).personId).toBe(id);
+    expect((await resolveName(db, "ראנצ'ו")).personId).toBe(id);
+  });
+
   it('promotes an unlinked name to a new person and clears the queue', async () => {
     const aliasId = await recordUnlinkedName(db, 'עמירם דהן', 'import');
     const personId = await createPersonFromAlias(db, aliasId, LEAD);

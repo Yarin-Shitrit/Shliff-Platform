@@ -14,12 +14,22 @@ export type MergeResult =
 export async function createPerson(
   db: AnyDb, displayName: string, email: string,
 ): Promise<string> {
-  const name = normalizeHebrew(displayName);
+  /*
+   * Store the spelling as given; normalize only for comparison.
+   *
+   * normalizeHebrew maps the geresh ׳ (U+05F3) to an ASCII apostrophe, so
+   * storing its output made `ראנצ׳ו` become `ראנצ'ו` — a spelling that appears
+   * in none of the camp's sheets, displayed back to the lead who typed the
+   * real one. The alias table exists precisely to keep the written form as
+   * evidence and the normalized form as the lookup key; collapsing them here
+   * defeated it at the moment a person is created.
+   */
+  const name = displayName.trim();
   const [person] = await db.insert(persons).values({ displayName: name }).returning();
   await db.insert(personAliases).values({
     personId: person.id,
     alias: name,
-    normalized: name,
+    normalized: normalizeHebrew(name),
     source: 'manual',
     confirmedBy: email,
     confirmedAt: new Date(),
