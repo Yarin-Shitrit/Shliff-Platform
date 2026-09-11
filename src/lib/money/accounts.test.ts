@@ -28,7 +28,6 @@ describe('accounts', () => {
 
   it('names the person holding a personal account', async () => {
     const db2 = await createTestDb();
-    const { createPerson } = await import('@/lib/members/link');
     const personId = await createPerson(db2, 'אופק', 'lead@example.com');
     await createAccount(db2, {
       name: 'עו״ש אופק', kind: 'personal', holderPersonId: personId, openingBalance: 14079.55,
