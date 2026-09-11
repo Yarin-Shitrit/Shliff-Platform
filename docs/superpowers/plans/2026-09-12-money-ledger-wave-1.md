@@ -2139,10 +2139,11 @@ describe('chart geometry in RTL', () => {
       width: 400, direction: 'rtl', gap: 2,
     });
     expect(segments).toHaveLength(2);
-    // first segment hugs the right edge
-    expect(segments[0].x + segments[0].width).toBe(400);
+    // first segment hugs the right edge. toBeCloseTo, not toBe: these are
+    // floats, and 400 - w + w is not reliably 400.
+    expect(segments[0].x + segments[0].width).toBeCloseTo(400, 6);
     // second sits to its left, separated by the gap
-    expect(segments[0].x - (segments[1].x + segments[1].width)).toBe(2);
+    expect(segments[0].x - (segments[1].x + segments[1].width)).toBeCloseTo(2, 6);
   });
 
   it('mirrors line points so time runs right to left', () => {
@@ -2434,6 +2435,10 @@ Expected: FAIL — cannot resolve `./bar-list`.
   color: var(--dust);
 }
 
+/* Its own element so the label is matchable on its own; text wears text
+ * tokens, never the series colour — the swatch beside it carries identity. */
+.legendLabel { color: var(--dust); }
+
 .swatch {
   inline-size: 0.625rem;
   block-size: 0.625rem;
@@ -2618,13 +2623,17 @@ export function StackedBar({ segments, totalAgorot, remainderLabel }: {
           <span key={segment.id}>
             <span className={styles.swatch}
                   style={{ background: `var(--series-${segment.series})` }} />
-            {segment.label} <bdi>{formatILS(segment.valueAgorot)} ₪</bdi>
+            {/* The label is its own element so a test can match it exactly;
+                a span reading "דמי קאמפ 42,000 ₪" matches neither half. */}
+            <span className={styles.legendLabel}>{segment.label}</span>{' '}
+            <bdi>{formatILS(segment.valueAgorot)} ₪</bdi>
           </span>
         ))}
         {remainderLabel && remainder > 0 ? (
           <span>
             <span className={styles.swatch} style={{ background: 'var(--track)' }} />
-            {remainderLabel} <bdi>{formatILS(remainder)} ₪</bdi>
+            <span className={styles.legendLabel}>{remainderLabel}</span>{' '}
+            <bdi>{formatILS(remainder)} ₪</bdi>
           </span>
         ) : null}
       </div>
@@ -3127,46 +3136,45 @@ Add to `src/lib/seed/camp-seed.test.ts`:
   });
 ```
 
-- [ ] **Step 3a: Add the guard test for the deprecated column**
+- [ ] **Step 3a: Guard the property that actually matters — no double counting**
 
-`src/lib/money/deprecated-budget-amount.test.ts`:
+`tasks.budgetAmount` is **not** removed. It appears in nine files including
+`new-task-form.tsx`, a working screen where a lead types a deliverable's
+budget, and Wave 1 ships no budget-line picker to replace it. Deleting a
+feature to satisfy a naming rule is a bad trade.
+
+What must be true instead is narrower and more useful: a season's budget total
+comes from `budget_lines` alone, so a deliverable carrying its own
+`budgetAmount` can never be counted twice.
+
+Add to `src/lib/money/budget.test.ts`:
 
 ```ts
-import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+  /**
+   * `budget_lines` is the single source for a season's planned spend.
+   * `tasks.budgetAmount` still exists and is still written by the task form —
+   * it is one deliverable's own figure, not part of the budget total. If it
+   * ever leaked into this sum, every owned deliverable would be counted
+   * twice and the ברן 26 total would stop reconciling with the workbook.
+   */
+  it('never counts a task budget toward the season budget', async () => {
+    const { createTask } = await import('@/lib/work/tasks');
+    await createTask(db, {
+      seasonId: s26, kind: 'deliverable', title: 'חשמל', budgetAmount: 12950,
+    });
+    expect(await budgetTotalAgorot(db, s26)).toBe(0);
 
-/**
- * `tasks.budget_amount` is deprecated in place: kept so existing rows keep
- * their history, written by nothing. `budget_lines` is the single home for a
- * planned amount. A second writer would reintroduce the fork this phase
- * removed — two totals, and no way to say which is the budget.
- */
-describe('tasks.budget_amount is written by nothing', () => {
-  it('appears in no source file except the schema and this test', () => {
-    const hits = execSync(
-      "git grep -l -e budgetAmount -e budget_amount -- 'src/**/*.ts' 'src/**/*.tsx' || true",
-      { encoding: 'utf8' },
-    ).split('\n').filter(Boolean);
-
-    expect(hits.sort()).toEqual([
-      'src/db/schema/camp.ts',
-      'src/lib/money/deprecated-budget-amount.test.ts',
-    ]);
+    await createBudgetLine(db, {
+      seasonId: s26, label: 'חשמל', total: 12950, category: 'dancefloor',
+    });
+    expect(await budgetTotalAgorot(db, s26)).toBe(1295000);
   });
-
-  it('is still declared, so existing rows keep their history', () => {
-    const schema = readFileSync('src/db/schema/camp.ts', 'utf8');
-    expect(schema).toContain("budgetAmount: numeric('budget_amount'");
-  });
-});
 ```
 
-Making this pass requires: removing `budgetAmount` from `createTask`'s input in
-`src/lib/work/tasks.ts`, updating `src/lib/work/tasks.test.ts` and
-`camp-seed.ts` to set a `budgetLineId` instead, and adding `budgetLineId` to
-whatever `listTasks` returns. Do that as part of this task — it is the point
-of the task, not a side effect.
+Also add `budgetLineId` to `TaskRow` and to the `select` in `listTasks`
+(`src/lib/work/tasks.ts`), and accept an optional `budgetLineId` on
+`createTask`'s input — the seed needs it to link the four ברן 25
+deliverables. Do not touch `budgetAmount` anywhere.
 
 - [ ] **Step 2: Run and verify they fail**
 
@@ -3178,11 +3186,24 @@ Expected: FAIL — `accounts` is not on the result.
 In `src/lib/seed/camp-seed.ts`, add the data constants near the existing ones:
 
 ```ts
-/** The ברן 25 `מיקום` block. `עו״ש אופק` is a member's personal account. */
-const ACCOUNTS: Array<{ name: string; kind: AccountKind; holder?: string; opening: number }> = [
-  { name: 'קופת מזומן', kind: 'cash', opening: 0 },
-  { name: 'עו״ש אופק', kind: 'personal', holder: 'אופק', opening: 0 },
-  { name: 'וייבז קלוז פרינדס', kind: 'event_float', opening: 0 },
+/**
+ * The ברן 25 `מיקום` block, with its stated balances as opening balances.
+ *
+ * They are openings rather than derived totals because the sheet's ledger rows
+ * carry no account at all — it never says which קופה any movement touched. So
+ * the honest reading is: these three figures are what the camp counted, and
+ * every seeded movement is unattributed until someone says otherwise.
+ *
+ * `עו״ש אופק` is a member's personal current account holding camp money.
+ * Their dates differ in the sheet (1,584 at 2025-10-10, the other two at
+ * 2025-05-20); `openingOn` records each as given rather than flattening them.
+ */
+const ACCOUNTS: Array<{
+  name: string; kind: AccountKind; holder?: string; opening: number; openingOn: string;
+}> = [
+  { name: 'קופת מזומן', kind: 'cash', opening: 1584, openingOn: '2025-10-10' },
+  { name: 'עו״ש אופק', kind: 'personal', holder: 'אופק', opening: 14079.55, openingOn: '2025-05-20' },
+  { name: 'וייבז קלוז פרינדס', kind: 'event_float', opening: 28520, openingOn: '2025-05-20' },
 ];
 
 /** `סיכום כללי` of `קופת קאמפ 25’`. The 44,647 `מעבר לקובץ חדש` row is NOT
@@ -3419,10 +3440,52 @@ describe('the workbooks own arithmetic', () => {
     expect(unnamed.every((row) => row.displayParty === null)).toBe(true);
   });
 
-  it('every seeded account balance is derived, never stored', async () => {
+  /**
+   * The workbook's ברן 25 sheet nets to 44,183.55 — but only because its
+   * income column includes `מעבר לקובץ חדש 44,647`, the previous book's
+   * closing balance. Under a continuous ledger that row is not income, so the
+   * seeded season nets to −463.45 and the 44,647 lives as an opening balance.
+   * The identity still has to close; it just closes honestly.
+   */
+  it('ברן 25 nets to −463.45 once the carry-forward is not income', async () => {
+    const s25 = (await getSeasonByName(db, 'ברן 25'))!;
+    const totals = await ledgerTotals(db, { seasonId: s25.id });
+    expect(totals.inAgorot).toBe(5030655);
+    expect(totals.outAgorot).toBe(5077000);
+    expect(totals.netAgorot).toBe(-46345);
+
+    // and the 44,647 the workbook booked as income is exactly what reconciles
+    // that net back to the מיקום block's 44,183.55
+    expect(totals.netAgorot + 4464700).toBe(4418355);
+  });
+
+  it('the מיקום block reproduces: 1,584 + 28,520 + 14,079.55 = 44,183.55', async () => {
     const balances = await accountBalances(db);
-    expect(balances.length).toBeGreaterThanOrEqual(3);
-    expect(balances.every((row) => Number.isInteger(row.balanceAgorot))).toBe(true);
+    const byName = new Map(balances.map((row) => [row.name, row.balanceAgorot]));
+    expect(byName.get('קופת מזומן')).toBe(158400);
+    expect(byName.get('וייבז קלוז פרינדס')).toBe(2852000);
+    expect(byName.get('עו״ש אופק')).toBe(1407955);
+    expect(balances.reduce((n, row) => n + row.balanceAgorot, 0)).toBe(4418355);
+  });
+
+  it('derives a balance rather than storing one', async () => {
+    const { listMovements } = await import('./ledger');
+    const { recordEntry } = await import('./ledger');
+    const balances = await accountBalances(db);
+    const kupa = balances.find((row) => row.name === 'קופת מזומן')!;
+
+    await recordEntry(db, {
+      occurredOn: new Date('2026-09-01T00:00:00Z'), direction: 'out', amount: 84,
+      description: 'בדיקה', accountId: kupa.accountId, recordedBy: LEAD,
+    });
+
+    const after = (await accountBalances(db))
+      .find((row) => row.name === 'קופת מזומן')!;
+    expect(after.balanceAgorot).toBe(kupa.balanceAgorot - 8400);
+
+    // and the movement is visible in the ledger, not swallowed by a stored total
+    const moves = await listMovements(db, { accountId: kupa.accountId });
+    expect(moves.some((m) => m.description === 'בדיקה')).toBe(true);
   });
 });
 ```
