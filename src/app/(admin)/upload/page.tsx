@@ -1,5 +1,6 @@
 import { UploadForm } from './upload-form';
 import { SeedButton } from './seed-button';
+import { CampSeedButton } from './camp-seed-button';
 
 export default function UploadPage() {
   return (
@@ -16,6 +17,7 @@ export default function UploadPage() {
         קבצים שכבר נטענו לא ייטענו פעם נוספת.
       </p>
       <SeedButton />
+      <CampSeedButton />
     </main>
   );
 }
