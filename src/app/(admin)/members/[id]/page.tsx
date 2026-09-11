@@ -1,9 +1,12 @@
 import { notFound } from 'next/navigation';
 import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
-import { personDossier } from '@/lib/members/dossier';
+import { listPeople, personDossier } from '@/lib/members/dossier';
+import { listSeasons } from '@/lib/members/roster';
 import type { Responsibility } from '@/lib/work/coverage';
 import { formatILS } from '@/lib/money';
+import { AddToSeason } from '../add-member';
+import { MergeControl } from '../merge-control';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +15,11 @@ const KIND_LABELS: Record<string, string> = {
   shift: 'משמרת',
   build: 'הקמה ולוגיסטיקה',
   event_task: 'משימה באירוע',
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  member: 'חבר/ה',
+  lead: 'ראש/ת צוות',
 };
 
 /** he-IL, date and time together — a shift's "when" is never just a day. */
@@ -52,9 +60,36 @@ export default async function PersonPage(
   const dossier = await personDossier(db, id);
   if (!dossier) notFound();
 
+  const seasons = await listSeasons(db);
+  const people = await listPeople(db);
+  const mergeCandidates = people
+    .filter((person) => person.personId !== dossier.personId)
+    .map((person) => ({ personId: person.personId, displayName: person.displayName }));
+
   return (
     <main>
       <h1>{dossier.displayName}</h1>
+
+      <section className="card">
+        <h2>שנים</h2>
+        {dossier.seasons.length === 0 ? (
+          <p className="muted">לא משויך/ת לאף שנה עדיין.</p>
+        ) : (
+          <ul>
+            {dossier.seasons.map((season) => (
+              <li key={season.seasonId}>
+                {season.seasonName}
+                <span className="muted"> — {ROLE_LABELS[season.role] ?? season.role}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <AddToSeason
+          personId={dossier.personId}
+          seasons={seasons.map((season) => ({ id: season.id, name: season.name }))}
+          memberSeasonIds={dossier.seasons.map((season) => season.seasonId)}
+        />
+      </section>
 
       <section className="card">
         <h2>כינויים</h2>
@@ -131,6 +166,15 @@ export default async function PersonPage(
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="card">
+        <h2>מיזוג</h2>
+        <MergeControl
+          personId={dossier.personId}
+          displayName={dossier.displayName}
+          candidates={mergeCandidates}
+        />
       </section>
     </main>
   );

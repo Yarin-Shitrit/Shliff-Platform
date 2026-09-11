@@ -4,9 +4,11 @@ import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import { listSeasons } from '@/lib/members/roster';
 import { coverageFor } from '@/lib/work/coverage';
+import { listEvents } from '@/lib/work/events';
 import { listPeople } from '@/lib/members/dossier';
 import { formatILS } from '@/lib/money';
 import { AssignControl } from './assign-control';
+import { NewTaskForm } from './new-task-form';
 import styles from './tasks.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -42,6 +44,7 @@ export default async function TasksPage(
   const { season: requested } = await searchParams;
   const season = seasons.find((s) => s.id === requested) ?? seasons[0];
   const coverage = await coverageFor(db, season.id);
+  const events = await listEvents(db, season.id);
   const people = await listPeople(db);
   const roster = people.map((p) => ({ personId: p.personId, displayName: p.displayName }));
 
@@ -66,6 +69,14 @@ export default async function TasksPage(
           </Link>
         ))}
       </nav>
+
+      <section className="card">
+        <h2>הוספת משימה</h2>
+        <NewTaskForm
+          seasonId={season.id}
+          events={events.map((event) => ({ id: event.id, name: event.name }))}
+        />
+      </section>
 
       <section className="card">
         <h2>חסרים אנשים</h2>
@@ -121,6 +132,7 @@ export default async function TasksPage(
               </p>
               <AssignControl
                 taskId={task.taskId}
+                status={task.status}
                 peopleNeeded={task.peopleNeeded}
                 accepted={task.accepted}
                 assignees={task.assignees}

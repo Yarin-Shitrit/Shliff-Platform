@@ -6,6 +6,7 @@ import { listPeople } from '@/lib/members/dossier';
 import { listUnlinkedNames, resolveName } from '@/lib/members/identity';
 import { listSeasons } from '@/lib/members/roster';
 import { formatILS } from '@/lib/money';
+import { AddMember } from './add-member';
 import { UnlinkedQueue, type QueuedName } from './unlinked-queue';
 import styles from './members.module.css';
 
@@ -70,6 +71,7 @@ export default async function MembersPage() {
             </span>
           )}
         </div>
+        <AddMember seasons={seasons.map((season) => ({ id: season.id, name: season.name }))} />
         <div className="scroll-x">
           <table>
             <thead>

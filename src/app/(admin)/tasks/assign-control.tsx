@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  assignPersonAction, setAssignmentStatusAction, removeAssignmentAction,
+  assignPersonAction, setAssignmentStatusAction, removeAssignmentAction, setTaskStatusAction,
 } from './actions';
 import styles from './tasks.module.css';
 
@@ -21,17 +21,29 @@ const STATUS_LABELS: Record<string, string> = {
   dropped: 'ירד',
 };
 
+const TASK_STATUS_LABELS: Record<string, string> = {
+  open: 'פתוחה',
+  done: 'הושלמה',
+  cancelled: 'בוטלה',
+};
+
 /**
- * Staffs one task.
+ * Staffs one task, and lets a lead close it out.
  *
  * `accepted` counts what a person has actually agreed to. A `proposed`
  * assignment shows here but does not close the gap — otherwise the coverage
  * report would call a shift staffed when nobody had said yes.
+ *
+ * Closing (`done`) or cancelling a task is only offered while it is `open` —
+ * `coverageFor` already stops counting a non-open task as a gap, so nothing
+ * here duplicates that rule, and staffing a task that is already done or
+ * cancelled reads as pointless once it is no longer open.
  */
 export function AssignControl({
-  taskId, peopleNeeded, accepted, assignees, people,
+  taskId, status, peopleNeeded, accepted, assignees, people,
 }: {
   taskId: string;
+  status: string;
   peopleNeeded: number;
   accepted: number;
   assignees: ControlAssignee[];
@@ -84,24 +96,47 @@ export function AssignControl({
         ))}
       </ul>
 
-      <label>
-        הוסף אדם
-        <select value={selected} onChange={(event) => setSelected(event.target.value)}>
-          <option value="">—</option>
-          {people.map((person) => (
-            <option key={person.personId} value={person.personId}>
-              {person.displayName}
-            </option>
-          ))}
-        </select>
-      </label>
-      <button
-        type="button"
-        disabled={pending}
-        onClick={() => { if (selected) run(() => assignPersonAction(taskId, selected)); }}
-      >
-        שבץ
-      </button>
+      {status === 'open' ? (
+        <>
+          <label>
+            הוסף אדם
+            <select value={selected} onChange={(event) => setSelected(event.target.value)}>
+              <option value="">—</option>
+              {people.map((person) => (
+                <option key={person.personId} value={person.personId}>
+                  {person.displayName}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => { if (selected) run(() => assignPersonAction(taskId, selected)); }}
+          >
+            שבץ
+          </button>
+
+          <div className={styles.taskStatusControls}>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => run(() => setTaskStatusAction(taskId, 'done'))}
+            >
+              סגור משימה
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => run(() => setTaskStatusAction(taskId, 'cancelled'))}
+            >
+              בטל משימה
+            </button>
+          </div>
+        </>
+      ) : (
+        <p className="muted">משימה {TASK_STATUS_LABELS[status] ?? status}</p>
+      )}
 
       {error && <p className="badge-warn" role="alert">{error}</p>}
     </div>

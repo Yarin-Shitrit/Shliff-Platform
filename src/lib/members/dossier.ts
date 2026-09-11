@@ -26,7 +26,7 @@ export interface Dossier {
   notes: string | null;
   mergedIntoId: string | null;
   aliases: Array<{ aliasId: string; alias: string; source: string; confirmedBy: string | null }>;
-  seasons: Array<{ seasonName: string; role: string }>;
+  seasons: Array<{ seasonId: string; seasonName: string; role: string }>;
   dues: DossierDue[];
   responsibilities: Responsibility[];
 }
@@ -58,7 +58,7 @@ export async function personDossier(
     .orderBy(asc(personAliases.alias));
 
   const seasonRows = await db
-    .select({ seasonName: seasons.name, role: memberships.role })
+    .select({ seasonId: seasons.id, seasonName: seasons.name, role: memberships.role })
     .from(memberships)
     .innerJoin(seasons, eq(seasons.id, memberships.seasonId))
     .where(eq(memberships.personId, personId))

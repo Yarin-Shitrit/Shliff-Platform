@@ -22,16 +22,19 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => {} }) }))
  * the factory something to close over (see `src/lib/auth/guard.test.ts`,
  * `src/app/(admin)/members/unlinked-queue.test.tsx`).
  */
-const { assignPersonAction, setAssignmentStatusAction, removeAssignmentAction } = vi.hoisted(
+const {
+  assignPersonAction, setAssignmentStatusAction, removeAssignmentAction, setTaskStatusAction,
+} = vi.hoisted(
   () => ({
     assignPersonAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
     setAssignmentStatusAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
     removeAssignmentAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
+    setTaskStatusAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
   }),
 );
 /** `./actions` is a `'use server'` module whose graph reaches `@/db`. */
 vi.mock('./actions', () => ({
-  assignPersonAction, setAssignmentStatusAction, removeAssignmentAction,
+  assignPersonAction, setAssignmentStatusAction, removeAssignmentAction, setTaskStatusAction,
 }));
 
 import { AssignControl } from './assign-control';
@@ -41,10 +44,14 @@ const PEOPLE = [
   { personId: 'p2', displayName: 'עמי' },
 ];
 
-function renderControl(assignees: React.ComponentProps<typeof AssignControl>['assignees'] = []) {
+function renderControl(
+  assignees: React.ComponentProps<typeof AssignControl>['assignees'] = [],
+  status: string = 'open',
+) {
   return render(
     <AssignControl
       taskId="t1"
+      status={status}
       peopleNeeded={4}
       accepted={assignees.filter((a) => a.status === 'accepted').length}
       assignees={assignees}
@@ -96,5 +103,29 @@ describe('AssignControl', () => {
     fireEvent.change(screen.getByLabelText('הוסף אדם'), { target: { value: 'p1' } });
     fireEvent.click(screen.getByRole('button', { name: 'שבץ' }));
     expect(await screen.findByText('כבר משובץ')).toBeDefined();
+  });
+
+  it('closes an open task as done', () => {
+    renderControl();
+    fireEvent.click(screen.getByRole('button', { name: 'סגור משימה' }));
+    expect(setTaskStatusAction).toHaveBeenCalledWith('t1', 'done');
+  });
+
+  it('cancels an open task', () => {
+    renderControl();
+    fireEvent.click(screen.getByRole('button', { name: 'בטל משימה' }));
+    expect(setTaskStatusAction).toHaveBeenCalledWith('t1', 'cancelled');
+  });
+
+  /**
+   * `coverageFor` already stops counting a non-open task as a gap — this only
+   * needs to stop offering to staff or close one that is no longer open.
+   */
+  it('hides staffing and close/cancel controls once a task is no longer open', () => {
+    renderControl([], 'done');
+    expect(screen.queryByLabelText('הוסף אדם')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'סגור משימה' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'בטל משימה' })).toBeNull();
+    expect(screen.getByText('משימה הושלמה')).toBeDefined();
   });
 });
