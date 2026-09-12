@@ -139,7 +139,15 @@ describe('MoneyPage', () => {
       }),
     }));
     render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
-    expect(screen.getByText(/אי אפשר לחשב עלות לאדם בלי גודל מחנה מתוכנן/)).toBeTruthy();
+    const message = screen.getByText(/בלי גודל מחנה מתוכנן/);
+    // Names the season and points at the season switcher, same as every
+    // other "nothing here" message on this page — this one was found only
+    // by sweeping the file for the pattern after finding it twice elsewhere,
+    // so its own regression needs its own test rather than riding along on
+    // the assertion above, which would still pass against the bare original
+    // wording ("...לשנה הזו." with no season name and no next step).
+    expect(message.textContent).toContain(SEASON.name);
+    expect(message.textContent).toContain('אם חיפשתם שנה אחרת');
     // `closes` is also false here (duesFundingIdentity's own contract), but
     // that false means "no size to check", not "the halves disagree" — the
     // page must tell those two apart rather than reusing one warning for both.
@@ -160,7 +168,7 @@ describe('MoneyPage', () => {
     // this render) — its total absence is what proves the bar itself was
     // never drawn, as opposed to drawn with a zero-length, misleading segment.
     expect(screen.queryByText('דמי קאמפ')).toBeNull();
-    expect(screen.getByText(/אי אפשר לחשב עלות לאדם בלי גודל מחנה מתוכנן/)).toBeTruthy();
+    expect(screen.getByText(/בלי גודל מחנה מתוכנן/)).toBeTruthy();
   });
 
   it('flags money with no account named, without folding it into an account', async () => {
@@ -340,6 +348,64 @@ describe('MoneyPage', () => {
     expect(within(weOweTable).queryByText('יוסי')).toBeNull();
     expect(within(owedToUsTable).getByText('יוסי')).toBeTruthy();
     expect(within(owedToUsTable).queryByText('דנה')).toBeNull();
+  });
+
+  /**
+   * A season with debt in only one direction is the ordinary case for this
+   * camp, not an edge case — ברן 25's reimbursements mean the camp owes
+   * several people while nobody owed the camp anything that season. Splitting
+   * the table into two independent JSX literals (one per direction) means a
+   * fix applied to one message does not guarantee the other got it too —
+   * that is exactly how the first version of this split shipped with two
+   * fresh copies of the very defect finding 1 had just removed elsewhere on
+   * this page. Both directions are tested here, separately, for that reason:
+   * a test that only ever emptied `owedToCamp` (or only ever emptied
+   * `campOwes`) could not have caught the sibling that was still broken.
+   */
+  it('instructs rather than merely reports when only "מה אנחנו חייבים" is empty', async () => {
+    const owedToUsRow: ObligationRow = {
+      id: 'o2', direction: 'owed_to_camp', partyPersonId: null, partyName: 'יוסי',
+      displayParty: 'יוסי', description: 'מקדמה על אוהל', amountAgorot: 45000,
+      settledAgorot: 0, outstandingAgorot: 45000, settled: false, unnamed: false,
+      seasonId: 's1', sourceBlockId: null, sourceRow: null, settlements: [],
+    };
+    seasonMoneySummary.mockResolvedValue(summary({
+      campOwes: [], owedToCamp: [owedToUsRow],
+    }));
+    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+
+    const emptyDirection = screen.getByRole('heading', { name: 'מה אנחנו חייבים' })
+      .nextElementSibling as HTMLElement;
+    expect(within(emptyDirection).getByText(SEASON.name)).toBeTruthy();
+    const link = within(emptyDirection).getByRole('link', { name: 'דף הייבוא' });
+    expect(link.getAttribute('href')).toBe('/upload');
+
+    const populatedDirection = screen.getByRole('heading', { name: 'מה חייבים לנו' })
+      .nextElementSibling as HTMLElement;
+    expect(within(populatedDirection).getByText('יוסי')).toBeTruthy();
+  });
+
+  it('instructs rather than merely reports when only "מה חייבים לנו" is empty', async () => {
+    const weOweRow: ObligationRow = {
+      id: 'o1', direction: 'camp_owes', partyPersonId: null, partyName: 'דנה',
+      displayParty: 'דנה', description: 'תיקון גנרטור', amountAgorot: 80000,
+      settledAgorot: 0, outstandingAgorot: 80000, settled: false, unnamed: false,
+      seasonId: 's1', sourceBlockId: null, sourceRow: null, settlements: [],
+    };
+    seasonMoneySummary.mockResolvedValue(summary({
+      campOwes: [weOweRow], owedToCamp: [],
+    }));
+    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+
+    const populatedDirection = screen.getByRole('heading', { name: 'מה אנחנו חייבים' })
+      .nextElementSibling as HTMLElement;
+    expect(within(populatedDirection).getByText('דנה')).toBeTruthy();
+
+    const emptyDirection = screen.getByRole('heading', { name: 'מה חייבים לנו' })
+      .nextElementSibling as HTMLElement;
+    expect(within(emptyDirection).getByText(SEASON.name)).toBeTruthy();
+    const link = within(emptyDirection).getByRole('link', { name: 'דף הייבוא' });
+    expect(link.getAttribute('href')).toBe('/upload');
   });
 
   it("moves a movement's amount into the in/out column that matches its direction", async () => {

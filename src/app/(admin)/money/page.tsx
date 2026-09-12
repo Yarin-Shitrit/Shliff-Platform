@@ -120,7 +120,8 @@ export default async function MoneyPage(
           </p>
         ) : (
           <p className="muted">
-            אי אפשר לחשב עלות לאדם בלי גודל מחנה מתוכנן לשנה הזו.
+            אי אפשר לחשב עלות לאדם ל<bdi>{season.name}</bdi> בלי גודל מחנה
+            מתוכנן. אם חיפשתם שנה אחרת, בחרו אותה למעלה.
           </p>
         )}
         {!identity.closes && perPerson ? (
@@ -192,14 +193,22 @@ export default async function MoneyPage(
           <>
             <h3>מה אנחנו חייבים</h3>
             {summary.campOwes.length === 0 ? (
-              <p className="muted">אין חובות שהקאמפ חייב.</p>
+              <p className="muted">
+                אין חובות שהקאמפ חייב ל<bdi>{season.name}</bdi>. אפשר לייבא
+                נתונים מ<Link href="/upload">דף הייבוא</Link>, או אם חיפשתם
+                שנה אחרת — לבחור אותה למעלה.
+              </p>
             ) : (
               <ObligationsTable rows={summary.campOwes} />
             )}
 
             <h3>מה חייבים לנו</h3>
             {summary.owedToCamp.length === 0 ? (
-              <p className="muted">אין חובות שחייבים לקאמפ.</p>
+              <p className="muted">
+                אין חובות שחייבים לקאמפ ל<bdi>{season.name}</bdi>. אפשר לייבא
+                נתונים מ<Link href="/upload">דף הייבוא</Link>, או אם חיפשתם
+                שנה אחרת — לבחור אותה למעלה.
+              </p>
             ) : (
               <ObligationsTable rows={summary.owedToCamp} />
             )}
