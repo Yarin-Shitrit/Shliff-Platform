@@ -582,16 +582,29 @@ Expected: PASS, 4 tests.
 - [ ] **Step 5: Mutation check**
 
 Change `openingBalance` to be ignored in `accountBalances` (return only the delta). Re-run: the first test must FAIL. Restore.
-Change the `קיזוז` exclusion in `unattributedAgorot` to include offsets. Note that no test currently covers it — **add one** rather than moving on:
+Change the `קיזוז` exclusion in `unattributedAgorot` to include offsets. No
+test covers it — **add one**, and make sure it can actually fail. A test that
+calls `unattributedAgorot` on an empty database asserts nothing: it returns 0
+whether the exclusion is there or not, so the mutation survives it. The test
+has to record a real offset first:
 
 ```ts
   it('does not count an offset as unattributed money', async () => {
-    // an offset moves no cash, so having no account is correct, not missing
-    const { unattributedAgorot } = await import('./accounts');
-    const before = await unattributedAgorot(db);
-    expect(before.paymentsAgorot).toBe(0);
+    // An offset settles a debt against a due. No cash moves, so carrying no
+    // account is correct for it rather than missing — unlike a cash payment
+    // with no account, which is money the camp cannot place.
+    const { recordOffset } = await import('@/lib/fees/payments');
+    await recordOffset(db, {
+      entries: [{ dueId, amount: 1200 }],
+      note: 'קיזוז מול חוב יוסף',
+      paidOn: new Date(),
+      recordedBy: LEAD,
+    });
+    expect((await unattributedAgorot(db)).paymentsAgorot).toBe(0);
   });
 ```
+
+Set up a person, season and due in `beforeEach` so `dueId` exists.
 
 - [ ] **Step 6: Commit**
 
@@ -1556,7 +1569,16 @@ Expected: PASS, 5 tests.
 - [ ] **Step 5: Mutation check**
 
 - Compute `perPersonFunding` as `perPersonFull - flatRateAgorot` instead of dividing. Test 4 ("reports a gap") must FAIL — this is the mutation that matters most, because subtraction makes `closes` trivially true and the page would then always claim the halves add up.
-- Change `Math.round` to `Math.floor`. Test 3 must FAIL (183929 → 183926 for the funding half).
+- Change `Math.round` to `Math.floor`. **Expect this to SURVIVE the five tests
+  above, and treat that as the finding.** ברן 26's remainders are ≈0.43, so
+  floor and round agree: `6437530/35 → 183929` and `2237530/35 → 63929` either
+  way, and the identity closes under both. Write a sixth test whose numbers
+  actually cross the .5 boundary — e.g. budget 10.03 and funding 6.03 over a
+  camp of 4, where round gives 251 and 151 but floor gives 250 and 150 — and
+  verify it fails on the mutant and passes on correct code. Do not put the
+  figure 183926 in a comment or anywhere else: it is wrong, it came from an
+  earlier draft of this plan, and it does not correspond to any floor of this
+  data.
 - Return `perPersonFullAgorot: 0` instead of `null` with no planned size. Test 5 must FAIL.
 
 - [ ] **Step 6: Commit**
@@ -1891,7 +1913,15 @@ Expected: PASS, 5 tests.
 
 - Delete the "no party" guard in `settleObligation`. Test 2 must FAIL.
 - Delete the over-settlement guard. Test 4 must FAIL.
-- Change `unnamed` to `!obligation.partyPersonId` only (ignoring `partyName`). Test 1 must FAIL, since `יוסף` has a name but no person link and must not be treated as unnamed.
+- Change `unnamed` to `!obligation.partyPersonId` only (ignoring `partyName`).
+  **Expect this to SURVIVE the five tests above, and treat that as the
+  finding.** Test 1 never asserts `unnamed`, and test 2's obligation has
+  neither a person nor a name, so it reads `true` either way. Write a test
+  that pins the case the mutation actually breaks: an obligation with a
+  `partyName` but no `partyPersonId` — `יוסף` — must have `unnamed === false`
+  and must be absent from `unnamedObligations`. Without it, a known creditor
+  could silently fall into the "nobody knows who is owed" queue and become
+  unsettleable.
 
 - [ ] **Step 6: Commit**
 
@@ -1920,7 +1950,13 @@ MSG
 - Create: `src/lib/money/summary.ts`, `src/lib/money/summary.test.ts`
 
 **Interfaces:**
-- Consumes: every module above, plus `seasonFeeSummary` from `@/lib/fees/summary`.
+- Consumes: `accountBalances` and `unattributedAgorot` (Task 2), `ledgerTotals`
+  (Task 3), `listObligations` (Task 7), `duesFundingIdentity` (Task 6), and
+  `seasons`.
+- Deliberately does **not** consume `seasonFeeSummary`. Dues collected is
+  already inside `ledgerTotals`, because `listMovements` unions `payments`
+  with `ledger_entries`. Adding the fees summary alongside it would put the
+  same shekels on the page twice and invite a caller to sum them.
 - Produces: `seasonMoneySummary(db, seasonId): Promise<SeasonMoneySummary>` — one call, one shape, so the page never issues a second query to fill a hole.
 
 - [ ] **Step 1: Write the failing test**
@@ -2267,7 +2303,11 @@ Expected: PASS, 7 tests.
 
 - Make `barGeometry` always return `x: 0`. Tests 1, 3 and 4 must FAIL.
 - Make `textAnchorFor` always return `'start'`. Test 7 must FAIL.
-- Remove the `maxAgorot > 0` guard. Test 4 must FAIL with `NaN`.
+- Remove the `maxAgorot > 0` guard. Test 4 must FAIL — but not with `NaN`:
+  `500 / 0` is `Infinity`, which the clamp turns into a ratio of 1, so the bar
+  renders at **full width** instead of zero. That is the more dangerous
+  failure of the two, because a full bar looks like real data rather than like
+  a bug.
 - Remove the gap subtraction in `stackGeometry`. Test 5 must FAIL.
 
 - [ ] **Step 6: Commit**
@@ -2306,7 +2346,15 @@ MSG
 
 `src/components/charts/bar-list.test.tsx`:
 
+The `@vitest-environment jsdom` docblock is **required and must be the first
+thing in the file**. `vitest.config.ts` sets `environment: 'node'` globally, so
+every component test in this repo opts into a DOM per file — see
+`src/app/(admin)/nav.test.tsx`. Without it, `render` fails with no `document`.
+
 ```tsx
+/**
+ * @vitest-environment jsdom
+ */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { BarList } from './bar-list';
@@ -2339,9 +2387,12 @@ describe('BarList', () => {
 });
 ```
 
-`src/components/charts/stacked-bar.test.tsx`:
+`src/components/charts/stacked-bar.test.tsx` (same jsdom docblock requirement):
 
 ```tsx
+/**
+ * @vitest-environment jsdom
+ */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { StackedBar } from './stacked-bar';
@@ -2749,7 +2800,7 @@ import { requireAdmin } from '@/lib/auth/guard';
 import { listSeasons } from '@/lib/members/roster';
 import { seasonMoneySummary } from '@/lib/money/summary';
 import { listMovements } from '@/lib/money/ledger';
-import { listBudgetLines } from '@/lib/money/budget';
+import { listBudgetLines, budgetDerivation } from '@/lib/money/budget';
 import { formatILS } from '@/lib/money';
 import { StatTile } from '@/components/charts/stat-tile';
 import { BarList } from '@/components/charts/bar-list';
@@ -2781,6 +2832,14 @@ export default async function MoneyPage(
   const movements = await listMovements(db, { seasonId: season.id });
   const budget = await listBudgetLines(db, season.id);
   const { identity } = summary;
+
+  // `listSeasons` is ordered by year descending, so the first season older
+  // than this one is its predecessor. Without one there is nothing to derive
+  // from, and the section is omitted rather than rendered empty.
+  const previousSeason = seasons.find((option) => option.year < season.year);
+  const derivation = previousSeason
+    ? await budgetDerivation(db, previousSeason.id, season.id)
+    : [];
 
   return (
     <main>
@@ -2922,6 +2981,43 @@ export default async function MoneyPage(
         )}
       </section>
 
+      {derivation.length > 0 ? (
+        <section className="card">
+          <h2>מאיפה התקציב הזה בא</h2>
+          <p className="muted">
+            כל סעיף מול מה שהוצא עליו ב<bdi>{previousSeason!.name}</bdi>.
+          </p>
+          <div className="scroll-x">
+            <table>
+              <thead>
+                <tr>
+                  <th>סעיף</th><th>בפועל</th><th>בתקציב</th><th>הפרש</th><th>למה</th>
+                </tr>
+              </thead>
+              <tbody>
+                {derivation.map((row) => (
+                  <tr key={row.label}>
+                    <td>{row.label}</td>
+                    <td>{row.actualAgorot === null
+                      ? <span className="muted">סעיף חדש</span>
+                      : <bdi>{formatILS(row.actualAgorot)} ₪</bdi>}</td>
+                    <td>{row.forecastAgorot === null
+                      ? <span className="muted">ירד מהתקציב</span>
+                      : <bdi>{formatILS(row.forecastAgorot)} ₪</bdi>}</td>
+                    <td>{row.bufferAgorot === null ? '' : (
+                      <bdi className={row.bufferAgorot < 0 ? 'badge-warn' : undefined}>
+                        {row.bufferAgorot > 0 ? '+' : ''}{formatILS(row.bufferAgorot)} ₪
+                      </bdi>
+                    )}</td>
+                    <td className="muted">{row.rationale}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+
       <section className="card">
         <h2>התקציב</h2>
         {budget.length === 0 ? (
@@ -2998,7 +3094,21 @@ export default async function MoneyPage(
 
 - [ ] **Step 5: Update the overview page**
 
-In `src/app/(admin)/page.tsx`, replace the "not built yet" paragraph with a link to `/money` reading `כספים — כל התמונה הכספית של הקאמפ, לפי שנה`.
+`src/app/(admin)/page.tsx` was rebuilt in commit `7fe31d7` into a live
+dashboard — it no longer contains the "not built yet" paragraph an earlier
+draft of this plan expected. **Read the file before editing it.**
+
+Add one entry to its `מה יש כאן` list, placed directly after the
+`דמי קאמפ` line so the money entries sit together:
+
+```tsx
+          <li><Link href="/money">כספים</Link> — איפה הכסף, מה נכנס ויצא, ומה חייבים</li>
+```
+
+Change nothing else on that page. Its season figures, its collected-against-
+expected bar and its two conditional sections are not this task's business,
+and the bar in particular is a deliberate, commented design choice — do not
+"unify" it with the new chart components.
 
 - [ ] **Step 6: Run the tests and the type check**
 
