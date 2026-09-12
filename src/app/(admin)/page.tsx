@@ -140,6 +140,7 @@ export default async function OverviewPage() {
         <ul>
           <li><Link href="/members">חברי מחנה</Link> — מי היה בקאמפ, בכל שנה</li>
           <li><Link href="/fees">דמי קאמפ</Link> — מי חייב, מי שילם, ולמה חריג הוא חריג</li>
+          <li><Link href="/money">כספים</Link> — איפה הכסף, מה נכנס ויצא, ומה חייבים</li>
           <li><Link href="/tasks">משימות</Link> — מי אחראי על מה, ומה עדיין לא מאויש</li>
           <li><Link href="/data">נתונים</Link> — כל מה שזוהה בקבצי האקסל, לפי שנה</li>
           <li><Link href="/upload">ייבוא</Link> — העלאת קובץ חדש וזיהוי הטבלאות שבו</li>

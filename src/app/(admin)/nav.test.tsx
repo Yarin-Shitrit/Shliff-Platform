@@ -41,4 +41,10 @@ describe('Nav', () => {
     // built section left behind a בקרוב badge is worse than not shipping it.
     expect(screen.getByRole('link', { name: label }).getAttribute('href')).toBe(href);
   });
+
+  it('links כספים', () => {
+    render(<Nav />);
+    const link = screen.getByRole('link', { name: 'כספים' });
+    expect(link.getAttribute('href')).toBe('/money');
+  });
 });

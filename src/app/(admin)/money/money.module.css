@@ -1,0 +1,29 @@
+.seasons { display: flex; gap: 1rem; margin-block-end: 1.5rem; }
+.seasons a[aria-current='page'] { color: var(--sand); text-decoration: none; }
+
+.lead {
+  border-inline-start: 3px solid var(--flare);
+  padding-inline-start: 1rem;
+  margin-block-end: 2rem;
+}
+
+.hero {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: clamp(2.5rem, 8vw, 4rem);
+  line-height: 1.1;
+  margin-block: 0 0.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.thesis {
+  max-inline-size: 42rem;
+  color: var(--dust);
+  margin-block: 0 1rem;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 1rem;
+  margin-block-end: 2rem;
+}
