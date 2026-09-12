@@ -6,7 +6,9 @@ import { getSeasonByName } from '@/lib/members/roster';
 import { accountBalances } from './accounts';
 import { ledgerTotals, listMovements, recordEntry } from './ledger';
 import { budgetTotalAgorot } from './budget';
-import { fundingTotalAgorot, ticketTotalAgorot, duesFundingIdentity } from './funding';
+import {
+  fundingTotalAgorot, ticketTotalAgorot, duesFundingIdentity, campBudgetFundingAgorot,
+} from './funding';
 import { listObligations, unnamedObligations } from './obligations';
 
 const LEAD = 'lead@example.com';
@@ -49,6 +51,11 @@ describe('the workbooks own arithmetic', () => {
 
   it('the dues/fundraising identity closes: 1,200 + 639.29 = 1,839.29', async () => {
     const s26 = (await getSeasonByName(db, 'ברן 26'))!;
+    // Pinned directly, not only through the rounded per-head figure below —
+    // the identity divides this by 35 before comparing, so a drift of a few
+    // agorot in the seeded dues line would round away and pass unnoticed.
+    expect(await campBudgetFundingAgorot(db, s26.id)).toBe(2237530);
+
     const identity = await duesFundingIdentity(db, s26.id);
     expect(identity.flatRateAgorot).toBe(120000);
     expect(identity.perPersonFundingAgorot).toBe(63929);
@@ -69,6 +76,14 @@ describe('the workbooks own arithmetic', () => {
     const reimbursements = rows.filter((row) => row.description !== 'חוב יוסף');
     expect(reimbursements).toHaveLength(12);
     expect(reimbursements.reduce((n, r) => n + r.amountAgorot, 0)).toBe(595400);
+
+    // Length + sum alone would still miss a mutation that moves value between
+    // two existing rows (drop 10 from one, add 10 to another) — count and
+    // total both survive that untouched. Pinning the sorted multiset of
+    // amounts closes that gap without hardcoding which name owns which figure.
+    expect(reimbursements.map((r) => r.amountAgorot).sort((a, b) => a - b)).toEqual(
+      [4000, 6500, 20000, 30000, 33500, 40000, 40000, 50000, 58000, 70900, 82000, 160500],
+    );
   });
 
   it('two of them can never be closed, because nobody knows who is owed', async () => {
@@ -92,8 +107,16 @@ describe('the workbooks own arithmetic', () => {
     expect(totals.netAgorot).toBe(-46345);
 
     // and the 44,647 the workbook booked as income is exactly what reconciles
-    // that net back to the מיקום block's 44,183.55
-    expect(totals.netAgorot + 4464700).toBe(4418355);
+    // that net back to the מיקום block's own derived total — not a second
+    // hardcoded figure standing in for it. `accountBalances` is a completely
+    // separate query (opening balances only, no ledger rows), so this fails
+    // on its own if either side drifts: a bad ledger entry moves `netAgorot`,
+    // a bad opening balance moves `mikomTotalAgorot`, and 44,647 is the one
+    // constant that can never come from a query, because it is deliberately
+    // the one row this seed refuses to store (see `LEDGER_25`'s comment).
+    const mikomTotalAgorot = (await accountBalances(db))
+      .reduce((n, row) => n + row.balanceAgorot, 0);
+    expect(totals.netAgorot + 4464700).toBe(mikomTotalAgorot);
   });
 
   /**
