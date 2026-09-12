@@ -1,4 +1,6 @@
-import { and, asc, eq } from 'drizzle-orm';
+import {
+  and, asc, eq, ne,
+} from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import type { AnyDb } from '@/lib/db-types';
 import { accounts, ledgerEntries } from '@/db/schema/money';
@@ -113,6 +115,12 @@ export async function recordTransfer(
  * of one into the other, so no row can disagree with its twin because no row
  * has one. `deletePayment` already exists and would silently orphan a copy;
  * a union cannot drift because there is only ever one row for any movement.
+ *
+ * A `קיזוז` payment is excluded, matching `unattributedAgorot` in
+ * `accounts.ts`: it settles a due against a debt the camp already owes the
+ * payer, so no cash moves. Counting it here would report every offset-settled
+ * due as fresh income — a season that settles `יוסף קארינה יונתן ירין ועילאי`
+ * through the 6,000 offset would show 6,000 more "in" than it ever received.
  */
 export async function listMovements(
   db: AnyDb, filter: MovementFilter = {},
@@ -139,7 +147,10 @@ export async function listMovements(
     .where(entryWhere.length ? and(...entryWhere) : undefined)
     .orderBy(asc(ledgerEntries.occurredOn));
 
-  const dueWhere = [];
+  // Always excluded, not just when a filter asks for it: a קיזוז moves no
+  // cash, so it is never part of "the ledger" regardless of what else is
+  // being filtered on.
+  const dueWhere = [ne(payments.channel, 'קיזוז')];
   if (filter.seasonId) dueWhere.push(eq(dues.seasonId, filter.seasonId));
   if (filter.accountId) dueWhere.push(eq(payments.accountId, filter.accountId));
 
@@ -160,7 +171,7 @@ export async function listMovements(
     .innerJoin(dues, eq(dues.id, payments.dueId))
     .innerJoin(persons, eq(persons.id, dues.personId))
     .leftJoin(accounts, eq(accounts.id, payments.accountId))
-    .where(dueWhere.length ? and(...dueWhere) : undefined)
+    .where(and(...dueWhere))
     .orderBy(asc(payments.paidOn));
 
   const all: Movement[] = [

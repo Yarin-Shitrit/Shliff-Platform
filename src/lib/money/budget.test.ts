@@ -67,4 +67,24 @@ describe('budget lines', () => {
       seasonId: s26, label: '‏  ', total: 100, category: 'camp',
     })).rejects.toThrow(/שם/);
   });
+
+  /**
+   * `budget_lines` is the single source for a season's planned spend.
+   * `tasks.budgetAmount` still exists and is still written by the task form —
+   * it is one deliverable's own figure, not part of the budget total. If it
+   * ever leaked into this sum, every owned deliverable would be counted
+   * twice and the ברן 26 total would stop reconciling with the workbook.
+   */
+  it('never counts a task budget toward the season budget', async () => {
+    const { createTask } = await import('@/lib/work/tasks');
+    await createTask(db, {
+      seasonId: s26, kind: 'deliverable', title: 'חשמל', budgetAmount: 12950,
+    });
+    expect(await budgetTotalAgorot(db, s26)).toBe(0);
+
+    await createBudgetLine(db, {
+      seasonId: s26, label: 'חשמל', total: 12950, category: 'dancefloor',
+    });
+    expect(await budgetTotalAgorot(db, s26)).toBe(1295000);
+  });
 });

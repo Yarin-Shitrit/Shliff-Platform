@@ -4,7 +4,7 @@ import { createTestDb } from '@/test/db';
 import { createSeason, addMember } from '@/lib/members/roster';
 import { createPerson } from '@/lib/members/link';
 import { issueFlatDues } from '@/lib/fees/dues';
-import { recordPayment } from '@/lib/fees/payments';
+import { recordPayment, recordOffset } from '@/lib/fees/payments';
 import { listSeasonFees } from '@/lib/fees/season-fees';
 import { createAccount } from './accounts';
 import { recordEntry, recordTransfer, listMovements, ledgerTotals } from './ledger';
@@ -115,5 +115,36 @@ describe('the ledger', () => {
     expect(totals.inAgorot).toBe(150000);
     expect(totals.outAgorot).toBe(30000);
     expect(totals.netAgorot).toBe(120000);
+  });
+
+  /**
+   * A `קיזוז` settles a due against a debt the camp already owes the payer —
+   * no cash changes hands. `unattributedAgorot` already excludes it for the
+   * same reason (`accounts.ts`). Counting it here as ledger income would make
+   * a season's "in" total exceed every shekel it actually received, by
+   * exactly the amount of every offset dues ever get settled with.
+   */
+  it('excludes a קיזוז offset from ledger income — it moves no cash', async () => {
+    const season = await createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1200 });
+    const personId = await createPerson(db, 'יוסף', LEAD);
+    await addMember(db, personId, season.id);
+    await issueFlatDues(db, season.id);
+    const [row] = await listSeasonFees(db, season.id);
+
+    await recordOffset(db, {
+      entries: [{ dueId: row.dueId!, amount: 1200 }],
+      note: 'קיזוז מול חוב הקאמפ ליוסף',
+      paidOn: new Date('2026-07-01T00:00:00Z'),
+      recordedBy: LEAD,
+    });
+
+    await recordEntry(db, {
+      occurredOn: new Date('2026-07-02T00:00:00Z'), direction: 'in', amount: 500,
+      description: 'תרומה אמיתית', recordedBy: LEAD, seasonId: season.id,
+    });
+
+    const totals = await ledgerTotals(db, { seasonId: season.id });
+    expect(totals.count).toBe(1);
+    expect(totals.inAgorot).toBe(50000);
   });
 });

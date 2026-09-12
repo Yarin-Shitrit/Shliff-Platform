@@ -13,6 +13,10 @@ export interface NewTask {
   description?: string;
   /** deliverable: budget in shekels. */
   budgetAmount?: number;
+  /** deliverable: which `budget_lines` row this deliverable's spend rolls up
+   *  into. Separate from `budgetAmount`, which stays the deliverable's own
+   *  figure — see `TaskRow.budgetLineId`. */
+  budgetLineId?: string;
   /** shift: both required. */
   startsAt?: Date;
   endsAt?: Date;
@@ -27,6 +31,7 @@ export interface TaskRow {
   title: string;
   description: string | null;
   budgetAgorot: number | null;
+  budgetLineId: string | null;
   startsAt: Date | null;
   endsAt: Date | null;
   dueOn: Date | null;
@@ -75,6 +80,7 @@ export async function createTask(db: AnyDb, input: NewTask): Promise<string> {
     budgetAmount: input.budgetAmount === undefined
       ? null
       : fromAgorot(toAgorot(input.budgetAmount)),
+    budgetLineId: input.budgetLineId ?? null,
     startsAt: input.startsAt ?? null,
     endsAt: input.endsAt ?? null,
     dueOn: input.dueOn ?? null,
@@ -97,6 +103,7 @@ export async function listTasks(
       title: tasks.title,
       description: tasks.description,
       budgetAmount: tasks.budgetAmount,
+      budgetLineId: tasks.budgetLineId,
       startsAt: tasks.startsAt,
       endsAt: tasks.endsAt,
       dueOn: tasks.dueOn,

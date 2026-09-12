@@ -113,4 +113,109 @@ describe('seedCampBaseline', () => {
     expect(roster.length).toBeLessThan(38);
     expect(roster.map((r) => r.displayName)).toContain('אופק');
   });
+
+  it('seeds the three ברן 25 accounts, including the personal one', async () => {
+    await seedCampBaseline(db, LEAD);
+    const { accountBalances } = await import('@/lib/money/accounts');
+    const balances = await accountBalances(db);
+    const names = balances.map((row) => row.name);
+    expect(names).toContain('קופת מזומן');
+    expect(names).toContain('עו״ש אופק');
+    expect(names).toContain('וייבז קלוז פרינדס');
+
+    const ofek = balances.find((row) => row.name === 'עו״ש אופק')!;
+    expect(ofek.kind).toBe('personal');
+    expect(ofek.holderName).toBe('אופק');
+  });
+
+  /**
+   * The one test that actually looks at ברן 25's own movements. Without it,
+   * seeding the 44,647 `מעבר לקובץ חדש` row as income (exactly the mistake
+   * `LEDGER_25`'s own comment explains) passes every other test in this file,
+   * because the ברן 26 ledger test below is filtered to ברן 26 and never
+   * sees a ברן 25 row at all.
+   */
+  it('reproduces the ברן 25 ledger bottom line, with no carry-forward row', async () => {
+    await seedCampBaseline(db, LEAD);
+    const { ledgerTotals } = await import('@/lib/money/ledger');
+    const s25 = (await getSeasonByName(db, 'ברן 25'))!;
+    const totals = await ledgerTotals(db, { seasonId: s25.id });
+    expect(totals.outAgorot).toBe(5077000);
+    expect(totals.inAgorot).toBe(5030655);
+    expect(totals.netAgorot).toBe(-46345);
+  });
+
+  it('reproduces the ברן 26 ledger bottom line', async () => {
+    await seedCampBaseline(db, LEAD);
+    const { ledgerTotals } = await import('@/lib/money/ledger');
+    const s26 = (await getSeasonByName(db, 'ברן 26'))!;
+    const totals = await ledgerTotals(db, { seasonId: s26.id });
+    expect(totals.outAgorot).toBe(4527100);
+    expect(totals.inAgorot).toBe(6200000);
+    expect(totals.netAgorot).toBe(1672900);
+  });
+
+  it('closes the ברן 26 dues/fundraising identity from seeded rows', async () => {
+    await seedCampBaseline(db, LEAD);
+    const { duesFundingIdentity } = await import('@/lib/money/funding');
+    const s26 = (await getSeasonByName(db, 'ברן 26'))!;
+    const identity = await duesFundingIdentity(db, s26.id);
+    expect(identity.budgetTotalAgorot).toBe(6437530);
+    expect(identity.perPersonFullAgorot).toBe(183929);
+    expect(identity.perPersonFundingAgorot).toBe(63929);
+    expect(identity.closes).toBe(true);
+  });
+
+  it('seeds חוב יוסף with 910 outstanding', async () => {
+    await seedCampBaseline(db, LEAD);
+    const { listObligations } = await import('@/lib/money/obligations');
+    const rows = await listObligations(db, { direction: 'camp_owes' });
+    const yosef = rows.find((row) => row.description.includes('יוסף'))!;
+    expect(yosef.amountAgorot).toBe(1524000);
+    expect(yosef.settledAgorot).toBe(1433000);
+    expect(yosef.outstandingAgorot).toBe(91000);
+  });
+
+  it('seeds all twelve reimbursements, including the two with no name', async () => {
+    await seedCampBaseline(db, LEAD);
+    const { listObligations, unnamedObligations } = await import('@/lib/money/obligations');
+    const all = await listObligations(db, { direction: 'camp_owes' });
+    const reimbursements = all.filter((row) => row.description !== 'חוב יוסף');
+    expect(reimbursements).toHaveLength(12);
+    expect(reimbursements.reduce((n, row) => n + row.amountAgorot, 0)).toBe(595400);
+    expect(await unnamedObligations(db)).toHaveLength(2);
+  });
+
+  it('is idempotent — the money side', async () => {
+    await seedCampBaseline(db, LEAD);
+    const first = await seedCampBaseline(db, LEAD);
+    expect(first.accounts).toBe(0);
+    expect(first.movements).toBe(0);
+    expect(first.obligations).toBe(0);
+  });
+
+  /**
+   * `budget_lines` is the single home for a planned amount. The four ברן 25
+   * deliverables carried theirs on the task itself; they now point at budget
+   * lines instead, and nothing writes `budgetAmount` again. Two homes for one
+   * number means "total planned spend" is a union and "did we come in on
+   * budget" forks in two.
+   */
+  it('gives the four ברן 25 deliverables budget lines instead of amounts', async () => {
+    await seedCampBaseline(db, LEAD);
+    const { listBudgetLines } = await import('@/lib/money/budget');
+    const s25 = (await getSeasonByName(db, 'ברן 25'))!;
+
+    const dancefloor = (await listBudgetLines(db, s25.id))
+      .filter((line) => line.category === 'dancefloor');
+    expect(dancefloor.map((line) => line.label).sort())
+      .toEqual(['הגברה + תאורה', 'הובלה', 'חשמל', 'מייצג'].sort());
+    expect(dancefloor.reduce((n, line) => n + line.totalAgorot, 0)).toBe(8906000);
+
+    const { listTasks } = await import('@/lib/work/tasks');
+    for (const task of await listTasks(db, s25.id)) {
+      if (task.kind !== 'deliverable') continue;
+      expect(task.budgetLineId).not.toBeNull();
+    }
+  });
 });
