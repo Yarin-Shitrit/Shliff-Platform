@@ -195,4 +195,32 @@ describe('payments', () => {
     await deletePayment(db, id);
     expect((await settlementFor(db, dueId)).settled).toBe(false);
   });
+
+  it('records which קופה received the money', async () => {
+    const { dueId } = await dueFor('תום');
+    const { createAccount } = await import('@/lib/money/accounts');
+    const account = await createAccount(db, { name: 'קופת מזומן', kind: 'cash' });
+    const id = await recordPayment(db, {
+      dueId, amount: 1200, channel: 'מזומן', paidOn: new Date(),
+      accountId: account.id, recordedBy: LEAD,
+    });
+    const [row] = await listPayments(db, dueId);
+    expect(row.id).toBe(id);
+    expect(row.accountId).toBe(account.id);
+  });
+
+  /**
+   * An offset settles a debt against a due. No cash changes hands, so naming
+   * an account would invent a movement that never happened — and would make
+   * that קופה's derived balance wrong.
+   */
+  it('refuses an account on a קיזוז, because no cash moved', async () => {
+    const { dueId } = await dueFor('מאיה');
+    const { createAccount } = await import('@/lib/money/accounts');
+    const account = await createAccount(db, { name: 'קופת מזומן', kind: 'cash' });
+    await expect(recordPayment(db, {
+      dueId, amount: 1200, channel: 'קיזוז', note: 'מול חוב יוסף',
+      paidOn: new Date(), accountId: account.id, recordedBy: LEAD,
+    })).rejects.toThrow(/קיזוז/);
+  });
 });

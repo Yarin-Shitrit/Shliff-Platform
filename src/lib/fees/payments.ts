@@ -14,6 +14,8 @@ export interface PaymentInput {
   /** Required when the channel is `קיזוז`. */
   note?: string;
   recordedBy: string;
+  /** Which קופה received this money. Never set on a `קיזוז`. */
+  accountId?: string;
 }
 
 export interface OffsetInput {
@@ -32,6 +34,7 @@ export interface PaymentRow {
   paidOn: Date;
   note: string | null;
   recordedBy: string;
+  accountId: string | null;
 }
 
 export interface Settlement {
@@ -59,6 +62,15 @@ function validate(input: PaymentInput): void {
   if (input.channel === 'קיזוז' && isBlank(input.note)) {
     throw new Error('an offset must carry a note saying what it was set against');
   }
+  /*
+   * A קיזוז settles a debt against a due — no cash changes hands. Naming a
+   * קופה here would invent a movement that never happened and would corrupt
+   * that account's derived balance (accountBalances sums payments.amount by
+   * accountId), so this is refused outright rather than silently dropped.
+   */
+  if (input.channel === 'קיזוז' && input.accountId) {
+    throw new Error('קיזוז אינו מזיז מזומן, ולכן אינו נכנס לחשבון');
+  }
 }
 
 export async function recordPayment(db: AnyDb, input: PaymentInput): Promise<string> {
@@ -70,6 +82,7 @@ export async function recordPayment(db: AnyDb, input: PaymentInput): Promise<str
     paidOn: input.paidOn,
     note: input.note?.trim() || null,
     recordedBy: input.recordedBy,
+    accountId: input.accountId ?? null,
   }).returning();
   return row.id;
 }
@@ -115,6 +128,7 @@ export async function listPayments(db: AnyDb, dueId: string): Promise<PaymentRow
     paidOn: row.paidOn,
     note: row.note,
     recordedBy: row.recordedBy,
+    accountId: row.accountId,
   }));
 }
 

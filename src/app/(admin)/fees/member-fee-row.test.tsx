@@ -76,6 +76,7 @@ const WITH_DUE: MemberFeeRowData = {
       paidOn: new Date('2026-07-01T00:00:00Z'),
       note: 'מקדמה',
       recordedBy: 'lead@shliff.camp',
+      accountId: null,
     },
   ],
 };
