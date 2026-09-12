@@ -163,7 +163,7 @@ export async function settleObligation(db: AnyDb, input: NewSettlement): Promise
 
   const [obligation] = await db.select().from(obligations)
     .where(eq(obligations.id, input.obligationId));
-  if (!obligation) throw new Error(`unknown obligation ${input.obligationId}`);
+  if (!obligation) throw new Error(`חוב לא קיים: ${input.obligationId}`);
 
   if (!obligation.partyPersonId && !obligation.partyName) {
     throw new Error('אי אפשר לסגור חוב בלי שם — לא ידוע למי מגיע הכסף');

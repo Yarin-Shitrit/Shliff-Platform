@@ -52,6 +52,31 @@ describe('obligations', () => {
     })).rejects.toThrow(/בלי שם/);
   });
 
+  /**
+   * An RTL browser injects LRM/RLM/zero-width marks invisibly on copy-paste.
+   * A `partyName` made of nothing else must land as null — not as a string
+   * that makes an obligation *look* named. The `.trim()`-vs-`isBlank` defect
+   * behind this was found three times before it got a name; `partyName` is
+   * where it does the most damage, since a falsely-named row both escapes
+   * `unnamedObligations` and becomes settleable, closing the only record
+   * that anyone is owed anything.
+   */
+  it('treats a partyName of only invisible directional marks as no name', async () => {
+    const id = await createObligation(db, {
+      direction: 'camp_owes', partyName: '‎‏​',
+      description: 'דולב זבל במחסן', amount: 400, openedOn: WHEN,
+    });
+
+    const [row] = await listObligations(db);
+    expect(row.partyName).toBeNull();
+    expect(row.unnamed).toBe(true);
+    expect(await unnamedObligations(db)).toHaveLength(1);
+
+    await expect(settleObligation(db, {
+      obligationId: id, amount: 400, kind: 'cash', settledOn: WHEN, recordedBy: LEAD,
+    })).rejects.toThrow(/בלי שם/);
+  });
+
   it('requires a note on an offset, as recordOffset already does', async () => {
     const id = await createObligation(db, {
       direction: 'camp_owes', partyName: 'יוסף', description: 'חוב',
