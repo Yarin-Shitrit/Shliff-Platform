@@ -5,7 +5,7 @@ import { createPerson } from '@/lib/members/link';
 import { issueFlatDues, listDues, setException } from '@/lib/fees/dues';
 import { recordOffset, settlementFor } from '@/lib/fees/payments';
 import { createEvent, listEvents } from '@/lib/work/events';
-import { createTask, listTasks } from '@/lib/work/tasks';
+import { createTask, listTasks, setTaskBudgetLine } from '@/lib/work/tasks';
 import { assignPerson, setAssignmentStatus } from '@/lib/work/coverage';
 import type { AccountKind } from '@/db/schema/money';
 import { createAccount, listAccounts } from '@/lib/money/accounts';
@@ -303,15 +303,22 @@ export async function seedCampBaseline(
   // The four owned רחבה deliverables, each pointed at its own dancefloor
   // budget line so the season's planned total never double-counts a
   // deliverable's own `budgetAmount` (see `BURN_25_DELIVERABLES`'s comment).
+  //
+  // The budget line's existence check is its own, independent of the
+  // task's — a database where `seedCampBaseline` already ran before budget
+  // lines existed already has these four tasks with `budgetLineId` null.
+  // Nesting the budget line under "the task doesn't exist yet" (as an
+  // earlier version of this function did) would mean those four tasks could
+  // never get a budget line, on any future re-run.
   const dancefloorLines = new Map(
     (await listBudgetLines(db, s25.id))
       .filter((line) => line.category === 'dancefloor')
       .map((line) => [line.label, line.id]),
   );
-  const existingTasks = new Set((await listTasks(db, s25.id)).map((t) => t.title));
+  const existingDeliverables = new Map(
+    (await listTasks(db, s25.id)).map((t) => [t.title, t]),
+  );
   for (const deliverable of BURN_25_DELIVERABLES) {
-    if (existingTasks.has(deliverable.title)) continue;
-
     let budgetLineId = dancefloorLines.get(deliverable.title);
     if (!budgetLineId) {
       budgetLineId = await createBudgetLine(db, {
@@ -324,7 +331,17 @@ export async function seedCampBaseline(
       result.budgetLines += 1;
     }
 
-    await createTask(db, {
+    const existingTask = existingDeliverables.get(deliverable.title);
+    if (existingTask) {
+      // The task predates this budget line — link the two so a task created
+      // before budget lines existed is not left permanently unlinked.
+      if (!existingTask.budgetLineId) {
+        await setTaskBudgetLine(db, existingTask.taskId, budgetLineId);
+      }
+      continue;
+    }
+
+    const taskId = await createTask(db, {
       seasonId: s25.id,
       kind: 'deliverable',
       title: deliverable.title,
@@ -334,11 +351,9 @@ export async function seedCampBaseline(
     result.tasks += 1;
 
     if (!deliverable.owner) continue;
-    const task = (await listTasks(db, s25.id))
-      .find((t) => t.title === deliverable.title)!;
     const owner = await resolveName(db, deliverable.owner);
     if (!owner.personId) continue;
-    const assignmentId = await assignPerson(db, task.taskId, owner.personId, email);
+    const assignmentId = await assignPerson(db, taskId, owner.personId, email);
     await setAssignmentStatus(db, assignmentId, 'accepted');
   }
 

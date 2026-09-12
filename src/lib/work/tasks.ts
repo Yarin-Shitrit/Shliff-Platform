@@ -128,3 +128,12 @@ export async function setTaskStatus(
 ): Promise<void> {
   await db.update(tasks).set({ status }).where(eq(tasks.id, taskId));
 }
+
+/** Links a deliverable to its `budget_lines` row after the fact — for a task
+ *  that was created before the budget line existed (a database seeded before
+ *  budget lines shipped, or seeded again against one). */
+export async function setTaskBudgetLine(
+  db: AnyDb, taskId: string, budgetLineId: string,
+): Promise<void> {
+  await db.update(tasks).set({ budgetLineId }).where(eq(tasks.id, taskId));
+}

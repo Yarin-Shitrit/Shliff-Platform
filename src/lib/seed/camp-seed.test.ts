@@ -218,4 +218,46 @@ describe('seedCampBaseline', () => {
       expect(task.budgetLineId).not.toBeNull();
     }
   });
+
+  /**
+   * `BURN_25_DELIVERABLES` and the task-creation loop predate this task —
+   * any database where `seedCampBaseline` already ran has the four ברן 25
+   * deliverable tasks already, with `budgetLineId` still null. This is
+   * exactly the shape of Task 13's live dev database: already seeded once,
+   * about to be seeded again. Budget-line creation must not be gated behind
+   * "the task doesn't exist yet", or these four tasks can never get a
+   * budget line, on any future re-run.
+   */
+  it('backfills dancefloor budget lines for deliverables that already existed', async () => {
+    const { createSeason } = await import('@/lib/members/roster');
+    const s25 = await createSeason(db, {
+      name: 'ברן 25', year: 2025, flatRate: 1500, plannedSize: 43,
+    });
+    const { createTask, listTasks } = await import('@/lib/work/tasks');
+    for (const [title, budget] of [
+      ['מייצג', 41300], ['חשמל', 12950], ['הגברה + תאורה', 30810], ['הובלה', 4000],
+    ] as const) {
+      await createTask(db, {
+        seasonId: s25.id, kind: 'deliverable', title, budgetAmount: budget,
+      });
+    }
+
+    await seedCampBaseline(db, LEAD);
+
+    const { listBudgetLines } = await import('@/lib/money/budget');
+    const dancefloor = (await listBudgetLines(db, s25.id))
+      .filter((line) => line.category === 'dancefloor');
+    expect(dancefloor).toHaveLength(4);
+    expect(dancefloor.reduce((n, line) => n + line.totalAgorot, 0)).toBe(8906000);
+
+    for (const task of await listTasks(db, s25.id)) {
+      if (task.kind !== 'deliverable') continue;
+      expect(task.budgetLineId).not.toBeNull();
+    }
+
+    // Re-running once more must add nothing further.
+    const again = await seedCampBaseline(db, LEAD);
+    expect(again.budgetLines).toBe(0);
+    expect(again.tasks).toBe(0);
+  });
 });
