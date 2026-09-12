@@ -6,6 +6,7 @@ import { listSeasons } from '@/lib/members/roster';
 import { seasonMoneySummary } from '@/lib/money/summary';
 import { listMovements } from '@/lib/money/ledger';
 import { listBudgetLines, budgetDerivation } from '@/lib/money/budget';
+import type { ObligationRow } from '@/lib/money/obligations';
 import { formatILS } from '@/lib/money';
 import { StatTile } from '@/components/charts/stat-tile';
 import { BarList } from '@/components/charts/bar-list';
@@ -14,6 +15,36 @@ import { Meter } from '@/components/charts/meter';
 import styles from './money.module.css';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * One direction's worth of obligation rows. Split out so the page can render
+ * "what we owe" and "what's owed to us" as two separately headed tables —
+ * concatenating both directions under one header left a reader with no way
+ * to tell, from a single row, which way the money was supposed to move.
+ */
+function ObligationsTable({ rows }: { rows: ObligationRow[] }) {
+  return (
+    <table>
+      <thead>
+        <tr><th>למי</th><th>על מה</th><th>סכום</th><th>קוזז</th><th>נותר</th></tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.id}>
+            <td>{row.displayParty ?? <span className="badge-warn">⚠ חסר שם</span>}</td>
+            <td>{row.description}</td>
+            <td><bdi>{formatILS(row.amountAgorot)} ₪</bdi></td>
+            <td>
+              <Meter label={row.description} valueAgorot={row.settledAgorot}
+                     totalAgorot={row.amountAgorot} />
+            </td>
+            <td><bdi>{formatILS(row.outstandingAgorot)} ₪</bdi></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
 
 /**
  * The page the lead opens to see where the money is. It leads with the
@@ -53,6 +84,17 @@ export default async function MoneyPage(
     ? await budgetDerivation(db, previousSeason.id, season.id)
     : [];
 
+  // `duesFundingIdentity` (src/lib/money/funding.ts) sets both of these to
+  // `null` in exactly the same branch — no planned camp size — so bundling
+  // them into one non-null object gates the thesis sentence, the mismatch
+  // warning and the bar identically, and lets each branch read the values
+  // back typed as plain numbers instead of `number | null`.
+  const perPerson = identity.perPersonFullAgorot !== null && identity.perPersonFundingAgorot !== null
+    ? { fullAgorot: identity.perPersonFullAgorot, fundingAgorot: identity.perPersonFundingAgorot }
+    : null;
+  const unattributedAgorot = summary.unattributed.paymentsAgorot
+    + summary.unattributed.entriesAgorot;
+
   return (
     <main>
       <h1>כספים</h1>
@@ -68,33 +110,43 @@ export default async function MoneyPage(
 
       <section className={styles.lead}>
         <p className={styles.hero}><bdi>{formatILS(identity.flatRateAgorot)} ₪</bdi></p>
-        {identity.perPersonFullAgorot !== null && identity.perPersonFundingAgorot !== null ? (
+        {perPerson ? (
           <p className={styles.thesis}>
             כל חבר משלם. התקציב המלא הוא{' '}
             <bdi>{formatILS(identity.budgetTotalAgorot)} ₪</bdi> ל־
             <bdi>{identity.plannedSize}</bdi> איש —{' '}
-            <bdi>{formatILS(identity.perPersonFullAgorot)} ₪</bdi> לאדם.
-            הגיוס מכסה <bdi>{formatILS(identity.perPersonFundingAgorot)} ₪</bdi> מכל אחד מהם.
+            <bdi>{formatILS(perPerson.fullAgorot)} ₪</bdi> לאדם.
+            הגיוס מכסה <bdi>{formatILS(perPerson.fundingAgorot)} ₪</bdi> מכל אחד מהם.
           </p>
         ) : (
           <p className="muted">
             אי אפשר לחשב עלות לאדם בלי גודל מחנה מתוכנן לשנה הזו.
           </p>
         )}
-        {!identity.closes && identity.perPersonFullAgorot !== null ? (
+        {!identity.closes && perPerson ? (
           <p className="badge-warn">
             ⚠ דמי הקאמפ והגיוס לא מסתכמים לתקציב. משהו כאן לא מתאים — התקציב,
             היעד או גודל המחנה.
           </p>
         ) : null}
 
-        <StackedBar
-          segments={[
-            { id: 'dues', label: 'דמי קאמפ', valueAgorot: identity.duesCoverAgorot ?? 0, series: 1 },
-            { id: 'raise', label: 'יעד גיוס', valueAgorot: identity.fundingTargetAgorot, series: 2 },
-          ]}
-          totalAgorot={identity.budgetTotalAgorot}
-        />
+        {/*
+          * `duesCoverAgorot` is only ever `null` in the same "no planned
+          * size" branch that makes `perPerson` null, so the bar is gated on
+          * that instead of defaulted to 0 — a zero-length "דמי קאמפ" segment
+          * would assert the camp collects ₪0 in dues, which is false; it is
+          * simply not computable yet, and the muted message above already
+          * says so on its own.
+          */}
+        {perPerson ? (
+          <StackedBar
+            segments={[
+              { id: 'dues', label: 'דמי קאמפ', valueAgorot: identity.duesCoverAgorot ?? 0, series: 1 },
+              { id: 'raise', label: 'יעד גיוס', valueAgorot: identity.fundingTargetAgorot, series: 2 },
+            ]}
+            totalAgorot={identity.budgetTotalAgorot}
+          />
+        ) : null}
       </section>
 
       <section className={styles.tiles}>
@@ -109,7 +161,7 @@ export default async function MoneyPage(
       <section className="card">
         <h2>איפה הכסף</h2>
         <BarList
-          emptyMessage="עדיין לא נרשמו חשבונות."
+          emptyMessage="עדיין לא נרשמו חשבונות. אפשר לייבא נתונים מדף הייבוא."
           items={summary.accounts.map((account) => ({
             id: account.accountId,
             label: account.name,
@@ -120,11 +172,9 @@ export default async function MoneyPage(
               : undefined,
           }))}
         />
-        {summary.unattributed.paymentsAgorot + summary.unattributed.entriesAgorot > 0 ? (
+        {unattributedAgorot > 0 ? (
           <p className="badge-warn">
-            ⚠ <bdi>
-              {formatILS(summary.unattributed.paymentsAgorot + summary.unattributed.entriesAgorot)} ₪
-            </bdi>{' '}
+            ⚠ <bdi>{formatILS(unattributedAgorot)} ₪</bdi>{' '}
             נרשמו בלי לציין לאיזה חשבון נכנסו.
           </p>
         ) : null}
@@ -133,27 +183,27 @@ export default async function MoneyPage(
       <section className="card">
         <h2>מה חייבים ומה חייבים לנו</h2>
         {summary.campOwes.length === 0 && summary.owedToCamp.length === 0 ? (
-          <p className="muted">אין חובות רשומים לשנה הזו.</p>
+          <p className="muted">
+            אין חובות רשומים ל<bdi>{season.name}</bdi>. אפשר לייבא נתונים מ
+            <Link href="/upload">דף הייבוא</Link>, או אם חיפשתם שנה אחרת — לבחור
+            אותה למעלה.
+          </p>
         ) : (
-          <table>
-            <thead>
-              <tr><th>למי</th><th>על מה</th><th>סכום</th><th>קוזז</th><th>נותר</th></tr>
-            </thead>
-            <tbody>
-              {[...summary.campOwes, ...summary.owedToCamp].map((row) => (
-                <tr key={row.id}>
-                  <td>{row.displayParty ?? <span className="badge-warn">⚠ חסר שם</span>}</td>
-                  <td>{row.description}</td>
-                  <td><bdi>{formatILS(row.amountAgorot)} ₪</bdi></td>
-                  <td>
-                    <Meter label={row.description} valueAgorot={row.settledAgorot}
-                           totalAgorot={row.amountAgorot} />
-                  </td>
-                  <td><bdi>{formatILS(row.outstandingAgorot)} ₪</bdi></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <>
+            <h3>מה אנחנו חייבים</h3>
+            {summary.campOwes.length === 0 ? (
+              <p className="muted">אין חובות שהקאמפ חייב.</p>
+            ) : (
+              <ObligationsTable rows={summary.campOwes} />
+            )}
+
+            <h3>מה חייבים לנו</h3>
+            {summary.owedToCamp.length === 0 ? (
+              <p className="muted">אין חובות שחייבים לקאמפ.</p>
+            ) : (
+              <ObligationsTable rows={summary.owedToCamp} />
+            )}
+          </>
         )}
         {summary.unnamed.length > 0 ? (
           <p className="badge-warn">
@@ -167,7 +217,9 @@ export default async function MoneyPage(
         <h2>התנועות</h2>
         {movements.length === 0 ? (
           <p className="muted">
-            עדיין אין תנועות ל<bdi>{season.name}</bdi>.
+            עדיין אין תנועות ל<bdi>{season.name}</bdi>. אפשר לייבא נתונים מ
+            <Link href="/upload">דף הייבוא</Link>, או אם חיפשתם שנה אחרת — לבחור
+            אותה למעלה.
           </p>
         ) : (
           <div className="scroll-x">
@@ -234,7 +286,9 @@ export default async function MoneyPage(
         <h2>התקציב</h2>
         {budget.length === 0 ? (
           <p className="muted">
-            עדיין לא נרשם תקציב ל<bdi>{season.name}</bdi>.
+            עדיין לא נרשם תקציב ל<bdi>{season.name}</bdi>. אפשר לייבא נתונים מ
+            <Link href="/upload">דף הייבוא</Link>, או אם חיפשתם שנה אחרת — לבחור
+            אותה למעלה.
           </p>
         ) : (
           <div className="scroll-x">

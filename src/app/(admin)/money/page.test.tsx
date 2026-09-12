@@ -146,6 +146,23 @@ describe('MoneyPage', () => {
     expect(screen.queryByText(/לא מסתכמים לתקציב/)).toBeNull();
   });
 
+  it('never draws a "דמי קאמפ" segment as a lying zero when there is a budget and a funding target but no planned camp size', async () => {
+    seasonMoneySummary.mockResolvedValue(summary({
+      identity: identity({
+        budgetTotalAgorot: 7000000, fundingTargetAgorot: 1500000,
+        plannedSize: null, duesCoverAgorot: null,
+        perPersonFullAgorot: null, perPersonFundingAgorot: null, closes: false,
+      }),
+    }));
+    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+    // "דמי קאמפ" is the StackedBar segment's own label and appears nowhere
+    // else on this page (Nav, which also uses that label, is not part of
+    // this render) — its total absence is what proves the bar itself was
+    // never drawn, as opposed to drawn with a zero-length, misleading segment.
+    expect(screen.queryByText('דמי קאמפ')).toBeNull();
+    expect(screen.getByText(/אי אפשר לחשב עלות לאדם בלי גודל מחנה מתוכנן/)).toBeTruthy();
+  });
+
   it('flags money with no account named, without folding it into an account', async () => {
     seasonMoneySummary.mockResolvedValue(summary({
       unattributed: { paymentsAgorot: 20000, entriesAgorot: 15000 },
@@ -266,13 +283,63 @@ describe('MoneyPage', () => {
 
   it('invites action instead of bare empty tables for a season with no movements, budget, or obligations', async () => {
     render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
-    expect(screen.getByText(/עדיין אין תנועות ל/)).toBeTruthy();
-    expect(screen.getByText(/עדיין לא נרשם תקציב ל/)).toBeTruthy();
-    expect(screen.getByText('אין חובות רשומים לשנה הזו.')).toBeTruthy();
-    expect(screen.getByText('עדיין לא נרשמו חשבונות.')).toBeTruthy();
+
+    // Each empty state must name the season *and* point somewhere actionable
+    // — the season switcher above is not enough on its own, because these
+    // three tables are only ever populated through /upload; a message that
+    // just states absence (as the earlier version of this page did) leaves a
+    // lead who just seeded a season with no idea what to do next.
+    for (const heading of ['התנועות', 'התקציב', 'מה חייבים ומה חייבים לנו']) {
+      const section = sectionFor(heading);
+      expect(within(section).getByText(SEASON.name)).toBeTruthy();
+      const link = within(section).getByRole('link', { name: 'דף הייבוא' });
+      expect(link.getAttribute('href')).toBe('/upload');
+    }
+
+    // Accounts are camp-wide, not season-scoped (see `accountBalances` in
+    // src/lib/money/accounts.ts) — pointing at "the season switcher above"
+    // for an empty account list would be actively misleading, since
+    // switching seasons can never change it. BarList's `emptyMessage` prop is
+    // a plain string, so this one is text-only, not a real link.
+    const accountsSection = sectionFor('איפה הכסף');
+    expect(within(accountsSection).getByText(/דף הייבוא/)).toBeTruthy();
+
     // A `>= 0` off-by-one on the unnamed-count guard would show this banner
     // on every season, including one with nothing unnamed to chase down.
     expect(screen.queryByText(/חובות בלי שם/)).toBeNull();
+  });
+
+  it("splits camp-owes and owed-to-camp into two separately headed tables, so a reader is never left to infer direction from row order", async () => {
+    const weOweRow: ObligationRow = {
+      id: 'o1', direction: 'camp_owes', partyPersonId: null, partyName: 'דנה',
+      displayParty: 'דנה', description: 'תיקון גנרטור', amountAgorot: 80000,
+      settledAgorot: 0, outstandingAgorot: 80000, settled: false, unnamed: false,
+      seasonId: 's1', sourceBlockId: null, sourceRow: null, settlements: [],
+    };
+    const owedToUsRow: ObligationRow = {
+      id: 'o2', direction: 'owed_to_camp', partyPersonId: null, partyName: 'יוסי',
+      displayParty: 'יוסי', description: 'מקדמה על אוהל', amountAgorot: 45000,
+      settledAgorot: 0, outstandingAgorot: 45000, settled: false, unnamed: false,
+      seasonId: 's1', sourceBlockId: null, sourceRow: null, settlements: [],
+    };
+    seasonMoneySummary.mockResolvedValue(summary({
+      campOwes: [weOweRow], owedToCamp: [owedToUsRow],
+    }));
+    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+
+    // Scoped to each subheading's own table (its next sibling) — a search
+    // anywhere in the outer section would find both names regardless of
+    // which table they actually landed in, and would not prove a reader can
+    // tell the two directions apart.
+    const weOweTable = screen.getByRole('heading', { name: 'מה אנחנו חייבים' })
+      .nextElementSibling as HTMLElement;
+    const owedToUsTable = screen.getByRole('heading', { name: 'מה חייבים לנו' })
+      .nextElementSibling as HTMLElement;
+
+    expect(within(weOweTable).getByText('דנה')).toBeTruthy();
+    expect(within(weOweTable).queryByText('יוסי')).toBeNull();
+    expect(within(owedToUsTable).getByText('יוסי')).toBeTruthy();
+    expect(within(owedToUsTable).queryByText('דנה')).toBeNull();
   });
 
   it("moves a movement's amount into the in/out column that matches its direction", async () => {
