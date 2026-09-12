@@ -18,8 +18,8 @@ describe('StackedBar', () => {
     // legend, once in the always-present table view.
     expect(screen.getAllByText('דמי קאמפ')).toHaveLength(2);
     expect(screen.getAllByText('גיוס')).toHaveLength(2);
-    expect(screen.getAllByText(/42,000/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/22,375.30/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/42,000/)).toHaveLength(2);
+    expect(screen.getAllByText(/22,375.30/)).toHaveLength(2);
   });
 
   it('shows the unfilled remainder as a named gap, not a third series', () => {
@@ -29,7 +29,7 @@ describe('StackedBar', () => {
       remainderLabel="נותר לגייס"
     />);
     expect(screen.getAllByText('נותר לגייס')).toHaveLength(2);
-    expect(screen.getAllByText(/12,375.30/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/12,375.30/)).toHaveLength(2);
   });
 
   it('carries a table view alongside the legend, same as every other chart', () => {
@@ -46,5 +46,18 @@ describe('StackedBar', () => {
     const table = screen.getByRole('table');
     expect(within(table).getByText('דמי קאמפ')).toBeTruthy();
     expect(within(table).getByText('גיוס')).toBeTruthy();
+  });
+
+  it('omits the legend for a single segment with no remainder — the title already names it', () => {
+    render(<StackedBar
+      segments={[{ id: 'raised', label: 'גויס', valueAgorot: 2237530, series: 1 }]}
+      totalAgorot={2237530}
+    />);
+    // Only one entry total (one segment, no remainder to show): a legend
+    // here would be a single swatch restating what the chart's own title
+    // already says. The label should appear once — in the table view only —
+    // not twice.
+    expect(screen.getAllByText('גויס')).toHaveLength(1);
+    expect(within(screen.getByRole('table')).getByText('גויס')).toBeTruthy();
   });
 });

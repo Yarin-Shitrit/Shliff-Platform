@@ -32,6 +32,11 @@ export function StackedBar({ segments, totalAgorot, remainderLabel }: {
   });
   const filled = segments.reduce((n, s) => n + s.valueAgorot, 0);
   const remainder = Math.max(0, totalAgorot - filled);
+  const hasRemainderEntry = Boolean(remainderLabel) && remainder > 0;
+  // A legend earns its place only when there's more than one entry to tell
+  // apart — a single segment with no remainder is already named by the
+  // chart's own title, and a lone swatch would just restate it.
+  const showLegend = segments.length + (hasRemainderEntry ? 1 : 0) >= 2;
 
   return (
     <div className={styles.viz}>
@@ -43,25 +48,27 @@ export function StackedBar({ segments, totalAgorot, remainderLabel }: {
         ))}
       </svg>
 
-      <div className={styles.legend}>
-        {segments.map((segment) => (
-          <span key={segment.id}>
-            <span className={styles.swatch}
-                  style={{ background: `var(--series-${segment.series})` }} />
-            {/* The label is its own element so a test can match it exactly;
-                a span reading "דמי קאמפ 42,000 ₪" matches neither half. */}
-            <span className={styles.legendLabel}>{segment.label}</span>{' '}
-            <bdi>{formatILS(segment.valueAgorot)} ₪</bdi>
-          </span>
-        ))}
-        {remainderLabel && remainder > 0 ? (
-          <span>
-            <span className={styles.swatch} style={{ background: 'var(--track)' }} />
-            <span className={styles.legendLabel}>{remainderLabel}</span>{' '}
-            <bdi>{formatILS(remainder)} ₪</bdi>
-          </span>
-        ) : null}
-      </div>
+      {showLegend ? (
+        <div className={styles.legend}>
+          {segments.map((segment) => (
+            <span key={segment.id}>
+              <span className={styles.swatch}
+                    style={{ background: `var(--series-${segment.series})` }} />
+              {/* The label is its own element so a test can match it exactly;
+                  a span reading "דמי קאמפ 42,000 ₪" matches neither half. */}
+              <span className={styles.legendLabel}>{segment.label}</span>{' '}
+              <bdi>{formatILS(segment.valueAgorot)} ₪</bdi>
+            </span>
+          ))}
+          {hasRemainderEntry ? (
+            <span>
+              <span className={styles.swatch} style={{ background: 'var(--track)' }} />
+              <span className={styles.legendLabel}>{remainderLabel}</span>{' '}
+              <bdi>{formatILS(remainder)} ₪</bdi>
+            </span>
+          ) : null}
+        </div>
+      ) : null}
 
       <table className={styles.tableView}>
         <caption>הנתונים שמאחורי התרשים</caption>
