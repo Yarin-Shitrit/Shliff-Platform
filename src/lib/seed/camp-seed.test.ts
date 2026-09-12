@@ -260,4 +260,39 @@ describe('seedCampBaseline', () => {
     expect(again.budgetLines).toBe(0);
     expect(again.tasks).toBe(0);
   });
+
+  it('seeds the whole ברן 26 fundraising plan, flagging only the dues line', async () => {
+    await seedCampBaseline(db, LEAD);
+    const { getSeasonByName } = await import('@/lib/members/roster');
+    const { listFundingTargets, fundingTotalAgorot, campBudgetFundingAgorot } =
+      await import('@/lib/money/funding');
+    const s26 = (await getSeasonByName(db, 'ברן 26'))!;
+
+    expect(await listFundingTargets(db, s26.id)).toHaveLength(8);
+    expect(await fundingTotalAgorot(db, s26.id)).toBe(13537530);
+    expect(await campBudgetFundingAgorot(db, s26.id)).toBe(2237530);
+  });
+
+  it('seeds the ticket projection: 60,000 + 33,000 + 78,000 = 171,000', async () => {
+    await seedCampBaseline(db, LEAD);
+    const { getSeasonByName } = await import('@/lib/members/roster');
+    const { listTicketRounds, ticketTotalAgorot } = await import('@/lib/money/funding');
+    const s26 = (await getSeasonByName(db, 'ברן 26'))!;
+
+    expect(await listTicketRounds(db, s26.id)).toHaveLength(3);
+    expect(await ticketTotalAgorot(db, s26.id)).toBe(17100000);
+  });
+
+  it('the identity still closes against the seeded plan', async () => {
+    await seedCampBaseline(db, LEAD);
+    const { getSeasonByName } = await import('@/lib/members/roster');
+    const { duesFundingIdentity } = await import('@/lib/money/funding');
+    const s26 = (await getSeasonByName(db, 'ברן 26'))!;
+
+    const id = await duesFundingIdentity(db, s26.id);
+    expect(id.fundingTargetAgorot).toBe(2237530);
+    expect(id.perPersonFullAgorot).toBe(183929);
+    expect(id.perPersonFundingAgorot).toBe(63929);
+    expect(id.closes).toBe(true);
+  });
 });

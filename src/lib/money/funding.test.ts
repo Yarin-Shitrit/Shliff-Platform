@@ -4,7 +4,7 @@ import { createTestDb } from '@/test/db';
 import { createSeason } from '@/lib/members/roster';
 import { createBudgetLine } from './budget';
 import {
-  createFundingTarget, fundingTotalAgorot,
+  createFundingTarget, fundingTotalAgorot, campBudgetFundingAgorot,
   createTicketRound, ticketTotalAgorot, duesFundingIdentity,
 } from './funding';
 
@@ -43,7 +43,9 @@ describe('the fundraising plan', () => {
    */
   it('closes the dues/fundraising identity for ברן 26', async () => {
     await createBudgetLine(db, { seasonId: s26, label: 'הכל', total: 64375.3, category: 'camp' });
-    await createFundingTarget(db, { seasonId: s26, label: 'הורדת מחיר דמי קאמפ', amount: 22375.3 });
+    await createFundingTarget(db, {
+      seasonId: s26, label: 'הורדת מחיר דמי קאמפ', amount: 22375.3, countsTowardCampBudget: true,
+    });
 
     const id = await duesFundingIdentity(db, s26);
     expect(id.budgetTotalAgorot).toBe(6437530);
@@ -80,10 +82,68 @@ describe('the fundraising plan', () => {
   it('rounds each per-person division to the nearest agora, not down', async () => {
     const s = (await createSeason(db, { name: 'ברן 29', year: 2029, flatRate: 999, plannedSize: 4 })).id;
     await createBudgetLine(db, { seasonId: s, label: 'הכל', total: 10.03, category: 'camp' });
-    await createFundingTarget(db, { seasonId: s, label: 'גיוס', amount: 6.03 });
+    await createFundingTarget(db, {
+      seasonId: s, label: 'גיוס', amount: 6.03, countsTowardCampBudget: true,
+    });
 
     const id = await duesFundingIdentity(db, s);
     expect(id.perPersonFullAgorot).toBe(251);
     expect(id.perPersonFundingAgorot).toBe(151);
+  });
+
+  /**
+   * The year's plan and the camp budget's share of it are different numbers.
+   * 135,375.30 is what the camp must raise in total; 22,375.30 is the part
+   * that keeps dues at 1,200 instead of 1,839.29. Summing all eight into the
+   * identity compares the camp budget against money earmarked for the
+   * dancefloor, the art car and last year's debt.
+   */
+  it('separates the year plan from the camp budget share', async () => {
+    const plan: Array<[string, number, boolean]> = [
+      ['חוב', 15000, false],
+      ['תיקון ותחזוק מייצג', 5000, false],
+      ['חשמל רחבה', 16000, false],
+      ['הגברה', 35000, false],
+      ['הובלה', 6000, false],
+      ['תאורה לייזרים', 20000, false],
+      ['מכולות', 16000, false],
+      ['הורדת מחיר דמי קאמפ', 22375.3, true],
+    ];
+    for (const [label, amount, countsTowardCampBudget] of plan) {
+      await createFundingTarget(db, { seasonId: s26, label, amount, countsTowardCampBudget });
+    }
+
+    expect(await fundingTotalAgorot(db, s26)).toBe(13537530);
+    expect(await campBudgetFundingAgorot(db, s26)).toBe(2237530);
+  });
+
+  it('closes the identity against the camp share, not the whole plan', async () => {
+    await createBudgetLine(db, { seasonId: s26, label: 'הכל', total: 64375.3, category: 'camp' });
+    await createFundingTarget(db, { seasonId: s26, label: 'הגברה', amount: 35000 });
+    await createFundingTarget(db, {
+      seasonId: s26, label: 'הורדת מחיר דמי קאמפ', amount: 22375.3,
+      countsTowardCampBudget: true,
+    });
+
+    const id = await duesFundingIdentity(db, s26);
+    // the identity reports the camp share, not the 57,375.30 total
+    expect(id.fundingTargetAgorot).toBe(2237530);
+    expect(id.perPersonFundingAgorot).toBe(63929);
+    expect(id.closes).toBe(true);
+  });
+
+  it('still reports a gap when the camp share does not cover the difference', async () => {
+    await createBudgetLine(db, { seasonId: s26, label: 'הכל', total: 70000, category: 'camp' });
+    await createFundingTarget(db, {
+      seasonId: s26, label: 'הורדת מחיר דמי קאמפ', amount: 22375.3,
+      countsTowardCampBudget: true,
+    });
+    expect((await duesFundingIdentity(db, s26)).closes).toBe(false);
+  });
+
+  it('defaults a target to not counting toward the camp budget', async () => {
+    await createFundingTarget(db, { seasonId: s26, label: 'ארט קאר', amount: 25000 });
+    expect(await fundingTotalAgorot(db, s26)).toBe(2500000);
+    expect(await campBudgetFundingAgorot(db, s26)).toBe(0);
   });
 });

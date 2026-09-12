@@ -1,4 +1,4 @@
-import { asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import type { AnyDb } from '@/lib/db-types';
 import { fundingTargets, ticketRounds } from '@/db/schema/money';
 import { seasons } from '@/db/schema/camp';
@@ -11,6 +11,7 @@ export interface NewFundingTarget {
   label: string;
   amount: number;
   note?: string;
+  countsTowardCampBudget?: boolean;
   sourceBlockId?: string;
   sourceRow?: number;
 }
@@ -34,6 +35,8 @@ export interface DuesFundingIdentity {
   flatRateAgorot: number;
   /** flatRate × plannedSize — what dues are expected to cover. */
   duesCoverAgorot: number | null;
+  /** The camp budget's share of the year's fundraising plan — see
+   *  `campBudgetFundingAgorot`. Not the whole plan's total. */
   fundingTargetAgorot: number;
   /** The whole budget divided by the camp, null when the size is unknown. */
   perPersonFullAgorot: number | null;
@@ -62,6 +65,7 @@ export async function createFundingTarget(
     label: input.label,
     amount: fromAgorot(toAgorot(input.amount)),
     note: input.note ?? null,
+    countsTowardCampBudget: input.countsTowardCampBudget ?? false,
     sourceBlockId: input.sourceBlockId ?? null,
     sourceRow: input.sourceRow ?? null,
   }).returning();
@@ -79,6 +83,28 @@ export async function fundingTotalAgorot(db: AnyDb, seasonId: string): Promise<n
     .select({ total: sql<string>`coalesce(sum(${fundingTargets.amount}), 0)` })
     .from(fundingTargets)
     .where(eq(fundingTargets.seasonId, seasonId));
+  return toAgorot(row.total);
+}
+
+/**
+ * The part of the year's fundraising that the camp budget assumes — the money
+ * that lets the flat rate be 1,200 rather than the full per-head cost.
+ *
+ * Distinct from `fundingTotalAgorot`, which is the whole year's plan. The
+ * identity must use this one: comparing the camp budget against money
+ * earmarked for the dancefloor would report a gap that is not real, or hide
+ * one that is.
+ */
+export async function campBudgetFundingAgorot(
+  db: AnyDb, seasonId: string,
+): Promise<number> {
+  const [row] = await db
+    .select({ total: sql<string>`coalesce(sum(${fundingTargets.amount}), 0)` })
+    .from(fundingTargets)
+    .where(and(
+      eq(fundingTargets.seasonId, seasonId),
+      eq(fundingTargets.countsTowardCampBudget, true),
+    ));
   return toAgorot(row.total);
 }
 
@@ -126,7 +152,7 @@ export async function duesFundingIdentity(
   if (!season) throw new Error(`עונה לא נמצאה: ${seasonId}`);
 
   const budget = await budgetTotalAgorot(db, seasonId);
-  const funding = await fundingTotalAgorot(db, seasonId);
+  const funding = await campBudgetFundingAgorot(db, seasonId);
   const flatRateAgorot = toAgorot(season.flatRate);
   const size = season.plannedSize;
 

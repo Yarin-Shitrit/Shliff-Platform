@@ -25,7 +25,9 @@ describe('the season money summary', () => {
       description: 'רווח מסיבת פקאנים', accountId: kupa.id, seasonId: s26, recordedBy: 'lead',
     });
     await createBudgetLine(db, { seasonId: s26, label: 'הכל', total: 64375.3, category: 'camp' });
-    await createFundingTarget(db, { seasonId: s26, label: 'הורדת מחיר דמי קאמפ', amount: 22375.3 });
+    await createFundingTarget(db, {
+      seasonId: s26, label: 'הורדת מחיר דמי קאמפ', amount: 22375.3, countsTowardCampBudget: true,
+    });
     await createObligation(db, {
       direction: 'camp_owes', partyName: 'יוסף', description: 'חוב יוסף',
       amount: 15240, openedOn: new Date('2026-06-01T00:00:00Z'), seasonId: s26,

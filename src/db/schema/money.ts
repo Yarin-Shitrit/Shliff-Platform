@@ -97,6 +97,16 @@ export const fundingTargets = pgTable('funding_targets', {
   label: text('label').notNull(),
   amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
   note: text('note'),
+  /**
+   * Whether this target is part of what the camp budget assumes will be
+   * raised, rather than part of the year's wider fundraising.
+   *
+   * `הורדת מחיר דמי קאמפ 22,375.3` is the only ברן 26 line that is: it is what
+   * keeps dues at 1,200 instead of 1,839.29. `הגברה`, `ארט קאר` and the rest
+   * fund the dancefloor and the year, and counting them against the camp
+   * budget would compare two different things.
+   */
+  countsTowardCampBudget: boolean('counts_toward_camp_budget').notNull().default(false),
   sourceBlockId: uuid('source_block_id').references(() => blocks.id, { onDelete: 'set null' }),
   sourceRow: integer('source_row'),
 }, (table) => [

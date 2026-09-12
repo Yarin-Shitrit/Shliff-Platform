@@ -1,0 +1,1 @@
+ALTER TABLE "funding_targets" ADD COLUMN "counts_toward_camp_budget" boolean DEFAULT false NOT NULL;

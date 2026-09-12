@@ -11,7 +11,9 @@ import type { AccountKind } from '@/db/schema/money';
 import { createAccount, listAccounts } from '@/lib/money/accounts';
 import { recordEntry, listMovements } from '@/lib/money/ledger';
 import { createBudgetLine, listBudgetLines } from '@/lib/money/budget';
-import { createFundingTarget, listFundingTargets } from '@/lib/money/funding';
+import {
+  createFundingTarget, listFundingTargets, createTicketRound, listTicketRounds,
+} from '@/lib/money/funding';
 import { createObligation, settleObligation, listObligations } from '@/lib/money/obligations';
 import { isBlank } from '@/lib/text/normalize';
 
@@ -24,6 +26,7 @@ export interface CampSeedResult {
   movements: number;
   budgetLines: number;
   fundingTargets: number;
+  ticketRounds: number;
   obligations: number;
 }
 
@@ -149,20 +152,26 @@ const BUDGET_26: Array<[string, string, number | null, number, string]> = [
   ['תקציב הפתעות דק׳ 90', '10% תקציב', 5852.3, 5852.3, ''],
 ];
 
-/**
- * `תקציב גיוס לשנה` names eight lines summing to 135,375.30, but only
- * `הורדת מחיר דמי קאמפ` is seeded as a `fundingTargets` row. It is the one
- * line whose amount is what dues and fundraising must independently
- * reconcile against: this season's budget (64,375.30) minus what the flat
- * rate alone covers (35 members × 1,200 = 42,000) is exactly 22,375.30 —
- * this row's own figure. The other seven (`חוב`, `תיקון ותחזוק מייצג`,
- * `חשמל רחבה`, `הגברה`, `הובלה`, `תאורה לייזרים`, `מכולות`, 113,000 together)
- * name what fundraised money will cover, not a fundraising ask the identity
- * below can check — seeding them as targets here would put 113,000 more into
- * `fundingTotalAgorot` than the budget ever asked for, and no real season
- * would ever close again.
- */
-const FUNDING_TARGET_26: [string, number] = ['הורדת מחיר דמי קאמפ', 22375.3];
+/** `תקציב גיוס לשנה` from `תקציב קאמפ ברן 26`, summing to 135,375.30. Only the
+ *  dues line counts against the camp budget — the rest fund the dancefloor,
+ *  the art car and last year's debt. */
+const FUNDING_26: Array<[string, number, boolean]> = [
+  ['חוב', 15000, false],
+  ['תיקון ותחזוק מייצג', 5000, false],
+  ['חשמל רחבה', 16000, false],
+  ['הגברה', 35000, false],
+  ['הובלה', 6000, false],
+  ['תאורה לייזרים', 20000, false],
+  ['מכולות', 16000, false],
+  ['הורדת מחיר דמי קאמפ', 22375.3, true],
+];
+
+/** The ticket projection beside it: 60,000 already sold, then two rounds. */
+const TICKETS_26: Array<[string, number | null, number | null, number]> = [
+  ['כרטיסים עד כה', null, null, 60000],
+  ['סבב ג׳', 165, 200, 33000],
+  ['סבב ד׳', 195, 400, 78000],
+];
 
 /** The `חוב יוסף` block: the debt's own total, and its four `קיזוזים`. */
 const YOSEF_DEBT = 15240;
@@ -226,7 +235,8 @@ export async function seedCampBaseline(
 ): Promise<CampSeedResult> {
   const result: CampSeedResult = {
     seasons: 0, events: 0, people: 0, tasks: 0,
-    accounts: 0, movements: 0, budgetLines: 0, fundingTargets: 0, obligations: 0,
+    accounts: 0, movements: 0, budgetLines: 0, fundingTargets: 0, ticketRounds: 0,
+    obligations: 0,
   };
   const counter = { people: 0 };
 
@@ -419,15 +429,36 @@ export async function seedCampBaseline(
     result.budgetLines += 1;
   }
 
-  // The one ברן 26 fundraising line the dues/funding identity actually
-  // checks against — see `FUNDING_TARGET_26`'s comment.
+  // The whole ברן 26 fundraising plan — see `FUNDING_26`'s comment. Its own
+  // existence guard, by label, independent of every other group's: nesting
+  // this inside another group's check (as an earlier version of this
+  // function did for the dancefloor budget lines) would mean a database
+  // seeded before this commit could never get the seven lines it is missing.
   const existingFunding26 = new Set(
     (await listFundingTargets(db, s26.id)).map((t) => t.label),
   );
-  const [fundingLabel, fundingAmount] = FUNDING_TARGET_26;
-  if (!existingFunding26.has(fundingLabel)) {
-    await createFundingTarget(db, { seasonId: s26.id, label: fundingLabel, amount: fundingAmount });
+  for (const [label, amount, countsTowardCampBudget] of FUNDING_26) {
+    if (existingFunding26.has(label)) continue;
+    await createFundingTarget(db, { seasonId: s26.id, label, amount, countsTowardCampBudget });
     result.fundingTargets += 1;
+  }
+
+  // The ticket projection beside the fundraising plan — see `TICKETS_26`'s
+  // comment. Its own existence guard, by label, standalone for the same
+  // reason as `FUNDING_26`'s above.
+  const existingTickets26 = new Set(
+    (await listTicketRounds(db, s26.id)).map((t) => t.label),
+  );
+  for (const [label, quantity, price, total] of TICKETS_26) {
+    if (existingTickets26.has(label)) continue;
+    await createTicketRound(db, {
+      seasonId: s26.id,
+      label,
+      quantity: quantity ?? undefined,
+      price: price ?? undefined,
+      total,
+    });
+    result.ticketRounds += 1;
   }
 
   // `חוב יוסף` and its four offsets. Settlements are only added the run that
