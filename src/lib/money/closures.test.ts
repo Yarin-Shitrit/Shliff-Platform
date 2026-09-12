@@ -96,6 +96,23 @@ describe('the workbooks own arithmetic', () => {
     expect(totals.netAgorot + 4464700).toBe(4418355);
   });
 
+  /**
+   * ברן 25's four רחבה deliverables are its only recorded budget lines —
+   * 41,300 + 12,950 + 30,810 + 4,000 = 89,060, category `dancefloor` — and it
+   * has no `camp` line at all. The identity must report that as no camp
+   * budget recorded, not as the dancefloor total divided by the camp.
+   */
+  it('ברן 25 has a dancefloor budget but no camp budget, and the identity says so', async () => {
+    const s25 = (await getSeasonByName(db, 'ברן 25'))!;
+    expect(await budgetTotalAgorot(db, s25.id, 'dancefloor')).toBe(8906000);
+    expect(await budgetTotalAgorot(db, s25.id, 'camp')).toBe(0);
+
+    const identity = await duesFundingIdentity(db, s25.id);
+    expect(identity.budgetTotalAgorot).toBe(0);
+    expect(identity.perPersonFullAgorot).toBe(0);
+    expect(identity.closes).toBe(false);
+  });
+
   it('the מיקום block reproduces: 1,584 + 28,520 + 14,079.55 = 44,183.55', async () => {
     const balances = await accountBalances(db);
     const byName = new Map(balances.map((row) => [row.name, row.balanceAgorot]));

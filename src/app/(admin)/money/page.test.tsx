@@ -62,7 +62,7 @@ function summary(overrides: Partial<SeasonMoneySummary> = {}): SeasonMoneySummar
     seasonName: 'ברן 26',
     accounts: [],
     totalBalanceAgorot: 500000,
-    unattributed: { paymentsAgorot: 0, entriesAgorot: 0 },
+    unattributed: { inAgorot: 0, outAgorot: 0, paymentsAgorot: 0 },
     ledger: { inAgorot: 100000, outAgorot: 50000, netAgorot: 50000, count: 3 },
     identity: identity(),
     campOwes: [],
@@ -171,24 +171,62 @@ describe('MoneyPage', () => {
     expect(screen.getByText(/בלי גודל מחנה מתוכנן/)).toBeTruthy();
   });
 
-  it('flags money with no account named, without folding it into an account', async () => {
+  it('flags unattributed inflow — ledger and dues payments combined — without folding it into an account', async () => {
     seasonMoneySummary.mockResolvedValue(summary({
-      unattributed: { paymentsAgorot: 20000, entriesAgorot: 15000 },
+      unattributed: { inAgorot: 15000, outAgorot: 0, paymentsAgorot: 20000 },
     }));
     render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
     const section = sectionFor('איפה הכסף');
     expect(within(section).getByText(/350/)).toBeTruthy();
     expect(within(section).getByText(/נרשמו בלי לציין לאיזה חשבון נכנסו/)).toBeTruthy();
+    // Money in and money out are different facts — an outflow sentence here
+    // would mean the two got summed again, just under a different label.
+    expect(within(section).queryByText(/יצאו/)).toBeNull();
+  });
+
+  it('flags unattributed outflow separately from inflow, with its own sentence', async () => {
+    seasonMoneySummary.mockResolvedValue(summary({
+      unattributed: { inAgorot: 0, outAgorot: 30000, paymentsAgorot: 0 },
+    }));
+    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+    const section = sectionFor('איפה הכסף');
+    expect(within(section).getByText(/300/)).toBeTruthy();
+    expect(within(section).getByText(/נרשמו בלי לציין מאיזה חשבון יצאו/)).toBeTruthy();
+    expect(within(section).queryByText(/נכנסו/)).toBeNull();
   });
 
   it('says nothing about unattributed money when every shekel is placed', async () => {
     // The zero case is not "no news" — a `>= 0` off-by-one here would show
     // the same warning for every season, training the lead to ignore it.
     seasonMoneySummary.mockResolvedValue(summary({
-      unattributed: { paymentsAgorot: 0, entriesAgorot: 0 },
+      unattributed: { inAgorot: 0, outAgorot: 0, paymentsAgorot: 0 },
     }));
     render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
     expect(screen.queryByText(/נרשמו בלי לציין לאיזה חשבון נכנסו/)).toBeNull();
+    expect(screen.queryByText(/נרשמו בלי לציין מאיזה חשבון יצאו/)).toBeNull();
+  });
+
+  /**
+   * ברן 25 has only its dancefloor budget lines recorded — no `camp` line —
+   * so `duesFundingIdentity` reports `budgetTotalAgorot: 0` honestly. The
+   * page must not present that 0 as a real per-head cost (the thesis would
+   * print "0 ₪ לאדם"), and must not reuse the "no planned size" message,
+   * since this season's planned size (35, from `identity()`'s default) is
+   * known — what's missing is the budget itself.
+   */
+  it('reports the camp budget as not recorded yet, not as a lying zero, when the season has no camp-category budget lines', async () => {
+    seasonMoneySummary.mockResolvedValue(summary({
+      identity: identity({
+        budgetTotalAgorot: 0, perPersonFullAgorot: 0, perPersonFundingAgorot: 0, closes: false,
+      }),
+    }));
+    const { container } = render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+
+    const message = screen.getByText(/עדיין לא נרשם תקציב קאמפ/);
+    expect(message.textContent).toContain(SEASON.name);
+    expect(screen.queryByText(/בלי גודל מחנה מתוכנן/)).toBeNull();
+    expect(container.querySelector(`.${styles.thesis}`)).toBeNull();
+    expect(screen.queryByText(/לא מסתכמים לתקציב/)).toBeNull();
   });
 
   it('shows an unnamed obligation\'s warning glyph inline, and the un-settleable count separately', async () => {

@@ -45,13 +45,20 @@ describe('the season money summary', () => {
     expect(summary.owedToCampAgorot).toBe(0);
   });
 
-  it('reports unattributed money rather than folding it into an account', async () => {
+  it('reports unattributed money rather than folding it into an account, scoped to its own season', async () => {
+    const other = await createSeason(db, { name: 'ברן 27', year: 2027, flatRate: 1300 });
     await recordEntry(db, {
       occurredOn: new Date(), direction: 'in', amount: 250,
       description: 'בלי חשבון', seasonId: s26, recordedBy: 'lead',
     });
+    // A different season's unattributed money must not leak into this one's
+    // figure — the exact bug that showed the same total on every season.
+    await recordEntry(db, {
+      occurredOn: new Date(), direction: 'in', amount: 900,
+      description: 'בלי חשבון בעונה אחרת', seasonId: other.id, recordedBy: 'lead',
+    });
     const summary = await seasonMoneySummary(db, s26);
-    expect(summary.unattributed.entriesAgorot).toBe(25000);
+    expect(summary.unattributed.inAgorot).toBe(25000);
     expect(summary.totalBalanceAgorot).toBe(0);
   });
 

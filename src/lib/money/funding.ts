@@ -151,7 +151,12 @@ export async function duesFundingIdentity(
   const [season] = await db.select().from(seasons).where(eq(seasons.id, seasonId));
   if (!season) throw new Error(`עונה לא נמצאה: ${seasonId}`);
 
-  const budget = await budgetTotalAgorot(db, seasonId);
+  // 'camp' only: a season's dancefloor budget (הגברה, מייצג, ...) is not part
+  // of what a member's dues buy, and summing it in here divided ברן 25's
+  // 89,060 of dancefloor spend by its 43-person camp — the same mixing of
+  // the year's wider spend into the camp budget already fixed for the
+  // funding half by `campBudgetFundingAgorot`, one column over.
+  const budget = await budgetTotalAgorot(db, seasonId, 'camp');
   const funding = await campBudgetFundingAgorot(db, seasonId);
   const flatRateAgorot = toAgorot(season.flatRate);
   const size = season.plannedSize;

@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import type { AnyDb } from '@/lib/db-types';
 import { seasons } from '@/db/schema/camp';
 import { accountBalances, unattributedAgorot } from './accounts';
-import type { AccountBalance } from './accounts';
+import type { AccountBalance, Unattributed } from './accounts';
 import { ledgerTotals } from './ledger';
 import { listObligations } from './obligations';
 import type { ObligationRow } from './obligations';
@@ -16,8 +16,9 @@ export interface SeasonMoneySummary {
   accounts: AccountBalance[];
   totalBalanceAgorot: number;
   /** Money the system holds but cannot place. Never folded into an account,
-   *  because a guessed account is worse than an admitted gap. */
-  unattributed: { paymentsAgorot: number; entriesAgorot: number };
+   *  because a guessed account is worse than an admitted gap. Scoped to this
+   *  season, unlike `accounts`. */
+  unattributed: Unattributed;
   ledger: { inAgorot: number; outAgorot: number; netAgorot: number; count: number };
   identity: DuesFundingIdentity;
   campOwes: ObligationRow[];
@@ -63,7 +64,7 @@ export async function seasonMoneySummary(
     seasonName: season.name,
     accounts,
     totalBalanceAgorot: accounts.reduce((total, row) => total + row.balanceAgorot, 0),
-    unattributed: await unattributedAgorot(db),
+    unattributed: await unattributedAgorot(db, seasonId),
     ledger: await ledgerTotals(db, { seasonId }),
     identity: await duesFundingIdentity(db, seasonId),
     campOwes,

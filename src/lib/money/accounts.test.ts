@@ -55,6 +55,45 @@ describe('accounts', () => {
     expect(before.paymentsAgorot).toBe(0);
   });
 
+  it('reports an unattributed inflow and an unattributed outflow separately, not summed', async () => {
+    // The defect this pins: summing both directions turned "money in" and
+    // "money out" into one number that is a quantity of nothing.
+    const season = await createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1200 });
+    await db.insert(ledgerEntries).values([
+      { occurredOn: new Date(), direction: 'in', amount: '500.00',
+        description: 'הכנסה בלי חשבון', seasonId: season.id, recordedBy: 'lead' },
+      { occurredOn: new Date(), direction: 'out', amount: '300.00',
+        description: 'הוצאה בלי חשבון', seasonId: season.id, recordedBy: 'lead' },
+    ]);
+
+    const result = await unattributedAgorot(db, season.id);
+    expect(result.inAgorot).toBe(50000);
+    expect(result.outAgorot).toBe(30000);
+  });
+
+  it("excludes another season's unattributed movements from this season's figure", async () => {
+    const other = await createSeason(db, { name: 'ברן 25', year: 2025, flatRate: 1500 });
+    const season = await createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1200 });
+    await db.insert(ledgerEntries).values({
+      occurredOn: new Date(), direction: 'in', amount: '900.00',
+      description: 'שייך לעונה אחרת', seasonId: other.id, recordedBy: 'lead',
+    });
+
+    const result = await unattributedAgorot(db, season.id);
+    expect(result.inAgorot).toBe(0);
+  });
+
+  it('does not count a ledger movement that names an account as unattributed', async () => {
+    const account = await createAccount(db, { name: 'קופה', kind: 'cash' });
+    await db.insert(ledgerEntries).values({
+      occurredOn: new Date(), direction: 'in', amount: '500.00',
+      description: 'עם חשבון', accountId: account.id, recordedBy: 'lead',
+    });
+
+    const result = await unattributedAgorot(db);
+    expect(result.inAgorot).toBe(0);
+  });
+
   it('excludes a real offset payment from unattributed money, though it names no account', async () => {
     // The vacuous version of this check (an empty db reporting zero) cannot
     // tell a working exclusion from a deleted one — both report zero when

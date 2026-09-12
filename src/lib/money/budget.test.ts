@@ -87,4 +87,18 @@ describe('budget lines', () => {
     });
     expect(await budgetTotalAgorot(db, s26)).toBe(1295000);
   });
+
+  /**
+   * The same mixing Task 12b fixed for funding, one column over: a category
+   * filter, not a second table, keeps a season's dancefloor spend out of a
+   * total that is supposed to answer "what does the camp budget cover".
+   */
+  it('sums only the requested category, and both categories when none is given', async () => {
+    await createBudgetLine(db, { seasonId: s26, label: 'תקציב קאמפ', total: 1000, category: 'camp' });
+    await createBudgetLine(db, { seasonId: s26, label: 'תקציב רחבה', total: 400, category: 'dancefloor' });
+
+    expect(await budgetTotalAgorot(db, s26)).toBe(140000);
+    expect(await budgetTotalAgorot(db, s26, 'camp')).toBe(100000);
+    expect(await budgetTotalAgorot(db, s26, 'dancefloor')).toBe(40000);
+  });
 });

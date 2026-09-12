@@ -1,8 +1,8 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { AnyDb } from '@/lib/db-types';
 import { accounts, ledgerEntries } from '@/db/schema/money';
-import type { AccountKind } from '@/db/schema/money';
-import { persons, payments } from '@/db/schema/camp';
+import type { AccountKind, LedgerDirection } from '@/db/schema/money';
+import { persons, payments, dues } from '@/db/schema/camp';
 import { toAgorot, fromAgorot } from '@/lib/money';
 import { isBlank } from '@/lib/text/normalize';
 
@@ -93,26 +93,77 @@ export async function accountBalances(db: AnyDb): Promise<AccountBalance[]> {
   }));
 }
 
+export interface Unattributed {
+  /** Money in, with no account named. */
+  inAgorot: number;
+  /** Money out, with no account named. */
+  outAgorot: number;
+  /** Dues payments with no account. Offsets are excluded: they move no cash,
+   *  so having no account is correct for them rather than missing. */
+  paymentsAgorot: number;
+}
+
 /**
  * Money the system holds but cannot place. Shown on the page as its own line,
  * because an unattributed shekel assigned to a guessed account is worse than
  * one the page admits it cannot place.
  *
+ * Split by direction — money that came in and money that went out are
+ * different facts, and summing them (as an earlier version of this function
+ * did) produced a number that was not a quantity of anything. When
+ * `seasonId` is given, every total is scoped to it; omitted, each is
+ * camp-wide, matching `accountBalances`'s own camp-wide scope.
+ *
  * `קיזוז` payments are excluded: they move no cash, so having no account is
  * correct for them rather than missing.
  */
 export async function unattributedAgorot(
-  db: AnyDb,
-): Promise<{ paymentsAgorot: number; entriesAgorot: number }> {
-  const [p] = await db
-    .select({ total: sql<string>`coalesce(sum(${payments.amount}), 0)` })
-    .from(payments)
-    .where(sql`${payments.accountId} is null and ${payments.channel} <> 'קיזוז'`);
+  db: AnyDb, seasonId?: string,
+): Promise<Unattributed> {
+  const directionTotal = async (direction: LedgerDirection): Promise<number> => {
+    const where = seasonId
+      ? and(
+          sql`${ledgerEntries.accountId} is null`,
+          eq(ledgerEntries.direction, direction),
+          eq(ledgerEntries.seasonId, seasonId),
+        )
+      : and(sql`${ledgerEntries.accountId} is null`, eq(ledgerEntries.direction, direction));
+    const [row] = await db
+      .select({ total: sql<string>`coalesce(sum(${ledgerEntries.amount}), 0)` })
+      .from(ledgerEntries)
+      .where(where);
+    return toAgorot(row.total);
+  };
 
-  const [e] = await db
-    .select({ total: sql<string>`coalesce(sum(${ledgerEntries.amount}), 0)` })
-    .from(ledgerEntries)
-    .where(sql`${ledgerEntries.accountId} is null`);
+  // A dues payment has no `seasonId` of its own — it is reached through the
+  // due it settles — so scoping it to a season means joining `dues` rather
+  // than filtering the table directly.
+  const paymentsTotal = async (): Promise<number> => {
+    if (seasonId) {
+      const [row] = await db
+        .select({ total: sql<string>`coalesce(sum(${payments.amount}), 0)` })
+        .from(payments)
+        .innerJoin(dues, eq(dues.id, payments.dueId))
+        .where(and(
+          sql`${payments.accountId} is null`,
+          sql`${payments.channel} <> 'קיזוז'`,
+          eq(dues.seasonId, seasonId),
+        ));
+      return toAgorot(row.total);
+    }
+    const [row] = await db
+      .select({ total: sql<string>`coalesce(sum(${payments.amount}), 0)` })
+      .from(payments)
+      .where(and(
+        sql`${payments.accountId} is null`,
+        sql`${payments.channel} <> 'קיזוז'`,
+      ));
+    return toAgorot(row.total);
+  };
 
-  return { paymentsAgorot: toAgorot(p.total), entriesAgorot: toAgorot(e.total) };
+  return {
+    inAgorot: await directionTotal('in'),
+    outAgorot: await directionTotal('out'),
+    paymentsAgorot: await paymentsTotal(),
+  };
 }

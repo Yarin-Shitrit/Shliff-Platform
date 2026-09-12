@@ -1,4 +1,4 @@
-import { asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import type { AnyDb } from '@/lib/db-types';
 import { budgetLines } from '@/db/schema/money';
 import type { BudgetCategory } from '@/db/schema/money';
@@ -95,11 +95,25 @@ export async function listBudgetLines(
   });
 }
 
-export async function budgetTotalAgorot(db: AnyDb, seasonId: string): Promise<number> {
+/**
+ * With no `category`, the season's whole planned spend — what the "התקציב"
+ * table on the money page sums. With one, only that category's lines: the
+ * dues/funding identity must use `'camp'` here, because `הגברה` and `מייצג`
+ * (category `dancefloor`) are no more part of what a member's dues buy than
+ * the year's fundraising targets for the art car or last year's debt are
+ * (see `campBudgetFundingAgorot` in `funding.ts`, the same fix one column
+ * over).
+ */
+export async function budgetTotalAgorot(
+  db: AnyDb, seasonId: string, category?: BudgetCategory,
+): Promise<number> {
+  const where = category
+    ? and(eq(budgetLines.seasonId, seasonId), eq(budgetLines.category, category))
+    : eq(budgetLines.seasonId, seasonId);
   const [row] = await db
     .select({ total: sql<string>`coalesce(sum(${budgetLines.total}), 0)` })
     .from(budgetLines)
-    .where(eq(budgetLines.seasonId, seasonId));
+    .where(where);
   return toAgorot(row.total);
 }
 

@@ -146,4 +146,21 @@ describe('the fundraising plan', () => {
     expect(await fundingTotalAgorot(db, s26)).toBe(2500000);
     expect(await campBudgetFundingAgorot(db, s26)).toBe(0);
   });
+
+  /**
+   * The same mixing already fixed for the funding half, one column over: a
+   * season's dancefloor budget is not part of what a member's dues buy. The
+   * dancefloor line here (45,000) is nine times the camp line (5,000) so a
+   * regression that sums both categories reports a per-head figure an order
+   * of magnitude too high rather than one that happens to round the same way.
+   */
+  it('divides the per-head cost by the camp budget alone, not by the camp plus the dancefloor', async () => {
+    const s = (await createSeason(db, { name: 'ברן 29', year: 2029, flatRate: 500, plannedSize: 10 })).id;
+    await createBudgetLine(db, { seasonId: s, label: 'תקציב קאמפ', total: 5000, category: 'camp' });
+    await createBudgetLine(db, { seasonId: s, label: 'תקציב רחבה', total: 45000, category: 'dancefloor' });
+
+    const id = await duesFundingIdentity(db, s);
+    expect(id.budgetTotalAgorot).toBe(500000);
+    expect(id.perPersonFullAgorot).toBe(50000);
+  });
 });

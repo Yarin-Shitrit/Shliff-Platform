@@ -89,11 +89,23 @@ export default async function MoneyPage(
   // them into one non-null object gates the thesis sentence, the mismatch
   // warning and the bar identically, and lets each branch read the values
   // back typed as plain numbers instead of `number | null`.
-  const perPerson = identity.perPersonFullAgorot !== null && identity.perPersonFundingAgorot !== null
+  //
+  // Also gated on `budgetTotalAgorot > 0`: ברן 25 has a planned size but no
+  // `camp`-category budget line, so the identity honestly reports a budget
+  // total (and so a per-person figure) of 0 — not null. Without this guard
+  // the thesis below would print "0 ₪ לאדם", asserting the camp budget is
+  // zero rather than admitting it was never recorded.
+  const hasCampBudget = identity.budgetTotalAgorot > 0;
+  const perPerson = hasCampBudget
+    && identity.perPersonFullAgorot !== null && identity.perPersonFundingAgorot !== null
     ? { fullAgorot: identity.perPersonFullAgorot, fundingAgorot: identity.perPersonFundingAgorot }
     : null;
-  const unattributedAgorot = summary.unattributed.paymentsAgorot
-    + summary.unattributed.entriesAgorot;
+  // A dues payment is always money in, so it joins the ledger's own inflow;
+  // outflow has no payments counterpart. Kept as two figures, not one sum —
+  // money that arrived somewhere unrecorded and money that left somewhere
+  // unrecorded are different facts about the camp's finances.
+  const unattributedInAgorot = summary.unattributed.inAgorot + summary.unattributed.paymentsAgorot;
+  const unattributedOutAgorot = summary.unattributed.outAgorot;
 
   return (
     <main>
@@ -118,10 +130,15 @@ export default async function MoneyPage(
             <bdi>{formatILS(perPerson.fullAgorot)} ₪</bdi> לאדם.
             הגיוס מכסה <bdi>{formatILS(perPerson.fundingAgorot)} ₪</bdi> מכל אחד מהם.
           </p>
-        ) : (
+        ) : identity.plannedSize === null ? (
           <p className="muted">
             אי אפשר לחשב עלות לאדם ל<bdi>{season.name}</bdi> בלי גודל מחנה
             מתוכנן. אם חיפשתם שנה אחרת, בחרו אותה למעלה.
+          </p>
+        ) : (
+          <p className="muted">
+            ל<bdi>{season.name}</bdi> עדיין לא נרשם תקציב קאמפ, ולכן אי אפשר
+            לחשב עלות לאדם. אם חיפשתם שנה אחרת, בחרו אותה למעלה.
           </p>
         )}
         {!identity.closes && perPerson ? (
@@ -173,10 +190,16 @@ export default async function MoneyPage(
               : undefined,
           }))}
         />
-        {unattributedAgorot > 0 ? (
+        {unattributedInAgorot > 0 ? (
           <p className="badge-warn">
-            ⚠ <bdi>{formatILS(unattributedAgorot)} ₪</bdi>{' '}
+            ⚠ <bdi>{formatILS(unattributedInAgorot)} ₪</bdi>{' '}
             נרשמו בלי לציין לאיזה חשבון נכנסו.
+          </p>
+        ) : null}
+        {unattributedOutAgorot > 0 ? (
+          <p className="badge-warn">
+            ⚠ <bdi>{formatILS(unattributedOutAgorot)} ₪</bdi>{' '}
+            נרשמו בלי לציין מאיזה חשבון יצאו.
           </p>
         ) : null}
       </section>
