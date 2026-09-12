@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { TestDb } from '@/test/db';
 import { createTestDb } from '@/test/db';
+import { obligations } from '@/db/schema/money';
 import { createObligation, listObligations, settleObligation, unnamedObligations } from './obligations';
 
 let db: TestDb;
@@ -117,6 +118,36 @@ describe('obligations', () => {
     const [row] = await listObligations(db);
     expect(row.unnamed).toBe(false);
     expect(await unnamedObligations(db)).toHaveLength(0);
+  });
+
+  /**
+   * `createObligation` normalises `partyName` with `isBlank` on write, so
+   * every row it produces is safe. This inserts straight through
+   * `db.insert(obligations)`, bypassing that normalisation entirely, to
+   * stand in for Wave 2's promoter or any other future writer that is not
+   * `createObligation` — the read side (`unnamed` in `listObligations`, and
+   * the settle guard) must not depend on the one writer that happens to be
+   * careful. A `partyName` of a lone RLM mark is truthy but carries no
+   * visible content; a plain-truthiness check on the read side would let it
+   * through as "named" — settleable, and so closeable — for exactly the
+   * reason `unnamedObligations` exists to prevent.
+   */
+  it('treats a directly-inserted row with an invisible-only partyName as unnamed and unsettleable', async () => {
+    const [row] = await db.insert(obligations).values({
+      direction: 'camp_owes',
+      partyName: '‏',
+      description: 'שולם 500 — מקפיא באיחסון נוסף',
+      amount: '500.00',
+      openedOn: WHEN,
+    }).returning();
+
+    const [listed] = await listObligations(db);
+    expect(listed.unnamed).toBe(true);
+    expect(await unnamedObligations(db)).toHaveLength(1);
+
+    await expect(settleObligation(db, {
+      obligationId: row.id, amount: 500, kind: 'cash', settledOn: WHEN, recordedBy: LEAD,
+    })).rejects.toThrow(/בלי שם/);
   });
 
   it('separates the two directions', async () => {

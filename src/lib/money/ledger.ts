@@ -48,6 +48,11 @@ export interface Movement {
   accountName: string | null;
   seasonId: string | null;
   eventId: string | null;
+  /** Non-null on both legs of a transfer, and only on those — the field
+   *  `recordTransfer` writes to make a transfer identifiable as one
+   *  movement (requirement 6). Always null on a plain `recordEntry` row and
+   *  on a dues payment, since neither is one half of a transfer. */
+  transferGroupId: string | null;
 }
 
 export interface MovementFilter {
@@ -87,8 +92,12 @@ export async function recordEntry(db: AnyDb, input: NewEntry): Promise<string> {
 
 /**
  * Two entries sharing a `transferGroupId`. Written as a pair rather than as
- * one signed row so that every account's balance stays a plain sum, and so a
- * transfer can never be half-visible on one side.
+ * one signed row so that every account's balance stays a plain sum. The two
+ * `recordEntry` calls below are sequential awaits, not one transaction — a
+ * crash between them is possible — but the shared `transferGroupId` still
+ * makes the pair identifiable as one movement after the fact, which is what
+ * a transfer needs: the group id, not atomicity, is the guarantee this
+ * function makes.
  */
 export async function recordTransfer(
   db: AnyDb, input: TransferInput,
@@ -141,6 +150,7 @@ export async function listMovements(
       accountName: accounts.name,
       seasonId: ledgerEntries.seasonId,
       eventId: ledgerEntries.eventId,
+      transferGroupId: ledgerEntries.transferGroupId,
     })
     .from(ledgerEntries)
     .leftJoin(accounts, eq(accounts.id, ledgerEntries.accountId))
@@ -180,12 +190,15 @@ export async function listMovements(
       direction: row.direction, amountAgorot: toAgorot(row.amount),
       description: row.description, accountId: row.accountId,
       accountName: row.accountName ?? null, seasonId: row.seasonId, eventId: row.eventId,
+      transferGroupId: row.transferGroupId,
     })),
     ...paid.map((row) => ({
       id: row.id, source: 'dues' as const, occurredOn: row.occurredOn,
       direction: 'in' as const, amountAgorot: toAgorot(row.amount),
       description: `דמי קאמפ — ${row.displayName}`, accountId: row.accountId,
       accountName: row.accountName ?? null, seasonId: row.seasonId, eventId: null,
+      // A dues payment is never one leg of a transfer.
+      transferGroupId: null,
     })),
   ];
 

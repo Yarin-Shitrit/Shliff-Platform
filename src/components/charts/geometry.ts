@@ -78,6 +78,26 @@ export interface StackInput {
  * the subtraction makes adjacent segments touch with no visible seam — two
  * different amounts read as one solid block, which is the exact failure a
  * stacked bar exists to prevent.
+ *
+ * Each ratio is clamped to `[0, 1]` on its own below, but the segments can
+ * still sum past `totalAgorot` — `money/page.tsx` passes exactly
+ * `[duesCoverAgorot, fundingTargetAgorot]` against `budgetTotalAgorot`, and a
+ * funding target set before a budget cut makes that sum exceed the budget in
+ * ordinary operation, not as an edge case. Clamping only the per-segment
+ * ratio still let the *cumulative* offset run past `width`, drawing a later
+ * segment's `x` negative (in `rtl`) — outside the track it is meant to be
+ * drawn on. `roomLeft` below clamps what track remains instead, so a segment
+ * that would spill over shrinks to fit rather than escaping the track.
+ *
+ * A segment whose share is narrower than the gap renders at zero width (the
+ * pre-existing `Math.max(0, ...)` on the line below) — but `offset` still
+ * advances by that segment's full, un-gapped share. This is deliberate, not
+ * an oversight the room-clamp happened to leave standing: `offset` tracks
+ * each segment's true proportional territory on the track, and the gap is a
+ * rendering-only inset. Making a zero-width sliver also consume zero offset
+ * would shift every later segment left by the sliver's true share, which is
+ * a layout lie in the opposite direction — later segments would then start
+ * as if the sliver's amount did not exist at all.
  */
 export function stackGeometry(input: StackInput): Box[] {
   const boxes: Box[] = [];
@@ -87,12 +107,14 @@ export function stackGeometry(input: StackInput): Box[] {
     const ratio = input.totalAgorot > 0
       ? Math.min(1, Math.max(0, segment / input.totalAgorot))
       : 0;
-    const width = Math.max(0, ratio * input.width - input.gap);
+    const rawWidth = Math.max(0, ratio * input.width - input.gap);
+    const roomLeft = Math.max(0, input.width - offset);
+    const width = Math.min(rawWidth, roomLeft);
     boxes.push({
       x: input.direction === 'rtl' ? input.width - offset - width : offset,
       width,
     });
-    offset += ratio * input.width;
+    offset = Math.min(input.width, offset + ratio * input.width);
   }
 
   return boxes;

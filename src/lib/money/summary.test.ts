@@ -104,4 +104,28 @@ describe('the season money summary', () => {
     expect(summary.unnamed).toHaveLength(1);
     expect(summary.unnamed[0].outstandingAgorot).toBe(30000);
   });
+
+  /**
+   * `campOwes`/`owedToCamp` are season-scoped: `season_id = $1` is false for
+   * a NULL row, so a season-less obligation appears in neither. Requirement
+   * 5 tells Wave 2's promoter to leave the season unset when it can't be
+   * determined, and requirement 19 says an unnamed obligation must surface
+   * "permanently in a block that cannot be dismissed" — so `unnamed` must
+   * come from the camp-wide query (`unnamedObligations`), not from filtering
+   * the two season-scoped lists, or a season-less unnamed row reaches no
+   * season's page at all, under any season.
+   */
+  it('surfaces a season-less unnamed obligation too, on a season it has nothing to do with', async () => {
+    await createObligation(db, {
+      direction: 'camp_owes', description: 'שולם 500 — מקפיא באיחסון נוסף',
+      amount: 500, openedOn: new Date('2026-06-20T00:00:00Z'),
+      // no seasonId: exactly the row requirement 5 says the promoter must
+      // produce when the season cannot be determined.
+    });
+
+    const summary = await seasonMoneySummary(db, s26);
+    expect(summary.unnamed).toHaveLength(1);
+    expect(summary.unnamed[0].outstandingAgorot).toBe(50000);
+    expect(summary.unnamed[0].seasonId).toBeNull();
+  });
 });

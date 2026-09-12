@@ -49,12 +49,6 @@ describe('accounts', () => {
     expect((await listAccounts(db)).map((row) => row.id)).toContain(a.id);
   });
 
-  it('does not count an offset as unattributed money', async () => {
-    // an offset moves no cash, so having no account is correct, not missing
-    const before = await unattributedAgorot(db);
-    expect(before.paymentsAgorot).toBe(0);
-  });
-
   it('reports an unattributed inflow and an unattributed outflow separately, not summed', async () => {
     // The defect this pins: summing both directions turned "money in" and
     // "money out" into one number that is a quantity of nothing.

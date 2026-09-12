@@ -61,7 +61,7 @@ describe('the ledger', () => {
     })).rejects.toThrow(/תיאור/);
   });
 
-  it('writes a transfer as two entries sharing a group', async () => {
+  it('writes a transfer as two entries sharing one non-null group', async () => {
     const from = await createAccount(db, { name: 'וייבז', kind: 'event_float', openingBalance: 5000 });
     const to = await createAccount(db, { name: 'קופת מזומן', kind: 'cash' });
 
@@ -73,6 +73,40 @@ describe('the ledger', () => {
     const moves = await listMovements(db);
     expect(moves).toHaveLength(2);
     expect(new Set(moves.map((m) => m.direction))).toEqual(new Set(['in', 'out']));
+    // The actual requirement (§4 requirement 6): a transfer is identifiable
+    // as one movement because both its entries carry the *same* group id.
+    // `typeof ... === 'string'` rather than `.not.toBeNull()`: a field the
+    // select statement forgets to project comes back `undefined`, and
+    // `undefined` passes a bare not-null check just as easily as a real
+    // UUID would — this would have let `transferGroupId` go on being
+    // selected nowhere and still pass.
+    expect(typeof moves[0].transferGroupId).toBe('string');
+    expect(moves[1].transferGroupId).toBe(moves[0].transferGroupId);
+  });
+
+  it('does not share a transfer group between two separate transfers', async () => {
+    const a = await createAccount(db, { name: 'וייבז', kind: 'event_float', openingBalance: 5000 });
+    const b = await createAccount(db, { name: 'קופת מזומן', kind: 'cash' });
+    const c = await createAccount(db, { name: 'עו״ש אופק', kind: 'personal' });
+
+    await recordTransfer(db, {
+      fromAccountId: a.id, toAccountId: b.id, amount: 1200,
+      occurredOn: new Date('2026-01-01T00:00:00Z'), description: 'העברה ראשונה', recordedBy: LEAD,
+    });
+    await recordTransfer(db, {
+      fromAccountId: b.id, toAccountId: c.id, amount: 300,
+      occurredOn: new Date('2026-01-02T00:00:00Z'), description: 'העברה שנייה', recordedBy: LEAD,
+    });
+
+    const moves = await listMovements(db);
+    expect(moves).toHaveLength(4);
+    const firstGroup = moves[0].transferGroupId;
+    const secondGroup = moves[2].transferGroupId;
+    expect(typeof firstGroup).toBe('string');
+    expect(typeof secondGroup).toBe('string');
+    expect(secondGroup).not.toBe(firstGroup);
+    expect(moves[1].transferGroupId).toBe(firstGroup);
+    expect(moves[3].transferGroupId).toBe(secondGroup);
   });
 
   it('refuses a transfer to the same account', async () => {

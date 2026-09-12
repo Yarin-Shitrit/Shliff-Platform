@@ -4,7 +4,7 @@ import { seasons } from '@/db/schema/camp';
 import { accountBalances, unattributedAgorot } from './accounts';
 import type { AccountBalance, Unattributed } from './accounts';
 import { ledgerTotals } from './ledger';
-import { listObligations } from './obligations';
+import { listObligations, unnamedObligations } from './obligations';
 import type { ObligationRow } from './obligations';
 import { duesFundingIdentity } from './funding';
 import type { DuesFundingIdentity } from './funding';
@@ -27,10 +27,14 @@ export interface SeasonMoneySummary {
    *  must not be shown as though nothing has been paid against it. */
   campOwesAgorot: number;
   owedToCampAgorot: number;
-  /** Obligations with no linked person and no recorded name, from both
-   *  directions. Surfaced on the summary itself rather than left for a
-   *  second query, because these are exactly the rows nobody can act on
-   *  without first finding out who they are. */
+  /** Every unnamed obligation camp-wide, from both directions and
+   *  regardless of season — including one with no season at all.
+   *  Deliberately *not* filtered from `campOwes`/`owedToCamp` above: those
+   *  two are season-scoped (`season_id = $1`, which a NULL season_id never
+   *  matches), so a season-less unnamed row would appear on no season's page
+   *  under that approach. An unnamed obligation must surface "permanently in
+   *  a block that cannot be dismissed" regardless of which season is open,
+   *  so this comes from the camp-wide `unnamedObligations` query instead. */
   unnamed: ObligationRow[];
 }
 
@@ -71,6 +75,6 @@ export async function seasonMoneySummary(
     owedToCamp,
     campOwesAgorot: sumOutstanding(campOwes),
     owedToCampAgorot: sumOutstanding(owedToCamp),
-    unnamed: [...campOwes, ...owedToCamp].filter((row) => row.unnamed),
+    unnamed: await unnamedObligations(db),
   };
 }

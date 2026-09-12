@@ -135,7 +135,13 @@ export async function listObligations(
       // the total absence of both counts as unnamed. Treating a merely
       // unlinked party as unnamed would put a known creditor into the "nobody
       // knows who to pay" queue that exists for the other two rows.
-      unnamed: !obligation.partyPersonId && !obligation.partyName,
+      //
+      // `isBlank`, not plain truthiness: `createObligation` normalises
+      // `partyName` to null on write, but this is the read side, and it is
+      // read for every row regardless of which writer produced it. A
+      // `partyName` of only invisible directional marks is truthy — a plain
+      // `!obligation.partyName` check would call that row named.
+      unnamed: !obligation.partyPersonId && isBlank(obligation.partyName),
       seasonId: obligation.seasonId,
       sourceBlockId: obligation.sourceBlockId,
       sourceRow: obligation.sourceRow,
@@ -165,7 +171,10 @@ export async function settleObligation(db: AnyDb, input: NewSettlement): Promise
     .where(eq(obligations.id, input.obligationId));
   if (!obligation) throw new Error(`חוב לא קיים: ${input.obligationId}`);
 
-  if (!obligation.partyPersonId && !obligation.partyName) {
+  // Same `isBlank` reasoning as `unnamed` above in `listObligations`: this
+  // guard runs against whatever is in the row, not just rows `createObligation`
+  // produced, and a truthy-but-invisible `partyName` must still refuse.
+  if (!obligation.partyPersonId && isBlank(obligation.partyName)) {
     throw new Error('אי אפשר לסגור חוב בלי שם — לא ידוע למי מגיע הכסף');
   }
 

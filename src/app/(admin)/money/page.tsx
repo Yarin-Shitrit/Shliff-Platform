@@ -73,6 +73,17 @@ export default async function MoneyPage(
   const season = seasons.find((s) => s.id === requested) ?? seasons[0];
   const summary = await seasonMoneySummary(db, season.id);
   const movements = await listMovements(db, { seasonId: season.id });
+  // `listMovements` already returns its rows sorted by date (see its own
+  // ordering), so the running balance is a plain reduce over what's already
+  // held — no separate query. `in` adds, `out` subtracts; index-aligned with
+  // `movements` for the render loop below.
+  const runningBalancesAgorot = movements.reduce<number[]>((balances, move) => {
+    const previous = balances.length > 0 ? balances[balances.length - 1] : 0;
+    balances.push(move.direction === 'in'
+      ? previous + move.amountAgorot
+      : previous - move.amountAgorot);
+    return balances;
+  }, []);
   const budget = await listBudgetLines(db, season.id);
   const { identity } = summary;
 
@@ -257,10 +268,13 @@ export default async function MoneyPage(
           <div className="scroll-x">
             <table>
               <thead>
-                <tr><th>תאריך</th><th>תיאור</th><th>חשבון</th><th>נכנס</th><th>יצא</th></tr>
+                <tr>
+                  <th>תאריך</th><th>תיאור</th><th>חשבון</th><th>נכנס</th><th>יצא</th>
+                  <th>יתרה</th>
+                </tr>
               </thead>
               <tbody>
-                {movements.map((move) => (
+                {movements.map((move, index) => (
                   <tr key={`${move.source}-${move.id}`}>
                     <td><bdi>{move.occurredOn.toLocaleDateString('he-IL')}</bdi></td>
                     <td>{move.description}</td>
@@ -269,6 +283,7 @@ export default async function MoneyPage(
                       ? <bdi>{formatILS(move.amountAgorot)} ₪</bdi> : null}</td>
                     <td>{move.direction === 'out'
                       ? <bdi>{formatILS(move.amountAgorot)} ₪</bdi> : null}</td>
+                    <td><bdi>{formatILS(runningBalancesAgorot[index])} ₪</bdi></td>
                   </tr>
                 ))}
               </tbody>

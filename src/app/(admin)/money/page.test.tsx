@@ -451,12 +451,12 @@ describe('MoneyPage', () => {
       {
         id: 'm1', source: 'ledger', occurredOn: new Date('2026-01-05'), direction: 'in',
         amountAgorot: 70000, description: 'תרומה', accountId: 'a1', accountName: 'קופה',
-        seasonId: 's1', eventId: null,
+        seasonId: 's1', eventId: null, transferGroupId: null,
       },
       {
         id: 'm2', source: 'ledger', occurredOn: new Date('2026-01-06'), direction: 'out',
         amountAgorot: 30000, description: 'ציוד', accountId: null, accountName: null,
-        seasonId: 's1', eventId: null,
+        seasonId: 's1', eventId: null, transferGroupId: null,
       },
     ];
     listMovements.mockResolvedValue(moves);
@@ -478,5 +478,39 @@ describe('MoneyPage', () => {
     // No account named on the second movement — shown as its own admission,
     // not folded into a guessed account.
     expect(within(outRow).getByText('לא צוין')).toBeTruthy();
+  });
+
+  /**
+   * Spec §4 band 6: a running balance, not just per-row in/out. `listMovements`
+   * already returns rows sorted by date, so this is a reduce over the array
+   * the page already holds. Both rows are checked, not just the second — a
+   * mutation that always printed the *final* balance in every row (rather
+   * than genuinely accumulating one row at a time) would still pass a
+   * check of the last row alone.
+   */
+  it('accumulates a running balance column, in adding and out subtracting', async () => {
+    const moves: Movement[] = [
+      {
+        id: 'm1', source: 'ledger', occurredOn: new Date('2026-01-05'), direction: 'in',
+        amountAgorot: 70000, description: 'תרומה', accountId: 'a1', accountName: 'קופה',
+        seasonId: 's1', eventId: null, transferGroupId: null,
+      },
+      {
+        id: 'm2', source: 'ledger', occurredOn: new Date('2026-01-06'), direction: 'out',
+        amountAgorot: 30000, description: 'ציוד', accountId: null, accountName: null,
+        seasonId: 's1', eventId: null, transferGroupId: null,
+      },
+    ];
+    listMovements.mockResolvedValue(moves);
+    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+
+    const section = sectionFor('התנועות');
+    const rows = within(section).getAllByRole('row');
+    const [, inRow, outRow] = rows;
+    // Columns: תאריך(0) תיאור(1) חשבון(2) נכנס(3) יצא(4) יתרה(5).
+    const inCells = within(inRow).getAllByRole('cell');
+    const outCells = within(outRow).getAllByRole('cell');
+    expect(within(inCells[5]).getByText(/700/)).toBeTruthy();
+    expect(within(outCells[5]).getByText(/400/)).toBeTruthy();
   });
 });

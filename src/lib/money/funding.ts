@@ -172,10 +172,9 @@ export async function duesFundingIdentity(
   }
 
   // Two independent divisions on integer agorot, each rounded on its own —
-  // never `Math.floor` (183926 instead of 183929, which would break the
-  // identity below) and never one derived by subtracting the other (see the
-  // `closes` field's own comment for why that would be worse than a rounding
-  // bug: it would make the check pass unconditionally).
+  // never `Math.floor`, and never one derived by subtracting the other (see
+  // the `closes` field's own comment for why that would be worse than a
+  // rounding bug: it would make the check pass unconditionally).
   const perPersonFull = Math.round(budget / size);
   const perPersonFunding = Math.round(funding / size);
 

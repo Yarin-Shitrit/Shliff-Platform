@@ -197,9 +197,12 @@ describe('seedCampBaseline', () => {
   /**
    * `budget_lines` is the single home for a planned amount. The four ברן 25
    * deliverables carried theirs on the task itself; they now point at budget
-   * lines instead, and nothing writes `budgetAmount` again. Two homes for one
-   * number means "total planned spend" is a union and "did we come in on
-   * budget" forks in two.
+   * lines too. `budgetAmount` is still written here and by the task form
+   * (`createTask`'s deliberate deprecated-in-place carry, documented at
+   * `BURN_25_DELIVERABLES`'s own comment) — what's guaranteed is that it
+   * never enters a season's budget total: `budgetTotalAgorot` sums only
+   * `budget_lines`, so a stray `budgetAmount` can make "did we come in on
+   * budget" wrong for one deliverable but can never inflate the season sum.
    */
   it('gives the four ברן 25 deliverables budget lines instead of amounts', async () => {
     await seedCampBaseline(db, LEAD);
