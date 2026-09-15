@@ -100,8 +100,13 @@ the parent spec, that requirement's number is given in parentheses.
 
 10. **W10** (4) A sheet carries a season, set by hand. The promoter never
     infers a season from a filename, a sheet name, or a date.
-11. **W11** (5) Blocks on a sheet with no season promote with `season_id`
-    null, and the sheet appears in the register as needing one.
+11. **W11** (5) A sheet with no season is handled per target table, because
+    the schema differs. `ledger_entries.season_id` and `obligations.season_id`
+    are nullable, so those blocks promote with a null season and the sheet is
+    reported as needing one. `budget_lines.season_id` and
+    `ticket_rounds.season_id` are `NOT NULL`, so those blocks are **refused**
+    with reason `no-season`. A budget belonging to no season is not a fact the
+    system can hold, and inventing one would be the guess this wave refuses.
 12. **W12** Two sheets **collide** when they share a name and either share a
     season or either one is unlabelled. Same name with two different seasons is
     not a collision — `סיכום כללי` is ברן 25's summary in one workbook and ברן
@@ -349,6 +354,24 @@ config guard test needs no change.
 
 `source.ts` gains an import from `camp.ts`. This is acyclic: `camp.ts` imports
 from no other schema file, and `money.ts` already depends on both.
+
+**Season nullability is not uniform, and W11 follows the schema rather than
+overriding it.** No migration changes this; the promoter adapts.
+
+| target table | `season_id` | block on an unlabelled sheet |
+|---|---|---|
+| `ledger_entries` | nullable | promotes, season null |
+| `obligations` | nullable | promotes, season null |
+| `budget_lines` | `NOT NULL` | refused, reason `no-season` |
+| `ticket_rounds` | `NOT NULL` | refused, reason `no-season` |
+
+The unique constraints are `(source_block_id, source_row)` on all five
+provenance-carrying tables. Postgres treats NULLs as distinct in a unique
+index, so the seed's null-provenance rows never conflict with each other, and
+`onConflictDoUpdate` on that constraint is the upsert W4 needs. Note that
+`source_block_id` is declared `onDelete: 'set null'`: deleting a block orphans
+its rows rather than removing them, which is why W5's deletion is the
+promoter's job and not the foreign key's.
 
 **A correction to the parent spec.** It states that Wave 2 adds
 `source_block_id` and `source_row` to "the six tables above". Wave 1 put them
