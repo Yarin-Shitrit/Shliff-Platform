@@ -412,7 +412,7 @@ MSG
   export type RefusalReason =
     | 'carry-forward' | 'total-row' | 'blank-row' | 'no-amount'
     | 'both-directions' | 'no-date' | 'no-description' | 'no-label'
-    | 'no-season' | 'unmapped-column' | 'no-promoter'
+    | 'no-season' | 'unconfirmed' | 'unmapped-column' | 'no-promoter'
     | 'sheet-undecided' | 'sheet-ambiguous' | 'sheet-superseded';
 
   export interface Refusal { sheetRow: number; reason: RefusalReason; message: string; cells: string[] }
@@ -431,6 +431,8 @@ MSG
   export function isTotalRow(raw: string[]): boolean;
   export function isCarryForward(raw: string[]): boolean;
   export function isBlankRow(raw: string[]): boolean;
+  // Note: `refuse` lives in rows.ts alongside the classifiers, not in types.ts.
+  // types.ts stays types-only, which is what lets every other module import it.
   export function refuse(row: BlockRow, reason: RefusalReason, message: string): Refusal;
   ```
   where `BlockShape` is `{ top: number; left: number; headerRow: number | null; rawGrid: string[][] }`.
@@ -453,6 +455,9 @@ export type RefusalReason =
   | 'no-description'
   | 'no-label'
   | 'no-season'
+  /** The block has not been approved by a lead yet. Distinct from
+   *  `unmapped-column`: the mapping may be perfect and merely unapproved. */
+  | 'unconfirmed'
   | 'unmapped-column'
   | 'no-promoter'
   | 'sheet-undecided'
@@ -1160,7 +1165,10 @@ export function budgetRow(row: BlockRow, ctx: PromoteContext): BudgetOutcome {
 
   const notes: string[] = [];
   if (quantity.value !== null && unitCost !== null) {
-    const expected = toAgorot(quantity.value * unitCost);
+    // Convert to agorot BEFORE multiplying: `quantity.value * unitCost` is
+    // float arithmetic on money, which the Global Constraints forbid. The
+    // count may legitimately be fractional, so the product is rounded.
+    const expected = Math.round(toAgorot(unitCost) * quantity.value);
     if (expected !== toAgorot(total)) {
       // Flagged, never blocked (W20 / req 11). The workbooks contain three
       // of these and they are the camp's own arithmetic, not ours to fix.
@@ -1198,7 +1206,7 @@ Expected: PASS, 8 tests.
 1. Set `quantityNum: quantity.value ?? 0` unconditionally → "keeps a prose quantity as text with no number at all" must fail.
 2. Turn the arithmetic note into a refusal → "notes an arithmetic mismatch without refusing the row" must fail.
 3. Remove the `ctx.seasonId === null` guard → "refuses every row when the sheet has no season" must fail.
-4. Compare `quantity.value * unitCost !== total` with floats instead of `toAgorot` → check whether any test fails. If none does, **add** a fixture that only float arithmetic gets wrong (e.g. `0.1 × 3` against `0.3`) and report that the existing tests could not see it.
+4. Replace the agorot computation with the float form `toAgorot(quantity.value * unitCost)` → check whether any test fails. If none does, **add** a fixture that only float arithmetic gets wrong (a unit cost of `0.1` with a quantity of `3` against a total of `0.3`) and report that the existing tests could not see it. This is the Global Constraints' "never do float arithmetic on money" rule; a surviving mutation here means the rule is unguarded.
 
 - [ ] **Step 6: Full suite, typecheck, lint, then commit**
 
@@ -2011,7 +2019,7 @@ describe('promoteBlock — party resolution', () => {
 rtk proxy ./node_modules/.bin/vitest run src/lib/import/promote/promote.test.ts
 ```
 
-Expected: FAIL, cannot resolve `./promote`. Confirm the failure count is 19, not 0.
+Expected: FAIL, cannot resolve `./promote`. Confirm the failure count is 17 (3 writing + 4 idempotency + 6 whole-block + 4 party), not 0.
 
 - [ ] **Step 3: Read before writing**
 
@@ -2068,7 +2076,7 @@ export async function promoteBlock(
     ({ ...base, written: [], refused: [r], deleted: 0 });
 
   if (!block.confirmedAt) {
-    return reject(wholeBlock(block, 'unmapped-column', 'הבלוק עדיין לא אושר'));
+    return reject(wholeBlock(block, 'unconfirmed', 'הבלוק עדיין לא אושר'));
   }
   if (!hasPromoter(block.archetype)) {
     return reject(wholeBlock(block, 'no-promoter',
@@ -2149,7 +2157,7 @@ if (outcome.partyRaw !== null) {
 rtk proxy ./node_modules/.bin/vitest run src/lib/import/promote/promote.test.ts
 ```
 
-Expected: PASS, 19 tests.
+Expected: PASS, 17 tests.
 
 - [ ] **Step 6: Mutation-test**
 
@@ -2301,7 +2309,7 @@ Add `isNotNull` to the `drizzle-orm` import.
 rtk proxy ./node_modules/.bin/vitest run src/lib/import/promote/promote.test.ts
 ```
 
-Expected: PASS, 22 tests.
+Expected: PASS, 20 tests.
 
 - [ ] **Step 5: Write the server actions**
 
@@ -2695,9 +2703,15 @@ MSG
 
 - [ ] **Step 1: Write the script**
 
-It must, against the live database, **read-only**:
-1. Label nothing and promote nothing. Construct the season and authority labels **in memory** from a hardcoded map you write by hand after looking at the 19 sheets, so the live `sheets` rows are not modified.
-2. Run `promoteBlock(db, id, { dryRun: true, recordedBy: 'evidence' })` for all confirmed blocks — and, because the live database has **zero** confirmed blocks today, also for unconfirmed ones by temporarily treating them as confirmed **in memory only**.
+**It runs against a scratch clone, never against `shliff`.** `promoteBlock` reads the sheet's season from the database and calls `sheetEligibility(db)`, and it refuses any block without `confirmedAt` — so "labels held in memory" cannot reach it, and adding an override would put a test-only branch in the production write path. Clone instead:
+
+```bash
+docker exec shliff-pg psql -U shliff -d postgres -c "create database shliff_evidence template shliff;"
+```
+
+Point the script at `shliff_evidence` via `DATABASE_URL` and, in the clone only:
+1. Set a season on each of the 19 sheets, from a map you write by hand after looking at the sheet names, and set `authoritative` on the copy you would choose for each colliding group.
+2. Mark every block confirmed, then run `promoteBlock(db, id, { dryRun: true, recordedBy: 'evidence' })` for all of them.
 3. For each of the four target tables, print: rows the promoter would write (with `source_row`), rows currently present with a null `source_block_id` (the seeded ones), and the set difference in both directions.
 4. Print every refusal, grouped by reason.
 
@@ -2706,9 +2720,10 @@ It must, against the live database, **read-only**:
 ```bash
 rtk proxy npx tsx scripts/dry-run-promote.ts
 docker exec shliff-pg psql -U shliff -d shliff -c "select count(*) from ledger_entries where source_block_id is not null;"
+docker exec shliff-pg psql -U shliff -d shliff -c "select count(*) from sheets where season_id is not null or authoritative is not null;"
 ```
 
-Expected: the second command returns **0**. If it does not, the script wrote to the live database — stop, report it, and do not continue to Task 13.
+Expected: **both return 0** — the live database has neither promoted rows nor labels on it. If either is non-zero, the script pointed at `shliff` rather than the clone: stop, report it, and do not continue to Task 13.
 
 - [ ] **Step 3: Write up the evidence**
 
