@@ -28,10 +28,19 @@ export interface SheetEligibility {
  * the sheet is later labelled into a different season — the same "which
  * copy is real" question `setSheetAuthority` refuses to answer without a
  * season would then be answered by a choice nobody made for that season.
+ *
+ * Refuses an unknown `sheetId` rather than issuing a no-op UPDATE — the
+ * quiet alternative is worse than `setSheetAuthority`'s Hebrew refusal
+ * below: a lead sets a season, nothing happens, and there is no error to
+ * read at all.
  */
 export async function setSheetSeason(
   db: AnyDb, sheetId: string, seasonId: string | null,
 ): Promise<void> {
+  const [sheet] = await db.select({ id: sheets.id }).from(sheets)
+    .where(eq(sheets.id, sheetId));
+  if (!sheet) throw new Error(`unknown sheet ${sheetId}`);
+
   await db.update(sheets)
     .set(seasonId === null ? { seasonId, authoritative: null } : { seasonId })
     .where(eq(sheets.id, sheetId));
@@ -43,6 +52,14 @@ export async function setSheetSeason(
  * "which copy is real" has no defined answer before a season is set — see
  * conflicts() below. Clearing (`false` or `null`) is always allowed,
  * including on an unlabelled sheet.
+ *
+ * The not-found case is a different failure from the unlabelled case and
+ * gets a different message: a bad `sheetId` is a programmer error (an
+ * English message, matching `applyConfirmation`'s `unknown block ${blockId}`
+ * in confirm.ts), while an unlabelled sheet is a state a lead can act on by
+ * setting a season, which the Hebrew message tells them to do. Conflating
+ * the two would tell a caller with a bad id that the season is the problem,
+ * which is simply false.
  */
 export async function setSheetAuthority(
   db: AnyDb, sheetId: string, authoritative: boolean | null,
@@ -50,7 +67,8 @@ export async function setSheetAuthority(
   if (authoritative === true) {
     const [sheet] = await db.select({ seasonId: sheets.seasonId }).from(sheets)
       .where(eq(sheets.id, sheetId));
-    if (sheet?.seasonId == null) {
+    if (!sheet) throw new Error(`unknown sheet ${sheetId}`);
+    if (sheet.seasonId === null) {
       throw new Error(
         'אי אפשר לסמן גיליון כסמכותי בלי עונה — בלי עונה אי אפשר להבחין בין גרסה כפולה של אותה שנה לגיליון של שנה אחרת',
       );

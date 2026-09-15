@@ -181,4 +181,16 @@ describe('authority guard', () => {
     expect(map.get(b)?.state).toBe('eligible');
     expect(map.get(c)?.state).toBe('eligible');
   });
+
+  it('marking an unknown sheet authoritative throws a not-found error, not the season message', async () => {
+    const unknownId = '00000000-0000-0000-0000-000000000000';
+    await expect(setSheetAuthority(db, unknownId, true))
+      .rejects.toThrow(`unknown sheet ${unknownId}`);
+  });
+
+  it('setting a season on an unknown sheet throws rather than silently succeeding', async () => {
+    const unknownId = '00000000-0000-0000-0000-000000000000';
+    await expect(setSheetSeason(db, unknownId, s25))
+      .rejects.toThrow(`unknown sheet ${unknownId}`);
+  });
 });
