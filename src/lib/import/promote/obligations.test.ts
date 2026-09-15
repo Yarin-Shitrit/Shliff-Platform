@@ -91,4 +91,22 @@ describe('obligationRow', () => {
     if (out.ok) return;
     expect(out.refusal.reason).toBe('no-description');
   });
+
+  it('refuses a negative amount, which may indicate opposite direction', () => {
+    const out = obligationRow(row({
+      party: 'יוסף', description: 'חוב יוסף', amount: '-15240', date: '20/05/2025',
+    }), CTX);
+    expect(out.ok).toBe(false);
+    if (out.ok) return;
+    expect(out.refusal.reason).toBe('negative-amount');
+  });
+
+  it('refuses a placeholder dash, which is treated as no amount', () => {
+    const out = obligationRow(row({
+      party: 'יוסף', description: 'חוב יוסף', amount: '-', date: '20/05/2025',
+    }), CTX);
+    expect(out.ok).toBe(false);
+    if (out.ok) return;
+    expect(out.refusal.reason).toBe('no-amount');
+  });
 });

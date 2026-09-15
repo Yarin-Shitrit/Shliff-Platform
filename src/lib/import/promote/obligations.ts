@@ -33,6 +33,15 @@ export function obligationRow(row: BlockRow, ctx: PromoteContext): ObligationOut
     return { ok: false, refusal: refuse(row, 'no-amount', 'אין סכום לחוב') };
   }
 
+
+  if (amount < 0) {
+    return {
+      ok: false,
+      refusal: refuse(row, 'negative-amount',
+        'הסכום בעמודה הוא בעל סימן. בגיליון זה כל שורה קוראת כחוב שהקאמפ חייב, אז סימן שלילי עלול להיות כיוון הפוך — לא ניתן להכריע בלי ניחוש'),
+    };
+  }
+
   const description = (row.cells.description ?? '').trim();
   if (isBlank(description)) {
     return { ok: false, refusal: refuse(row, 'no-description', 'אין תיאור לחוב') };
@@ -45,6 +54,14 @@ export function obligationRow(row: BlockRow, ctx: PromoteContext): ObligationOut
       refusal: refuse(row, 'no-date', `אין תאריך פתיחה קריא: ${parsed.raw || '(ריק)'}`),
     };
   }
+
+  // Store only what the schema can represent truthfully. obligations.party_name
+  // is nullable, so storing "unknown party" is a truthful fact. But
+  // obligations.opened_on is notNull().defaultNow(), so storing a row with
+  // an unreadable date would stamp it with today — asserting a 2025 debt was
+  // opened in 2026. That is not a flag, it is a fabricated fact. The refused
+  // row lands in the register with its reason and evidence cells, so the debt
+  // is not lost.
 
   // A blank party is NOT a refusal. The camp has two reimbursements whose
   // payee was never recorded; dropping them would lose the debt itself.
@@ -60,7 +77,7 @@ export function obligationRow(row: BlockRow, ctx: PromoteContext): ObligationOut
   const input: NewObligation = {
     direction: 'camp_owes',
     description,
-    amount: Math.abs(amount),
+    amount,
     openedOn: parsed.date,
     sourceBlockId: ctx.blockId,
     sourceRow: row.sheetRow,
