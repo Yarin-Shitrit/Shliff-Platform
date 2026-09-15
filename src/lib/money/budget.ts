@@ -4,7 +4,7 @@ import { budgetLines } from '@/db/schema/money';
 import type { BudgetCategory } from '@/db/schema/money';
 import { toAgorot, fromAgorot } from '@/lib/money';
 import { isBlank, normalizeHebrew } from '@/lib/text/normalize';
-import { isArithmeticOff, ARITHMETIC_TOLERANCE } from './arithmetic';
+import { isArithmeticOff } from './arithmetic';
 
 export interface NewBudgetLine {
   seasonId: string;

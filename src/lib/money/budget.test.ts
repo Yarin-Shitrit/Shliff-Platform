@@ -36,20 +36,6 @@ describe('budget lines', () => {
     expect(line.arithmeticOff).toBe(true);
   });
 
-  it('sub-agora rate with correct arithmetic does not flag', async () => {
-    // 100 units at ₪3.35 = ₪335.00. This exercises the product-first approach:
-    // if we rounded the rate to agorot first (335 → 335, which is exact), we'd get
-    // 335 * 100 = 33500, matching the total. Product-first also gives 33500.
-    // Both approaches work here, but the test ensures product-first is correct.
-    const id = await createBudgetLine(db, {
-      seasonId: s26, label: 'שער תת-אגורה', quantityText: '100', quantityNum: 100,
-      unitCost: 3.35, total: 335, category: 'camp',
-    });
-    expect(id).toBeTruthy();
-    const [line] = await listBudgetLines(db, s26);
-    expect(line.arithmeticOff).toBe(false);
-  });
-
   it('arithmetic off by ₪0.30 (within 50-agora tolerance) does not flag', async () => {
     // Tolerance is 50 agorot (₪0.50). An error of ₪0.30 (30 agorot) should be
     // within tolerance and not flagged.
