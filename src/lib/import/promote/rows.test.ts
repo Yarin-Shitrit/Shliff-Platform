@@ -69,4 +69,19 @@ describe('row classifiers', () => {
     expect(isBlankRow(['', '  ', '‏'])).toBe(true);
     expect(isBlankRow(['', '', '0'])).toBe(false);
   });
+
+  it('over-refuses סה"כ with substring matching (refuses totals that are part of a label)', () => {
+    // Substring matching deliberately over-refuses: a refusal appears in the register
+    // with its evidence cells where a lead sees it and fixes the sheet or mapping.
+    // Under-refusing writes a computed total into the ledger as a real movement,
+    // silently double-counting the camp's money — the exact failure carry-forward prevents.
+    // A promoter should fail toward the visible side.
+    expect(isTotalRow(['סה״כ חשמל', '', '7500'])).toBe(true);
+  });
+
+  it('over-refuses carry-forward with substring matching (refuses rows with the phrase in any position)', () => {
+    // Same trade-off as סה"כ: substring matching over-refuses, because the refusal
+    // is visible and incorrect totals are not.
+    expect(isCarryForward(['פירוט: מעבר לקובץ חדש מ-תאריך-קודם', '', '44647'])).toBe(true);
+  });
 });
