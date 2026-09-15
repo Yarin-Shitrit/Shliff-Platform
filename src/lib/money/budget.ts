@@ -4,10 +4,7 @@ import { budgetLines } from '@/db/schema/money';
 import type { BudgetCategory } from '@/db/schema/money';
 import { toAgorot, fromAgorot } from '@/lib/money';
 import { isBlank, normalizeHebrew } from '@/lib/text/normalize';
-
-/** Tolerance for the arithmetic check, in agorot. Half a shekel, matching the
- *  rounding the workbook itself does. */
-const ARITHMETIC_TOLERANCE = 50;
+import { isArithmeticOff, ARITHMETIC_TOLERANCE } from './arithmetic';
 
 export interface NewBudgetLine {
   seasonId: string;
@@ -74,12 +71,6 @@ export async function listBudgetLines(
     const quantityNumAgorot = row.quantityNum === null ? null : toAgorot(row.quantityNum);
     const unitCostAgorot = row.unitCost === null ? null : toAgorot(row.unitCost);
 
-    // quantity is in agorot only because it shares the numeric converter;
-    // the product is (qty/100) * unitAgorot, so divide the extra factor out.
-    const expected = quantityNumAgorot === null || unitCostAgorot === null
-      ? null
-      : Math.round((quantityNumAgorot * unitCostAgorot) / 100);
-
     return {
       id: row.id,
       label: row.label,
@@ -89,8 +80,7 @@ export async function listBudgetLines(
       totalAgorot,
       rationale: row.rationale,
       category: row.category,
-      arithmeticOff: expected !== null
-        && Math.abs(expected - totalAgorot) > ARITHMETIC_TOLERANCE,
+      arithmeticOff: isArithmeticOff(row.quantityNum === null ? null : row.quantityNum, row.unitCost === null ? null : row.unitCost, totalAgorot),
     };
   });
 }

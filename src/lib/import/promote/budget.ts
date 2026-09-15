@@ -1,4 +1,5 @@
 import type { NewBudgetLine } from '@/lib/money/budget';
+import { isArithmeticOff } from '@/lib/money/arithmetic';
 import { parseNumber } from '@/lib/coerce/number';
 import { parseQuantity } from '@/lib/coerce/quantity';
 import { isBlank } from '@/lib/text/normalize';
@@ -48,20 +49,10 @@ export function budgetRow(row: BlockRow, ctx: PromoteContext): BudgetOutcome {
   const rationale = (row.cells.note ?? '').trim();
 
   const notes: string[] = [];
-  if (quantity.value !== null && unitCost !== null) {
-    // Unit cost is a rate, not a stored amount. Rounding the rate to whole
-    // agorot before multiplying scales the rounding error by the quantity
-    // (₪0.335 × 1000 rounds to ₪340, not ₪335). The right approach is to
-    // multiply first and round once at the end — toAgorot absorbs float error
-    // for any magnitude the camp records. The "never do float arithmetic"
-    // rule protects summing stored amounts (src/lib/money.ts), not computing
-    // rates. Do not restore the agorot-first pattern — it breaks true rows.
-    const expected = toAgorot(quantity.value * unitCost);
-    if (expected !== toAgorot(total)) {
-      // Flagged, never blocked (W20 / req 11). The workbooks contain three
-      // of these and they are the camp's own arithmetic, not ours to fix.
-      notes.push('החשבון בשורה לא מסתדר: כמות × מחיר ליחידה שונה מהעלות הכוללת');
-    }
+  if (isArithmeticOff(quantity.value, unitCost, toAgorot(total))) {
+    // Flagged, never blocked (W20 / req 11). The workbooks contain three
+    // of these and they are the camp's own arithmetic, not ours to fix.
+    notes.push('החשבון בשורה לא מסתדר: כמות × מחיר ליחידה שונה מהעלות הכוללת');
   }
 
   const input: NewBudgetLine = {
