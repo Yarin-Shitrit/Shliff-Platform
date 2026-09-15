@@ -64,6 +64,30 @@ describe('eligibility', () => {
     expect(map.get(b)?.state).toBe('eligible');
   });
 
+  it('two differently-named sheets in the same season do not contest each other', async () => {
+    const a = await addSheet('25.xlsx', 'סיכום כללי');
+    const b = await addSheet('2026.xlsx', 'תקציב קאמפ ברן 26');
+    await setSheetSeason(db, a, s26);
+    await setSheetSeason(db, b, s26);
+    const map = await sheetEligibility(db);
+    expect(map.get(a)?.state).toBe('eligible');
+    expect(map.get(a)?.contestedWith).toEqual([]);
+    expect(map.get(b)?.state).toBe('eligible');
+    expect(map.get(b)?.contestedWith).toEqual([]);
+  });
+
+  it('two differently-named sheets, one unlabelled, do not contest each other', async () => {
+    const a = await addSheet('25.xlsx', 'סיכום כללי');
+    const b = await addSheet('2026.xlsx', 'תקציב קאמפ ברן 26');
+    await setSheetSeason(db, a, s26);
+    // b keeps its default null seasonId — deliberately left unlabelled.
+    const map = await sheetEligibility(db);
+    expect(map.get(a)?.state).toBe('eligible');
+    expect(map.get(a)?.contestedWith).toEqual([]);
+    expect(map.get(b)?.state).toBe('eligible');
+    expect(map.get(b)?.contestedWith).toEqual([]);
+  });
+
   it('the same sheet name in one season with no choice made is undecided on both', async () => {
     const a = await addSheet('25.xlsx', 'תקציב קאמפ ברן 26');
     const b = await addSheet('2026.xlsx', 'תקציב קאמפ ברן 26');
