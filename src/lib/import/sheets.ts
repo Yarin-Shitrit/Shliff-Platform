@@ -22,15 +22,40 @@ export interface SheetEligibility {
   contestedWith: string[];
 }
 
+/**
+ * Clearing the season (`null`) also clears authority. Otherwise a decision
+ * made under one season would survive un-labelling and silently re-apply if
+ * the sheet is later labelled into a different season — the same "which
+ * copy is real" question `setSheetAuthority` refuses to answer without a
+ * season would then be answered by a choice nobody made for that season.
+ */
 export async function setSheetSeason(
   db: AnyDb, sheetId: string, seasonId: string | null,
 ): Promise<void> {
-  await db.update(sheets).set({ seasonId }).where(eq(sheets.id, sheetId));
+  await db.update(sheets)
+    .set(seasonId === null ? { seasonId, authoritative: null } : { seasonId })
+    .where(eq(sheets.id, sheetId));
 }
 
+/**
+ * `true` is refused on an unlabelled sheet. The season label is what tells
+ * a repeated copy of one year's budget apart from a different year's, so
+ * "which copy is real" has no defined answer before a season is set — see
+ * conflicts() below. Clearing (`false` or `null`) is always allowed,
+ * including on an unlabelled sheet.
+ */
 export async function setSheetAuthority(
   db: AnyDb, sheetId: string, authoritative: boolean | null,
 ): Promise<void> {
+  if (authoritative === true) {
+    const [sheet] = await db.select({ seasonId: sheets.seasonId }).from(sheets)
+      .where(eq(sheets.id, sheetId));
+    if (sheet?.seasonId == null) {
+      throw new Error(
+        'אי אפשר לסמן גיליון כסמכותי בלי עונה — בלי עונה אי אפשר להבחין בין גרסה כפולה של אותה שנה לגיליון של שנה אחרת',
+      );
+    }
+  }
   await db.update(sheets).set({ authoritative }).where(eq(sheets.id, sheetId));
 }
 

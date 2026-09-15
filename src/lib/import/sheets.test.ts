@@ -133,3 +133,52 @@ describe('eligibility', () => {
     expect(map.get(b)?.state).toBe('eligible');
   });
 });
+
+describe('authority guard', () => {
+  it('marking an unlabelled sheet authoritative throws, and the row is unchanged', async () => {
+    const id = await addSheet('25.xlsx', 'תקציב קאמפ ברן 26');
+    await expect(setSheetAuthority(db, id, true)).rejects.toThrow();
+    const [row] = await listSheets(db);
+    expect(row.authoritative).toBeNull();
+    expect(row.seasonId).toBeNull();
+  });
+
+  it('clearing authority on an unlabelled sheet succeeds', async () => {
+    const id = await addSheet('25.xlsx', 'תקציב קאמפ ברן 26');
+    await setSheetAuthority(db, id, false);
+    let [row] = await listSheets(db);
+    expect(row.authoritative).toBe(false);
+
+    await setSheetAuthority(db, id, null);
+    [row] = await listSheets(db);
+    expect(row.authoritative).toBeNull();
+  });
+
+  it('clearing a season also clears authority', async () => {
+    const id = await addSheet('25.xlsx', 'תקציב קאמפ ברן 26');
+    await setSheetSeason(db, id, s26);
+    await setSheetAuthority(db, id, true);
+    await setSheetSeason(db, id, null);
+    const [row] = await listSheets(db);
+    expect(row.authoritative).toBeNull();
+  });
+
+  it('an unlabelled copy in a three-way name collision cannot be chosen, and labelling it into a third season clears all three', async () => {
+    const a = await addSheet('25.xlsx', 'תקציב קאמפ ברן');
+    const b = await addSheet('26.xlsx', 'תקציב קאמפ ברן');
+    const c = await addSheet('27.xlsx', 'תקציב קאמפ ברן');
+    await setSheetSeason(db, a, s25);
+    await setSheetSeason(db, b, s26);
+    // c stays unlabelled — it conflicts with both a and b via the null clause.
+    await expect(setSheetAuthority(db, c, true)).rejects.toThrow();
+
+    const s27 = (await createSeason(
+      db, { name: 'ברן 27', year: 2027, flatRate: 1300, plannedSize: 30 },
+    )).id;
+    await setSheetSeason(db, c, s27);
+    const map = await sheetEligibility(db);
+    expect(map.get(a)?.state).toBe('eligible');
+    expect(map.get(b)?.state).toBe('eligible');
+    expect(map.get(c)?.state).toBe('eligible');
+  });
+});
