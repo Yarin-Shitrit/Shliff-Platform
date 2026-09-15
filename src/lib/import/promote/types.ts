@@ -18,7 +18,11 @@ export type RefusalReason =
   | 'no-promoter'
   | 'sheet-undecided'
   | 'sheet-ambiguous'
-  | 'sheet-superseded';
+  | 'sheet-superseded'
+  /** A signed amount appears in a direction-carrying column. The column
+   *  name already specifies the direction, so a negative sign cannot be
+   *  resolved without guessing at intent. Refuse rather than flip. */
+  | 'negative-amount';
 
 export interface Refusal {
   /** Absolute 1-indexed sheet row, or the block's own top row for a

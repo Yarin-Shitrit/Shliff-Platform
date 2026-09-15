@@ -50,6 +50,15 @@ export function ledgerRow(row: BlockRow, ctx: PromoteContext): LedgerOutcome {
     return { ok: false, refusal: refuse(row, 'no-amount', 'אין סכום בשורה') };
   }
 
+  const chosenAmount = hasOut ? outflow : inflow;
+  if (chosenAmount !== null && chosenAmount < 0) {
+    return {
+      ok: false,
+      refusal: refuse(row, 'negative-amount',
+        'הסכום בעמודה הוא בעל סימן, והעמודה עצמה קובעת כיוון — לא ניתן להכריע אם זה הוצאה או הכנסה'),
+    };
+  }
+
   const parsed = parseDate(row.cells.date ?? '');
   if (!parsed.ok || parsed.date === null) {
     return {
@@ -69,7 +78,7 @@ export function ledgerRow(row: BlockRow, ctx: PromoteContext): LedgerOutcome {
   const input: NewEntry = {
     occurredOn: parsed.date,
     direction: hasOut ? 'out' : 'in',
-    amount: hasOut ? Math.abs(outflow as number) : Math.abs(inflow as number),
+    amount: chosenAmount as number,
     description,
     recordedBy: ctx.recordedBy,
     sourceBlockId: ctx.blockId,

@@ -120,4 +120,32 @@ describe('ledgerRow', () => {
     expect(out.refusal.cells).toContain('סה"כ');
     expect(out.refusal.sheetRow).toBe(7);
   });
+
+  it('refuses a negative outflow as negative-amount', () => {
+    const out = ledgerRow(row({
+      date: '20/05/2025', description: 'החזר הוצאה', outflow: '-500', inflow: '',
+    }), CTX);
+    expect(out.ok).toBe(false);
+    if (out.ok) return;
+    expect(out.refusal.reason).toBe('negative-amount');
+    expect(out.refusal.cells).toContain('-500');
+  });
+
+  it('refuses a negative inflow as negative-amount', () => {
+    const out = ledgerRow(row({
+      date: '20/05/2025', description: 'החזר הכנסה', outflow: '', inflow: '-1000',
+    }), CTX);
+    expect(out.ok).toBe(false);
+    if (out.ok) return;
+    expect(out.refusal.reason).toBe('negative-amount');
+  });
+
+  it('treats a bare dash as no-amount, not negative-amount', () => {
+    const out = ledgerRow(row({
+      date: '20/05/2025', description: 'כאן אין סכום', outflow: '-', inflow: '',
+    }), CTX);
+    expect(out.ok).toBe(false);
+    if (out.ok) return;
+    expect(out.refusal.reason).toBe('no-amount');
+  });
 });
