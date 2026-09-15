@@ -49,10 +49,14 @@ export function budgetRow(row: BlockRow, ctx: PromoteContext): BudgetOutcome {
 
   const notes: string[] = [];
   if (quantity.value !== null && unitCost !== null) {
-    // Convert to agorot BEFORE multiplying: `quantity.value * unitCost` is
-    // float arithmetic on money, which the Global Constraints forbid. The
-    // count may legitimately be fractional, so the product is rounded.
-    const expected = Math.round(toAgorot(unitCost) * quantity.value);
+    // Unit cost is a rate, not a stored amount. Rounding the rate to whole
+    // agorot before multiplying scales the rounding error by the quantity
+    // (₪0.335 × 1000 rounds to ₪340, not ₪335). The right approach is to
+    // multiply first and round once at the end — toAgorot absorbs float error
+    // for any magnitude the camp records. The "never do float arithmetic"
+    // rule protects summing stored amounts (src/lib/money.ts), not computing
+    // rates. Do not restore the agorot-first pattern — it breaks true rows.
+    const expected = toAgorot(quantity.value * unitCost);
     if (expected !== toAgorot(total)) {
       // Flagged, never blocked (W20 / req 11). The workbooks contain three
       // of these and they are the camp's own arithmetic, not ours to fix.

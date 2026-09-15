@@ -90,17 +90,25 @@ describe('budgetRow', () => {
     expect(out.refusal.reason).toBe('no-label');
   });
 
-  it('catches float arithmetic errors in quantity * unit_cost', () => {
-    // Mutation 4 detector: The agorot-first approach prevents float arithmetic
-    // on money. This fixture is designed to test that principle.
-    // Note: The toAgorot function's rounding hides float errors in this case,
-    // so mutation 4 (float-first arithmetic) survives - but the principle
-    // should still be followed to prevent latent bugs in other contexts.
+  it('sub-agora unit cost with correct arithmetic produces no note', () => {
+    // 1000 units at ₪0.335 = ₪335.00. Rounding the rate to agorot first
+    // would give ₪340 (error of ₪5), proving that rates must multiply first.
     const out = budgetRow(row({
-      item: 'טעות צפה', quantity: '3', unit_cost: '0.1', total: '0.3', note: '',
+      item: 'דוגמה של שער תת-אגורה', quantity: '1000', unit_cost: '0.335', total: '335', note: '',
     }), CTX);
     expect(out.ok).toBe(true);
     if (!out.ok) return;
-    expect(out.notes).not.toContain('החשבון בשורה לא מסתדר');
+    expect(out.notes).toEqual([]);
+  });
+
+  it('sub-agora unit cost with genuinely wrong arithmetic still flags', () => {
+    // Same rate and quantity, but stated total is ₪400 instead of ₪335.
+    // The check must not be satisfied by simply never flagging anything.
+    const out = budgetRow(row({
+      item: 'טעות אמיתית', quantity: '1000', unit_cost: '0.335', total: '400', note: '',
+    }), CTX);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.notes).toContain('החשבון בשורה לא מסתדר: כמות × מחיר ליחידה שונה מהעלות הכוללת');
   });
 });
