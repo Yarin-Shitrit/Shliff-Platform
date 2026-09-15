@@ -1,8 +1,9 @@
 import {
-  pgTable, uuid, text, integer, timestamp, jsonb, numeric, unique,
+  pgTable, uuid, text, integer, timestamp, jsonb, numeric, unique, boolean,
 } from 'drizzle-orm/pg-core';
 import type { ColumnMapping } from '@/lib/classify/map-columns';
 import type { BlockArchetype } from '@/lib/classify/types';
+import { seasons } from './camp';
 
 export const uploads = pgTable('uploads', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -27,6 +28,12 @@ export const sheets = pgTable('sheets', {
   index: integer('index').notNull(),
   rowCount: integer('row_count').notNull(),
   colCount: integer('col_count').notNull(),
+  /** The season this sheet's blocks belong to, set by hand. Never inferred
+   *  from the filename or the sheet name — see W10. */
+  seasonId: uuid('season_id').references(() => seasons.id, { onDelete: 'set null' }),
+  /** True on the chosen copy when the same sheet name appears in more than
+   *  one upload for the same season. Null means undecided. */
+  authoritative: boolean('authoritative'),
 });
 
 export const blocks = pgTable('blocks', {
