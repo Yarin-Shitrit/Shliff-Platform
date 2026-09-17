@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
-import { basename, join, relative } from 'node:path';
+import { basename, join, relative, sep } from 'node:path';
 
 /**
  * Spec req 31's "guard lint rule", done as a test rather than a lint plugin:
@@ -59,6 +59,103 @@ describe('every admin entry point calls requireAdmin', () => {
     (_label, file) => {
       const source = readFileSync(file, 'utf8');
       expect(source).toContain('requireAdmin(');
+    },
+  );
+});
+
+/**
+ * Ruling 1 of the promotion-blockers hardening pass: production code never
+ * imports from `src/test/`. `src/test/` reads real files off disk (the
+ * camp's actual workbooks, by way of `src/test/fixtures.ts`) and exists only
+ * to support tests; a `'use server'` file that reaches it drags dev-only file
+ * reads into what gets deployed.
+ *
+ * `import type { X } from '@/test/...'` is exempt: a type-only import is
+ * erased at compile time (see `src/lib/db-types.ts`), so it can never smuggle
+ * runtime behaviour into a production bundle no matter which module it names.
+ * What's forbidden is a *value* import — anything not spelled `import type`.
+ *
+ * Three shapes carry a value import, and all three are checked:
+ * - `import { X } from '@/test/y'` — a static declaration with a `from`
+ *   clause. `import type { X } from '@/test/y'` is the one exempt case.
+ * - `import '@/test/y'` — a bare, side-effect-only import. There is no
+ *   `import type '@/test/y'` form, so this is always a value import.
+ * - `import('@/test/y')` — a dynamic import expression. Also always a value
+ *   import at runtime (it returns a `Promise`); this codebase's own
+ *   `src/lib/storage/index.ts` reaches `@vercel/blob` exactly this way, so a
+ *   file reaching `@/test/` through the same idiom is not a hypothetical.
+ */
+const SRC_DIR = join(process.cwd(), 'src');
+const TEST_DIR = join(SRC_DIR, 'test');
+
+// Matches one whole static import statement that names `@/test/...`. Bounded
+// by the next `;`, which is safe because import clauses never contain a
+// semicolon of their own — so this can't run on past a multi-line brace list
+// into an unrelated later statement.
+const STATIC_FROM_IMPORT_RE = /import\s+[^;]*from\s+['"]@\/test\/[^'"]*['"]/g;
+
+// `import '@/test/y'` — bare side-effect import, no `from` clause at all.
+const BARE_IMPORT_RE = /import\s*['"]@\/test\/[^'"]*['"]/g;
+
+// `import('@/test/y')` — a dynamic import call, however it's awaited/used.
+const DYNAMIC_IMPORT_RE = /import\s*\(\s*['"]@\/test\/[^'"]*['"]\s*\)/g;
+
+function valueImportsFromTest(source: string): string[] {
+  const staticImports = (source.match(STATIC_FROM_IMPORT_RE) ?? [])
+    .filter((statement) => !/^import\s+type\s/.test(statement));
+  const bareImports = source.match(BARE_IMPORT_RE) ?? [];
+  const dynamicImports = source.match(DYNAMIC_IMPORT_RE) ?? [];
+  return [...staticImports, ...bareImports, ...dynamicImports];
+}
+
+function isTestOnlyFile(file: string): boolean {
+  return file.startsWith(TEST_DIR + sep) || /\.test\.tsx?$/.test(file);
+}
+
+const productionFiles = walk(SRC_DIR).filter(
+  (file) => /\.tsx?$/.test(file) && !isTestOnlyFile(file),
+);
+
+/**
+ * Unit-level coverage for the matcher itself, against literal fixture
+ * strings rather than real files, so every shape it's supposed to catch (and
+ * the one shape it's supposed to let through) is provable without editing a
+ * production file to break the net on purpose.
+ */
+describe('valueImportsFromTest', () => {
+  it('flags a static value import with a from clause', () => {
+    expect(valueImportsFromTest("import { FIXTURES } from '@/test/fixtures';")).toHaveLength(1);
+  });
+
+  it('does not flag a type-only import with a from clause', () => {
+    expect(valueImportsFromTest("import type { TestDb } from '@/test/db';")).toEqual([]);
+  });
+
+  it('flags a bare side-effect import', () => {
+    expect(valueImportsFromTest("import '@/test/fixtures';")).toHaveLength(1);
+  });
+
+  it('flags a dynamic import() expression', () => {
+    expect(valueImportsFromTest("const mod = await import('@/test/fixtures');")).toHaveLength(1);
+  });
+
+  it('does not flag an import that has nothing to do with @/test/', () => {
+    expect(valueImportsFromTest("import { db } from '@/db';")).toEqual([]);
+  });
+});
+
+describe('no production file imports a value from @/test/', () => {
+  // Same defence as the admin-entry-points check above: a silent empty walk
+  // would make every assertion below vacuously pass.
+  it('found production files to check', () => {
+    expect(productionFiles.length).toBeGreaterThan(0);
+  });
+
+  it.each(productionFiles.map((file) => [relative(process.cwd(), file), file] as const))(
+    '%s does not value-import from @/test/',
+    (_label, file) => {
+      const source = readFileSync(file, 'utf8');
+      expect(valueImportsFromTest(source)).toEqual([]);
     },
   );
 });
