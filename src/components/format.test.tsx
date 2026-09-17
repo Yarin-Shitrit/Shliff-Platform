@@ -17,6 +17,13 @@ describe('Money', () => {
     expect(isolate?.textContent).toBe('1,200 ₪');
   });
 
+  /**
+   * The optional leading mark in the regex below is a real, ICU-emitted
+   * left-to-right mark (U+200E), not slack in the assertion — see the
+   * fuller note beside the equivalent case in `src/lib/money.test.ts`
+   * ("never lets a minus sign come off its digits") for the
+   * `formatToParts` evidence before touching this regex.
+   */
   it('keeps a negative amount whole', () => {
     const { container } = render(<Money agorot={-45050} />);
     expect(container.querySelectorAll('bdi')).toHaveLength(1);
