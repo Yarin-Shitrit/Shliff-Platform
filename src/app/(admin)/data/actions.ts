@@ -29,8 +29,14 @@ export async function setAuthorityAction(
 export async function promoteAllAction(): Promise<BulkResult> {
   const admin = await requireAdmin();
   if (!admin.ok) throw new Error('unauthorized');
-  const result = await promoteAll(db, { dryRun: false, recordedBy: admin.email });
-  revalidatePath('/data');
-  revalidatePath('/money');
-  return result;
+  // A bulk run can commit some blocks and record failures for others (it no
+  // longer throws for a per-block database error — see `promoteAll`), so the
+  // revalidation must run whether or not this call throws for some other
+  // reason: a partially-committed run must never leave these pages stale.
+  try {
+    return await promoteAll(db, { dryRun: false, recordedBy: admin.email });
+  } finally {
+    revalidatePath('/data');
+    revalidatePath('/money');
+  }
 }

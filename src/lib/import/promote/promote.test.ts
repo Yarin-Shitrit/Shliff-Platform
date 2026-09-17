@@ -1065,7 +1065,7 @@ describe('promoteAll', () => {
     expect(await db.select().from(obligations)).toHaveLength(2);
   });
 
-  it('one block failing mid-write leaves an earlier block\'s commit standing, and its own rows untouched', async () => {
+  it('records a mid-write database failure as a failure, and leaves an earlier block\'s savepoint-committed rows standing', async () => {
     const first = await addBlock(sheetId, 'ledger', LEDGER_GRID_3, LEDGER_MAP, { top: 1 });
     const second = await addBlock(sheetId, 'ledger', LEDGER_GRID_3, LEDGER_MAP, { top: 20 });
     await db.execute(sql.raw(
@@ -1075,10 +1075,51 @@ describe('promoteAll', () => {
     badGrid[2][1] = 'בום';
     await setGrid(second, badGrid);
 
-    await expect(promoteAll(db, { dryRun: false, recordedBy: 'lead@shliff.test' })).rejects.toThrow();
+    const result = await promoteAll(db, { dryRun: false, recordedBy: 'lead@shliff.test' });
 
+    // The whole bulk run still commits: promoteAll no longer throws for a
+    // per-block database error, and returns a complete BulkResult.
+    expect(result.failedCount).toBe(1);
+    expect(result.failures).toEqual([{ blockId: second, message: expect.any(String) }]);
+    expect(result.results.map((r) => r.blockId)).toEqual([first]);
+
+    // Proof the failing block's SAVEPOINT rolled back on its own, without
+    // undoing the earlier block's already-committed-within-the-transaction
+    // writes: both blocks share one outer transaction (see `promoteAll`).
     const rows = await db.select().from(ledgerEntries);
     expect(rows.filter((r) => r.sourceBlockId === first)).toHaveLength(3);
     expect(rows.filter((r) => r.sourceBlockId === second)).toHaveLength(0);
+  });
+
+  it('orders results by sheet name ahead of insertion or sheet-id order', async () => {
+    const sheetZ = await addSheet('z.xlsx', 'zz-sheet');
+    const sheetA = await addSheet('a.xlsx', 'aa-sheet');
+    // sheetZ (and its block) is created first — a wrong implementation that
+    // ignores sheets.name, or sorts by sheet id/creation order, would put
+    // blockOnZ ahead of blockOnA.
+    const blockOnZ = await addBlock(sheetZ, 'ledger', LEDGER_GRID, LEDGER_MAP);
+    const blockOnA = await addBlock(sheetA, 'ledger', LEDGER_GRID, LEDGER_MAP);
+
+    const result = await promoteAll(db, { dryRun: false, recordedBy: 'lead@shliff.test' });
+    expect(result.results.map((r) => r.blockId)).toEqual([blockOnA, blockOnZ]);
+  });
+
+  it('orders results by block top ascending within a sheet, regardless of insertion order', async () => {
+    // Created in reverse of the expected order: the top-20 block first, the
+    // top-1 block second. A wrong implementation without `orderBy(blocks.top)`
+    // would likely return them in insertion (i.e. reversed) order.
+    const later = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP, { top: 20 });
+    const earlier = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP, { top: 1 });
+
+    const result = await promoteAll(db, { dryRun: false, recordedBy: 'lead@shliff.test' });
+    expect(result.results.map((r) => r.blockId)).toEqual([earlier, later]);
+  });
+
+  it('promotes a mixed confirmed/unconfirmed set in one call, reporting only the confirmed block', async () => {
+    const confirmed = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP, { top: 1 });
+    await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP, { top: 20, confirmed: false });
+
+    const result = await promoteAll(db, { dryRun: false, recordedBy: 'lead@shliff.test' });
+    expect(result.results.map((r) => r.blockId)).toEqual([confirmed]);
   });
 });

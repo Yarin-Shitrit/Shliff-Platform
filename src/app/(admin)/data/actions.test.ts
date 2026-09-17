@@ -5,10 +5,11 @@ const mocks = vi.hoisted(() => ({
   setSheetSeason: vi.fn(),
   setSheetAuthority: vi.fn(),
   promoteAll: vi.fn(),
+  revalidatePath: vi.fn(),
 }));
 
 vi.mock('@/db', () => ({ db: {} }));
-vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock('@/lib/auth/guard', () => ({ requireAdmin: mocks.requireAdmin }));
 vi.mock('@/lib/import/sheets', () => ({
   setSheetSeason: mocks.setSheetSeason,
@@ -60,5 +61,16 @@ describe('data server actions', () => {
       dryRun: false, recordedBy: 'lead@shliff.test',
     });
     expect(result.retainedCount).toBe(0);
+  });
+
+  it('revalidates both pages even when promoteAll itself rejects', async () => {
+    mocks.requireAdmin.mockResolvedValue({ ok: true, email: 'lead@shliff.test' });
+    mocks.promoteAll.mockRejectedValue(new Error('boom'));
+    const { promoteAllAction } = await import('./actions');
+
+    await expect(promoteAllAction()).rejects.toThrow('boom');
+
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/data');
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/money');
   });
 });

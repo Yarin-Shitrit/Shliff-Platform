@@ -313,6 +313,16 @@ export interface BulkResult {
    *  them. Filled on a dry run too, for the same reason `deletedCount` is:
    *  a dry run reports what a commit would do, not what it did. */
   retainedCount: number;
+  /** Blocks whose promotion threw a genuine database error rather than
+   *  returning a business refusal — the two are not the same thing: a
+   *  refusal is a normal outcome and lives in `results[].refused`; a
+   *  failure here means the database itself rejected the write and the
+   *  register cannot explain it to a lead in Hebrew. A failed block wrote
+   *  nothing — its savepoint rolled back to before its own writes — while
+   *  every block around it in the same run still committed normally. */
+  failures: { blockId: string; message: string }[];
+  /** `failures.length`, for a caller that only wants the count. */
+  failedCount: number;
 }
 
 /**
@@ -321,38 +331,57 @@ export interface BulkResult {
  * `results`: the register is a list of what could not be settled, so a
  * refused block is the point, not noise.
  *
- * Each block runs in its own `promoteBlock` transaction (top-level, not
- * nested under a shared one — see the block comment above `promoteBlock`).
- * A block that fails with a genuine database error therefore rolls back
- * only its own rows; blocks already processed earlier in this run keep
- * what they wrote, and `promoteAll` itself rejects rather than silently
- * skipping the rest of the run. A normal business refusal never reaches
- * here as a throw — `promoteBlock` returns those in `refused` — so a thrown
- * error out of this loop means something the register cannot explain to a
- * lead in Hebrew, and the caller should see it as a failure, not a partial
- * bulk result with a gap in it.
+ * The whole run is ONE outer transaction. Each `promoteBlock` call nests
+ * inside it as a savepoint — both drivers support this (drizzle's PGlite
+ * session opens `savepoint spN`; postgres-js delegates to
+ * `client.savepoint`) — so a block whose write throws a genuine database
+ * error rolls back only that block's savepoint; the loop catches the error,
+ * records it in `failures`, and moves on to the next block. The outer
+ * transaction then commits normally, so a bulk run always returns a
+ * complete `BulkResult` and always persists whatever succeeded — a lead can
+ * tell "18 of 20 promoted, block 19 failed, block 20 was fine" from the
+ * result, rather than the caller seeing nothing at all because one block
+ * out of many hit a bug. `promoteBlock` itself is unchanged for callers
+ * that promote a single block directly: it still opens its own top-level
+ * transaction and still throws on a genuine database error.
  */
 export async function promoteAll(
   db: AnyDb, opts: { dryRun: boolean; recordedBy: string },
 ): Promise<BulkResult> {
-  const confirmed = await db.select({ id: blocks.id })
-    .from(blocks)
-    .innerJoin(sheets, eq(sheets.id, blocks.sheetId))
-    .where(isNotNull(blocks.confirmedAt))
-    .orderBy(sheets.name, blocks.top);
+  return runInTransaction(db, async (tx) => {
+    const confirmed = await tx.select({ id: blocks.id })
+      .from(blocks)
+      .innerJoin(sheets, eq(sheets.id, blocks.sheetId))
+      .where(isNotNull(blocks.confirmedAt))
+      .orderBy(sheets.name, blocks.top);
 
-  const results: PromotionResult[] = [];
-  for (const { id } of confirmed) {
-    results.push(await promoteBlock(db, id, opts));
-  }
+    const results: PromotionResult[] = [];
+    const failures: { blockId: string; message: string }[] = [];
+    for (const { id } of confirmed) {
+      try {
+        // Deliberately sequential: each block must finish (and, on
+        // failure, roll back to its own savepoint) before the next one
+        // starts. Running them concurrently would interleave writes and
+        // sweeps against the same shared transaction.
+        results.push(await promoteBlock(tx, id, opts));
+      } catch (error) {
+        failures.push({
+          blockId: id,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
 
-  return {
-    results,
-    writtenCount: results.reduce((n, r) => n + r.written.length, 0),
-    refusedCount: results.reduce((n, r) => n + r.refused.length, 0),
-    deletedCount: results.reduce((n, r) => n + r.deleted, 0),
-    retainedCount: results.reduce((n, r) => n + r.retained.length, 0),
-  };
+    return {
+      results,
+      writtenCount: results.reduce((n, r) => n + r.written.length, 0),
+      refusedCount: results.reduce((n, r) => n + r.refused.length, 0),
+      deletedCount: results.reduce((n, r) => n + r.deleted, 0),
+      retainedCount: results.reduce((n, r) => n + r.retained.length, 0),
+      failures,
+      failedCount: failures.length,
+    };
+  });
 }
 
 /**
