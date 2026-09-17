@@ -1,0 +1,539 @@
+<!--meta {"file":"Foundations.dc.html","w":1440,"h":1560,"nav":"","title":"יסודות העיצוב","interactive":false} -->
+<!doctype html>
+<html lang="he">
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!--HEAD-->
+<div class="app {{themeClass}}" dir="rtl" style="width: __W__px; height: __H__px;">
+  <div style="flex: 1; overflow: hidden; padding: 32px 40px; display: flex; flex-direction: column; gap: 20px;">
+
+    <!-- 1 ── כותרת ───────────────────────────────────────────── -->
+    <div class="pagehead">
+      <div>
+        <h1>יסודות העיצוב — קופת שליף</h1>
+        <p class="sub">ערכת צבעים בהירה, מבטא כתום אחד, וטיפוגרפיה עברית צפופה לטבלאות.</p>
+      </div>
+    </div>
+
+    <!-- 2 ── צבעים ──────────────────────────────────────────── -->
+    <section class="card">
+      <div class="card-h">
+        <span style="color: var(--brand-text); display: inline-flex;">[[i:layers:17]]</span>
+        <h2>צבעים</h2>
+        <span class="muted" style="font-size: 12.5px;">כל צבע הוא משתנה. אין ערכים קשיחים בקוד הרכיבים.</span>
+      </div>
+      <div class="card-b" style="display: flex; flex-direction: column; gap: 14px;">
+
+        <div style="display: flex; gap: 40px; align-items: flex-start;">
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <span class="sectitle">משטחים</span>
+            <div style="display: flex; gap: 10px;">
+              <div style="width: 72px; display: flex; flex-direction: column; gap: 4px;">
+                <span style="height: 44px; border-radius: 8px; background: #F6F4F1; box-shadow: inset 0 0 0 1px rgba(28,25,23,.12);"></span>
+                <span style="font-size: 12px;"><bdi>--canvas</bdi></span>
+                <span class="muted" style="font-size: 11px;"><bdi>#F6F4F1</bdi></span>
+              </div>
+              <div style="width: 72px; display: flex; flex-direction: column; gap: 4px;">
+                <span style="height: 44px; border-radius: 8px; background: #FFFFFF; box-shadow: inset 0 0 0 1px rgba(28,25,23,.12);"></span>
+                <span style="font-size: 12px;"><bdi>--panel</bdi></span>
+                <span class="muted" style="font-size: 11px;"><bdi>#FFFFFF</bdi></span>
+              </div>
+              <div style="width: 72px; display: flex; flex-direction: column; gap: 4px;">
+                <span style="height: 44px; border-radius: 8px; background: #F3F0EC; box-shadow: inset 0 0 0 1px rgba(28,25,23,.12);"></span>
+                <span style="font-size: 12px;"><bdi>--sunken</bdi></span>
+                <span class="muted" style="font-size: 11px;"><bdi>#F3F0EC</bdi></span>
+              </div>
+              <div style="width: 72px; display: flex; flex-direction: column; gap: 4px;">
+                <span style="height: 44px; border-radius: 8px; background: #F8F6F3; box-shadow: inset 0 0 0 1px rgba(28,25,23,.12);"></span>
+                <span style="font-size: 12px;"><bdi>--hover</bdi></span>
+                <span class="muted" style="font-size: 11px;"><bdi>#F8F6F3</bdi></span>
+              </div>
+              <div style="width: 72px; display: flex; flex-direction: column; gap: 4px;">
+                <span style="height: 44px; border-radius: 8px; background: #E9E4DE; box-shadow: inset 0 0 0 1px rgba(28,25,23,.12);"></span>
+                <span style="font-size: 12px;"><bdi>--line</bdi></span>
+                <span class="muted" style="font-size: 11px;"><bdi>#E9E4DE</bdi></span>
+              </div>
+              <div style="width: 72px; display: flex; flex-direction: column; gap: 4px;">
+                <span style="height: 44px; border-radius: 8px; background: #D8D1C9; box-shadow: inset 0 0 0 1px rgba(28,25,23,.12);"></span>
+                <span style="font-size: 12px;"><bdi>--line-strong</bdi></span>
+                <span class="muted" style="font-size: 11px;"><bdi>#D8D1C9</bdi></span>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <span class="sectitle">טקסט</span>
+            <div style="display: flex; gap: 10px;">
+              <div style="width: 72px; display: flex; flex-direction: column; gap: 4px;">
+                <span style="height: 44px; border-radius: 8px; background: #1C1917; box-shadow: inset 0 0 0 1px rgba(28,25,23,.12);"></span>
+                <span style="font-size: 12px;"><bdi>--ink</bdi></span>
+                <span class="muted" style="font-size: 11px;"><bdi>#1C1917</bdi></span>
+              </div>
+              <div style="width: 72px; display: flex; flex-direction: column; gap: 4px;">
+                <span style="height: 44px; border-radius: 8px; background: #57534E; box-shadow: inset 0 0 0 1px rgba(28,25,23,.12);"></span>
+                <span style="font-size: 12px;"><bdi>--ink-2</bdi></span>
+                <span class="muted" style="font-size: 11px;"><bdi>#57534E</bdi></span>
+              </div>
+              <div style="width: 72px; display: flex; flex-direction: column; gap: 4px;">
+                <span style="height: 44px; border-radius: 8px; background: #6B645E; box-shadow: inset 0 0 0 1px rgba(28,25,23,.12);"></span>
+                <span style="font-size: 12px;"><bdi>--ink-3</bdi></span>
+                <span class="muted" style="font-size: 11px;"><bdi>#6B645E</bdi></span>
+              </div>
+              <div style="width: 72px; display: flex; flex-direction: column; gap: 4px;">
+                <span style="height: 44px; border-radius: 8px; background: #A8A29E; box-shadow: inset 0 0 0 1px rgba(28,25,23,.12);"></span>
+                <span style="font-size: 12px;"><bdi>--ink-4</bdi></span>
+                <span class="muted" style="font-size: 11px;"><bdi>#A8A29E</bdi></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 24px; align-items: flex-end;">
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <span class="sectitle">מבטא ומצבים</span>
+            <div style="display: flex; gap: 10px;">
+              <div style="width: 72px; display: flex; flex-direction: column; gap: 4px;">
+                <span style="height: 44px; border-radius: 8px; background: #EB7837; box-shadow: inset 0 0 0 1px rgba(28,25,23,.12);"></span>
+                <span style="font-size: 12px;"><bdi>--brand</bdi></span>
+                <span class="muted" style="font-size: 11px;"><bdi>#EB7837</bdi></span>
+              </div>
+              <div style="width: 72px; display: flex; flex-direction: column; gap: 4px;">
+                <span style="height: 44px; border-radius: 8px; background: #B04E17; box-shadow: inset 0 0 0 1px rgba(28,25,23,.12);"></span>
+                <span style="font-size: 12px;"><bdi>--brand-text</bdi></span>
+                <span class="muted" style="font-size: 11px;"><bdi>#B04E17</bdi></span>
+              </div>
+              <div style="width: 72px; display: flex; flex-direction: column; gap: 4px;">
+                <span style="height: 44px; border-radius: 8px; background: #C8570F; box-shadow: inset 0 0 0 1px rgba(28,25,23,.12);"></span>
+                <span style="font-size: 12px;"><bdi>--focus</bdi></span>
+                <span class="muted" style="font-size: 11px;"><bdi>#C8570F</bdi></span>
+              </div>
+              <div style="width: 72px; display: flex; flex-direction: column; gap: 4px;">
+                <span style="height: 44px; border-radius: 8px; background: #FDF1E8; box-shadow: inset 0 0 0 1px rgba(28,25,23,.12);"></span>
+                <span style="font-size: 12px;"><bdi>--brand-soft</bdi></span>
+                <span class="muted" style="font-size: 11px;"><bdi>#FDF1E8</bdi></span>
+              </div>
+              <div style="width: 72px; display: flex; flex-direction: column; gap: 4px;">
+                <span style="height: 44px; border-radius: 8px; background: #1A7F4B; box-shadow: inset 0 0 0 1px rgba(28,25,23,.12);"></span>
+                <span style="font-size: 12px;"><bdi>--ok</bdi></span>
+                <span class="muted" style="font-size: 11px;"><bdi>#1A7F4B</bdi></span>
+              </div>
+              <div style="width: 72px; display: flex; flex-direction: column; gap: 4px;">
+                <span style="height: 44px; border-radius: 8px; background: #8A5A00; box-shadow: inset 0 0 0 1px rgba(28,25,23,.12);"></span>
+                <span style="font-size: 12px;"><bdi>--warn</bdi></span>
+                <span class="muted" style="font-size: 11px;"><bdi>#8A5A00</bdi></span>
+              </div>
+              <div style="width: 72px; display: flex; flex-direction: column; gap: 4px;">
+                <span style="height: 44px; border-radius: 8px; background: #B42318; box-shadow: inset 0 0 0 1px rgba(28,25,23,.12);"></span>
+                <span style="font-size: 12px;"><bdi>--bad</bdi></span>
+                <span class="muted" style="font-size: 11px;"><bdi>#B42318</bdi></span>
+              </div>
+              <div style="width: 72px; display: flex; flex-direction: column; gap: 4px;">
+                <span style="height: 44px; border-radius: 8px; background: #2458C6; box-shadow: inset 0 0 0 1px rgba(28,25,23,.12);"></span>
+                <span style="font-size: 12px;"><bdi>--info</bdi></span>
+                <span class="muted" style="font-size: 11px;"><bdi>#2458C6</bdi></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="banner neutral" style="flex: 1; align-items: flex-start;">
+            <span class="ic">[[i:info:16]]</span>
+            <span class="t" style="font-size: 13px; line-height: 1.55;">טקסט על כתום הוא תמיד דיו כהה (<bdi>6.06:1</bdi>), לא לבן — בדיוק כמו בלוגו. טבעת הפוקוס משתמשת ב־<bdi>--focus</bdi> (<bdi>4.35:1</bdi>), כי הכתום עצמו הוא <bdi>2.89:1</bdi> בלבד על לבן. לקישורים בטקסט משתמשים ב־<bdi>--brand-text</bdi> (<bdi>5.32:1</bdi> על לבן).</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 3 + 5 ── טיפוגרפיה · טבלה ─────────────────────────────── -->
+    <div style="display: flex; gap: 20px; align-items: stretch;">
+
+      <section class="card" style="flex: 1; display: flex; flex-direction: column;">
+        <div class="card-h">
+          <span style="color: var(--ink-3); display: inline-flex;">[[i:note:17]]</span>
+          <h2>טיפוגרפיה</h2>
+        </div>
+        <div class="card-b" style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; align-items: baseline; gap: 14px;">
+            <span style="font-size: 22px; font-weight: 600; letter-spacing: -.1px; line-height: 1.3;">ברן 26 — קופת הקאמפ</span>
+            <span class="muted" style="font-size: 12px; margin-inline-start: auto; white-space: nowrap;">כותרת עמוד · <bdi>22px/600</bdi></span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 14px;">
+            <span style="font-size: 14.5px; font-weight: 600;">לטיפול — הכרעות שממתינות לכם</span>
+            <span class="muted" style="font-size: 12px; margin-inline-start: auto; white-space: nowrap;">כותרת מקטע · <bdi>14.5px/600</bdi></span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 14px;">
+            <span style="font-size: 14.5px; font-weight: 400;">המערכת לא מנחשת, ולא כותבת כלום בלי אישור.</span>
+            <span class="muted" style="font-size: 12px; margin-inline-start: auto; white-space: nowrap;">טקסט · <bdi>14.5px/400</bdi></span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 14px;">
+            <span style="font-size: 14px; font-weight: 400; font-variant-numeric: tabular-nums;">נועה לוי · תעריף רגיל · <bdi>1,200 ₪</bdi></span>
+            <span class="muted" style="font-size: 12px; margin-inline-start: auto; white-space: nowrap;">טבלה · <bdi>14/20</bdi></span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 14px;">
+            <span style="font-size: 12.5px; color: var(--ink-3);">שם מהקובץ · <bdi>4</bdi> שורות · נקלט אתמול</span>
+            <span class="muted" style="font-size: 12px; margin-inline-start: auto; white-space: nowrap;">משני · <bdi>12.5px</bdi></span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 14px;">
+            <span style="font-size: 11.5px; font-weight: 500; color: var(--ink-3); letter-spacing: .2px;">מקורות ואסמכתאות</span>
+            <span class="muted" style="font-size: 12px; margin-inline-start: auto; white-space: nowrap;">תווית · <bdi>11.5px</bdi></span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 14px;">
+            <span style="font-size: 26px; font-weight: 600; letter-spacing: -.3px; line-height: 1.2;"><bdi>24,300 ₪</bdi></span>
+            <span class="muted" style="font-size: 12px; margin-inline-start: auto; white-space: nowrap;">מספר גדול · <bdi>26px/600</bdi></span>
+          </div>
+          <p class="muted" style="font-size: 12px; line-height: 1.6; border-top: 1px solid var(--line); padding-top: 8px; margin-top: 2px;">
+            <bdi>Heebo</bdi> לממשק — ספרות טבלאיות כברירת מחדל, <bdi>Frank Ruhl Libre</bdi> ללוגוטייפ ולדף ההתחברות בלבד, <bdi>IBM Plex Mono</bdi> להפניות לתאים בגיליון.
+            עברית צריכה <bdi>+1px</bdi> גודל ו־<bdi>+2px</bdi> פסיקה מול סקאלה לטינית — ולכן תא הטבלה הוא <bdi>14/20</bdi>.
+          </p>
+        </div>
+      </section>
+
+      <section class="card" style="flex: 1.05; display: flex; flex-direction: column;">
+        <div class="card-h">
+          <span style="color: var(--ink-3); display: inline-flex;">[[i:sheet:17]]</span>
+          <h2>טבלה</h2>
+          <span class="muted" style="font-size: 12.5px;">שורה נבחרת, ריחוף, וסכום שמסתדר</span>
+        </div>
+        <div class="card-b" style="display: flex; flex-direction: column; gap: 10px;">
+          <div class="tablewrap">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>שם</th>
+                  <th class="n">סכום</th>
+                  <th>מצב</th>
+                  <th>מקור</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <span class="namecell">
+                      <span class="av c2">אכ</span>
+                      <a class="nm" href="Person.dc.html">איתי כהן</a>
+                    </span>
+                  </td>
+                  <td class="n"><bdi>1,200 ₪</bdi></td>
+                  <td><span class="pill bad">טרם שולם</span></td>
+                  <td><span class="src"><bdi>קופת קאמפ 2026!B14</bdi></span></td>
+                </tr>
+                <tr class="sel">
+                  <td>
+                    <span class="namecell">
+                      <span class="av c4">נל</span>
+                      <a class="nm" href="Person.dc.html">נועה לוי</a>
+                    </span>
+                  </td>
+                  <td class="n"><bdi>1,200 ₪</bdi></td>
+                  <td><span class="pill ok">שולם</span></td>
+                  <td><span class="src"><bdi>קופת קאמפ 2026!B15</bdi></span></td>
+                </tr>
+                <tr>
+                  <td>
+                    <span class="namecell">
+                      <span class="av c6">הנ</span>
+                      <a class="nm" href="Person.dc.html">הילה נחום</a>
+                    </span>
+                  </td>
+                  <td class="n"><bdi>700 ₪</bdi></td>
+                  <td><span class="pill warn">חלקי</span></td>
+                  <td><span class="src manual">נרשם ידנית</span></td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td>סה״כ <bdi>3</bdi> שורות</td>
+                  <td class="n"><bdi>3,100 ₪</bdi></td>
+                  <td colspan="2" class="muted" style="font-weight: 400;">מתוך <bdi>3,600 ₪</bdi> שחויבו</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p class="muted" style="font-size: 12px;">שורה <bdi>44px</bdi> · כותרת <bdi>36px</bdi> · מספרים מיושרים לסוף · סכום בתחתית</p>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- 4 ── רכיבים ─────────────────────────────────────────── -->
+    <section class="card">
+      <div class="card-h">
+        <span style="color: var(--brand-text); display: inline-flex;">[[i:grid:17]]</span>
+        <h2>רכיבים</h2>
+        <span class="muted" style="font-size: 12.5px;">גובה כפתור <bdi>34px</bdi> · שדה <bdi>36px</bdi> · רדיוס <bdi>8px</bdi></span>
+      </div>
+      <div class="card-b" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px;">
+
+        <div style="grid-column: span 2; display: flex; flex-direction: column; gap: 6px;">
+          <span class="muted" style="font-size: 12px;">כפתורים</span>
+          <div class="card" style="flex: 1;">
+            <div class="card-b" style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px;">
+              <button class="btn primary" type="button">[[i:plus:14]] רישום תשלום</button>
+              <button class="btn" type="button">[[i:download:14]] ייצוא</button>
+              <button class="btn ghost" type="button">ביטול</button>
+              <button class="btn sm" type="button">[[i:filter:13]] סינון</button>
+              <button class="btn icon" type="button" aria-label="אפשרויות נוספות">[[i:more]]</button>
+              <button class="btn" type="button" disabled>[[i:merge:14]] מיזוג</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="grid-column: span 2; display: flex; flex-direction: column; gap: 6px;">
+          <span class="muted" style="font-size: 12px;">שדות וטבעת פוקוס</span>
+          <div class="card" style="flex: 1;">
+            <div class="card-b" style="display: flex; align-items: flex-end; gap: 12px;">
+              <div class="field" style="flex: 1;">
+                <label for="fnd-amount">סכום</label>
+                <span class="input money" id="fnd-amount"><bdi>1,200</bdi></span>
+              </div>
+              <div class="field" style="flex: 1;">
+                <label for="fnd-focus">שם לחיפוש</label>
+                <span class="input focus" id="fnd-focus">נועה ל…</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <span class="muted" style="font-size: 12px;">מתג מקטעים</span>
+          <div class="card" style="flex: 1;">
+            <div class="card-b" style="display: flex; align-items: center;">
+              <span class="seg">
+                <button type="button" aria-pressed="true">הכול</button>
+                <button type="button">שילמו</button>
+                <button type="button">חייבים</button>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <span class="muted" style="font-size: 12px;">תיבות סימון</span>
+          <div class="card" style="flex: 1;">
+            <div class="card-b" style="display: flex; align-items: center; gap: 16px;">
+              <button type="button" style="display: inline-flex; align-items: center; gap: 8px; padding: 0; border: 0; background: none; cursor: pointer; font-size: 13px;">
+                <span class="check"></span> ריק
+              </button>
+              <button type="button" aria-pressed="true" style="display: inline-flex; align-items: center; gap: 8px; padding: 0; border: 0; background: none; cursor: pointer; font-size: 13px;">
+                <span class="check on">[[i:check:12]]</span> מסומן
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <span class="muted" style="font-size: 12px;">צ׳יפים של סינון</span>
+          <div class="card" style="flex: 1;">
+            <div class="card-b" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px;">
+              <button class="chip" type="button">שנה <b><bdi>2026</bdi></b></button>
+              <button class="chip on" type="button">טרם שילמו [[i:x:12]]</button>
+              <button class="chip dashed" type="button">[[i:plus:12]] סינון</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <span class="muted" style="font-size: 12px;">מקור הנתון</span>
+          <div class="card" style="flex: 1;">
+            <div class="card-b" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px;">
+              <span class="src"><bdi>קופת קאמפ 2026!B14</bdi></span>
+              <span class="src manual">נרשם ידנית</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="grid-column: span 2; display: flex; flex-direction: column; gap: 6px;">
+          <span class="muted" style="font-size: 12px;">תגיות מצב</span>
+          <div class="card" style="flex: 1;">
+            <div class="card-b" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px;">
+              <span class="pill">ניטרלי</span>
+              <span class="pill ok"><span class="dot"></span> שולם</span>
+              <span class="pill warn"><span class="dot"></span> חלקי</span>
+              <span class="pill bad"><span class="dot"></span> טרם שולם</span>
+              <span class="pill info">ממתין לאישור</span>
+              <span class="pill brand">חריג</span>
+              <span class="pill outline">טיוטה</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <span class="muted" style="font-size: 12px;">אווטארים</span>
+          <div class="card" style="flex: 1;">
+            <div class="card-b" style="display: flex; align-items: center; gap: 10px;">
+              <span class="av lg c1">נל</span>
+              <span style="display: flex; flex-direction: column; gap: 6px;">
+                <span style="display: flex; gap: 4px;">
+                  <span class="av c1">אכ</span>
+                  <span class="av c2">נל</span>
+                  <span class="av c3">עב</span>
+                  <span class="av c4">מר</span>
+                  <span class="av c5">גב</span>
+                  <span class="av c6">הנ</span>
+                </span>
+                <span style="display: flex; align-items: center; gap: 10px;">
+                  <span class="stack">
+                    <span class="av sm c2">אכ</span>
+                    <span class="av sm c3">עב</span>
+                    <span class="av sm c5">גב</span>
+                    <span class="av sm empty">+</span>
+                  </span>
+                  <span class="av sm empty">?</span>
+                </span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <span class="muted" style="font-size: 12px;">מדדים וקיצור מקלדת</span>
+          <div class="card" style="flex: 1;">
+            <div class="card-b" style="display: flex; flex-direction: column; gap: 10px;">
+              <span class="bar" style="width: 100%;">
+                <i style="width: 58%; background: var(--viz-dues);"></i>
+                <i style="width: 20%; background: var(--viz-fund);"></i>
+                <i style="width: 8%; background: var(--viz-reserve);"></i>
+              </span>
+              <span style="display: flex; align-items: center; gap: 10px;">
+                <span class="meter"><i style="width: 62%;"></i></span>
+                <span class="muted" style="font-size: 12px;"><bdi>62%</bdi></span>
+                <span class="kbd" style="margin-inline-start: auto;"><bdi>⌘K</bdi></span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 6 + 7 ── הודעות ומצבי קצה · כללי RTL ──────────────────── -->
+    <div style="display: flex; gap: 20px; align-items: stretch;">
+
+      <section class="card" style="flex: 1.25; display: flex; flex-direction: column;">
+        <div class="card-h">
+          <span style="color: var(--ink-3); display: inline-flex;">[[i:alert:17]]</span>
+          <h2>הודעות ומצבי קצה</h2>
+          <span class="muted" style="font-size: 12.5px;">ריק בגלל שאין נתונים ≠ ריק בגלל סינון</span>
+        </div>
+        <div class="card-b" style="display: flex; flex-direction: column; gap: 12px;">
+
+          <div style="display: flex; gap: 12px;">
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+              <span class="muted" style="font-size: 12px;">אזהרה — משהו דורש הכרעה</span>
+              <div class="banner">
+                <span class="ic">[[i:alert:16]]</span>
+                <span class="t" style="font-size: 13px;"><bdi>2,400 ₪</bdi> נרשמו בלי חשבון</span>
+                <button class="btn sm" type="button">שיוך לחשבון</button>
+              </div>
+            </div>
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+              <span class="muted" style="font-size: 12px;">מידע — הסבר, בלי פעולה</span>
+              <div class="banner info">
+                <span class="ic">[[i:info:16]]</span>
+                <span class="t" style="font-size: 13px;">ייבוא לא כותב כלום עד שתאשרו.</span>
+                <a class="link" href="History.dc.html">להיסטוריה ←</a>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 12px;">
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+              <span class="muted" style="font-size: 12px;">ריק באמת</span>
+              <div class="card" style="flex: 1;">
+                <div class="card-b" style="display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 18px 16px;">
+                  <span style="color: var(--ink-4); display: inline-flex;">[[i:inbox:24]]</span>
+                  <b style="font-weight: 600;">אין כאן כלום עדיין</b>
+                  <span class="muted" style="font-size: 12.5px;">כשתעלו קובץ, הטבלאות שיזוהו יופיעו כאן.</span>
+                  <a class="btn primary sm" href="Files.dc.html" style="margin-top: 4px;">[[i:upload:13]] העלאת קובץ</a>
+                </div>
+              </div>
+            </div>
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+              <span class="muted" style="font-size: 12px;">ריק בגלל סינון</span>
+              <div class="card" style="flex: 1;">
+                <div class="card-b" style="display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 18px 16px;">
+                  <span style="color: var(--ink-4); display: inline-flex;">[[i:filter:24]]</span>
+                  <b style="font-weight: 600;">אין תוצאות לסינון הזה</b>
+                  <span class="muted" style="font-size: 12.5px;">נסו להסיר את הסינון ״טרם שילמו״.</span>
+                  <button class="btn sm" type="button" style="margin-top: 4px;">[[i:x:13]] ניקוי סינון</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <section class="card" style="flex: 1; display: flex; flex-direction: column;">
+        <div class="card-h">
+          <span style="color: var(--ink-3); display: inline-flex;">[[i:right:17]]</span>
+          <h2>כללי <bdi>RTL</bdi></h2>
+        </div>
+        <div class="card-b" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 20px; align-content: start;">
+          <span style="display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; line-height: 1.5;">
+            <span style="color: var(--ok); display: inline-flex; padding-top: 3px;">[[i:check:14]]</span>
+            הסרגל מימין והמגירה נפתחת משמאל
+          </span>
+          <span style="display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; line-height: 1.5;">
+            <span style="color: var(--ok); display: inline-flex; padding-top: 3px;">[[i:check:14]]</span>
+            חצי ניווט מתהפכים, סימני וי ושעונים לא
+          </span>
+          <span style="display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; line-height: 1.5;">
+            <span style="color: var(--ok); display: inline-flex; padding-top: 3px;">[[i:check:14]]</span>
+            כל מספר, תאריך ואימייל בתוך <bdi>bdi</bdi>
+          </span>
+          <span style="display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; line-height: 1.5;">
+            <span style="color: var(--ok); display: inline-flex; padding-top: 3px;">[[i:check:14]]</span>
+            סכומים מיושרים לקצה השורה עם <bdi>tabular-nums</bdi>; עמודות כסף מקבלות <bdi>text-align: right</bdi> פיזי — המקום היחיד שבו תכונה פיזית גוברת על לוגית
+          </span>
+          <span style="display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; line-height: 1.5;">
+            <span style="color: var(--ok); display: inline-flex; padding-top: 3px;">[[i:check:14]]</span>
+            ₪ אחרי הסכום
+          </span>
+          <span style="display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; line-height: 1.5;">
+            <span style="color: var(--ok); display: inline-flex; padding-top: 3px;">[[i:check:14]]</span>
+            עמודות טבלה נקראות מימין לשמאל
+          </span>
+          <span style="display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; line-height: 1.5;">
+            <span style="color: var(--ok); display: inline-flex; padding-top: 3px;">[[i:check:14]]</span>
+            גרפים גדלים מימין
+          </span>
+          <span style="display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; line-height: 1.5;">
+            <span style="color: var(--ok); display: inline-flex; padding-top: 3px;">[[i:check:14]]</span>
+            קיצורי מקלדת על ספרות ולא על אותיות (מקלדת עברית)
+          </span>
+          <span style="display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; line-height: 1.5;">
+            <span style="color: var(--ok); display: inline-flex; padding-top: 3px;">[[i:check:14]]</span>
+            שימוש ב־<bdi>inset-inline</bdi> ולא <bdi>left/right</bdi>
+          </span>
+          <span style="display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; line-height: 1.5;">
+            <span style="color: var(--ok); display: inline-flex; padding-top: 3px;">[[i:check:14]]</span>
+            תאריכים נכתבים <bdi>DD/MM/YYYY</bdi> עם לוכסנים — כך מציגים אותם אקסל והבנקים
+          </span>
+          <span style="display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; line-height: 1.5;">
+            <span style="color: var(--ok); display: inline-flex; padding-top: 3px;">[[i:check:14]]</span>
+            כסף תמיד עובר דרך <bdi>Intl.NumberFormat('he-IL')</bdi>, כדי שסימן המינוס יישאר צמוד לספרות
+          </span>
+        </div>
+      </section>
+
+    </div>
+
+  </div>
+<!--OVERLAYS-->
+</div>
+</x-dc>
+<script data-dc-script data-props='__PROPS__'>
+class Component extends DCLogic {
+/*SHELL*/
+  renderVals() {
+    return { ...this.shell() };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,462 @@
+<!--meta {"file": "Tasks.dc.html", "w": 1440, "h": 1000, "nav": "tasks", "title": "משימות", "interactive": true} -->
+<!doctype html>
+<html lang="he">
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!--HEAD-->
+<div class="app {{themeClass}}" dir="rtl" style="width: __W__px; height: __H__px;">
+<!--SIDEBAR-->
+  <div class="main">
+    <header class="topbar">
+      <div class="crumbs"><a href="Main.dc.html">ברן 26</a>[[i:left:14]]<span class="here">משימות</span></div>
+      <span class="scopechip">[[i:users:14]] <bdi>16</bdi> מתוך <bdi>32</bdi> מקומות</span>
+      <span class="spacer"></span>
+      <button class="btn sm" type="button">[[i:download:14]] ייצוא</button>
+    </header>
+
+    <div class="page">
+      <div class="pagehead">
+        <div>
+          <h1>משימות</h1>
+          <p class="sub"><bdi>16</bdi> מתוך <bdi>32</bdi> מקומות מאוישים · <bdi>6</bdi> משימות עדיין חסרות אנשים · השער נפתח בעוד <bdi>36</bdi> ימים</p>
+        </div>
+        <div class="actions">
+          <div class="seg">
+            <button type="button" aria-pressed="true">[[i:list:14]] רשימה</button>
+            <button type="button" aria-pressed="false">[[i:users:14]] לפי אדם</button>
+          </div>
+          <button class="btn primary sm" type="button">[[i:plus:14]] משימה חדשה</button>
+        </div>
+      </div>
+
+      <div class="tabs" role="tablist" aria-label="תצוגות שמורות">
+        <button class="tab" type="button" role="tab" aria-selected="false">הכול <span class="n"><bdi>10</bdi></span></button>
+        <button class="tab" type="button" role="tab" aria-selected="true">חסרים אנשים <span class="n"><bdi>6</bdi></span></button>
+        <button class="tab" type="button" role="tab" aria-selected="false">מאוישות <span class="n"><bdi>4</bdi></span></button>
+        <button class="tab" type="button" role="tab" aria-selected="false">בלי תאריך <span class="n"><bdi>1</bdi></span></button>
+        <button class="tab" type="button" role="tab" aria-selected="false">שלי <span class="n"><bdi>3</bdi></span></button>
+      </div>
+
+      <div class="toolbar">
+        <button class="search" type="button" style="text-align: start;">[[i:search:15]] <span>חיפוש משימה</span></button>
+        <button class="chip" type="button">[[i:filter:13]] סוג: <b>הכול</b></button>
+        <button class="chip dashed" type="button">[[i:plus:13]] אחראי</button>
+        <button class="chip" type="button">[[i:sort:13]] מיון: <b>לפי דחיפות</b></button>
+        <span class="muted" style="margin-inline-start: auto; font-size: 12.5px;"><bdi>10</bdi> משימות</span>
+      </div>
+
+      <div class="banner">
+        <span class="ic">[[i:alert:16]]</span>
+        <span class="t"><bdi>16</bdi> מקומות עדיין לא מאוישים. מה שלא יאויש עד פתיחת השער — יתגלה בשטח.</span>
+        <button class="btn sm" type="button">שיבוץ מהיר</button>
+      </div>
+
+      <div class="tablewrap">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th scope="col">משימה</th>
+              <th scope="col" class="w0">מתי</th>
+              <th scope="col" class="w0">צוות</th>
+              <th scope="col" class="w0">איוש</th>
+              <th scope="col" class="w0">תקציב</th>
+              <th class="w0"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="grouprow"><td colspan="6">הקמה ולוגיסטיקה · <bdi>3</bdi> משימות</td></tr>
+
+            <tr>
+              <td>
+                <span style="display: flex; flex-direction: column;">
+                  <b style="font-weight: 600;">הקמת הצל והמבנה</b>
+                  <span class="muted" style="font-size: 12.5px;">משימת הקמה</span>
+                </span>
+              </td>
+              <td>
+                <span style="display: flex; flex-direction: column;">
+                  <bdi>20/10</bdi>
+                  <span class="muted" style="font-size: 12.5px;"><bdi>2</bdi> ימים לפני השער</span>
+                </span>
+              </td>
+              <td>
+                <span style="display: inline-flex; align-items: center; gap: 6px;">
+                  <span class="stack">
+                    <span class="av sm c1">רא</span><span class="av sm c3">יל</span><span class="av sm c2">דש</span><button class="av sm empty" type="button" aria-label="שיבוץ אדם">+</button><span class="av sm empty"></span>
+                  </span>
+                  <span class="muted" style="font-size: 12px;">+<bdi>3</bdi></span>
+                </span>
+              </td>
+              <td>
+                <span style="display: inline-flex; flex-direction: column; align-items: flex-start;">
+                  <span class="pill warn"><bdi>5/8</bdi></span>
+                  <span class="muted" style="font-size: 12px;">חסרים <bdi>3</bdi></span>
+                </span>
+              </td>
+              <td><span class="dim">—</span></td>
+              <td class="w0">
+                <span class="rowact">
+                  <button class="btn ghost sm icon" type="button" aria-label="שיבוץ">[[i:userplus:15]]</button>
+                  <button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button>
+                </span>
+              </td>
+            </tr>
+
+            <tr>
+              <td>
+                <span style="display: flex; flex-direction: column;">
+                  <b style="font-weight: 600;">הובלת ציוד מהמחסן</b>
+                  <span class="muted" style="font-size: 12.5px;">משימת לוגיסטיקה</span>
+                </span>
+              </td>
+              <td>
+                <span style="display: flex; flex-direction: column;">
+                  <bdi>18/10</bdi>
+                  <span class="muted" style="font-size: 12.5px;"><bdi>4</bdi> ימים לפני השער</span>
+                </span>
+              </td>
+              <td>
+                <span class="stack">
+                  <span class="av sm c3">עב</span><button class="av sm empty" type="button" aria-label="שיבוץ אדם">+</button><span class="av sm empty"></span>
+                </span>
+              </td>
+              <td>
+                <span style="display: inline-flex; flex-direction: column; align-items: flex-start;">
+                  <span class="pill warn"><bdi>1/3</bdi></span>
+                  <span class="muted" style="font-size: 12px;">חסרים <bdi>2</bdi></span>
+                </span>
+              </td>
+              <td><span class="dim">—</span></td>
+              <td class="w0">
+                <span class="rowact">
+                  <button class="btn ghost sm icon" type="button" aria-label="שיבוץ">[[i:userplus:15]]</button>
+                  <button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button>
+                </span>
+              </td>
+            </tr>
+
+            <tr>
+              <td>
+                <span style="display: flex; flex-direction: column;">
+                  <b style="font-weight: 600;">פירוק ו־<bdi>MOOP</bdi></b>
+                  <span class="muted" style="font-size: 12.5px;">משימת הקמה</span>
+                </span>
+              </td>
+              <td>
+                <span style="display: flex; flex-direction: column;">
+                  <bdi>30/10</bdi>
+                  <span class="muted" style="font-size: 12.5px;"><bdi>8</bdi> ימים אחרי השער</span>
+                </span>
+              </td>
+              <td>
+                <span style="display: inline-flex; align-items: center; gap: 6px;">
+                  <span class="stack">
+                    <button class="av sm empty" type="button" aria-label="שיבוץ אדם">+</button><span class="av sm empty"></span><span class="av sm empty"></span><span class="av sm empty"></span><span class="av sm empty"></span>
+                  </span>
+                  <span class="muted" style="font-size: 12px;">+<bdi>1</bdi></span>
+                </span>
+              </td>
+              <td>
+                <span style="display: inline-flex; flex-direction: column; align-items: flex-start;">
+                  <span class="pill bad"><bdi>0/6</bdi></span>
+                  <span class="muted" style="font-size: 12px;">חסרים <bdi>6</bdi></span>
+                </span>
+              </td>
+              <td><span class="dim">—</span></td>
+              <td class="w0">
+                <span class="rowact">
+                  <button class="btn ghost sm icon" type="button" aria-label="שיבוץ">[[i:userplus:15]]</button>
+                  <button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button>
+                </span>
+              </td>
+            </tr>
+
+            <tr class="grouprow"><td colspan="6">משמרות · <bdi>4</bdi></td></tr>
+
+            <tr>
+              <td>
+                <span style="display: flex; flex-direction: column;">
+                  <b style="font-weight: 600;">משמרת בר — חמישי</b>
+                  <span class="muted" style="font-size: 12.5px;">משמרת · <bdi>4</bdi> שעות</span>
+                </span>
+              </td>
+              <td>
+                <span style="display: flex; flex-direction: column;">
+                  <bdi>22:00–02:00</bdi>
+                  <span class="muted" style="font-size: 12.5px;"><bdi>23/10</bdi></span>
+                </span>
+              </td>
+              <td>
+                <span class="stack">
+                  <span class="av sm c4">מפ</span><span class="av sm c5">גב</span><button class="av sm empty" type="button" aria-label="שיבוץ אדם">+</button><span class="av sm empty"></span>
+                </span>
+              </td>
+              <td>
+                <span style="display: inline-flex; flex-direction: column; align-items: flex-start;">
+                  <span class="pill warn"><bdi>2/4</bdi></span>
+                  <span class="muted" style="font-size: 12px;">חסרים <bdi>2</bdi></span>
+                </span>
+              </td>
+              <td><span class="dim">—</span></td>
+              <td class="w0">
+                <span class="rowact">
+                  <button class="btn ghost sm icon" type="button" aria-label="שיבוץ">[[i:userplus:15]]</button>
+                  <button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button>
+                </span>
+              </td>
+            </tr>
+
+            <tr>
+              <td>
+                <span style="display: flex; flex-direction: column;">
+                  <b style="font-weight: 600;">משמרת בר — שישי</b>
+                  <span class="muted" style="font-size: 12.5px;">משמרת · <bdi>4</bdi> שעות</span>
+                </span>
+              </td>
+              <td>
+                <span style="display: flex; flex-direction: column;">
+                  <bdi>22:00–02:00</bdi>
+                  <span class="muted" style="font-size: 12.5px;"><bdi>24/10</bdi></span>
+                </span>
+              </td>
+              <td>
+                <span class="stack">
+                  <span class="av sm c6">הנ</span><span class="av sm c2">אכ</span><span class="av sm c4">מר</span><span class="av sm c1">נל</span>
+                </span>
+              </td>
+              <td><span class="pill ok"><bdi>4/4</bdi></span></td>
+              <td><span class="dim">—</span></td>
+              <td class="w0">
+                <span class="rowact">
+                  <button class="btn ghost sm icon" type="button" aria-label="שיבוץ">[[i:userplus:15]]</button>
+                  <button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button>
+                </span>
+              </td>
+            </tr>
+
+            <tr>
+              <td>
+                <span style="display: flex; flex-direction: column;">
+                  <b style="font-weight: 600;">משמרת שקט — שבת</b>
+                  <span class="muted" style="font-size: 12.5px;">משמרת · <bdi>4</bdi> שעות</span>
+                </span>
+              </td>
+              <td>
+                <span style="display: flex; flex-direction: column;">
+                  <bdi>14:00–18:00</bdi>
+                  <span class="muted" style="font-size: 12.5px;"><bdi>25/10</bdi></span>
+                </span>
+              </td>
+              <td>
+                <span class="stack">
+                  <span class="av sm c3">שא</span><button class="av sm empty" type="button" aria-label="שיבוץ אדם">+</button>
+                </span>
+              </td>
+              <td>
+                <span style="display: inline-flex; flex-direction: column; align-items: flex-start;">
+                  <span class="pill warn"><bdi>1/2</bdi></span>
+                  <span class="muted" style="font-size: 12px;">חסרים <bdi>1</bdi></span>
+                </span>
+              </td>
+              <td><span class="dim">—</span></td>
+              <td class="w0">
+                <span class="rowact">
+                  <button class="btn ghost sm icon" type="button" aria-label="שיבוץ">[[i:userplus:15]]</button>
+                  <button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button>
+                </span>
+              </td>
+            </tr>
+
+            <tr>
+              <td>
+                <span style="display: flex; flex-direction: column;">
+                  <b style="font-weight: 600;">מסיבת גיוס — דלת</b>
+                  <span class="muted" style="font-size: 12.5px;">משימה באירוע · מסיבת אוקטובר</span>
+                </span>
+              </td>
+              <td>
+                <span style="display: flex; flex-direction: column;">
+                  <bdi>04/10</bdi>
+                  <span class="muted" style="font-size: 12.5px;"><bdi>18</bdi> ימים לפני השער</span>
+                </span>
+              </td>
+              <td>
+                <span class="stack">
+                  <button class="av sm empty" type="button" aria-label="שיבוץ אדם">+</button><span class="av sm empty"></span>
+                </span>
+              </td>
+              <td>
+                <span style="display: inline-flex; flex-direction: column; align-items: flex-start;">
+                  <span class="pill bad"><bdi>0/2</bdi></span>
+                  <span class="muted" style="font-size: 12px;">חסרים <bdi>2</bdi></span>
+                </span>
+              </td>
+              <td><span class="dim">—</span></td>
+              <td class="w0">
+                <span class="rowact">
+                  <button class="btn ghost sm icon" type="button" aria-label="שיבוץ">[[i:userplus:15]]</button>
+                  <button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button>
+                </span>
+              </td>
+            </tr>
+
+            <tr class="grouprow"><td colspan="6">אחריות תקציבית · <bdi>3</bdi></td></tr>
+
+            <tr>
+              <td>
+                <span style="display: flex; flex-direction: column;">
+                  <b style="font-weight: 600;">גנרטור וחשמל</b>
+                  <span class="muted" style="font-size: 12.5px;">אחריות על סעיף תקציב</span>
+                </span>
+              </td>
+              <td>
+                <span style="display: flex; flex-direction: column;">
+                  <bdi>10/10</bdi>
+                  <span class="muted" style="font-size: 12.5px;"><bdi>12</bdi> ימים לפני השער</span>
+                </span>
+              </td>
+              <td>
+                <span class="stack"><span class="av sm c1">רא</span></span>
+              </td>
+              <td><span class="pill ok"><bdi>1/1</bdi></span></td>
+              <td>
+                <span style="display: flex; flex-direction: column;">
+                  <bdi style="font-weight: 500;">41,300 ₪</bdi>
+                  <span class="muted" style="font-size: 12.5px;"><a class="link" href="Money.dc.html">גנרטור וחשמל</a></span>
+                </span>
+              </td>
+              <td class="w0">
+                <span class="rowact">
+                  <button class="btn ghost sm icon" type="button" aria-label="שיבוץ">[[i:userplus:15]]</button>
+                  <button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button>
+                </span>
+              </td>
+            </tr>
+
+            <tr>
+              <td>
+                <span style="display: flex; flex-direction: column;">
+                  <b style="font-weight: 600;">מטבח — קניות</b>
+                  <span class="muted" style="font-size: 12.5px;">אחריות על סעיף תקציב</span>
+                </span>
+              </td>
+              <td>
+                <span style="display: flex; flex-direction: column;">
+                  <bdi>19/10</bdi>
+                  <span class="muted" style="font-size: 12.5px;"><bdi>3</bdi> ימים לפני השער</span>
+                </span>
+              </td>
+              <td>
+                <span class="stack"><span class="av sm c4">מר</span></span>
+              </td>
+              <td><span class="pill ok"><bdi>1/1</bdi></span></td>
+              <td>
+                <span style="display: flex; flex-direction: column;">
+                  <bdi style="font-weight: 500;">8,400 ₪</bdi>
+                  <span class="muted" style="font-size: 12.5px;"><a class="link" href="Money.dc.html">מטבח ואוכל</a></span>
+                </span>
+              </td>
+              <td class="w0">
+                <span class="rowact">
+                  <button class="btn ghost sm icon" type="button" aria-label="שיבוץ">[[i:userplus:15]]</button>
+                  <button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button>
+                </span>
+              </td>
+            </tr>
+
+            <tr>
+              <td>
+                <span style="display: flex; flex-direction: column;">
+                  <b style="font-weight: 600;">סאונד רחבה</b>
+                  <span class="muted" style="font-size: 12.5px;">אחריות על סעיף תקציב</span>
+                </span>
+              </td>
+              <td><span class="muted">בלי תאריך</span></td>
+              <td>
+                <span class="stack"><span class="av sm c5">גב</span></span>
+              </td>
+              <td><span class="pill ok"><bdi>1/1</bdi></span></td>
+              <td>
+                <span style="display: flex; flex-direction: column;">
+                  <bdi style="font-weight: 500;">12,000 ₪</bdi>
+                  <span class="muted" style="font-size: 12.5px;"><a class="link" href="Money.dc.html">סאונד והפקה</a></span>
+                </span>
+              </td>
+              <td class="w0">
+                <span class="rowact">
+                  <button class="btn ghost sm icon" type="button" aria-label="שיבוץ">[[i:userplus:15]]</button>
+                  <button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button>
+                </span>
+              </td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td><bdi>10</bdi> משימות</td>
+              <td class="muted" style="font-weight: 500;">מהן <bdi>1</bdi> בלי תאריך</td>
+              <td></td>
+              <td><bdi>16/32</bdi> מקומות</td>
+              <td><bdi>61,700 ₪</bdi></td>
+              <td class="w0"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div class="pop" style="bottom: 150px; inset-inline-start: 300px; width: 320px;">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line);">
+          [[i:search:15]]
+          <span style="flex: 1; color: var(--ink-3);">חיפוש חבר…</span>
+          <span class="kbd">esc</span>
+        </div>
+        <div style="padding: 4px 0;">
+          <div class="menusect">מומלצים — לא משובצים לשום משימה</div>
+          <button class="menuitem active" type="button" style="width: 100%; border: 0; background: transparent; text-align: start;">
+            <span class="check on">[[i:check:12]]</span>
+            <span class="av sm c2">נל</span>
+            <span>נועה לוי</span>
+            <span class="mi-meta">בברן 26 · <bdi>0</bdi> משימות</span>
+          </button>
+          <button class="menuitem active" type="button" style="width: 100%; border: 0; background: transparent; text-align: start;">
+            <span class="check on">[[i:check:12]]</span>
+            <span class="av sm c6">אכ</span>
+            <span>איתי כהן</span>
+            <span class="mi-meta">בברן 26 · <bdi>0</bdi> משימות</span>
+          </button>
+          <div class="menusect">עוד מהקאמפ</div>
+          <button class="menuitem" type="button" style="width: 100%; border: 0; background: transparent; text-align: start;">
+            <span class="check"></span>
+            <span class="av sm c1">רא</span>
+            <span>רוני אדלר</span>
+            <span class="mi-meta">כבר ב־<bdi>2</bdi> משימות</span>
+          </button>
+          <div class="divider"></div>
+          <button class="menuitem" type="button" style="width: 100%; border: 0; background: transparent; text-align: start;">
+            [[i:userplus:15]]
+            <span>אדם חדש</span>
+          </button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-top: 1px solid var(--line); background: var(--sunken); color: var(--ink-3); font-size: 12px;">
+          <button class="btn primary sm" type="button">שיבוץ <bdi>2</bdi></button>
+          <span style="margin-inline-start: auto;"><bdi>1</bdi>–<bdi>9</bdi> בחירה מהירה</span>
+        </div>
+      </div>
+    </div>
+  </div>
+<!--OVERLAYS-->
+</div>
+</x-dc>
+<script data-dc-script data-props='__PROPS__'>
+class Component extends DCLogic {
+/*SHELL*/
+  renderVals() {
+    return { ...this.shell() };
+  }
+}
+</script>
+</body>
+</html>

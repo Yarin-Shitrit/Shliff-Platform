@@ -1,0 +1,353 @@
+<!--meta {"file":"Inbox.dc.html","w":1440,"h":1060,"nav":"inbox","title":"לטיפול","interactive":true} -->
+<!doctype html>
+<html lang="he">
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!--HEAD-->
+<div class="app {{themeClass}}" dir="rtl" style="width: __W__px; height: __H__px;">
+<!--SIDEBAR-->
+  <div class="main">
+    <header class="topbar">
+      <div class="crumbs"><span class="here">לטיפול</span></div>
+      <span class="spacer"></span>
+      <span class="muted" style="font-size: 13px;">נוקו היום: <bdi>4</bdi></span>
+      <button class="btn sm" type="button">[[i:history:14]] מה שטופל</button>
+    </header>
+
+    <div class="page" style="gap: 14px;">
+      <div class="pagehead">
+        <div>
+          <h1>לטיפול</h1>
+          <p class="sub">המערכת לא מנחשת. כאן כל מה שהיא סירבה להכריע לבד — אתם מכריעים, היא כותבת.</p>
+        </div>
+        <div class="actions">
+          <button class="btn sm" type="button">[[i:filter:14]] הכול</button>
+          <button class="btn primary sm" type="button" disabled>[[i:check:14]] קידום כל הטבלאות <span style="font-weight: 400; opacity: .8;">— חסום עד שההחלטות ייסגרו</span></button>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab" type="button" aria-selected="true">ממתין להחלטה <span class="n"><bdi>12</bdi></span></button>
+        <button class="tab" type="button">לידיעה <span class="n"><bdi>8</bdi></span></button>
+        <button class="tab" type="button">טופלו</button>
+      </div>
+
+      <div style="display: flex; gap: 16px; flex: 1; min-height: 0;">
+        <!-- rail -->
+        <div style="width: 360px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px;">
+          <div class="seg" style="width: 100%;">
+            <button type="button" aria-pressed="true">הכול <bdi>12</bdi></button>
+            <button type="button">שמות <bdi>3</bdi></button>
+            <button type="button">גיליונות <bdi>2</bdi></button>
+            <button type="button">טבלאות <bdi>4</bdi></button>
+            <button type="button">חובות <bdi>2</bdi></button>
+          </div>
+
+          <div class="tablewrap" style="flex: 1; min-height: 0; overflow: hidden;">
+            <ul>
+              <li>
+                <button type="button" onClick="{{ selName }}" style="width: 100%; text-align: start; display: flex; gap: 10px; padding: 11px 12px; border: 0; border-bottom: 1px solid var(--line); border-inline-end: 3px solid {{nameMark}}; background: {{nameBg}}; cursor: pointer;">
+                  <span class="av sm" style="background: var(--info-soft); color: var(--info); margin-top: 2px;">[[i:link:13]]</span>
+                  <span style="flex: 1; min-width: 0;">
+                    <span style="display: block; font-weight: 600;">״נועה ל.״</span>
+                    <span class="muted" style="display: block; font-size: 12.5px;">שם מקובץ · <bdi>4</bdi> שורות · הצעה: נועה לוי</span>
+                  </span>
+                  <span class="pill info" style="align-self: center;">חזקה</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" style="width: 100%; text-align: start; display: flex; gap: 10px; padding: 11px 12px; border: 0; border-bottom: 1px solid var(--line); background: transparent; cursor: pointer;">
+                  <span class="av sm" style="background: var(--info-soft); color: var(--info); margin-top: 2px;">[[i:link:13]]</span>
+                  <span style="flex: 1; min-width: 0;">
+                    <span style="display: block; font-weight: 500;">״<bdi>Itay</bdi>״</span>
+                    <span class="muted" style="display: block; font-size: 12.5px;">שם מקובץ · <bdi>2</bdi> שורות · הצעה: איתי כהן</span>
+                  </span>
+                  <span class="pill" style="align-self: center;">אפשרית</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" style="width: 100%; text-align: start; display: flex; gap: 10px; padding: 11px 12px; border: 0; border-bottom: 1px solid var(--line); background: transparent; cursor: pointer;">
+                  <span class="av sm" style="background: var(--info-soft); color: var(--info); margin-top: 2px;">[[i:link:13]]</span>
+                  <span style="flex: 1; min-width: 0;">
+                    <span style="display: block; font-weight: 500;">״רוני ו<bdi>-</bdi>גיל״</span>
+                    <span class="muted" style="display: block; font-size: 12.5px;">שני שמות בתא אחד · <bdi>1</bdi> שורה</span>
+                  </span>
+                  <span class="pill" style="align-self: center;">פיצול</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" onClick="{{ selDup }}" style="width: 100%; text-align: start; display: flex; gap: 10px; padding: 11px 12px; border: 0; border-bottom: 1px solid var(--line); border-inline-end: 3px solid {{dupMark}}; background: {{dupBg}}; cursor: pointer;">
+                  <span class="av sm" style="background: var(--warn-soft); color: var(--warn); margin-top: 2px;">[[i:copy:13]]</span>
+                  <span style="flex: 1; min-width: 0;">
+                    <span style="display: block; font-weight: 600;">שני עותקים של ״תקציב 26״</span>
+                    <span class="muted" style="display: block; font-size: 12.5px;"><bdi>14</bdi> שורות שונות · חוסם קידום</span>
+                  </span>
+                  <span class="pill warn" style="align-self: center;">חוסם</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" style="width: 100%; text-align: start; display: flex; gap: 10px; padding: 11px 12px; border: 0; border-bottom: 1px solid var(--line); background: transparent; cursor: pointer;">
+                  <span class="av sm" style="background: var(--warn-soft); color: var(--warn); margin-top: 2px;">[[i:calendar:13]]</span>
+                  <span style="flex: 1; min-width: 0;">
+                    <span style="display: block; font-weight: 500;">לגיליון ״סיכום כללי״ אין שנה</span>
+                    <span class="muted" style="display: block; font-size: 12.5px;"><bdi>39</bdi> שורות תקציב ממתינות</span>
+                  </span>
+                  <span class="pill warn" style="align-self: center;">חוסם</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" style="width: 100%; text-align: start; display: flex; gap: 10px; padding: 11px 12px; border: 0; border-bottom: 1px solid var(--line); background: transparent; cursor: pointer;">
+                  <span class="av sm" style="background: var(--warn-soft); color: var(--warn); margin-top: 2px;">[[i:calendar:13]]</span>
+                  <span style="flex: 1; min-width: 0;">
+                    <span style="display: block; font-weight: 500;">לגיליון ״מסיבת פורים״ אין שנה</span>
+                    <span class="muted" style="display: block; font-size: 12.5px;"><bdi>12</bdi> תנועות ממתינות</span>
+                  </span>
+                  <span class="pill warn" style="align-self: center;">חוסם</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" style="width: 100%; text-align: start; display: flex; gap: 10px; padding: 11px 12px; border: 0; border-bottom: 1px solid var(--line); background: transparent; cursor: pointer;">
+                  <span class="av sm" style="background: var(--brand-soft); color: var(--brand-text); margin-top: 2px;">[[i:layers:13]]</span>
+                  <span style="flex: 1; min-width: 0;">
+                    <span style="display: block; font-weight: 500;">״סבבי כרטיסים״ — אישור סיווג</span>
+                    <span class="muted" style="display: block; font-size: 12.5px;">זוהה מפריסה מוכרת משנה שעברה</span>
+                  </span>
+                  <span class="pill brand" style="align-self: center;">סיווג</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" style="width: 100%; text-align: start; display: flex; gap: 10px; padding: 11px 12px; border: 0; border-bottom: 1px solid var(--line); background: transparent; cursor: pointer;">
+                  <span class="av sm" style="background: var(--brand-soft); color: var(--brand-text); margin-top: 2px;">[[i:layers:13]]</span>
+                  <span style="flex: 1; min-width: 0;">
+                    <span style="display: block; font-weight: 500;">טבלה בלי סיווג — <bdi>גיליון2!A3:F44</bdi></span>
+                    <span class="muted" style="display: block; font-size: 12.5px;">דורש בדיקה · <bdi>41</bdi> שורות</span>
+                  </span>
+                  <span class="pill brand" style="align-self: center;">סיווג</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" style="width: 100%; text-align: start; display: flex; gap: 10px; padding: 11px 12px; border: 0; background: transparent; cursor: pointer;">
+                  <span class="av sm" style="background: var(--bad-soft); color: var(--bad); margin-top: 2px;">[[i:scale:13]]</span>
+                  <span style="flex: 1; min-width: 0;">
+                    <span style="display: block; font-weight: 500;">חוב בלי שם — <bdi>540 ₪</bdi></span>
+                    <span class="muted" style="display: block; font-size: 12.5px;">אי אפשר לסגור עד שיירשם למי</span>
+                  </span>
+                  <span class="pill bad" style="align-self: center;">שם</span>
+                </button>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- detail -->
+        <div class="card" style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+          <sc-if value="{{ isName }}" hint-placeholder-val="{{ true }}">
+            <div style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
+              <div class="card-h" style="gap: 10px;">
+                <h2 style="font-size: 17px;">״נועה ל.״</h2>
+                <span class="pill info">שם מקובץ שלא שויך</span>
+                <span class="muted" style="font-size: 12.5px;">מופיע ב־<bdi>4</bdi> שורות</span>
+                <span class="more" style="display: flex; gap: 6px; align-items: center;">
+                  <span class="muted" style="font-size: 12.5px;"><bdi>1</bdi> מתוך <bdi>12</bdi></span>
+                  <button class="btn ghost sm icon" type="button" aria-label="הקודם">[[i:up:15]]</button>
+                  <button class="btn ghost sm icon" type="button" aria-label="הבא">[[i:down:15]]</button>
+                </span>
+              </div>
+
+              <div style="padding: 16px 18px; display: flex; flex-direction: column; gap: 16px; flex: 1; min-height: 0;">
+                <section>
+                  <div class="sectitle" style="margin-bottom: 8px;">
+                    [[i:grid:15]] איפה זה מופיע
+                    <span class="src more">קופת קאמפ 2026 › דמי קאמפ › <bdi>B14</bdi></span>
+                  </div>
+                  <div class="tablewrap">
+                    <table class="tbl" style="font-size: 13px;">
+                      <thead>
+                        <tr>
+                          <th class="w0" style="text-align: center; width: 34px;"></th>
+                          <th style="width: 44px; text-align: center;"><bdi>A</bdi></th>
+                          <th><bdi>B</bdi></th>
+                          <th><bdi>C</bdi></th>
+                          <th><bdi>D</bdi></th>
+                          <th><bdi>E</bdi></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr><td class="muted" style="text-align: center;"><bdi>12</bdi></td><td style="text-align: center;"><bdi>9</bdi></td><td>יונתן מזרחי</td><td class="n"><bdi>1,200</bdi></td><td>ביט</td><td><bdi>12/06/26</bdi></td></tr>
+                        <tr><td class="muted" style="text-align: center;"><bdi>13</bdi></td><td style="text-align: center;"><bdi>10</bdi></td><td>מאיה פרץ</td><td class="n"><bdi>600</bdi></td><td>מזומן</td><td><bdi>14/06/26</bdi></td></tr>
+                        <tr style="background: var(--brand-soft);">
+                          <td class="muted" style="text-align: center;"><bdi>14</bdi></td>
+                          <td style="text-align: center;"><bdi>11</bdi></td>
+                          <td style="font-weight: 600; box-shadow: inset 0 0 0 2px var(--brand); border-radius: 4px;">נועה ל.</td>
+                          <td class="n"><bdi>1,200</bdi></td><td>העברה</td><td><bdi>18/06/26</bdi></td>
+                        </tr>
+                        <tr><td class="muted" style="text-align: center;"><bdi>15</bdi></td><td style="text-align: center;"><bdi>12</bdi></td><td>עומר ביטון</td><td class="n"><bdi>500</bdi></td><td>פייבוקס</td><td><bdi>21/06/26</bdi></td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <p class="muted" style="font-size: 12.5px; margin-top: 6px;">אותו שם מופיע גם ב<bdi>-</bdi><a class="link" href="Files.dc.html"><bdi>3</bdi> שורות נוספות</a> — קישור אחד יטפל בכולן.</p>
+                </section>
+
+                <section>
+                  <div class="sectitle" style="margin-bottom: 8px;">[[i:users:15]] למי זה מתאים</div>
+                  <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--panel);">
+                      <span class="av c3">נל</span>
+                      <span style="flex: 1; min-width: 0;">
+                        <span style="display: flex; align-items: center; gap: 8px;">
+                          <b style="font-weight: 600;">נועה לוי</b>
+                          <span class="pill outline">ראש/ת צוות</span>
+                          <span class="pill ok">התאמה חזקה</span>
+                        </span>
+                        <span style="display: flex; gap: 6px; margin-top: 5px;">
+                          <span class="pill">שם פרטי זהה</span>
+                          <span class="pill">האות הראשונה של שם המשפחה</span>
+                          <span class="pill">ברשימת ברן 26</span>
+                          <span class="pill">שילמה <bdi>1,200 ₪</bdi> באותו תאריך</span>
+                        </span>
+                      </span>
+                      <button class="btn primary" type="button">קישור <span class="kbd" style="background: transparent; border-color: rgba(28,25,23,.25);"><bdi>1</bdi></span></button>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px;">
+                      <span class="av c6">נל</span>
+                      <span style="flex: 1; min-width: 0;">
+                        <span style="display: flex; align-items: center; gap: 8px;">
+                          <b style="font-weight: 500;">נועה ליבוביץ</b>
+                          <span class="muted" style="font-size: 12.5px;">ברן 23, ברן 24</span>
+                          <span class="pill">התאמה חלשה</span>
+                        </span>
+                        <span style="display: flex; gap: 6px; margin-top: 5px;">
+                          <span class="pill">שם פרטי זהה</span>
+                          <span class="pill">לא ברשימת ברן 26</span>
+                        </span>
+                      </span>
+                      <button class="btn" type="button">קישור <span class="kbd"><bdi>2</bdi></span></button>
+                    </div>
+                  </div>
+                </section>
+
+                <section>
+                  <div class="sectitle" style="margin-bottom: 8px;">[[i:sliders:15]] אפשרויות אחרות</div>
+                  <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button class="btn sm" type="button">[[i:search:14]] חיפוש אדם אחר</button>
+                    <button class="btn sm" type="button">[[i:userplus:14]] יצירת אדם חדש <span class="kbd"><bdi>3</bdi></span></button>
+                    <button class="btn sm" type="button">[[i:split:14]] פיצול לשני שמות</button>
+                    <button class="btn sm" type="button">[[i:ban:14]] לא אדם — התעלמות <span class="kbd"><bdi>4</bdi></span></button>
+                    <button class="btn sm" type="button">[[i:clock:14]] דחייה לשבוע <span class="kbd"><bdi>5</bdi></span></button>
+                  </div>
+                </section>
+
+                <div class="banner neutral" style="margin-top: auto;">
+                  <span class="ic">[[i:info:16]]</span>
+                  <span class="t" style="font-size: 13px;">קישור אינו מיזוג: הוא מצמיד את האיות הזה לאדם קיים ואפשר לבטל אותו. מיזוג של שני אנשים נעשה מדף האדם, ואינו הפיך.</span>
+                </div>
+              </div>
+
+              <div class="drawer-f" style="align-items: center;">
+                <span class="muted" style="font-size: 12.5px;">אחרי כל החלטה הפריט הבא נפתח מעצמו · <bdi>1</bdi>–<bdi>5</bdi> פעולה · ↑↓ מעבר · <bdi>Z</bdi> ביטול</span>
+                <span class="grow"></span>
+                <span class="muted" style="font-size: 12.5px;">נשארו <bdi>11</bdi></span>
+                <button class="btn sm" type="button">דילוג [[i:arrowl:14]]</button>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isDup }}" hint-placeholder-val="{{ false }}">
+            <div style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
+              <div class="card-h" style="gap: 10px;">
+                <h2 style="font-size: 17px;">שני עותקים של ״תקציב 26״</h2>
+                <span class="pill warn">חוסם קידום</span>
+                <span class="more muted" style="font-size: 12.5px;"><bdi>4</bdi> מתוך <bdi>12</bdi></span>
+              </div>
+
+              <div style="padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; flex: 1; min-height: 0;">
+                <p class="muted" style="font-size: 13.5px;">אותו גיליון נמצא בשני קבצים ו<bdi>-</bdi><bdi>14</bdi> שורות שונות ביניהם. אף שורה לא תיכתב עד שתבחרו עותק מוסמך אחד.</p>
+
+                <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; flex: 1; min-height: 0;">
+                  <div style="border: 2px solid var(--brand); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden;">
+                    <div style="padding: 10px 14px; background: var(--brand-soft); display: flex; align-items: center; gap: 8px;">
+                      <span style="font-weight: 600;">קופת קאמפ 2026.xlsx</span>
+                      <span class="pill brand">מומלץ — חדש יותר</span>
+                      <span class="muted more" style="font-size: 12px;">הועלה <bdi>12/09/26</bdi></span>
+                    </div>
+                    <table class="tbl" style="font-size: 13px;">
+                      <thead><tr><th>סעיף</th><th class="n">סה״כ</th></tr></thead>
+                      <tbody>
+                        <tr><td>שכירות גנרטור</td><td class="n" style="background: var(--ok-soft); color: var(--ok); font-weight: 600;"><bdi>41,300</bdi></td></tr>
+                        <tr><td>צל ומבנה</td><td class="n" style="background: var(--ok-soft); color: var(--ok); font-weight: 600;"><bdi>18,600</bdi></td></tr>
+                        <tr><td>מטבח ואוכל</td><td class="n"><bdi>8,400</bdi></td></tr>
+                        <tr><td>מים וקרח</td><td class="n" style="background: var(--ok-soft); color: var(--ok); font-weight: 600;"><bdi>6,200</bdi></td></tr>
+                        <tr><td>סאונד רחבה</td><td class="n"><bdi>12,000</bdi></td></tr>
+                        <tr><td style="background: var(--ok-soft); color: var(--ok); font-weight: 600;">ביטוח ואישורים</td><td class="n" style="background: var(--ok-soft); color: var(--ok); font-weight: 600;"><bdi>3,875</bdi></td></tr>
+                      </tbody>
+                      <tfoot><tr><td><bdi>26</bdi> סעיפים</td><td class="n"><bdi>64,375.30</bdi></td></tr></tfoot>
+                    </table>
+                    <div style="margin-top: auto; padding: 10px 14px; border-top: 1px solid var(--line);">
+                      <button class="btn primary sm" type="button" style="width: 100%;">[[i:check:14]] בחירת העותק הזה כמוסמך</button>
+                    </div>
+                  </div>
+
+                  <div style="border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden;">
+                    <div style="padding: 10px 14px; background: var(--sunken); display: flex; align-items: center; gap: 8px;">
+                      <span style="font-weight: 600;">קופת קאמפ 25׳.xlsx</span>
+                      <span class="muted more" style="font-size: 12px;">הועלה <bdi>03/05/26</bdi></span>
+                    </div>
+                    <table class="tbl" style="font-size: 13px;">
+                      <thead><tr><th>סעיף</th><th class="n">סה״כ</th></tr></thead>
+                      <tbody>
+                        <tr><td>שכירות גנרטור</td><td class="n" style="color: var(--bad); text-decoration: line-through;"><bdi>38,000</bdi></td></tr>
+                        <tr><td>צל ומבנה</td><td class="n" style="color: var(--bad); text-decoration: line-through;"><bdi>17,400</bdi></td></tr>
+                        <tr><td>מטבח ואוכל</td><td class="n"><bdi>8,400</bdi></td></tr>
+                        <tr><td>מים וקרח</td><td class="n" style="color: var(--bad); text-decoration: line-through;"><bdi>5,800</bdi></td></tr>
+                        <tr><td>סאונד רחבה</td><td class="n"><bdi>12,000</bdi></td></tr>
+                        <tr><td class="dim">— אין את השורה הזו —</td><td class="n dim">—</td></tr>
+                      </tbody>
+                      <tfoot><tr><td><bdi>25</bdi> סעיפים</td><td class="n"><bdi>60,200.30</bdi></td></tr></tfoot>
+                    </table>
+                    <div style="margin-top: auto; padding: 10px 14px; border-top: 1px solid var(--line);">
+                      <button class="btn sm" type="button" style="width: 100%;">בחירת העותק הזה כמוסמך</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="banner neutral">
+                  <span class="ic">[[i:info:16]]</span>
+                  <span class="t" style="font-size: 13px;">מוצגות <bdi>6</bdi> מתוך <bdi>14</bdi> השורות השונות.</span>
+                  <button class="btn sm" type="button">הצגת כל ההבדלים</button>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+  </div>
+<!--OVERLAYS-->
+</div>
+</x-dc>
+<script data-dc-script data-props='__PROPS__'>
+class Component extends DCLogic {
+/*SHELL*/
+  renderVals() {
+    const sel = (this.state && this.state.sel) || 'name';
+    return {
+      ...this.shell(),
+      isName: sel === 'name',
+      isDup: sel === 'dup',
+      nameMark: sel === 'name' ? 'var(--brand)' : 'transparent',
+      nameBg: sel === 'name' ? 'var(--selected)' : 'transparent',
+      dupMark: sel === 'dup' ? 'var(--brand)' : 'transparent',
+      dupBg: sel === 'dup' ? 'var(--selected)' : 'transparent',
+      selName: () => this.setState({ sel: 'name' }),
+      selDup: () => this.setState({ sel: 'dup' }),
+    };
+  }
+}
+</script>
+</body>
+</html>

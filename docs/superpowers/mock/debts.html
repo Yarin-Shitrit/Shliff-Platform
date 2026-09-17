@@ -1,0 +1,387 @@
+<!--meta {"file": "Debts.dc.html", "w": 1440, "h": 1000, "nav": "debts", "title": "חובות", "interactive": true} -->
+<!doctype html>
+<html lang="he">
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!--HEAD-->
+<div class="app {{themeClass}}" dir="rtl" style="width: __W__px; height: __H__px;">
+<!--SIDEBAR-->
+  <div class="main">
+    <header class="topbar">
+      <div class="crumbs"><span class="here">חובות</span></div>
+      <span class="scopechip">[[i:calendar:14]] ברן 26</span>
+      <span class="spacer"></span>
+      <button class="btn ghost sm icon" type="button" aria-label="היסטוריית שינויים">[[i:history:16]]</button>
+      <a class="btn ghost sm" href="Ledger.dc.html">[[i:ledger:14]] יומן</a>
+    </header>
+
+    <div class="page">
+      <div class="pagehead">
+        <div>
+          <h1>חובות</h1>
+          <p class="sub">מה הקאמפ חייב, ומה חייבים לו. חוב נסגר במזומן או בקיזוז מול דמי קאמפ.</p>
+        </div>
+        <div class="actions">
+          <button class="btn sm" type="button">[[i:download:14]] ייצוא</button>
+          <button class="btn primary sm" type="button">[[i:plus:14]] חוב חדש</button>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+        <div class="card stat">
+          <span class="k">[[i:scale:14]] אנחנו חייבים</span>
+          <span class="v"><bdi>6,864 ₪</bdi></span>
+          <span class="d"><bdi>12</bdi> חובות פתוחים · <bdi>2</bdi> מהם בלי שם</span>
+        </div>
+        <div class="card stat">
+          <span class="k">[[i:in:14]] חייבים לנו</span>
+          <span class="v"><bdi>2,350 ₪</bdi></span>
+          <span class="d"><bdi>3</bdi> חובות פתוחים</span>
+        </div>
+        <div class="card stat">
+          <span class="k">[[i:merge:14]] נסגר בקיזוז השנה</span>
+          <span class="v"><bdi>14,330 ₪</bdi></span>
+          <span class="d"><bdi>5</bdi> קיזוזים מול דמי קאמפ · לא עברו דרך אף קופה</span>
+        </div>
+      </div>
+
+      <div class="banner" style="background: var(--bad-soft); border-color: transparent;">
+        <span class="ic" style="color: var(--bad);">[[i:alert:16]]</span>
+        <span class="t"><b style="font-weight: 600;"><bdi>2</bdi> חובות בלי שם — <bdi>740 ₪</bdi>.</b> הקאמפ חייב את הכסף ולא יודע למי. אי אפשר לסגור אותם עד שיירשם שם, והם לא ייעלמו מכאן.</span>
+        <a class="btn sm" href="Inbox.dc.html">הוספת שם</a>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div class="seg">
+          <button type="button" aria-pressed="true">אנחנו חייבים <bdi>12</bdi></button>
+          <button type="button" aria-pressed="false">חייבים לנו <bdi>3</bdi></button>
+          <button type="button" aria-pressed="false">נסגרו <bdi>9</bdi></button>
+        </div>
+        <span class="muted" style="margin-inline-start: auto; font-size: 13px;">מוצגות <bdi>9</bdi> מתוך <bdi>12</bdi></span>
+      </div>
+
+      <div class="tablewrap" style="flex: 1; min-height: 0;">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>למי</th>
+              <th>על מה</th>
+              <th>מתי</th>
+              <th class="n">סכום</th>
+              <th>קוזז עד כה</th>
+              <th class="n">נותר</th>
+              <th>מקור</th>
+              <th class="w0"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <span class="namecell">
+                  <span class="av sm c1">רא</span>
+                  <a class="nm" href="Person.dc.html">רוני אדלר</a>
+                </span>
+              </td>
+              <td>מקדמה לגנרטור ששולמה מכיסה</td>
+              <td class="muted"><bdi>02/07/26</bdi></td>
+              <td class="n"><bdi>15,240 ₪</bdi></td>
+              <td>
+                <span style="display: flex; align-items: center; gap: 8px;">
+                  <span class="meter" aria-hidden="true"><i style="width: 94%;"></i></span>
+                  <span class="muted" style="font-size: 12px;"><bdi>14,330</bdi> מתוך <bdi>15,240</bdi></span>
+                </span>
+              </td>
+              <td class="n"><bdi>910 ₪</bdi></td>
+              <td><span class="src"><bdi>קופה 25!D31</bdi></span></td>
+              <td class="w0">
+                <span class="rowact show">
+                  <button class="btn sm" type="button">סגירה</button>
+                  <button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button>
+                </span>
+              </td>
+            </tr>
+
+            <tr>
+              <td>
+                <span class="namecell">
+                  <span class="av sm c3">נל</span>
+                  <a class="nm" href="Person.dc.html">נועה לוי</a>
+                </span>
+              </td>
+              <td>קניות למטבח</td>
+              <td class="muted"><bdi>28/06/26</bdi></td>
+              <td class="n"><bdi>1,240 ₪</bdi></td>
+              <td class="dim">—</td>
+              <td class="n"><bdi>1,240 ₪</bdi></td>
+              <td><span class="src"><bdi>קופה 25!D18</bdi></span></td>
+              <td class="w0">
+                <span class="rowact show">
+                  <button class="btn sm" type="button">סגירה</button>
+                  <button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button>
+                </span>
+              </td>
+            </tr>
+
+            <tr>
+              <td>
+                <span class="namecell">
+                  <span class="av sm c2">אכ</span>
+                  <a class="nm" href="Person.dc.html">איתי כהן</a>
+                </span>
+              </td>
+              <td>דלק להובלה</td>
+              <td class="muted"><bdi>14/07/26</bdi></td>
+              <td class="n"><bdi>1,180 ₪</bdi></td>
+              <td class="dim">—</td>
+              <td class="n"><bdi>1,180 ₪</bdi></td>
+              <td><span class="src"><bdi>קופה 25!D22</bdi></span></td>
+              <td class="w0">
+                <span class="rowact show">
+                  <button class="btn sm" type="button">סגירה</button>
+                  <button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button>
+                </span>
+              </td>
+            </tr>
+
+            <tr>
+              <td>
+                <span class="namecell">
+                  <span class="av sm c4">מפ</span>
+                  <a class="nm" href="Person.dc.html">מאיה פרץ</a>
+                </span>
+              </td>
+              <td>ציוד לרחבה</td>
+              <td class="muted"><bdi>19/07/26</bdi></td>
+              <td class="n"><bdi>860 ₪</bdi></td>
+              <td>
+                <span style="display: flex; align-items: center; gap: 8px;">
+                  <span class="meter" aria-hidden="true"><i style="width: 35%;"></i></span>
+                  <span class="muted" style="font-size: 12px;"><bdi>300</bdi> מתוך <bdi>860</bdi></span>
+                </span>
+              </td>
+              <td class="n"><bdi>560 ₪</bdi></td>
+              <td><span class="src"><bdi>הוצאות 26!B7</bdi></span></td>
+              <td class="w0">
+                <span class="rowact show">
+                  <button class="btn sm" type="button">סגירה</button>
+                  <button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button>
+                </span>
+              </td>
+            </tr>
+
+            <tr>
+              <td>
+                <span class="namecell">
+                  <span class="av sm c3">עב</span>
+                  <a class="nm" href="Person.dc.html">עומר ביטון</a>
+                </span>
+              </td>
+              <td>שילוט ועיצוב</td>
+              <td class="muted"><bdi>05/08/26</bdi></td>
+              <td class="n"><bdi>740 ₪</bdi></td>
+              <td class="dim">—</td>
+              <td class="n"><bdi>740 ₪</bdi></td>
+              <td><span class="src manual">נרשם ידנית</span></td>
+              <td class="w0">
+                <span class="rowact show">
+                  <button class="btn sm" type="button">סגירה</button>
+                  <button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button>
+                </span>
+              </td>
+            </tr>
+
+            <tr>
+              <td>
+                <span class="namecell">
+                  <span class="av sm c5">שא</span>
+                  <a class="nm" href="Person.dc.html">שירה אברהם</a>
+                </span>
+              </td>
+              <td>כיבוד לערב ההכנה</td>
+              <td class="muted"><bdi>22/08/26</bdi></td>
+              <td class="n"><bdi>620 ₪</bdi></td>
+              <td class="dim">—</td>
+              <td class="n"><bdi>620 ₪</bdi></td>
+              <td><span class="src manual">נרשם ידנית</span></td>
+              <td class="w0">
+                <span class="rowact show">
+                  <button class="btn sm" type="button">סגירה</button>
+                  <button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button>
+                </span>
+              </td>
+            </tr>
+
+            <tr>
+              <td>
+                <span class="namecell">
+                  <span class="av sm c6">תג</span>
+                  <a class="nm" href="Person.dc.html">תמר גולן</a>
+                </span>
+              </td>
+              <td>החזר על שכירות מקררים</td>
+              <td>
+                <span class="muted" style="display: block; white-space: normal; font-size: 12px; line-height: 1.3; max-width: 112px;">בגיליון אין תאריך לחוב הזה</span>
+              </td>
+              <td class="n"><bdi>180 ₪</bdi></td>
+              <td class="dim">—</td>
+              <td class="n"><bdi>180 ₪</bdi></td>
+              <td><span class="src"><bdi>קופה 25!D39</bdi></span></td>
+              <td class="w0">
+                <span class="rowact show">
+                  <button class="btn sm" type="button">סגירה</button>
+                  <button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button>
+                </span>
+              </td>
+            </tr>
+
+            <tr>
+              <td>
+                <span class="namecell">
+                  <span class="av sm empty">[[i:user:12]]</span>
+                  <span>
+                    <span class="pill bad">[[i:alert:12]] חסר שם</span>
+                    <span class="al" style="display: block;">מהגיליון: ״החזר לנהג המשאית״</span>
+                  </span>
+                </span>
+              </td>
+              <td class="muted">לא נרשם על מה</td>
+              <td class="muted"><bdi>11/07/26</bdi></td>
+              <td class="n"><bdi>540 ₪</bdi></td>
+              <td class="dim">—</td>
+              <td class="n"><bdi>540 ₪</bdi></td>
+              <td><span class="src"><bdi>קופה 25!D44</bdi></span></td>
+              <td class="w0">
+                <span class="rowact show">
+                  <button class="btn sm" type="button" disabled>סגירה</button>
+                  <button class="btn sm" type="button">הוספת שם</button>
+                  <button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button>
+                </span>
+              </td>
+            </tr>
+
+            <tr>
+              <td>
+                <span class="namecell">
+                  <span class="av sm empty">[[i:user:12]]</span>
+                  <span>
+                    <span class="pill bad">[[i:alert:12]] חסר שם</span>
+                    <span class="al" style="display: block;">מהגיליון: ״החזר על שקיות קרח״</span>
+                  </span>
+                </span>
+              </td>
+              <td class="muted">לא נרשם על מה</td>
+              <td class="muted"><bdi>03/08/26</bdi></td>
+              <td class="n"><bdi>200 ₪</bdi></td>
+              <td class="dim">—</td>
+              <td class="n"><bdi>200 ₪</bdi></td>
+              <td><span class="src"><bdi>קופה 25!D45</bdi></span></td>
+              <td class="w0">
+                <span class="rowact show">
+                  <button class="btn sm" type="button" disabled>סגירה</button>
+                  <button class="btn sm" type="button">הוספת שם</button>
+                  <button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button>
+                </span>
+              </td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="3"><bdi>12</bdi> חובות פתוחים</td>
+              <td class="n"></td>
+              <td class="muted" style="font-weight: 400;"><bdi>2</bdi> קוזזו חלקית</td>
+              <td class="n"><bdi>6,864 ₪</bdi></td>
+              <td colspan="2"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <div class="scrim"></div>
+    <div class="drawer">
+      <div class="drawer-h">
+        <h2>סגירת חוב — רוני אדלר</h2>
+        <span class="pill">נותר <bdi>910 ₪</bdi></span>
+        <span class="x">
+          <button class="btn ghost sm icon" type="button" aria-label="סגירה">[[i:x:15]]</button>
+        </span>
+      </div>
+
+      <div class="drawer-b">
+        <dl class="kv">
+          <dt>על מה</dt>
+          <dd>מקדמה לגנרטור ששולמה מכיסה</dd>
+          <dt>מתי</dt>
+          <dd><bdi>02/07/26</bdi></dd>
+          <dt>מקור</dt>
+          <dd style="display: flex; align-items: center; gap: 8px;">
+            <span class="src"><bdi>קופה 25!D31</bdi></span>
+            <a class="link" href="Files.dc.html" style="font-size: 12.5px;">לגיליון</a>
+          </dd>
+          <dt>קוזז עד כה</dt>
+          <dd style="display: flex; align-items: center; gap: 8px;">
+            <span class="meter" aria-hidden="true"><i style="width: 94%;"></i></span>
+            <span class="muted" style="font-size: 12.5px;"><bdi>14,330</bdi> מתוך <bdi>15,240</bdi></span>
+          </dd>
+        </dl>
+
+        <div class="divider"></div>
+
+        <div class="field" style="align-items: flex-start;">
+          <label>איך נסגר</label>
+          <div class="seg">
+            <button type="button" aria-pressed="false">[[i:cash:14]] מזומן</button>
+            <button type="button" aria-pressed="true">[[i:merge:14]] קיזוז מול דמי קאמפ</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>סכום</label>
+          <div class="input money"><bdi>910</bdi></div>
+          <span class="hint">אי אפשר לקזז יותר ממה שחייבים</span>
+        </div>
+
+        <div class="field">
+          <label>מול מה קוזז</label>
+          <textarea class="input" readonly>קוזז מול דמי הקאמפ של רוני לברן 26</textarea>
+          <span class="hint">חובה — בלי זה אי אפשר לדעת בעוד שנה מה קרה כאן</span>
+        </div>
+
+        <div class="field">
+          <label>תאריך</label>
+          <div class="input"><bdi>17/09/26</bdi></div>
+        </div>
+
+        <div class="banner neutral">
+          <span class="ic">[[i:info:16]]</span>
+          <span class="t">קיזוז אינו מזיז מזומן, ולכן אינו נכנס לאף חשבון ואינו מופיע בתנועות.</span>
+          <a class="btn sm" href="Money.dc.html">לתנועות</a>
+        </div>
+      </div>
+
+      <div class="drawer-f">
+        <button class="btn primary" type="button">סגירת החוב</button>
+        <button class="btn" type="button">ביטול</button>
+        <span class="grow" style="display: flex; align-items: center; justify-content: flex-end;">
+          <span class="muted" style="font-size: 12.5px;">הפעולה נרשמת על שמך</span>
+        </span>
+      </div>
+    </div>
+  </div>
+<!--OVERLAYS-->
+</div>
+</x-dc>
+<script data-dc-script data-props='__PROPS__'>
+class Component extends DCLogic {
+/*SHELL*/
+  renderVals() {
+    return { ...this.shell() };
+  }
+}
+</script>
+</body>
+</html>

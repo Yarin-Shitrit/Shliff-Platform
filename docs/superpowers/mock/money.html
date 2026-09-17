@@ -1,0 +1,393 @@
+<!--meta {"file": "Money.dc.html", "w": 1440, "h": 1400, "nav": "money", "title": "כספים", "interactive": true} -->
+<!doctype html>
+<html lang="he">
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!--HEAD-->
+<div class="app {{themeClass}}" dir="rtl" style="width: __W__px; height: __H__px;">
+<!--SIDEBAR-->
+  <div class="main">
+    <header class="topbar">
+      <div class="crumbs"><span class="here">כספים</span></div>
+      <span class="scopechip">[[i:calendar:14]] ברן 26</span>
+      <span class="spacer"></span>
+      <button class="btn sm" type="button">[[i:download:14]] ייצוא</button>
+      <button class="btn sm" type="button">[[i:plus:14]] תנועה חדשה</button>
+    </header>
+
+    <div class="page" style="gap: 16px;">
+      <!-- 1. the sentence -->
+      <section class="card" style="display: flex; gap: 28px; padding: 18px 20px; align-items: center;">
+        <div style="flex-shrink: 0;">
+          <div class="muted" style="font-size: 12.5px;">דמי קאמפ לאדם · ברן 26</div>
+          <div style="font-size: 38px; font-weight: 600; line-height: 1.15; letter-spacing: -.5px;"><bdi>1,200 ₪</bdi></div>
+          <a class="link" href="Dues.dc.html" style="font-size: 13px;">לדף דמי הקאמפ ←</a>
+        </div>
+        <div style="flex: 1; min-width: 0;">
+          <p style="font-size: 16px; line-height: 1.55;">
+            התקציב המלא הוא <b style="font-weight: 600;"><bdi>64,375 ₪</bdi></b> ל<bdi>-</bdi><b style="font-weight: 600;"><bdi>35</bdi></b> איש —
+            <b style="font-weight: 600;"><bdi>1,839 ₪</bdi></b> לאדם.
+            הגיוס אמור לכסות <b style="font-weight: 600;"><bdi>639 ₪</bdi></b> מכל אחד מהם, וכל חבר משלם את השאר.
+          </p>
+          <div class="bar" style="height: 12px; margin-top: 12px;">
+            <i style="width: 65.2%; background: var(--viz-dues);"></i>
+            <i style="width: 34.8%; background: var(--viz-fund);"></i>
+          </div>
+          <div style="display: flex; gap: 18px; margin-top: 8px; font-size: 12.5px;" class="muted">
+            <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; border-radius: 2px; background: var(--viz-dues); display: inline-block;"></span>דמי קאמפ <bdi>42,000 ₪</bdi></span>
+            <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; border-radius: 2px; background: var(--viz-fund); display: inline-block;"></span>יעד גיוס <bdi>22,375 ₪</bdi></span>
+            <span style="margin-inline-start: auto;">כל מספר כאן נגזר משורות אמיתיות. אין כאן שום סכום שנכתב ביד.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. tiles -->
+      <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px;">
+        <div class="card stat">
+          <span class="k">[[i:wallet:14]] יתרה בכל הקופות</span>
+          <span class="v"><bdi>60,912.55</bdi></span>
+          <span class="d"><bdi>3</bdi> חשבונות · לא תלוי בשנה</span>
+        </div>
+        <a class="card stat" href="Ledger.dc.html">
+          <span class="k">[[i:in:14]] נכנס בברן 26</span>
+          <span class="v" style="color: var(--ok);"><bdi>62,000</bdi></span>
+          <span class="d"><bdi>12</bdi> תנועות</span>
+        </a>
+        <a class="card stat" href="Ledger.dc.html">
+          <span class="k">[[i:out:14]] יצא בברן 26</span>
+          <span class="v"><bdi>45,271</bdi></span>
+          <span class="d"><bdi>19</bdi> תנועות</span>
+        </a>
+        <a class="card stat" href="Money.dc.html">
+          <span class="k">[[i:pie:14]] נותר לגייס</span>
+          <span class="v"><bdi>3,875</bdi></span>
+          <span class="d">גויסו <bdi>18,500</bdi> מתוך <bdi>22,375 ₪</bdi></span>
+        </a>
+        <a class="card stat" href="Inbox.dc.html">
+          <span class="k">[[i:alert:14]] דורש הכרעה</span>
+          <span class="v"><bdi>4</bdi></span>
+          <span class="d" style="color: var(--warn);"><bdi>2</bdi> חובות בלי שם · <bdi>2</bdi> סעיפים שלא מסתדרים</span>
+        </a>
+      </div>
+
+      <!-- 3. where the money is -->
+      <section>
+        <div class="sectitle" style="margin-bottom: 8px;">
+          [[i:bank:15]] איפה הכסף
+          <span class="muted more" style="font-weight: 400; font-size: 12.5px;">חשבונות אינם שייכים לשנה — היתרה היא תמיד הנוכחית</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+          <div class="card" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 6px;">
+            <span style="display: flex; align-items: center; gap: 8px;">
+              <span class="av sm c5">[[i:cash:13]]</span>
+              <b style="font-weight: 600;">קופה מזומן</b>
+              <span class="pill more">מזומן</span>
+            </span>
+            <span style="font-size: 22px; font-weight: 600;"><bdi>4,120 ₪</bdi></span>
+            <span class="muted" style="font-size: 12.5px;">אצל גיל ברק · נספר לאחרונה <bdi>05/09/26</bdi></span>
+          </div>
+          <div class="card" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; border-color: var(--warn-line);">
+            <span style="display: flex; align-items: center; gap: 8px;">
+              <span class="av sm c1">[[i:user:13]]</span>
+              <b style="font-weight: 600;">החשבון של רוני</b>
+              <span class="pill warn more">חשבון פרטי</span>
+            </span>
+            <span style="font-size: 22px; font-weight: 600;"><bdi>52,940.55 ₪</bdi></span>
+            <span style="font-size: 12.5px; color: var(--warn); display: flex; align-items: center; gap: 5px;">[[i:alert:13]] חשבון פרטי של <a class="link" href="Person.dc.html">רוני אדלר</a> שמחזיק כסף של הקאמפ</span>
+          </div>
+          <div class="card" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 6px;">
+            <span style="display: flex; align-items: center; gap: 8px;">
+              <span class="av sm c4">[[i:party:13]]</span>
+              <b style="font-weight: 600;">קופת מסיבות</b>
+              <span class="pill more">קופת אירוע</span>
+            </span>
+            <span style="font-size: 22px; font-weight: 600;"><bdi>3,852 ₪</bdi></span>
+            <span class="muted" style="font-size: 12.5px;">נפתחה לקראת מסיבת אוקטובר</span>
+          </div>
+        </div>
+        <div class="banner" style="margin-top: 10px;">
+          <span class="ic">[[i:alert:16]]</span>
+          <span class="t"><b style="font-weight: 600;"><bdi>2,400 ₪</bdi> נכנסו בלי שנכתב לאיזה חשבון</b> — הם לא נספרים באף קופה למעלה. עדיף שהמערכת תודה בזה מאשר תנחש קופה.</span>
+          <a class="btn sm" href="Ledger.dc.html">שיוך לחשבון</a>
+        </div>
+      </section>
+
+      <!-- 4. debts -->
+      <section>
+        <div class="sectitle" style="margin-bottom: 8px;">
+          [[i:scale:15]] מה חייבים ומה חייבים לנו
+          <a class="link more" href="Debts.dc.html">לכל החובות ←</a>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+          <div class="tablewrap">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>אנחנו חייבים — <bdi>6,864 ₪</bdi></th>
+                  <th>על מה</th>
+                  <th class="n">נותר</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="namecell"><span class="av sm c1">רא</span><a class="nm" href="Person.dc.html">רוני אדלר</a></span></td>
+                  <td class="muted">מקדמה לגנרטור</td>
+                  <td class="n"><bdi>910 ₪</bdi></td>
+                </tr>
+                <tr>
+                  <td><span class="namecell"><span class="av sm c3">עב</span><a class="nm" href="Person.dc.html">עומר ביטון</a></span></td>
+                  <td class="muted">קניות למטבח</td>
+                  <td class="n"><bdi>1,240 ₪</bdi></td>
+                </tr>
+                <tr>
+                  <td><span class="namecell"><span class="av sm c6">הנ</span><a class="nm" href="Person.dc.html">הילה נחום</a></span></td>
+                  <td class="muted">דלק להובלה</td>
+                  <td class="n"><bdi>1,180 ₪</bdi></td>
+                </tr>
+                <tr style="background: var(--bad-soft);">
+                  <td><span class="pill bad">[[i:alert:12]] חסר שם</span></td>
+                  <td class="muted">״החזר לנהג המשאית״</td>
+                  <td class="n"><bdi>540 ₪</bdi></td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="2"><bdi>12</bdi> חובות · <bdi>2</bdi> מהם בלי שם ולכן לא ניתנים לסגירה</td>
+                  <td class="n"><bdi>6,864 ₪</bdi></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <div class="tablewrap">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>חייבים לנו — <bdi>2,350 ₪</bdi></th>
+                  <th>על מה</th>
+                  <th class="n">נותר</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="namecell"><span class="av sm c2">אכ</span><a class="nm" href="Person.dc.html">איתי כהן</a></span></td>
+                  <td class="muted">כרטיסים שנמכרו במסיבה</td>
+                  <td class="n"><bdi>1,400 ₪</bdi></td>
+                </tr>
+                <tr>
+                  <td><span class="namecell"><span class="av sm c4">מפ</span><a class="nm" href="Person.dc.html">מאיה פרץ</a></span></td>
+                  <td class="muted">ציוד שהושאל לקאמפ שכן</td>
+                  <td class="n"><bdi>650 ₪</bdi></td>
+                </tr>
+                <tr>
+                  <td><span class="namecell"><span class="av sm c5">גב</span><a class="nm" href="Person.dc.html">גיל ברק</a></span></td>
+                  <td class="muted">עודף מקופת המסיבה</td>
+                  <td class="n"><bdi>300 ₪</bdi></td>
+                </tr>
+                <tr>
+                  <td colspan="3" class="muted" style="height: 44px;">אין חובות נוספים לטובתנו בברן 26.</td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="2"><bdi>3</bdi> חובות פתוחים</td>
+                  <td class="n"><bdi>2,350 ₪</bdi></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. budget -->
+      <section>
+        <div class="sectitle" style="margin-bottom: 8px;">
+          [[i:pie:15]] התקציב — ומה כבר יצא ממנו
+          <span class="muted" style="font-weight: 400; font-size: 12.5px;">עמודת ״למה״ היא הנימוק כפי שנכתב בגיליון</span>
+          <a class="link more" href="Money.dc.html">כל <bdi>26</bdi> הסעיפים ←</a>
+        </div>
+        <div class="tablewrap">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>סעיף</th>
+                <th class="n">בפועל ברן 25</th>
+                <th class="n">בתקציב 26</th>
+                <th class="n">הוצא עד כה</th>
+                <th class="n">נותר</th>
+                <th>למה</th>
+                <th>מקור</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="grouprow"><td colspan="7">קאמפ · <bdi>22</bdi> סעיפים · <bdi>52,375.30 ₪</bdi></td></tr>
+              <tr>
+                <td>
+                  שכירות גנרטור
+                  <span class="bar" style="width: 120px; height: 3px; margin-top: 5px;"><i style="width: 100%; background: var(--ink-3);"></i></span>
+                </td>
+                <td class="n muted"><bdi>38,000</bdi></td>
+                <td class="n"><bdi>41,300</bdi></td>
+                <td class="n"><bdi>41,300</bdi></td>
+                <td class="n dim">—</td>
+                <td class="muted">מחיר עלה ב<bdi>-</bdi><bdi>8%</bdi> מול אשתקד</td>
+                <td><span class="src"><bdi>תקציב 26!C7</bdi></span></td>
+              </tr>
+              <tr>
+                <td>
+                  צל ומבנה
+                  <span class="bar" style="width: 120px; height: 3px; margin-top: 5px;"><i style="width: 62%; background: var(--ink-3);"></i></span>
+                </td>
+                <td class="n muted"><bdi>17,400</bdi></td>
+                <td class="n"><bdi>18,600</bdi></td>
+                <td class="n"><bdi>11,500</bdi></td>
+                <td class="n"><bdi>7,100</bdi></td>
+                <td class="muted">שני מבנים נוספים</td>
+                <td><span class="src"><bdi>תקציב 26!C8</bdi></span></td>
+              </tr>
+              <tr>
+                <td>
+                  מטבח ואוכל
+                  <span class="bar" style="width: 120px; height: 3px; margin-top: 5px;"><i style="width: 100%; background: var(--bad);"></i></span>
+                </td>
+                <td class="n muted"><bdi>7,900</bdi></td>
+                <td class="n"><bdi>8,400</bdi></td>
+                <td class="n"><bdi>8,720</bdi></td>
+                <td class="n"><span class="pill warn">חריגה <bdi>320 ₪</bdi></span></td>
+                <td class="muted">לפי <bdi>35</bdi> איש</td>
+                <td><span class="src"><bdi>תקציב 26!C9</bdi></span></td>
+              </tr>
+              <tr>
+                <td>
+                  מים וקרח
+                  <span class="bar" style="width: 120px; height: 3px; margin-top: 5px;"><i style="width: 28%; background: var(--ink-3);"></i></span>
+                </td>
+                <td class="n muted"><bdi>5,800</bdi></td>
+                <td class="n"><bdi>6,200</bdi></td>
+                <td class="n"><bdi>1,740</bdi></td>
+                <td class="n"><bdi>4,460</bdi></td>
+                <td class="muted">באפר <bdi>7%</bdi> על אשתקד</td>
+                <td><span class="src"><bdi>תקציב 26!C10</bdi></span></td>
+              </tr>
+              <tr>
+                <td style="display: flex; align-items: center; gap: 6px;">
+                  ביטוח ואישורים
+                  <span class="pill warn">[[i:calc:12]] החשבון לא מסתדר</span>
+                </td>
+                <td class="n dim">—</td>
+                <td class="n"><bdi>3,875</bdi></td>
+                <td class="n dim">—</td>
+                <td class="n"><bdi>3,875</bdi></td>
+                <td class="muted"><bdi>5</bdi> × <bdi>700</bdi> — אבל בגיליון נכתב <bdi>3,875</bdi></td>
+                <td><span class="src"><bdi>תקציב 26!C14</bdi></span></td>
+              </tr>
+              <tr class="grouprow"><td colspan="7">רחבה · <bdi>4</bdi> סעיפים · <bdi>12,000 ₪</bdi></td></tr>
+              <tr>
+                <td>
+                  סאונד רחבה
+                  <span class="bar" style="width: 120px; height: 3px; margin-top: 5px;"><i style="width: 50%; background: var(--ink-3);"></i></span>
+                </td>
+                <td class="n muted"><bdi>11,000</bdi></td>
+                <td class="n"><bdi>12,000</bdi></td>
+                <td class="n"><bdi>6,000</bdi></td>
+                <td class="n"><bdi>6,000</bdi></td>
+                <td class="muted">מקדמה שולמה</td>
+                <td><span class="src manual">נרשם ידנית</span></td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr>
+                <td><bdi>26</bdi> סעיפים</td>
+                <td class="n"><bdi>60,200.30</bdi></td>
+                <td class="n"><bdi>64,375.30</bdi></td>
+                <td class="n"><bdi>45,271.00</bdi></td>
+                <td class="n"><bdi>19,104.30</bdi></td>
+                <td colspan="2"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </section>
+
+      <!-- 6. recent movements -->
+      <section>
+        <div class="sectitle" style="margin-bottom: 8px;">
+          [[i:ledger:15]] התנועות האחרונות
+          <a class="link more" href="Ledger.dc.html">לכל <bdi>31</bdi> התנועות ←</a>
+        </div>
+        <div class="tablewrap">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>תאריך</th>
+                <th>תיאור</th>
+                <th>חשבון</th>
+                <th class="n">נכנס</th>
+                <th class="n">יצא</th>
+                <th>מקור</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><bdi>12/09/26</bdi></td>
+                <td>מסיבת גיוס — אוקטובר <span class="muted" style="font-size: 12.5px;">· מכירת כרטיסים</span></td>
+                <td>קופת מסיבות</td>
+                <td class="n" style="color: var(--ok); font-weight: 500;"><bdi>18,500</bdi></td>
+                <td class="n dim">—</td>
+                <td><span class="src"><bdi>תנועות קופה!A41</bdi></span></td>
+              </tr>
+              <tr>
+                <td><bdi>09/09/26</bdi></td>
+                <td>שכירות גנרטור <span class="muted" style="font-size: 12.5px;">· מקדמה</span></td>
+                <td>החשבון של רוני</td>
+                <td class="n dim">—</td>
+                <td class="n"><bdi>41,300</bdi></td>
+                <td><span class="src"><bdi>תנועות קופה!A39</bdi></span></td>
+              </tr>
+              <tr>
+                <td><bdi>07/09/26</bdi></td>
+                <td>דמי קאמפ — <a class="link" href="Person.dc.html">יונתן מזרחי</a></td>
+                <td>קופה מזומן</td>
+                <td class="n" style="color: var(--ok); font-weight: 500;"><bdi>1,200</bdi></td>
+                <td class="n dim">—</td>
+                <td><span class="src manual">נרשם ידנית</span></td>
+              </tr>
+              <tr style="background: var(--warn-soft);">
+                <td><bdi>05/09/26</bdi></td>
+                <td>העברה מקופת המסיבות</td>
+                <td><span class="pill warn">לא צוין</span></td>
+                <td class="n" style="color: var(--ok); font-weight: 500;"><bdi>2,400</bdi></td>
+                <td class="n dim">—</td>
+                <td><span class="src"><bdi>מסיבות!B12</bdi></span></td>
+              </tr>
+              <tr>
+                <td><bdi>02/09/26</bdi></td>
+                <td>מים וקרח <span class="muted" style="font-size: 12.5px;">· משלוח ראשון</span></td>
+                <td>קופה מזומן</td>
+                <td class="n dim">—</td>
+                <td class="n"><bdi>1,740</bdi></td>
+                <td><span class="src"><bdi>תנועות קופה!A36</bdi></span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+<!--OVERLAYS-->
+</div>
+</x-dc>
+<script data-dc-script data-props='__PROPS__'>
+class Component extends DCLogic {
+/*SHELL*/
+  renderVals() {
+    return { ...this.shell() };
+  }
+}
+</script>
+</body>
+</html>

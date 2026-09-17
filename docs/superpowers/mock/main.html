@@ -1,0 +1,278 @@
+<!--meta {"file":"Main.dc.html","w":1440,"h":1000,"nav":"home","title":"בית","interactive":true} -->
+<!doctype html>
+<html lang="he">
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!--HEAD-->
+<div class="app {{themeClass}}" dir="rtl" style="width: __W__px; height: __H__px;">
+<!--SIDEBAR-->
+  <div class="main">
+    <header class="topbar">
+      <div class="crumbs"><span class="here">בית</span></div>
+      <span class="scopechip">[[i:flag:14]] השער נפתח בעוד <bdi>36</bdi> ימים</span>
+      <span class="spacer"></span>
+      <button class="btn sm" type="button">[[i:download:14]] ייצוא</button>
+      <button class="btn primary sm" type="button">[[i:plus:14]] חדש</button>
+    </header>
+
+    <div class="page">
+      <div class="pagehead">
+        <div>
+          <h1>ברן 26</h1>
+          <p class="sub"><bdi>35</bdi> חברים ברשימה · תעריף <bdi>1,200 ₪</bdi> · תקציב <bdi>64,375 ₪</bdi></p>
+        </div>
+        <div class="actions">
+          <a class="btn sm" href="Files.dc.html">[[i:upload:14]] העלאת קובץ</a>
+          <a class="btn sm" href="Dues.dc.html">[[i:receipt:14]] רישום תשלום</a>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;">
+        <a class="card stat" href="Dues.dc.html">
+          <span class="k">[[i:receipt:14]] נגבה מדמי קאמפ</span>
+          <span class="v"><bdi>24,300</bdi> <small>מתוך <bdi>36,500 ₪</bdi></small></span>
+          <span class="bar" style="margin: 4px 0 2px;"><i style="width: 67%; background: var(--viz-dues);"></i></span>
+          <span class="d"><bdi>9</bdi> טרם שילמו · <bdi>3</bdi> שילמו חלקית</span>
+        </a>
+        <a class="card stat" href="Money.dc.html">
+          <span class="k">[[i:wallet:14]] כסף בקופות</span>
+          <span class="v"><bdi>60,912.55 ₪</bdi></span>
+          <span class="d" style="margin-top: 6px;">ב־<bdi>3</bdi> חשבונות</span>
+          <span class="d" style="color: var(--warn); display: flex; align-items: center; gap: 5px;">[[i:alert:13]] <bdi>2,400 ₪</bdi> נרשמו בלי חשבון</span>
+        </a>
+        <a class="card stat" href="Debts.dc.html">
+          <span class="k">[[i:scale:14]] חובות פתוחים</span>
+          <span class="v"><bdi>6,864 ₪</bdi> <small>אנחנו חייבים</small></span>
+          <span class="d" style="margin-top: 6px;">חייבים לנו <bdi>2,350 ₪</bdi></span>
+          <span class="d" style="color: var(--warn); display: flex; align-items: center; gap: 5px;">[[i:alert:13]] <bdi>2</bdi> חובות בלי שם</span>
+        </a>
+        <a class="card stat" href="Tasks.dc.html">
+          <span class="k">[[i:tasks:14]] איוש משימות</span>
+          <span class="v"><bdi>16</bdi> <small>מתוך <bdi>32</bdi> מקומות</small></span>
+          <span class="bar" style="margin: 4px 0 2px;"><i style="width: 50%; background: var(--ink-2);"></i></span>
+          <span class="d"><bdi>6</bdi> משימות עדיין חסרות אנשים</span>
+        </a>
+      </div>
+
+      <div style="display: flex; gap: 16px; align-items: flex-start; flex: 1; min-height: 0;">
+        <section class="card" style="flex: 1.6; display: flex; flex-direction: column; align-self: stretch;">
+          <div class="card-h">
+            <span style="color: var(--brand-text); display: inline-flex;">[[i:inbox:17]]</span>
+            <h2>לטיפול</h2>
+            <span class="pill brand"><bdi>12</bdi> החלטות</span>
+            <span class="muted" style="font-size: 12.5px;">המערכת לא מנחשת. אלה ההכרעות שממתינות לכם.</span>
+            <a class="link more" href="Inbox.dc.html">לכל הרשימה ←</a>
+          </div>
+
+          <ul style="display: flex; flex-direction: column;">
+            <li style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line);">
+              <span class="av c2" style="background: var(--info-soft); color: var(--info);">[[i:link:15]]</span>
+              <span style="flex: 1; min-width: 0;">
+                <span style="display: flex; align-items: center; gap: 8px;">
+                  <b style="font-weight: 600;">״נועה ל.״</b>
+                  <span class="pill">שם מהקובץ · <bdi>4</bdi> שורות</span>
+                </span>
+                <span class="muted" style="font-size: 12.5px;">הצעה: <b style="font-weight: 600; color: var(--ink);">נועה לוי</b> — התאמה חזקה (שם פרטי זהה, אותה שנה)</span>
+              </span>
+              <span class="src">קופת קאמפ 2026!B14</span>
+              <button class="btn sm" type="button">קשר לנועה לוי</button>
+              <button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button>
+            </li>
+
+            <li style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line);">
+              <span class="av c5" style="background: var(--warn-soft); color: var(--warn);">[[i:calendar:15]]</span>
+              <span style="flex: 1; min-width: 0;">
+                <span style="display: flex; align-items: center; gap: 8px;">
+                  <b style="font-weight: 600;">לגיליון ״סיכום כללי״ אין שנה</b>
+                  <span class="pill warn">חוסם ייבוא</span>
+                </span>
+                <span class="muted" style="font-size: 12.5px;"><bdi>39</bdi> שורות תקציב ממתינות. שנה נקבעת ביד — היא לא נגזרת מהתאריכים.</span>
+              </span>
+              <span class="src">קופת קאמפ 25׳.xlsx</span>
+              <button class="btn sm" type="button">קביעת שנה</button>
+              <button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button>
+            </li>
+
+            <li style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line);">
+              <span class="av c4" style="background: var(--info-soft); color: var(--info);">[[i:copy:15]]</span>
+              <span style="flex: 1; min-width: 0;">
+                <span style="display: flex; align-items: center; gap: 8px;">
+                  <b style="font-weight: 600;">שני עותקים של ״תקציב 26״</b>
+                  <span class="pill"><bdi>14</bdi> שורות שונות</span>
+                </span>
+                <span class="muted" style="font-size: 12.5px;">צריך לבחור איזה עותק מוסמך. אף אחד מהם לא ייכתב עד שתבחרו.</span>
+              </span>
+              <span class="src">2 קבצים</span>
+              <button class="btn sm" type="button">השוואה</button>
+              <button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button>
+            </li>
+
+            <li style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line);">
+              <span class="av c1" style="background: var(--brand-soft); color: var(--brand-text);">[[i:layers:15]]</span>
+              <span style="flex: 1; min-width: 0;">
+                <span style="display: flex; align-items: center; gap: 8px;">
+                  <b style="font-weight: 600;"><bdi>4</bdi> טבלאות ממתינות לאישור סיווג</b>
+                </span>
+                <span class="muted" style="font-size: 12.5px;">שתיים זוהו מפריסה מוכרת משנה שעברה · שתיים דורשות בדיקה</span>
+              </span>
+              <span class="src">קופת קאמפ 2026.xlsx</span>
+              <a class="btn sm" href="Files.dc.html">לסקירה</a>
+              <button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button>
+            </li>
+
+            <li style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line);">
+              <span class="av" style="background: var(--bad-soft); color: var(--bad);">[[i:scale:15]]</span>
+              <span style="flex: 1; min-width: 0;">
+                <span style="display: flex; align-items: center; gap: 8px;">
+                  <b style="font-weight: 600;"><bdi>2</bdi> חובות בלי שם — <bdi>740 ₪</bdi></b>
+                  <span class="pill bad">לא ניתן לסגור</span>
+                </span>
+                <span class="muted" style="font-size: 12.5px;">הקאמפ חייב כסף ולא יודע למי. החוב יישאר כאן עד שיירשם שם.</span>
+              </span>
+              <span class="src">קופה 25!D31</span>
+              <a class="btn sm" href="Debts.dc.html">הוספת שם</a>
+              <button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button>
+            </li>
+
+            <li style="display: flex; align-items: center; gap: 12px; padding: 12px 16px;">
+              <span class="av c2" style="background: var(--info-soft); color: var(--info);">[[i:link:15]]</span>
+              <span style="flex: 1; min-width: 0;">
+                <span style="display: flex; align-items: center; gap: 8px;">
+                  <b style="font-weight: 600;">״<bdi>Itay</bdi>״</b>
+                  <span class="pill">שם מהקובץ · <bdi>2</bdi> שורות</span>
+                </span>
+                <span class="muted" style="font-size: 12.5px;">הצעה: <b style="font-weight: 600; color: var(--ink);">איתי כהן</b> — התאמה אפשרית (תעתיק לועזי בלבד)</span>
+              </span>
+              <span class="src">קופת קאמפ 2026!B22</span>
+              <button class="btn sm" type="button">בדיקה</button>
+              <button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button>
+            </li>
+          </ul>
+
+          <div style="margin-top: auto; padding: 10px 16px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 8px;">
+            <span class="muted" style="font-size: 12.5px;">עוד <bdi>6</bdi> פריטים: <bdi>6</bdi> שורות שנדחו ו־<bdi>2</bdi> סעיפים שהחשבון בהם לא מסתדר</span>
+            <a class="link" style="margin-inline-start: auto;" href="Inbox.dc.html">פתיחת הרשימה</a>
+          </div>
+        </section>
+
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 16px; align-self: stretch;">
+          <section class="card">
+            <div class="card-h">
+              <span style="color: var(--ink-3); display: inline-flex;">[[i:tasks:16]]</span>
+              <h2>חסרים אנשים</h2>
+              <a class="link more" href="Tasks.dc.html">לכל המשימות ←</a>
+            </div>
+            <ul>
+              <li style="display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--line);">
+                <span style="flex: 1; min-width: 0;">
+                  <span style="font-weight: 500;">פירוק ו־MOOP</span>
+                  <span class="muted" style="display: block; font-size: 12.5px;">הקמה ולוגיסטיקה · יום אחרי השער</span>
+                </span>
+                <span class="stack">
+                  <span class="av sm empty">+</span><span class="av sm empty"></span><span class="av sm empty"></span>
+                </span>
+                <span class="pill bad"><bdi>0/6</bdi></span>
+              </li>
+              <li style="display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--line);">
+                <span style="flex: 1; min-width: 0;">
+                  <span style="font-weight: 500;">הקמת הצל והמבנה</span>
+                  <span class="muted" style="display: block; font-size: 12.5px;">הקמה ולוגיסטיקה · <bdi>2</bdi> ימים לפני השער</span>
+                </span>
+                <span class="stack">
+                  <span class="av sm c1">רא</span><span class="av sm c3">יל</span><span class="av sm c2">דש</span><span class="av sm empty">+</span>
+                </span>
+                <span class="pill warn"><bdi>5/8</bdi></span>
+              </li>
+              <li style="display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--line);">
+                <span style="flex: 1; min-width: 0;">
+                  <span style="font-weight: 500;">משמרת בר — חמישי <bdi>22:00</bdi></span>
+                  <span class="muted" style="display: block; font-size: 12.5px;">משמרת · <bdi>4</bdi> שעות</span>
+                </span>
+                <span class="stack">
+                  <span class="av sm c4">מפ</span><span class="av sm c5">גב</span><span class="av sm empty">+</span>
+                </span>
+                <span class="pill warn"><bdi>2/4</bdi></span>
+              </li>
+              <li style="display: flex; align-items: center; gap: 10px; padding: 10px 16px;">
+                <span style="flex: 1; min-width: 0;">
+                  <span style="font-weight: 500;">מסיבת גיוס — דלת</span>
+                  <span class="muted" style="display: block; font-size: 12.5px;">משימה באירוע · מסיבת אוקטובר</span>
+                </span>
+                <span class="stack">
+                  <span class="av sm empty">+</span><span class="av sm empty"></span>
+                </span>
+                <span class="pill bad"><bdi>0/2</bdi></span>
+              </li>
+            </ul>
+          </section>
+
+          <section class="card" style="flex: 1; display: flex; flex-direction: column;">
+            <div class="card-h">
+              <span style="color: var(--ink-3); display: inline-flex;">[[i:receipt:16]]</span>
+              <h2>טרם שילמו</h2>
+              <span class="pill"><bdi>12</bdi></span>
+              <a class="link more" href="Dues.dc.html">לדף דמי הקאמפ ←</a>
+            </div>
+            <ul>
+              <li style="display: flex; align-items: center; gap: 10px; padding: 9px 16px; border-bottom: 1px solid var(--line);">
+                <span class="av c2">אכ</span>
+                <a href="Person.dc.html" style="flex: 1; font-weight: 500;">איתי כהן</a>
+                <span class="muted" style="font-size: 12.5px;">תעריף רגיל</span>
+                <bdi style="font-variant-numeric: tabular-nums; font-weight: 500;">1,200 ₪</bdi>
+                <button class="btn ghost sm icon" type="button" aria-label="רישום תשלום לאיתי כהן">[[i:plus:15]]</button>
+              </li>
+              <li style="display: flex; align-items: center; gap: 10px; padding: 9px 16px; border-bottom: 1px solid var(--line);">
+                <span class="av c5">גב</span>
+                <a href="Person.dc.html" style="flex: 1; font-weight: 500;">גיל ברק</a>
+                <span class="pill brand">חריג</span>
+                <bdi style="font-variant-numeric: tabular-nums; font-weight: 500;">900 ₪</bdi>
+                <button class="btn ghost sm icon" type="button" aria-label="רישום תשלום לגיל ברק">[[i:plus:15]]</button>
+              </li>
+              <li style="display: flex; align-items: center; gap: 10px; padding: 9px 16px; border-bottom: 1px solid var(--line);">
+                <span class="av c4">מר</span>
+                <a href="Person.dc.html" style="flex: 1; font-weight: 500;">מיכל רוזן</a>
+                <span class="muted" style="font-size: 12.5px;">תעריף רגיל</span>
+                <bdi style="font-variant-numeric: tabular-nums; font-weight: 500;">1,200 ₪</bdi>
+                <button class="btn ghost sm icon" type="button" aria-label="רישום תשלום למיכל רוזן">[[i:plus:15]]</button>
+              </li>
+              <li style="display: flex; align-items: center; gap: 10px; padding: 9px 16px; border-bottom: 1px solid var(--line);">
+                <span class="av c6">הנ</span>
+                <a href="Person.dc.html" style="flex: 1; font-weight: 500;">הילה נחום</a>
+                <span class="pill info">שילמה <bdi>500</bdi></span>
+                <bdi style="font-variant-numeric: tabular-nums; font-weight: 500;">700 ₪</bdi>
+                <button class="btn ghost sm icon" type="button" aria-label="רישום תשלום להילה נחום">[[i:plus:15]]</button>
+              </li>
+              <li style="display: flex; align-items: center; gap: 10px; padding: 9px 16px;">
+                <span class="av c3">עב</span>
+                <a href="Person.dc.html" style="flex: 1; font-weight: 500;">עומר ביטון</a>
+                <span class="pill info">שילם <bdi>500</bdi></span>
+                <bdi style="font-variant-numeric: tabular-nums; font-weight: 500;">700 ₪</bdi>
+                <button class="btn ghost sm icon" type="button" aria-label="רישום תשלום לעומר ביטון">[[i:plus:15]]</button>
+              </li>
+            </ul>
+            <div style="margin-top: auto; padding: 10px 16px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 8px;">
+              <span class="muted" style="font-size: 12.5px;"><bdi>2</bdi> חברים בלי חיוב כלל</span>
+              <button class="btn sm" type="button" style="margin-inline-start: auto;">הנפקת חיוב לשניהם</button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+<!--OVERLAYS-->
+</div>
+</x-dc>
+<script data-dc-script data-props='__PROPS__'>
+class Component extends DCLogic {
+/*SHELL*/
+  renderVals() {
+    return { ...this.shell() };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,382 @@
+<!--meta {"file": "Ledger.dc.html", "w": 1440, "h": 1240, "nav": "ledger", "title": "תנועות", "interactive": true} -->
+<!doctype html>
+<html lang="he">
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!--HEAD-->
+<div class="app {{themeClass}}" dir="rtl" style="width: __W__px; height: __H__px;">
+<!--SIDEBAR-->
+  <div class="main">
+    <header class="topbar">
+      <div class="crumbs"><a href="Money.dc.html">כסף</a> [[i:left:14]] <span class="here">תנועות</span></div>
+      <span class="scopechip">[[i:calendar:14]] ברן 26</span>
+      <span class="spacer"></span>
+      <button class="btn ghost sm icon" type="button" aria-label="היסטוריית שינויים">[[i:history:16]]</button>
+    </header>
+
+    <div class="page">
+      <div class="pagehead">
+        <div>
+          <h1>תנועות</h1>
+          <p class="sub"><bdi>31</bdi> תנועות בברן 26 · נכנס <bdi>62,000 ₪</bdi> · יצא <bdi>45,271 ₪</bdi></p>
+        </div>
+        <div class="actions">
+          <button class="btn sm" type="button">[[i:ledger:14]] העברה בין חשבונות</button>
+          <button class="btn sm" type="button">[[i:download:14]] ייצוא</button>
+          <button class="btn primary sm" type="button">[[i:plus:14]] תנועה חדשה</button>
+        </div>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <button class="tab" type="button" role="tab" aria-selected="true">הכול <span class="n"><bdi>31</bdi></span></button>
+        <button class="tab" type="button" role="tab">נכנס <span class="n"><bdi>12</bdi></span></button>
+        <button class="tab" type="button" role="tab">יצא <span class="n"><bdi>19</bdi></span></button>
+        <button class="tab" type="button" role="tab">בלי חשבון <span class="n"><bdi>3</bdi></span></button>
+        <button class="tab" type="button" role="tab">מהקבצים <span class="n"><bdi>24</bdi></span></button>
+        <button class="tab" type="button" role="tab">נרשמו ידנית <span class="n"><bdi>7</bdi></span></button>
+        <button class="tab" type="button" role="tab" aria-label="תצוגה שמורה חדשה">[[i:plus:14]]</button>
+      </div>
+
+      <div class="toolbar">
+        <span class="search">[[i:search:15]] <span class="muted">חיפוש בתיאור או בסכום</span></span>
+        <button class="chip" type="button">חשבון: <b>הכול</b> [[i:down:12]]</button>
+        <button class="chip" type="button">סעיף תקציב: <b>הכול</b> [[i:down:12]]</button>
+        <button class="chip dashed" type="button">[[i:plus:13]] סינון</button>
+        <button class="chip" type="button">[[i:sort:13]] מיון: <b>תאריך</b></button>
+        <span class="muted" style="margin-inline-start: auto; font-size: 13px;"><bdi>31</bdi> שורות</span>
+      </div>
+
+      <div class="card" style="padding: 10px 16px; display: flex; gap: 32px; align-items: center;">
+        <span style="display: flex; flex-direction: column;">
+          <span class="muted" style="font-size: 12px;">נכנס</span>
+          <span style="font-size: 16px; font-weight: 500; color: var(--ok);"><bdi>62,000 ₪</bdi></span>
+        </span>
+        <span style="display: flex; flex-direction: column;">
+          <span class="muted" style="font-size: 12px;">יצא</span>
+          <span style="font-size: 16px; font-weight: 500;"><bdi>45,271 ₪</bdi></span>
+        </span>
+        <span style="display: flex; flex-direction: column;">
+          <span class="muted" style="font-size: 12px;">שינוי נטו</span>
+          <span style="font-size: 16px; font-weight: 600;"><bdi>16,729 ₪</bdi></span>
+        </span>
+        <span class="muted" style="margin-inline-start: auto; font-size: 12.5px;">המספרים מתעדכנים לפי הסינון הפעיל</span>
+      </div>
+
+      <div class="banner">
+        <span class="ic">[[i:alert:16]]</span>
+        <span class="t"><b style="font-weight: 600;"><bdi>2,400 ₪</bdi> נרשמו בלי לציין חשבון.</b> עד שישויכו הם לא נספרים ביתרה של אף קופה.</span>
+        <button class="btn sm" type="button">שיוך לחשבון</button>
+      </div>
+
+      <div class="tablewrap" style="flex: 1; min-height: 0;">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>תאריך</th>
+              <th>תיאור</th>
+              <th>מ/אל</th>
+              <th>חשבון</th>
+              <th>סעיף תקציב</th>
+              <th>מקור</th>
+              <th class="n">נכנס</th>
+              <th class="n">יצא</th>
+              <th class="n">יתרה</th>
+              <th class="w0"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="grouprow"><td colspan="10">ספטמבר <bdi>2026</bdi> · <bdi>6</bdi> תנועות</td></tr>
+
+            <tr>
+              <td class="muted"><bdi>15/09</bdi></td>
+              <td>
+                <span style="display: flex; flex-direction: column; gap: 1px;">
+                  <span style="font-weight: 500;">הכנסות מסיבת גיוס</span>
+                  <span class="muted" style="font-size: 12.5px;">מסיבת גיוס — אוקטובר</span>
+                </span>
+              </td>
+              <td><span class="muted">—</span></td>
+              <td>קופת מסיבות</td>
+              <td class="muted">גיוס כספים</td>
+              <td><span class="src">[[i:sheet:13]] <bdi>קופת קאמפ 2026!A14</bdi></span></td>
+              <td class="n" style="color: var(--ok); font-weight: 500;"><bdi>18,500 ₪</bdi></td>
+              <td class="n dim">—</td>
+              <td class="n muted"><bdi>60,912.55 ₪</bdi></td>
+              <td class="w0"><span class="rowact"><button class="btn ghost sm icon" type="button" aria-label="מקור בגיליון">[[i:eye:15]]</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+
+            <tr>
+              <td class="muted"><bdi>14/09</bdi></td>
+              <td>
+                <span style="display: flex; flex-direction: column; gap: 1px;">
+                  <span style="font-weight: 500;">השכרת משאית</span>
+                  <span class="muted" style="font-size: 12.5px;">הובלה ופירוק — <bdi>3</bdi> ימים</span>
+                </span>
+              </td>
+              <td>הובלות דרום</td>
+              <td>קופה מזומן</td>
+              <td class="muted">הקמה ופירוק</td>
+              <td><span class="src">[[i:sheet:13]] <bdi>קופת קאמפ 2026!B31</bdi></span></td>
+              <td class="n dim">—</td>
+              <td class="n"><bdi>3,875 ₪</bdi></td>
+              <td class="n muted"><bdi>42,412.55 ₪</bdi></td>
+              <td class="w0"><span class="rowact"><button class="btn ghost sm icon" type="button" aria-label="מקור בגיליון">[[i:eye:15]]</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+
+            <tr>
+              <td class="muted"><bdi>12/09</bdi></td>
+              <td>
+                <span style="display: flex; flex-direction: column; gap: 2px;">
+                  <span style="font-weight: 500;">העברה לקופת מסיבות</span>
+                  <span style="display: flex; align-items: center; gap: 6px;">
+                    <span class="pill info">העברה</span>
+                    <span class="muted" style="font-size: 12.5px;">אל: קופת מסיבות</span>
+                  </span>
+                </span>
+              </td>
+              <td>קופת מסיבות</td>
+              <td>החשבון של רוני</td>
+              <td class="dim">—</td>
+              <td><span class="src manual">נרשם ידנית</span></td>
+              <td class="n dim">—</td>
+              <td class="n"><bdi>6,200 ₪</bdi></td>
+              <td class="n muted"><bdi>46,287.55 ₪</bdi></td>
+              <td class="w0"><span class="rowact"><button class="btn ghost sm icon" type="button" aria-label="מקור בגיליון">[[i:eye:15]]</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+
+            <tr>
+              <td class="muted"><bdi>12/09</bdi></td>
+              <td>
+                <span style="display: flex; flex-direction: column; gap: 2px;">
+                  <span style="font-weight: 500;">העברה מהחשבון של רוני</span>
+                  <span style="display: flex; align-items: center; gap: 6px;">
+                    <span class="pill info">העברה</span>
+                    <span class="muted" style="font-size: 12.5px;">מתוך: החשבון של רוני</span>
+                  </span>
+                </span>
+              </td>
+              <td>החשבון של רוני</td>
+              <td>קופת מסיבות</td>
+              <td class="dim">—</td>
+              <td><span class="src manual">נרשם ידנית</span></td>
+              <td class="n" style="color: var(--ok); font-weight: 500;"><bdi>6,200 ₪</bdi></td>
+              <td class="n dim">—</td>
+              <td class="n muted"><bdi>52,487.55 ₪</bdi></td>
+              <td class="w0"><span class="rowact"><button class="btn ghost sm icon" type="button" aria-label="מקור בגיליון">[[i:eye:15]]</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+
+            <tr>
+              <td class="muted"><bdi>10/09</bdi></td>
+              <td>
+                <span style="display: flex; flex-direction: column; gap: 1px;">
+                  <span style="font-weight: 500;">דמי קאמפ — נועה לוי</span>
+                  <span class="muted" style="font-size: 12.5px;">דמי קאמפ · ברן 26</span>
+                </span>
+              </td>
+              <td><span class="namecell"><span class="av sm c3">נל</span><a class="nm" href="Person.dc.html">נועה לוי</a></span></td>
+              <td>קופה מזומן</td>
+              <td class="muted">דמי קאמפ</td>
+              <td><span class="src">[[i:sheet:13]] <bdi>קופת קאמפ 2026!A22</bdi></span></td>
+              <td class="n" style="color: var(--ok); font-weight: 500;"><bdi>1,200 ₪</bdi></td>
+              <td class="n dim">—</td>
+              <td class="n muted"><bdi>46,287.55 ₪</bdi></td>
+              <td class="w0"><span class="rowact"><button class="btn ghost sm icon" type="button" aria-label="מקור בגיליון">[[i:eye:15]]</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+
+            <tr>
+              <td class="muted"><bdi>08/09</bdi></td>
+              <td>
+                <span style="display: flex; flex-direction: column; gap: 1px;">
+                  <span style="font-weight: 500;">קניות למטבח</span>
+                  <span class="muted" style="font-size: 12.5px;">מזון ומטבח — קנייה שבועית</span>
+                </span>
+              </td>
+              <td><span class="muted">—</span></td>
+              <td>קופה מזומן</td>
+              <td class="muted">מזון ומטבח</td>
+              <td><span class="src manual">נרשם ידנית</span></td>
+              <td class="n dim">—</td>
+              <td class="n"><bdi>2,140 ₪</bdi></td>
+              <td class="n muted"><bdi>45,087.55 ₪</bdi></td>
+              <td class="w0"><span class="rowact"><button class="btn ghost sm icon" type="button" aria-label="מקור בגיליון">[[i:eye:15]]</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+
+            <tr class="grouprow"><td colspan="10">אוגוסט <bdi>2026</bdi> · <bdi>5</bdi> תנועות</td></tr>
+
+            <tr>
+              <td class="muted"><bdi>28/08</bdi></td>
+              <td>
+                <span style="display: flex; flex-direction: column; gap: 1px;">
+                  <span style="font-weight: 500;">השכרת גנרטור</span>
+                  <span class="muted" style="font-size: 12.5px;">תשתיות — שבוע הקאמפ</span>
+                </span>
+              </td>
+              <td>גנרטורים ברן</td>
+              <td>החשבון של רוני</td>
+              <td class="muted">תשתיות</td>
+              <td><span class="src">[[i:sheet:13]] <bdi>קופת קאמפ 2026!B12</bdi></span></td>
+              <td class="n dim">—</td>
+              <td class="n"><bdi>18,600 ₪</bdi></td>
+              <td class="n muted"><bdi>47,227.55 ₪</bdi></td>
+              <td class="w0"><span class="rowact"><button class="btn ghost sm icon" type="button" aria-label="מקור בגיליון">[[i:eye:15]]</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+
+            <tr>
+              <td class="muted"><bdi>24/08</bdi></td>
+              <td>
+                <span style="display: flex; flex-direction: column; gap: 1px;">
+                  <span style="font-weight: 500;">מבנה הצללה</span>
+                  <span class="muted" style="font-size: 12.5px;">תשתיות — הקמה ועיגון</span>
+                </span>
+              </td>
+              <td>אוהלי נגב</td>
+              <td>החשבון של רוני</td>
+              <td class="muted">תשתיות</td>
+              <td><span class="src">[[i:sheet:13]] <bdi>קופת קאמפ 2026!B17</bdi></span></td>
+              <td class="n dim">—</td>
+              <td class="n"><bdi>8,400 ₪</bdi></td>
+              <td class="n muted"><bdi>65,827.55 ₪</bdi></td>
+              <td class="w0"><span class="rowact"><button class="btn ghost sm icon" type="button" aria-label="מקור בגיליון">[[i:eye:15]]</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+
+            <tr>
+              <td class="muted"><bdi>21/08</bdi></td>
+              <td>
+                <span style="display: flex; flex-direction: column; gap: 1px;">
+                  <span style="font-weight: 500;">דמי קאמפ — יונתן מזרחי</span>
+                  <span class="muted" style="font-size: 12.5px;">דמי קאמפ · ברן 26</span>
+                </span>
+              </td>
+              <td><span class="namecell"><span class="av sm c2">ימ</span><a class="nm" href="Person.dc.html">יונתן מזרחי</a></span></td>
+              <td><span class="pill warn">לא צוין</span></td>
+              <td class="muted">דמי קאמפ</td>
+              <td><span class="src">[[i:sheet:13]] <bdi>קופת קאמפ 2026!A27</bdi></span></td>
+              <td class="n" style="color: var(--ok); font-weight: 500;"><bdi>1,200 ₪</bdi></td>
+              <td class="n dim">—</td>
+              <td class="n muted"><bdi>74,227.55 ₪</bdi></td>
+              <td class="w0"><span class="rowact"><button class="btn ghost sm icon" type="button" aria-label="מקור בגיליון">[[i:eye:15]]</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+
+            <tr>
+              <td class="muted"><bdi>18/08</bdi></td>
+              <td>
+                <span style="display: flex; flex-direction: column; gap: 1px;">
+                  <span style="font-weight: 500;">מים וקרח</span>
+                  <span class="muted" style="font-size: 12.5px;">מזון ומטבח — אספקה יומית</span>
+                </span>
+              </td>
+              <td><span class="muted">—</span></td>
+              <td><span class="pill warn">לא צוין</span></td>
+              <td class="muted">מזון ומטבח</td>
+              <td><span class="src manual">נרשם ידנית</span></td>
+              <td class="n dim">—</td>
+              <td class="n"><bdi>1,200 ₪</bdi></td>
+              <td class="n muted"><bdi>73,027.55 ₪</bdi></td>
+              <td class="w0"><span class="rowact"><button class="btn ghost sm icon" type="button" aria-label="מקור בגיליון">[[i:eye:15]]</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+
+            <tr>
+              <td class="muted"><bdi>05/08</bdi></td>
+              <td>
+                <span style="display: flex; flex-direction: column; gap: 1px;">
+                  <span style="font-weight: 500;">ביטוח אירוע</span>
+                  <span class="muted" style="font-size: 12.5px;">ביטוח ורגולציה — פוליסה לעונה</span>
+                </span>
+              </td>
+              <td>הראל ביטוח</td>
+              <td>החשבון של רוני</td>
+              <td class="muted">ביטוח ורגולציה</td>
+              <td><span class="src">[[i:sheet:13]] <bdi>קופת קאמפ 2026!B08</bdi></span></td>
+              <td class="n dim">—</td>
+              <td class="n"><bdi>4,950 ₪</bdi></td>
+              <td class="n muted"><bdi>74,227.55 ₪</bdi></td>
+              <td class="w0"><span class="rowact"><button class="btn ghost sm icon" type="button" aria-label="מקור בגיליון">[[i:eye:15]]</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+
+            <tr class="grouprow"><td colspan="10">יולי <bdi>2026</bdi> · <bdi>3</bdi> תנועות</td></tr>
+
+            <tr>
+              <td class="muted"><bdi>29/07</bdi></td>
+              <td>
+                <span style="display: flex; flex-direction: column; gap: 1px;">
+                  <span style="font-weight: 500;">גבייה מרוכזת — דמי קאמפ</span>
+                  <span class="muted" style="font-size: 12.5px;">דמי קאמפ · <bdi>18</bdi> משלמים</span>
+                </span>
+              </td>
+              <td><span class="muted">—</span></td>
+              <td>קופה מזומן</td>
+              <td class="muted">דמי קאמפ</td>
+              <td><span class="src">[[i:sheet:13]] <bdi>קופת קאמפ 2026!A03</bdi></span></td>
+              <td class="n" style="color: var(--ok); font-weight: 500;"><bdi>22,000 ₪</bdi></td>
+              <td class="n dim">—</td>
+              <td class="n muted"><bdi>79,177.55 ₪</bdi></td>
+              <td class="w0"><span class="rowact"><button class="btn ghost sm icon" type="button" aria-label="מקור בגיליון">[[i:eye:15]]</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+
+            <tr>
+              <td class="muted"><bdi>22/07</bdi></td>
+              <td>
+                <span style="display: flex; flex-direction: column; gap: 1px;">
+                  <span style="font-weight: 500;">דמי קאמפ — מאיה פרץ</span>
+                  <span class="muted" style="font-size: 12.5px;">דמי קאמפ · ברן 26</span>
+                </span>
+              </td>
+              <td><span class="namecell"><span class="av sm c4">מפ</span><a class="nm" href="Person.dc.html">מאיה פרץ</a></span></td>
+              <td>קופה מזומן</td>
+              <td class="muted">דמי קאמפ</td>
+              <td><span class="src">[[i:sheet:13]] <bdi>קופת קאמפ 2026!A09</bdi></span></td>
+              <td class="n" style="color: var(--ok); font-weight: 500;"><bdi>1,200 ₪</bdi></td>
+              <td class="n dim">—</td>
+              <td class="n muted"><bdi>57,177.55 ₪</bdi></td>
+              <td class="w0"><span class="rowact"><button class="btn ghost sm icon" type="button" aria-label="מקור בגיליון">[[i:eye:15]]</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+
+            <tr>
+              <td class="muted"><bdi>11/07</bdi></td>
+              <td>
+                <span style="display: flex; flex-direction: column; gap: 1px;">
+                  <span style="font-weight: 500;">רכש ציוד תשתית</span>
+                  <span class="muted" style="font-size: 12.5px;">הקמה ופירוק — מקדמה לספק</span>
+                </span>
+              </td>
+              <td>ציוד שטח בע״מ</td>
+              <td>קופה מזומן</td>
+              <td class="muted">הקמה ופירוק</td>
+              <td><span class="src">[[i:sheet:13]] <bdi>קופת קאמפ 2026!B02</bdi></span></td>
+              <td class="n dim">—</td>
+              <td class="n"><bdi>41,300 ₪</bdi></td>
+              <td class="n muted"><bdi>55,977.55 ₪</bdi></td>
+              <td class="w0"><span class="rowact"><button class="btn ghost sm icon" type="button" aria-label="מקור בגיליון">[[i:eye:15]]</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td><bdi>31</bdi> תנועות</td>
+              <td colspan="5" class="muted" style="font-weight: 400;"><bdi>24</bdi> מהקבצים · <bdi>7</bdi> נרשמו ידנית · <bdi>3</bdi> בלי חשבון</td>
+              <td class="n" style="color: var(--ok);"><bdi>62,000 ₪</bdi></td>
+              <td class="n"><bdi>45,271 ₪</bdi></td>
+              <td class="n"><bdi>60,912.55 ₪</bdi></td>
+              <td class="w0"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+<!--OVERLAYS-->
+</div>
+</x-dc>
+<script data-dc-script data-props='__PROPS__'>
+class Component extends DCLogic {
+/*SHELL*/
+  renderVals() {
+    return { ...this.shell() };
+  }
+}
+</script>
+</body>
+</html>
