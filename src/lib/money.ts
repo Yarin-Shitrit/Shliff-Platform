@@ -26,3 +26,21 @@ export function formatILS(agorot: number): string {
     maximumFractionDigits: 2,
   });
 }
+
+export const SHEKEL = '₪';
+
+/**
+ * A11. The one place an amount and its symbol are put together.
+ *
+ * The number — sign included — is formatted in a single `Intl` call, so the
+ * minus stays welded to the digits. The symbol goes last, and the whole thing
+ * is rendered inside a `<bdi>` by `Money` in `src/components/format.tsx`.
+ * Direction is carried by the column an amount sits in, never by its sign.
+ *
+ * Never write `` `${formatILS(x)} ₪` `` at a call site. That is the same
+ * string by luck, and the luck runs out the first time somebody writes the
+ * minus separately.
+ */
+export function formatShekels(agorot: number): string {
+  return `${formatILS(agorot)} ${SHEKEL}`;
+}

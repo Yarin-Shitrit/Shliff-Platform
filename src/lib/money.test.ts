@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { toAgorot, fromAgorot, sumAgorot, formatILS } from '@/lib/money';
+import {
+  toAgorot, fromAgorot, sumAgorot, formatILS, formatShekels,
+} from '@/lib/money';
 
 describe('money', () => {
   it('converts a numeric(12,2) string to integer agorot', () => {
@@ -38,5 +40,31 @@ describe('money', () => {
   it('formats for display, dropping empty decimals', () => {
     expect(formatILS(6095500)).toBe('60,955');
     expect(formatILS(3374055)).toBe('33,740.55');
+  });
+
+  it('attaches the symbol in one place, last', () => {
+    expect(formatShekels(120000)).toBe('1,200 ₪');
+    expect(formatShekels(3374055)).toBe('33,740.55 ₪');
+    expect(formatShekels(0)).toBe('0 ₪');
+  });
+
+  /**
+   * A11. The sign and the first digit must be one uninterrupted run. If a
+   * '-' is ever prepended to an already-formatted amount in JSX, bidi
+   * reordering floats it to the far side of the number and a debt reads as a
+   * credit. Formatting the signed number in one call is what prevents it.
+   *
+   * Node's full-ICU `he-IL` negative-number pattern itself prepends a
+   * left-to-right mark (U+200E) before the sign — confirmed with
+   * `Intl.NumberFormat('he-IL').formatToParts(-1200)`, which reports it as a
+   * `literal` part, and reproduced the same way for `he` and `ur-PK`. It is
+   * a zero-width, non-reorderable control character, not a digit or a
+   * second sign, so it does not break the sign-to-digit run the assertion
+   * is guarding; the regex allows one optional leading occurrence of it.
+   */
+  it('never lets a minus sign come off its digits', () => {
+    const text = formatShekels(-120000);
+    expect(text.endsWith(' ₪')).toBe(true);
+    expect(text.slice(0, text.length - 2)).toMatch(/^‎?[-−]\d/);
   });
 });
