@@ -68,9 +68,12 @@ function blobStorage(): Storage {
     async get(key) {
       const { get } = await import('@vercel/blob');
       const result = await get(key, { access: 'private' });
-      const status = result?.statusCode ?? 404;
-      if (!result || status !== 200) {
-        throw new Error(`failed to read blob "${key}": status ${status}`);
+      // Testing `result.statusCode` directly (not an aliased local) is what
+      // lets TypeScript narrow `result` to the `statusCode: 200` member of
+      // `GetBlobResult`'s discriminated union below, so `result.stream` is
+      // known to be a `ReadableStream`, not `ReadableStream | null`.
+      if (!result || result.statusCode !== 200) {
+        throw new Error(`failed to read blob "${key}": status ${result?.statusCode ?? 404}`);
       }
       return Buffer.from(await new Response(result.stream).arrayBuffer());
     },
