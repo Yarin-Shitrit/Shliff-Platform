@@ -89,12 +89,19 @@ describe('tokens.css', () => {
   /**
    * Plain CSS cannot share one declaration block between a media query and a
    * bare selector, so the dark palette is written twice. This is the guard
-   * against the second copy drifting from the first.
+   * against the second copy drifting from the first — names and values,
+   * across every declared token, not only the ones listed in DARK.
    */
-  it('gives the two dark blocks the same tokens', () => {
+  it('gives the two dark blocks the same tokens, names and values', () => {
     const css = tokens();
-    expect(declaredNames(block(css, ":root:not([data-theme='light'])")))
-      .toEqual(declaredNames(block(css, ":root[data-theme='dark']")));
+    const byPreference = block(css, ":root:not([data-theme='light'])");
+    const byAttribute = block(css, ":root[data-theme='dark']");
+    expect(declaredNames(byPreference)).toEqual(declaredNames(byAttribute));
+    for (const name of declaredNames(byPreference)) {
+      const bare = name.slice(2);
+      expect(`${name}: ${tokenValue(byPreference, bare)}`)
+        .toBe(`${name}: ${tokenValue(byAttribute, bare)}`);
+    }
   });
 
   it('guards the OS preference so an explicit light choice wins', () => {
@@ -180,10 +187,11 @@ describe('globals.css', () => {
     expect(css).not.toContain('text-align: left');
   });
 
-  it('keeps the four pre-redesign global classes the screens still use', () => {
+  it('keeps the four pre-redesign global classes, re-pointed at the new tokens', () => {
     const css = globals();
-    for (const name of ['.card', '.muted', '.badge-warn', '.scroll-x']) {
-      expect(css).toContain(name);
-    }
+    expect(block(css, '.card {')).toContain('var(--panel)');
+    expect(block(css, '.muted {')).toContain('var(--ink-3)');
+    expect(block(css, '.badge-warn {')).toContain('var(--bad)');
+    expect(block(css, '.scroll-x {')).toContain('overflow-x');
   });
 });

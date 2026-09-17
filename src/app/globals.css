@@ -105,8 +105,11 @@ th {
   color: var(--ink-3);
 }
 
-/* Nearly every use of this class is a `role="alert"` error message, so it
-   takes the error colour, not the warning colour (R3). */
+/* Most uses of this class are `role="alert"` error messages, so it takes the
+   error colour, not the warning colour (R3). Some are status indicators — an
+   outstanding balance, an understaffed task — carried alongside a Hebrew
+   word, so the colour is not load-bearing for meaning; those will be revisited
+   when their screens are redesigned and this class's uses there are removed. */
 .badge-warn {
   color: var(--bad);
 }
