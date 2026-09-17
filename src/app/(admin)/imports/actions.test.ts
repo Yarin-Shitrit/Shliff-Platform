@@ -42,8 +42,11 @@ const BUDGET_GRID = [
 
 /** Seeds a block already stored (misclassified) as `ledger`, with a matching
  *  `ledger` column map, over the given grid — for exercising a re-pick to
- *  another archetype. */
-async function seedLedgerBlock(db: TestDb, fingerprint: string | null, grid: string[][]) {
+ *  another archetype. `headerRow` defaults to 1, matching every grid used
+ *  below except the merged-title fixture, which passes its real one. */
+async function seedLedgerBlock(
+  db: TestDb, fingerprint: string | null, grid: string[][], headerRow = 1,
+) {
   const [upload] = await db.insert(uploads).values({
     filename: 'y.xlsx', sha256: 'b'.repeat(64), storageKey: 'k2',
     sizeBytes: 1, uploadedBy: 'admin@example.com',
@@ -54,13 +57,47 @@ async function seedLedgerBlock(db: TestDb, fingerprint: string | null, grid: str
   }).returning();
   const [block] = await db.insert(blocks).values({
     sheetId: sheet.id, top: 1, left: 1, bottom: grid.length, right: grid[0].length,
-    archetype: 'ledger', confidence: '0.9', headerRow: 1,
+    archetype: 'ledger', confidence: '0.9', headerRow,
     fingerprint, pipelineVersion: 1, rawGrid: grid,
   }).returning();
   await db.insert(blockMappings).values({
     blockId: block.id, columnMap: LEDGER_MAP, source: 'rules',
   });
   return { blockId: block.id, sheetId: sheet.id };
+}
+
+/** A merged decorative title (ExcelJS mirrors its text onto every column it
+ *  spans) sits above the real ticket_rounds header — the sparse
+ *  "צפי הכנסות - קולאבו" case header.ts documents. Row 2 is the real header;
+ *  a block seeded from this grid must be given `headerRow: 2` (as
+ *  `run-import.ts` would have computed once, against the real, merge-aware
+ *  grid). */
+const TITLE_ABOVE_TICKET_GRID = [
+  ['כותרת', 'כותרת', 'כותרת', 'כותרת'],
+  ['סוג כרטיס', 'כמות כרטיס', 'מחיר כרטיס', 'סה"כ'],
+  ['בוקר', '50', '20', '1000'],
+  ['ערב', '30', '25', '750'],
+];
+
+/** Seeds a headerless block (no header row, hence never fingerprinted). */
+async function seedHeaderlessBlock(db: TestDb, grid: string[][]) {
+  const [upload] = await db.insert(uploads).values({
+    filename: 'w.xlsx', sha256: 'c'.repeat(64), storageKey: 'k3',
+    sizeBytes: 1, uploadedBy: 'admin@example.com',
+  }).returning();
+  const [sheet] = await db.insert(sheets).values({
+    uploadId: upload.id, name: 'חוב', index: 0,
+    rowCount: grid.length, colCount: grid[0].length,
+  }).returning();
+  const [block] = await db.insert(blocks).values({
+    sheetId: sheet.id, top: 1, left: 1, bottom: grid.length, right: grid[0].length,
+    archetype: 'unknown', confidence: '0.1', headerRow: null,
+    fingerprint: null, pipelineVersion: 1, rawGrid: grid,
+  }).returning();
+  await db.insert(blockMappings).values({
+    blockId: block.id, columnMap: [], source: 'rules',
+  });
+  return block.id;
 }
 
 describe('applyConfirmation', () => {
@@ -185,5 +222,31 @@ describe('applyConfirmation — re-picking the archetype remaps the columns', ()
     expect(result.written).toHaveLength(1);
     expect(result.refused).toHaveLength(0);
     expect(await db.select().from(budgetLines)).toHaveLength(1);
+  });
+
+  it('reuses the block\'s own stored headerRow, so a merged title row above the real header is not mistaken for it', async () => {
+    // Without headerRow reuse, gridFromBlock's reconstruction has no
+    // isMerged information: the title row and the real header row score the
+    // same 4 text cells, and findHeaderRow's earliest-row-wins tiebreak picks
+    // the title — producing an empty mapping (its text matches no
+    // ticket_rounds term) instead of the real one.
+    const { blockId } = await seedLedgerBlock(db, 'e'.repeat(32), TITLE_ABOVE_TICKET_GRID, 2);
+
+    await applyConfirmation(db, 'admin@example.com', blockId, 'ticket_rounds', LEDGER_MAP);
+
+    const [mapping] = await db.select().from(blockMappings)
+      .where(eq(blockMappings.blockId, blockId));
+    const fields = mapping.columnMap.map((m) => m.field).sort();
+    expect(fields).toEqual(['price', 'quantity', 'round', 'total']);
+  });
+
+  it('a re-pick on a headerless block omits headerRow and keeps detecting one, as before', async () => {
+    const blockId = await seedHeaderlessBlock(db, [['100'], ['200']]);
+
+    await applyConfirmation(db, 'admin@example.com', blockId, 'obligations', []);
+
+    const [mapping] = await db.select().from(blockMappings)
+      .where(eq(blockMappings.blockId, blockId));
+    expect(mapping.columnMap).toEqual([]);
   });
 });

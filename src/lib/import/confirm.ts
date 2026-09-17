@@ -24,13 +24,19 @@ interface StoredBlock {
  *
  * `rawGrid` (see `sliceGrid` in run-import.ts) keeps only each cell's
  * display text, not its typed value or merge state. `value` is set to that
- * same text: `parseNumber`, all `findHeaderRow`/`mapColumns` ever ask of
- * `value`, parses a numeric-looking string exactly as it would the digits
- * `extract.ts`'s `toText` had stringified a numeric cell into in the first
- * place. Losing `isMerged` only matters for choosing *which* row is the
- * header among rows this same block already had a header among when it was
- * first imported — re-mapping never changes the layout, so it never changes
- * that answer.
+ * same text: `parseNumber`, all `mapColumns` ever asks of `value` once a
+ * header row is known, parses a numeric-looking string exactly as it would
+ * the digits `extract.ts`'s `toText` had stringified a numeric cell into in
+ * the first place.
+ *
+ * `isMerged` is always false here, which would normally matter: a
+ * horizontally-merged decorative title (mirrored onto every column it spans)
+ * can otherwise outscore the real header beneath it once `findHeaderRow`
+ * can no longer collapse it back into the one cell it is (header.ts). That
+ * gap is harmless here because callers always pass `mapColumns` the block's
+ * own stored `headerRow` — computed once at import time against the real,
+ * merge-aware grid — so `findHeaderRow` is never re-run against this
+ * reconstruction to begin with.
  *
  * `rawGrid`'s rows and columns are block-local (row 0 is `block.top`, as
  * `blockRows` in promote/rows.ts also assumes), while `mapColumns` addresses
@@ -91,9 +97,19 @@ export async function applyConfirmation(
   // own stored grid and bounds, discarding whatever map the caller passed
   // for the archetype it is leaving. An unchanged archetype keeps using the
   // passed map verbatim — including an admin's manual edit to it.
+  //
+  // `block.headerRow` — computed once at import time against the real,
+  // merge-aware grid — is passed through rather than letting `mapColumns`
+  // re-detect it against `gridFromBlock`'s text-only reconstruction, which
+  // has no reliable merge information to find it correctly with. A
+  // headerless block (`headerRow` null, which also means it was never
+  // fingerprinted) has no such answer to reuse, so `mapColumns` falls back
+  // to detection exactly as before.
   const resolvedMap = archetype === block.archetype
     ? columnMap
-    : mapColumns(gridFromBlock(block), block, archetype).mappings;
+    : mapColumns(
+      gridFromBlock(block), block, archetype, block.headerRow ?? undefined,
+    ).mappings;
 
   await db.update(blocks)
     .set({ archetype, confidence: '1.0000', confirmedBy: email, confirmedAt: new Date() })

@@ -90,22 +90,34 @@ const FIELD_TERMS: Partial<Record<BlockArchetype, Record<string, string[]>>> = {
  * trailing payment-tracker columns) never has fields invented from that
  * unrelated table, and a mapping always fits every block sharing its
  * fingerprint.
+ *
+ * `headerRow`, when given, is used as-is instead of calling `findHeaderRow`.
+ * A caller re-mapping a block already at rest in the database (confirm.ts,
+ * re-picking the archetype) can only rebuild a grid from its stored, text-only
+ * `rawGrid` — one with no reliable `isMerged` flags — and `findHeaderRow`'s
+ * row-scoring depends on `isMerged` to collapse a horizontally-merged
+ * decorative title into the one cell it actually is (header.ts); without that,
+ * such a title can outscore the real header beneath it. Passing the header
+ * row the block was originally imported with — computed once against the
+ * real, merge-aware grid — sidesteps re-detection, and the bad input,
+ * entirely. Every existing caller omits it and behaves exactly as before.
  */
 export function mapColumns(
   grid: SheetGrid,
   range: CellRange,
   archetype: BlockArchetype,
+  headerRow?: number,
 ): MappingResult {
-  const headerRow = findHeaderRow(grid, range);
+  const resolvedHeaderRow = headerRow ?? findHeaderRow(grid, range);
   const terms = FIELD_TERMS[archetype];
-  if (headerRow === null || !terms) return { headerRow, mappings: [] };
+  if (resolvedHeaderRow === null || !terms) return { headerRow: resolvedHeaderRow, mappings: [] };
 
   const mappings: ColumnMapping[] = [];
   const claimed = new Set<string>();
-  const lastCol = headerRunEnd(grid, range, headerRow);
+  const lastCol = headerRunEnd(grid, range, resolvedHeaderRow);
 
   for (let col = range.left; col <= lastCol; col += 1) {
-    const raw = grid.cells[headerRow - 1]?.[col - 1]?.text ?? '';
+    const raw = grid.cells[resolvedHeaderRow - 1]?.[col - 1]?.text ?? '';
     if (raw === '') continue;
     const header = normalizeHebrew(raw).toLowerCase();
 
@@ -137,5 +149,5 @@ export function mapColumns(
     }
   }
 
-  return { headerRow, mappings };
+  return { headerRow: resolvedHeaderRow, mappings };
 }
