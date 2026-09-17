@@ -3,7 +3,7 @@ import type { Db } from '@/db';
 import type { TestDb } from '@/test/db';
 import { uploads } from '@/db/schema/source';
 import { getStorage, sha256Hex } from '@/lib/storage';
-import { FIXTURES, fixtureBuffer } from '@/test/fixtures';
+import { REFERENCE_WORKBOOKS, referenceWorkbookBuffer } from './reference-workbooks';
 import { runImport } from './run-import';
 
 export interface SeedResult {
@@ -27,8 +27,8 @@ export async function seedReferenceWorkbooks(db: Db | TestDb): Promise<SeedResul
   const result: SeedResult = { imported: [], skipped: [] };
   const storage = getStorage();
 
-  for (const filename of [FIXTURES.y2324, FIXTURES.y25, FIXTURES.y26]) {
-    const buffer = fixtureBuffer(filename);
+  for (const filename of [REFERENCE_WORKBOOKS.y2324, REFERENCE_WORKBOOKS.y25, REFERENCE_WORKBOOKS.y26]) {
+    const buffer = referenceWorkbookBuffer(filename);
     const sha256 = sha256Hex(buffer);
 
     const existing = await db.select().from(uploads).where(eq(uploads.sha256, sha256));

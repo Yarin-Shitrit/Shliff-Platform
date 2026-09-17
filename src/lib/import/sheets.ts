@@ -64,15 +64,17 @@ export async function setSheetSeason(
 export async function setSheetAuthority(
   db: AnyDb, sheetId: string, authoritative: boolean | null,
 ): Promise<void> {
-  if (authoritative === true) {
-    const [sheet] = await db.select({ seasonId: sheets.seasonId }).from(sheets)
-      .where(eq(sheets.id, sheetId));
-    if (!sheet) throw new Error(`unknown sheet ${sheetId}`);
-    if (sheet.seasonId === null) {
-      throw new Error(
-        'אי אפשר לסמן גיליון כסמכותי בלי עונה — בלי עונה אי אפשר להבחין בין גרסה כפולה של אותה שנה לגיליון של שנה אחרת',
-      );
-    }
+  // Existence is checked on every path, not only `true`: an UPDATE with no
+  // matching row silently no-ops, and a bad `sheetId` on the clearing paths
+  // deserves the same not-found error the `true` path already throws.
+  const [sheet] = await db.select({ seasonId: sheets.seasonId }).from(sheets)
+    .where(eq(sheets.id, sheetId));
+  if (!sheet) throw new Error(`unknown sheet ${sheetId}`);
+
+  if (authoritative === true && sheet.seasonId === null) {
+    throw new Error(
+      'אי אפשר לסמן גיליון כסמכותי בלי עונה — בלי עונה אי אפשר להבחין בין גרסה כפולה של אותה שנה לגיליון של שנה אחרת',
+    );
   }
   await db.update(sheets).set({ authoritative }).where(eq(sheets.id, sheetId));
 }

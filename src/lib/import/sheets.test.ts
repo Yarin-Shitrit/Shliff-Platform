@@ -188,6 +188,18 @@ describe('authority guard', () => {
       .rejects.toThrow(`unknown sheet ${unknownId}`);
   });
 
+  it('clearing authority (false) on an unknown sheet throws rather than silently no-oping', async () => {
+    const unknownId = '00000000-0000-0000-0000-000000000000';
+    await expect(setSheetAuthority(db, unknownId, false))
+      .rejects.toThrow(`unknown sheet ${unknownId}`);
+  });
+
+  it('clearing authority (null) on an unknown sheet throws rather than silently no-oping', async () => {
+    const unknownId = '00000000-0000-0000-0000-000000000000';
+    await expect(setSheetAuthority(db, unknownId, null))
+      .rejects.toThrow(`unknown sheet ${unknownId}`);
+  });
+
   it('setting a season on an unknown sheet throws rather than silently succeeding', async () => {
     const unknownId = '00000000-0000-0000-0000-000000000000';
     await expect(setSheetSeason(db, unknownId, s25))
