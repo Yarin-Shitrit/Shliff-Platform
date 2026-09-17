@@ -59,7 +59,9 @@ export function budgetRow(row: BlockRow, ctx: PromoteContext): BudgetOutcome {
     seasonId: ctx.seasonId,
     label,
     total,
-    category: 'camp',
+    // A lead's stored decision on the block's mapping (Task 15), never
+    // inferred here or anywhere else — see `applyConfirmation`.
+    category: ctx.budgetCategory ?? 'camp',
     sourceBlockId: ctx.blockId,
     sourceRow: row.sheetRow,
     ...(quantity.text ? { quantityText: quantity.text } : {}),
