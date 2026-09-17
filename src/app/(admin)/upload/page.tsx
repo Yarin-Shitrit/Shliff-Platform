@@ -1,8 +1,11 @@
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { requireAdmin } from '@/lib/auth/guard';
 import { UploadForm } from './upload-form';
 import { SeedButton } from './seed-button';
 import { CampSeedButton } from './camp-seed-button';
+
+export const metadata: Metadata = { title: 'העלאת קובץ' };
 
 export default async function UploadPage() {
   const admin = await requireAdmin();

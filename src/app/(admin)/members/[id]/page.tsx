@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
@@ -9,6 +10,8 @@ import { AddToSeason } from '../add-member';
 import { MergeControl } from '../merge-control';
 
 export const dynamic = 'force-dynamic';
+
+export const metadata: Metadata = { title: 'כרטיס אדם' };
 
 const KIND_LABELS: Record<string, string> = {
   deliverable: 'אחריות תקציבית',

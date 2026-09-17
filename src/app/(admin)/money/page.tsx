@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { db } from '@/db';
@@ -15,6 +16,8 @@ import { Meter } from '@/components/charts/meter';
 import styles from './money.module.css';
 
 export const dynamic = 'force-dynamic';
+
+export const metadata: Metadata = { title: 'כספים' };
 
 /**
  * One direction's worth of obligation rows. Split out so the page can render

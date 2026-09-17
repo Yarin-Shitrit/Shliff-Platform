@@ -40,8 +40,13 @@ const mono = IBM_Plex_Mono({
   variable: '--font-mono',
 });
 
+/**
+ * B8: a page sets its own name and this supplies the suffix. The suffix is
+ * the wordmark — קופת שליף — because that is what the product calls itself
+ * on screen; "פלטפורמת שליף" appeared nowhere but the title bar.
+ */
 export const metadata: Metadata = {
-  title: 'פלטפורמת שליף',
+  title: { default: 'קופת שליף', template: '%s · קופת שליף' },
   description: 'ניהול נתוני הקאמפ',
 };
 

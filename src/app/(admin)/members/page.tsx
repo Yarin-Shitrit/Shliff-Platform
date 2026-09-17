@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { db } from '@/db';
@@ -11,6 +12,8 @@ import { UnlinkedQueue, type QueuedName } from './unlinked-queue';
 import styles from './members.module.css';
 
 export const dynamic = 'force-dynamic';
+
+export const metadata: Metadata = { title: 'אנשים' };
 
 export default async function MembersPage() {
   const admin = await requireAdmin();

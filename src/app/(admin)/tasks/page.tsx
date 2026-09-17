@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { db } from '@/db';
@@ -12,6 +13,8 @@ import { NewTaskForm } from './new-task-form';
 import styles from './tasks.module.css';
 
 export const dynamic = 'force-dynamic';
+
+export const metadata: Metadata = { title: 'משימות' };
 
 const KIND_LABELS: Record<string, string> = {
   deliverable: 'אחריות תקציבית',

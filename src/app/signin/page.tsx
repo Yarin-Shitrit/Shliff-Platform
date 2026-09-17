@@ -1,4 +1,7 @@
+import type { Metadata } from 'next';
 import { signIn } from '@/lib/auth/config';
+
+export const metadata: Metadata = { title: 'התחברות' };
 
 async function authenticate(formData: FormData) {
   'use server';

@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { notFound } from 'next/navigation';
@@ -11,6 +12,8 @@ import { colLabel } from '@/lib/xlsx/col-label';
 import { DataExplorer, type Workbook, type DerivationRow, type RevisionRow } from './data-explorer';
 
 export const dynamic = 'force-dynamic';
+
+export const metadata: Metadata = { title: 'נתונים' };
 
 const DIR = join(process.cwd(), 'docs', 'reference-data');
 const FILES = [

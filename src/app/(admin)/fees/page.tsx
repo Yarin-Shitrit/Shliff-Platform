@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { db } from '@/db';
@@ -10,6 +11,8 @@ import { MemberFeeRow, IssueMissingDuesButton } from './member-fee-row';
 import styles from './fees.module.css';
 
 export const dynamic = 'force-dynamic';
+
+export const metadata: Metadata = { title: 'דמי קאמפ' };
 
 export default async function FeesPage(
   { searchParams }: { searchParams: Promise<{ season?: string }> },

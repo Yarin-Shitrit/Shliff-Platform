@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { eq } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
 import { db } from '@/db';
@@ -9,6 +10,8 @@ import styles from './import-review.module.css';
 
 type BlockRow = typeof blocks.$inferSelect;
 type MappingRow = typeof blockMappings.$inferSelect;
+
+export const metadata: Metadata = { title: 'בדיקת קובץ' };
 
 /**
  * A block still needs a human decision only if nothing has reviewed it yet.

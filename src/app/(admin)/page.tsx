@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { db } from '@/db';
@@ -10,6 +11,8 @@ import { formatILS } from '@/lib/money';
 import styles from './overview.module.css';
 
 export const dynamic = 'force-dynamic';
+
+export const metadata: Metadata = { title: 'בית' };
 
 /**
  * The first screen, and the only one that answers "where does the camp stand"
