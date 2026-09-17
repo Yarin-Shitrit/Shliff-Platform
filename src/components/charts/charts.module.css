@@ -1,24 +1,29 @@
 /*
- * Series colours are the documented dark steps of the validated palette,
- * checked against this app's real card surface (#141210) with
- * scripts/validate_palette.js: lightness band PASS, chroma floor PASS,
- * CVD separation worst all-pairs ΔE 9.4 (deutan), normal-vision worst
- * ΔE 20.9, contrast ≥ 3:1 PASS.
+ * Series colours are the documented steps of the validated palette and are
+ * unchanged by the redesign (A4). They stay scoped to `.viz` rather than
+ * moving into tokens.css, so nothing outside a chart can reach them and no
+ * mark can be painted in the accent. On the light panel (#FFFFFF) they are
+ * 3.88:1, 3.64:1 and 3.41:1 — all clear of the 3:1 floor for a graphical
+ * object. On the dark panel they are the values they always were.
  *
- * --flare (#EB7837) is deliberately absent. It fails the dark lightness band
- * (OKLCH L 0.694 against a 0.67 ceiling) and drops the CVD pair into the warn
- * band, so it stays what it already is: the UI accent for links and warnings.
+ * --flare / --brand (#EB7837) is deliberately absent. It fails the dark
+ * lightness band (OKLCH L 0.694 against a 0.67 ceiling) and drops the CVD
+ * pair into the warn band, so it stays what it already is: the UI accent for
+ * links and primary actions, never a chart mark.
  *
  * Status `serious` (#ec835a) is also absent: it sits ~5.8 ΔE from series
- * orange and almost on top of --flare, and three oranges meaning three
+ * orange and almost on top of the accent, and three oranges meaning three
  * different things is how a page lies. Status here is good/warning/critical
  * only, always with an icon and a word.
+ *
+ * The unfilled track is the one value that follows the theme, because it is a
+ * surface rather than a mark.
  */
 .viz {
   --series-1: #d95926;
   --series-2: #3987e5;
   --series-3: #199e70;
-  --track: #2b2724;
+  --track: var(--viz-track);
   --status-good: #0ca30c;
   --status-warning: #fab219;
   --status-critical: #d03b3b;
@@ -73,11 +78,13 @@
   white-space: nowrap;
 }
 
-.tile { padding-block: 0.5rem; }
+.tile { padding-block: var(--space-2); }
 .tileValue {
-  font-family: var(--font-display), Georgia, serif;
-  font-size: 1.75rem;
+  font-size: var(--text-display);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -.3px;
   font-variant-numeric: tabular-nums;
 }
-.tileLabel { color: var(--dust); font-size: 0.8125rem; }
-.tileDerivation { color: var(--dust-dim); font-size: 0.75rem; }
+.tileLabel { color: var(--ink-3); font-size: var(--text-meta); }
+.tileDerivation { color: var(--ink-3); font-size: var(--text-meta); }

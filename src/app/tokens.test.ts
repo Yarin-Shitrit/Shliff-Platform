@@ -195,3 +195,38 @@ describe('globals.css', () => {
     expect(block(css, '.scroll-x {')).toContain('overflow-x');
   });
 });
+
+describe('charts.module.css', () => {
+  const charts = () =>
+    readFileSync(join(process.cwd(), 'src/components/charts/charts.module.css'), 'utf8');
+
+  /**
+   * A4: the series palette is unchanged and stays scoped to `.viz`, so no page
+   * stylesheet can reach it and the accent can never paint a mark.
+   */
+  it('keeps the three series colours where they are', () => {
+    const viz = block(charts(), '.viz {');
+    expect(tokenValue(viz, 'series-1')).toBe('#d95926');
+    expect(tokenValue(viz, 'series-2')).toBe('#3987e5');
+    expect(tokenValue(viz, 'series-3')).toBe('#199e70');
+    // A4's standing rule: the accent may never colour a chart mark.
+    expect(viz).not.toContain('--brand');
+    expect(viz).not.toContain('--flare');
+  });
+
+  it('themes the unfilled track', () => {
+    expect(tokenValue(block(charts(), '.viz {'), 'track')).toBe('var(--viz-track)');
+  });
+
+  /**
+   * A5 reduces Frank Ruhl Libre to the wordmark and the sign-in page. A
+   * display figure is set in the UI face at 26/600 (A6), not in the serif.
+   */
+  it('sets the display figure in the interface face', () => {
+    expect(charts()).not.toContain('--font-display');
+  });
+
+  it('keeps the derivation line readable', () => {
+    expect(block(charts(), '.tileDerivation {')).toContain('var(--ink-3)');
+  });
+});
