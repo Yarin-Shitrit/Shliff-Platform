@@ -1,4 +1,4 @@
-export { auth as middleware } from '@/lib/auth/edge-config';
+export { auth as proxy } from '@/lib/auth/edge-config';
 
 export const config = {
   /** Everything except Next internals, static assets, and the sign-in flow. */
