@@ -34,6 +34,15 @@ describe('Money', () => {
     render(<p>נותרו <Money agorot={240000} /> לגבייה</p>);
     expect(screen.getByText('2,400 ₪')).toBeDefined();
   });
+
+  /**
+   * A no-op today — see the comment above `Money` in `format.tsx` for why —
+   * but the attribute must be present regardless, as the explicit defence.
+   */
+  it('pins the isolate to ltr explicitly', () => {
+    const { container } = render(<Money agorot={120000} />);
+    expect(container.querySelector('bdi')?.getAttribute('dir')).toBe('ltr');
+  });
 });
 
 describe('DateText', () => {
@@ -53,5 +62,25 @@ describe('DateText', () => {
       .container.querySelector('bdi')?.textContent).toBe('19:30');
     expect(render(<DateText at={evening} form="datetime" />)
       .container.querySelector('bdi')?.textContent).toBe('07/09/26 19:30');
+  });
+
+  /**
+   * The same explicit-defence pin as `Money`, on every form whose string
+   * cannot contain a strong RTL character.
+   */
+  it('pins dir=ltr on every numeric form', () => {
+    for (const form of ['short', 'full', 'time', 'datetime'] as const) {
+      const { container } = render(<DateText at={evening} form={form} />);
+      expect(container.querySelector('bdi')?.getAttribute('dir')).toBe('ltr');
+    }
+  });
+
+  /**
+   * The one form this plan would break by applying `dir="ltr"` uniformly:
+   * `prose` contains Hebrew letters and resolves `rtl` correctly on its own.
+   */
+  it('leaves the prose form with no dir', () => {
+    const { container } = render(<DateText at={evening} form="prose" />);
+    expect(container.querySelector('bdi')?.hasAttribute('dir')).toBe(false);
   });
 });

@@ -187,6 +187,17 @@ describe('globals.css', () => {
     expect(css).not.toContain('text-align: left');
   });
 
+  /**
+   * layout.tsx's docblock says Heebo is the only face a table, a form or a
+   * figure is ever set in. Without this rule a form control does not inherit
+   * font-family or font-size at all, and renders in the UA default instead.
+   */
+  it('lets form controls inherit the interface face', () => {
+    const css = globals();
+    expect(block(css, 'button, input, select, textarea {')).toContain('font: inherit');
+    expect(block(css, 'button, input, select, textarea {')).toContain('color: inherit');
+  });
+
   it('keeps the four pre-redesign global classes, re-pointed at the new tokens', () => {
     const css = globals();
     expect(block(css, '.card {')).toContain('var(--panel)');

@@ -26,6 +26,21 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/**
+ * `layout.tsx`'s docblock calls Heebo "the only face a table, a form or a
+ * figure is ever set in" — true for the table and the figure, not true as
+ * shipped for the form: none of these four elements inherit `font-family` or
+ * `font-size` on their own, so without this rule every button and input
+ * renders in the UA default face at the UA default size. Safe to add now:
+ * five pre-existing CSS Modules already carry this exact declaration, at
+ * higher specificity, across 22 separate sites, and the mock's own
+ * foundation block carries the same line (`docs/superpowers/mock/shared.css:70`).
+ */
+button, input, select, textarea {
+  font: inherit;
+  color: inherit;
+}
+
 /* A9. Never removed, anywhere, for any control. */
 :focus-visible {
   outline: 2px solid var(--focus);
