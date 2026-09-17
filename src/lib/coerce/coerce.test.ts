@@ -1,7 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { parseNumber, detectSignConvention } from '@/lib/coerce/number';
 import { parseQuantity } from '@/lib/coerce/quantity';
 import { parseDate } from '@/lib/coerce/date';
+import { extractWorkbook } from '@/lib/xlsx/extract';
+import type { SheetGrid } from '@/lib/xlsx/types';
+import { FIXTURES, fixtureBuffer } from '@/test/fixtures';
 
 describe('parseNumber', () => {
   it('passes through real numbers', () => {
@@ -144,5 +147,66 @@ describe('parseDate', () => {
     expect(parsed.date?.getUTCFullYear()).toBe(2024);
     expect(parsed.date?.getUTCMonth()).toBe(1);
     expect(parsed.date?.getUTCDate()).toBe(29);
+  });
+
+  // Task 12b: raw_grid renders an Excel date cell with toISOString(), so the
+  // real stored text is a full ISO-8601 timestamp, never a bare YYYY-MM-DD.
+  it('parses an ISO timestamp (midnight) to its UTC calendar date', () => {
+    const parsed = parseDate('2025-05-20T00:00:00.000Z');
+    expect(parsed.ok).toBe(true);
+    expect(parsed.date?.getUTCFullYear()).toBe(2025);
+    expect(parsed.date?.getUTCMonth()).toBe(4);
+    expect(parsed.date?.getUTCDate()).toBe(20);
+  });
+
+  it('discards the time of day rather than rolling the calendar date', () => {
+    const parsed = parseDate('2025-05-20T21:30:00.000Z');
+    expect(parsed.ok).toBe(true);
+    expect(parsed.date?.getUTCFullYear()).toBe(2025);
+    expect(parsed.date?.getUTCMonth()).toBe(4);
+    expect(parsed.date?.getUTCDate()).toBe(20);
+  });
+
+  it('accepts an ISO timestamp with no seconds and no milliseconds', () => {
+    const noSeconds = parseDate('2025-05-20T00:00');
+    expect(noSeconds.ok).toBe(true);
+    expect(noSeconds.date?.getUTCDate()).toBe(20);
+
+    const withSeconds = parseDate('2025-05-20T00:00:00');
+    expect(withSeconds.ok).toBe(true);
+    expect(withSeconds.date?.getUTCDate()).toBe(20);
+  });
+
+  it('rejects a calendar-invalid ISO timestamp', () => {
+    const parsed = parseDate('2025-02-30T00:00:00.000Z');
+    expect(parsed.ok).toBe(false);
+    expect(parsed.date).toBeNull();
+  });
+
+  it('rejects a non-Z numeric offset, preserving the raw text', () => {
+    const parsed = parseDate('2025-05-20T23:00:00+03:00');
+    expect(parsed.ok).toBe(false);
+    expect(parsed.date).toBeNull();
+    expect(parsed.raw).toBe('2025-05-20T23:00:00+03:00');
+  });
+
+  // The regression this task exists for: no hand-written date string, the
+  // date cell's text comes out of a real workbook through extractWorkbook,
+  // exactly as the import pipeline reads it.
+  describe('against a real workbook cell', () => {
+    let sheets: SheetGrid[];
+
+    beforeAll(async () => {
+      sheets = await extractWorkbook(fixtureBuffer(FIXTURES.y26));
+    });
+
+    it('accepts the ISO timestamp stored in a real ledger date cell', () => {
+      const ledger = sheets.find((s) => s.name === 'סיכום כללי')!;
+      const dateCell = ledger.cells[1][0];
+      expect(dateCell.value).toBeInstanceOf(Date);
+
+      const parsed = parseDate(dateCell.text);
+      expect(parsed.ok).toBe(true);
+    });
   });
 });
