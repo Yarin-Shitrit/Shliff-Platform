@@ -1,0 +1,54 @@
+/**
+ * B6's 52px top bar: breadcrumbs, the page's scope chip, and its global
+ * actions. Mirrors `docs/superpowers/mock/shared.css:126-137` (`.topbar`,
+ * `.crumbs`, `.scopechip`), translated to logical properties (A10) — the
+ * mock is written for a single fixed direction and this is RTL Hebrew.
+ * Colours come only from `src/app/tokens.css`; no alias name is used.
+ */
+.topbar {
+  block-size: 52px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-inline: 20px;
+  border-block-end: 1px solid var(--line);
+}
+
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-3);
+  font-size: 13.5px;
+}
+
+.crumbs a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.crumbs a:hover {
+  color: var(--ink);
+}
+
+.here {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.scopechip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  block-size: 26px;
+  padding-inline: 10px;
+  border-radius: var(--radius-pill);
+  background: var(--sunken);
+  color: var(--ink-2);
+  font-size: 12.5px;
+}
