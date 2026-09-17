@@ -1,70 +1,116 @@
 /**
- * The one place the brand palette is defined. Every page shell and CSS module
- * reads these tokens; none of them re-declare a colour of their own.
+ * Element defaults only. Every value here comes from tokens.css, and this
+ * file declares no colour of its own — `src/app/tokens.test.ts` enforces it.
  *
- * Camp brand: the logo is pure black, #EB7837 orange, and white. The palette is
- * held to those three so the orange stays the only loud thing on screen.
- *
- * The admin surface is a dark, single-theme design: `--ground` is the page,
- * `--raised` the panels that sit on it, `--line` their edges. `--sand` is body
- * text, `--dust` secondary text (it clears 4.5:1 on both `--ground` and
- * `--raised`, so one value works everywhere), `--dust-dim` the same family for
- * unavailable controls, and `--flare` the single accent.
+ * The four classes at the bottom (`.card`, `.muted`, `.badge-warn`,
+ * `.scroll-x`) are pre-redesign globals that seven screens' JSX still names.
+ * They are re-pointed at the new tokens and kept on the same terms as the
+ * token aliases: each screen plan removes its own uses, and the last of them
+ * deletes the block.
  */
-:root {
-  --ground: #000000;
-  --raised: #141210;
-  --line: #2b2724;
-  --sand: #f2ede6;
-  --dust: #98918a;
-  /* 4.69:1 on --ground only. Fails AA on --raised (4.17:1) — do not use it
-     on a raised panel. */
-  --dust-dim: #7d766e;
-  --flare: #EB7837;
+@import './tokens.css';
 
-  /* Dark-only design: let native controls, scrollbars and UA defaults match. */
-  color-scheme: dark;
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
-
-* { box-sizing: border-box; }
 
 body {
   margin: 0;
-  background: var(--ground);
-  color: var(--sand);
-  font-family: var(--font-body), system-ui, 'Segoe UI', Arial, sans-serif;
-  line-height: 1.6;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-body), 'Segoe UI', system-ui, Arial, sans-serif;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* A9. Never removed, anywhere, for any control. */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/**
+ * A5: Heebo carries tabular numerals by default — and "by default" here means
+ * every number, because every number on this platform is already inside a
+ * <bdi>: that is how the minus sign is kept from migrating across the digits
+ * in bidi (A11).
+ */
+bdi {
+  font-variant-numeric: tabular-nums;
+}
+
+/**
+ * A10's single documented exception. A money column must line up by place
+ * value; `text-align: start` would push it to the wrong edge of an RTL table.
+ * This class is the only physical direction in the codebase.
+ */
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 main {
   max-inline-size: 60rem;
   margin-inline: auto;
-  padding-block: 2rem;
-  padding-inline: 1.5rem;
+  padding-block: var(--space-6);
+  padding-inline: var(--space-4);
 }
 
-h1 { font-size: 1.5rem; margin-block-end: 1rem; }
+h1 {
+  font-size: var(--text-title);
+  line-height: var(--leading-title);
+  font-weight: 600;
+  margin-block-end: var(--space-4);
+}
 
-a { color: var(--flare); }
+a {
+  color: var(--brand-text);
+}
+
+table {
+  border-collapse: collapse;
+  inline-size: 100%;
+}
+
+th,
+td {
+  border: 1px solid var(--line);
+  padding-block: var(--space-1);
+  padding-inline: var(--space-2);
+  text-align: start;
+  font-size: var(--text-cell);
+  line-height: var(--leading-cell);
+}
+
+th {
+  background: var(--sunken);
+  color: var(--ink-3);
+  font-weight: 500;
+}
+
+/* ── Pre-redesign globals, kept until the last screen plan ─────────── */
 
 .card {
   border: 1px solid var(--line);
-  border-radius: 0.5rem;
-  padding: 1rem;
-  margin-block-end: 1rem;
-  background: var(--raised);
+  border-radius: var(--radius-card);
+  padding: var(--space-4);
+  margin-block-end: var(--space-4);
+  background: var(--panel);
 }
 
-.muted { color: var(--dust); }
-.badge-warn { color: var(--flare); }
-
-table { border-collapse: collapse; inline-size: 100%; }
-th, td {
-  border: 1px solid var(--line);
-  padding: 0.375rem 0.5rem;
-  text-align: start;
-  font-size: 0.875rem;
+.muted {
+  color: var(--ink-3);
 }
-th { background: var(--raised); font-weight: 600; }
 
-.scroll-x { overflow-x: auto; }
+/* Nearly every use of this class is a `role="alert"` error message, so it
+   takes the error colour, not the warning colour (R3). */
+.badge-warn {
+  color: var(--bad);
+}
+
+.scroll-x {
+  overflow-x: auto;
+}

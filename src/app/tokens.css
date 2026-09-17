@@ -1,0 +1,209 @@
+/**
+ * The one place a colour, a type step, a space step, a radius or a row height
+ * is named. Nothing else belongs here, and no CSS Module may declare a colour
+ * of its own.
+ *
+ * Light is the default and dark is a choice (R2). The dark palette is written
+ * twice because plain CSS cannot share one declaration block between a media
+ * query and a bare selector: once under the OS preference, guarded by
+ * `:not([data-theme='light'])` so that someone who chose light on a dark
+ * laptop gets light, and once under `[data-theme='dark']` for someone who
+ * chose dark on a light laptop. `src/app/tokens.test.ts` pins the two copies
+ * to each other.
+ *
+ * The orange is brand and primary action, never state (R3). `--brand` is a
+ * fill and takes `--brand-ink` on top of it, never white (R4: #1C1917 on
+ * #EB7837 is 6.06:1; white is 2.89:1 and fails). `--brand-text` is the orange
+ * that may be read as text (5.32:1 on white) and `--focus` the orange that may
+ * be drawn as a ring (4.35:1).
+ */
+
+:root {
+  color-scheme: light;
+
+  /* ── Surfaces (A2) ────────────────────────────────────────────── */
+  --canvas: #F6F4F1;
+  --panel: #FFFFFF;
+  --sunken: #F3F0EC;
+  --hover: #F8F6F3;
+  --selected: #FDF1E8;
+  --line: #E9E4DE;
+  --line-strong: #D8D1C9;
+
+  /* ── Text (A2) ────────────────────────────────────────────────── */
+  --ink: #1C1917;
+  --ink-2: #57534E;
+  --ink-3: #6B645E;
+  --ink-4: #A8A29E;
+
+  /* ── Brand (A2, R3, R4) ───────────────────────────────────────── */
+  --brand: #EB7837;
+  --brand-hover: #E06A28;
+  --brand-ink: #1C1917;
+  --brand-text: #B04E17;
+  --brand-soft: #FDF1E8;
+  --focus: #C8570F;
+
+  /* ── States (A2, R3): every one of these is paired with a word ── */
+  --ok: #1A7F4B;
+  --ok-soft: #E7F5EC;
+  --warn: #8A5A00;
+  --warn-soft: #FDF3D7;
+  --warn-line: #F1D9A0;
+  --bad: #B42318;
+  --bad-soft: #FDECEA;
+  --info: #2458C6;
+  --info-soft: #EAF1FD;
+
+  /* ── Chart track (A4) ─────────────────────────────────────────────
+     The three series colours are not here. They stay scoped to `.viz` in
+     charts.module.css so that no page stylesheet can reach them and no mark
+     can accidentally be painted in the accent. Only the unfilled track
+     follows the theme. */
+  --viz-track: #EEEAE5;
+
+  /* ── Shadow (A7): overlays only. Structure is drawn with 1px borders. ── */
+  --shadow-pop: 0 1px 2px rgba(28, 25, 23, .06), 0 8px 24px rgba(28, 25, 23, .12);
+  --shadow-drawer: 0 0 0 1px rgba(28, 25, 23, .06), 0 16px 48px rgba(28, 25, 23, .18);
+
+  /* ── Type (A6): Hebrew-corrected, +1px size and +2px leading over a
+     Latin scale — which is why a table cell is 14/20 and not 13/18. ── */
+  --text-label: 11.5px;
+  --text-meta: 12.5px;
+  --text-dense: 13px;
+  --text-cell: 14px;
+  --leading-cell: 20px;
+  --text-body: 14.5px;
+  --leading-body: 22px;
+  --text-lead: 16px;
+  --text-title: 22px;
+  --leading-title: 30px;
+  --text-display: 26px;
+  --text-display-lg: 38px;
+
+  /* ── Space (A7): the 4px scale, and nothing between its steps. ── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* ── Radii (A7) ───────────────────────────────────────────────── */
+  --radius-sm: 6px;
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-panel: 14px;
+  --radius-pill: 999px;
+
+  /* ── Density (A8) ─────────────────────────────────────────────── */
+  --row-head: 36px;
+  --row: 44px;
+  --control-h: 34px;
+  --control-h-lg: 36px;
+  --tap-min: 44px;
+  --input-font-phone: 16px;
+
+  /* ── Aliases from the pre-redesign palette ────────────────────────
+     Every CSS Module written before this plan reads these six names. They
+     are kept, mapped onto the new tokens, so the redesign lands one screen
+     at a time: a screen nobody has rewritten yet renders in the new palette
+     on the day this file lands. `--line` is not in this list because the new
+     palette uses the same name for the same job.
+
+     `--flare` maps to `--brand-text` and not to `--brand`: it is read as
+     text — links, warnings, the active nav pill's background with the canvas
+     colour on top — and #EB7837 as text on white is 2.89:1.
+
+     A screen plan deletes the alias uses in the CSS Module it rewrites. The
+     last screen plan deletes this block. No new CSS may use these names. */
+  --ground: var(--canvas);
+  --raised: var(--panel);
+  --sand: var(--ink);
+  --dust: var(--ink-3);
+  --dust-dim: var(--ink-4);
+  --flare: var(--brand-text);
+}
+
+/* A8: the compact table row. Set on <html> by a later plan's density control. */
+:root[data-density='compact'] {
+  --row: 36px;
+}
+
+/* Dark by the OS preference — unless the reader said light (A1, A13). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --canvas: #0E0D0C;
+    --panel: #171513;
+    --sunken: #1D1A17;
+    --hover: #1F1C19;
+    --selected: #2A1D14;
+    --line: #2B2724;
+    --line-strong: #3A3531;
+
+    --ink: #F2EDE6;
+    --ink-2: #C9C1B8;
+    --ink-3: #A39B93;
+    --ink-4: #6F6861;
+
+    --brand-text: #F59A5E;
+    --brand-soft: #2A1D14;
+    --focus: #F08A4B;
+
+    --ok: #5CC98E;
+    --ok-soft: #12261B;
+    --warn: #F0C05A;
+    --warn-soft: #2A2112;
+    --warn-line: #4A3A1A;
+    --bad: #F2877C;
+    --bad-soft: #2C1614;
+    --info: #7FA8F5;
+    --info-soft: #141E33;
+
+    --viz-track: #2B2724;
+
+    --shadow-pop: 0 0 0 1px #2B2724, 0 8px 24px rgba(0, 0, 0, .5);
+    --shadow-drawer: 0 0 0 1px #2B2724, 0 16px 48px rgba(0, 0, 0, .6);
+  }
+}
+
+/* Dark because the reader chose it (A13). */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --canvas: #0E0D0C;
+  --panel: #171513;
+  --sunken: #1D1A17;
+  --hover: #1F1C19;
+  --selected: #2A1D14;
+  --line: #2B2724;
+  --line-strong: #3A3531;
+
+  --ink: #F2EDE6;
+  --ink-2: #C9C1B8;
+  --ink-3: #A39B93;
+  --ink-4: #6F6861;
+
+  --brand-text: #F59A5E;
+  --brand-soft: #2A1D14;
+  --focus: #F08A4B;
+
+  --ok: #5CC98E;
+  --ok-soft: #12261B;
+  --warn: #F0C05A;
+  --warn-soft: #2A2112;
+  --warn-line: #4A3A1A;
+  --bad: #F2877C;
+  --bad-soft: #2C1614;
+  --info: #7FA8F5;
+  --info-soft: #141E33;
+
+  --viz-track: #2B2724;
+
+  --shadow-pop: 0 0 0 1px #2B2724, 0 8px 24px rgba(0, 0, 0, .5);
+  --shadow-drawer: 0 0 0 1px #2B2724, 0 16px 48px rgba(0, 0, 0, .6);
+}
