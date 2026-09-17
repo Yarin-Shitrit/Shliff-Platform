@@ -80,7 +80,10 @@
  *     workbook that says 59,587, because the dancefloor block comes back
  *     categorised `camp`. `--season` narrows the promotion and the deletion set
  *     together, so a lead can take the half that is right without the half that
- *     is not.
+ *     is not. It cannot be re-run over a season it has already cut over: the
+ *     enumerated rows for that season are gone, so every replacement check
+ *     fails and the transaction rolls back. A second run is a refusal, not a
+ *     repair — see "Left for the camp lead" item 5 for the by-hand recovery.
  *
  *  6. Make the lead ANSWER the truncation question before committing. Leaving
  *     the two truncated rows is not a neutral default — their replacements are
@@ -132,6 +135,7 @@ import { normalizeHebrew } from '@/lib/text/normalize';
 import { formatILS, toAgorot } from '@/lib/money';
 import type { AnyDb } from '@/lib/db-types';
 import { assertScratchDatabase, CUTOVER_DATABASE } from './scratch-guard';
+import { placeInScope, type ScopePlacement } from './cutover-scope';
 
 // ---------------------------------------------------------------------------
 // The evidence, transcribed
@@ -901,6 +905,23 @@ async function main(): Promise<void> {
     say(`not acting on: ${season.name} — its blocks are not promoted and its `
       + 'enumerated rows are left exactly where they are.');
   }
+
+  // The list above can only name seasons that exist, and sheets with no season
+  // belong to none of them — so without this line the eight unlabelled
+  // `קופת קאמפ 23'-24'` sheets would be absent from the scope report entirely,
+  // which reads as "not there" rather than "deliberately nowhere". Nothing is
+  // at risk either way: an unlabelled sheet is never in scope (a scoped run
+  // matches on season id, and theirs is null), and under an unscoped run its
+  // blocks promote but refuse every row `no-season`. They are counted rather
+  // than listed because the point is that they are a known quantity.
+  const [unlabelled] = await db.select({ n: sql<string>`count(*)` })
+    .from(sheets).where(isNull(sheets.seasonId));
+  if (Number(unlabelled.n) > 0) {
+    say(`not acting on: ${unlabelled.n} sheets with no season at all — ברן 23 and `
+      + 'ברן 24 do not exist as seasons, so their sheets could not be labelled. They '
+      + 'are in no season\'s scope, they have no enumerated rows, and under an '
+      + 'unscoped run every row of theirs refuses `no-season`.');
+  }
   say();
 
   const confirmedBlocks = await db.select({ n: sql<string>`count(*)` })
@@ -978,17 +999,36 @@ async function main(): Promise<void> {
       // The block's season decides scope, because it is the same thing that
       // decided whether the block was promoted a moment ago. A target whose
       // block is out of scope has no replacement in this transaction — by
-      // design — so it must be skipped rather than verified and failed.
+      // design — so it is skipped rather than verified and failed. A target
+      // whose block this database does not have at all is neither, and is
+      // raised as a problem: see `placeInScope`.
       const byBlock = await blockSeasons(tx);
-      const inScope = (blockId: string): boolean => (
-        scope.seasonId === null || byBlock.get(blockId)?.seasonId === scope.seasonId
+      const known = new Set(byBlock.keys());
+      const place = (blockId: string): ScopePlacement => placeInScope(
+        blockId, known, (id) => byBlock.get(id)?.seasonId ?? null, scope.seasonId,
       );
 
       const chosen = includeTruncations ? [...REPLACED, ...TRUNCATIONS] : REPLACED;
-      const targets = chosen.filter((target) => inScope(target.blockId));
-      const skipped = chosen.filter((target) => !inScope(target.blockId));
-      const skippedJunk = JUNK.filter((junk) => !inScope(junk.blockId));
-      const junkTargets = JUNK.filter((junk) => inScope(junk.blockId));
+      const targets = chosen.filter((target) => place(target.blockId) === 'in');
+      const skipped = chosen.filter((target) => place(target.blockId) === 'out');
+      const skippedJunk = JUNK.filter((junk) => place(junk.blockId) === 'out');
+      const junkTargets = JUNK.filter((junk) => place(junk.blockId) === 'in');
+      const unknown = [...chosen, ...JUNK].filter(
+        (target) => place(target.blockId) === 'unknown',
+      );
+
+      if (unknown.length > 0) {
+        say('## Blocks this database has never heard of');
+        say();
+        for (const target of unknown) {
+          const why = `block ${target.blockId} is not in this database, so the row `
+            + `"${target.label}" has no replacement and no season — the evidence was `
+            + 'taken against a different database, or the sheets were re-imported';
+          problems.push(why);
+          say(`  !!  ${target.table}  ${why}`);
+        }
+        say();
+      }
 
       if (skipped.length > 0 || skippedJunk.length > 0) {
         say('## Out of scope — enumerated, and deliberately left alone');
@@ -1044,9 +1084,10 @@ async function main(): Promise<void> {
 
       if (problems.length > 0) {
         throw new CutoverRefusal(
-          `${problems.length} of ${targets.length + junkTargets.length} in-scope rows `
-          + 'could not be verified. The evidence and the database disagree, so nothing '
-          + 'is deleted and the promotion is rolled back with it.',
+          `${problems.length} of ${targets.length + junkTargets.length + unknown.length} `
+          + 'rows this run had to account for could not be verified. The evidence and '
+          + 'the database disagree, so nothing is deleted and the promotion is rolled '
+          + 'back with it.',
         );
       }
 
@@ -1144,13 +1185,36 @@ function reportDecisions(): void {
   say('   no longer exists — so the NEXT promotion of block 66ad3b61 does not update');
   say('   them, it re-INSERTS them: 42,000 + 22,375.30 of non-budget back onto');
   say('   ברן 26, which is 64,375.30 on a budget of 64,375.30. It exactly doubles.');
-  say('   Re-running this script is evidence of it: the second run finds those rows');
-  say('   present and verified, because re-promotion put them back. The W5 sweep');
-  say('   cannot help — it only removes rows the block no longer produces, and the');
-  say('   block still produces these.');
-  say('   Until a lead can veto a row at confirm time, or block bounds become');
-  say('   editable, treat re-promoting 66ad3b61 (and 84d315a5) as an action that');
-  say('   requires running this script again afterwards.');
+  say('   Measured on a clone: budget 64,375.30 -> 128,750.60 after one re-promotion.');
+  say('   The W5 sweep cannot help — it only removes rows the block no longer');
+  say('   produces, and the block still produces these.');
+  say();
+  say('   THIS SCRIPT CANNOT UNDO IT. It cannot be re-run over a season it has');
+  say('   already cut over: the enumerated seeded rows for that season are gone, so');
+  say('   every `verifyReplacement` fails with "seeded row ... is not in the');
+  say('   database" and the whole transaction rolls back — including the deletion');
+  say('   of the junk it was run to remove. A second run is a refusal, not a repair.');
+  say();
+  say('   The repair is by hand, against the database, after the re-promotion:');
+  say();
+  say('     delete from budget_lines');
+  say('      where source_block_id = \'66ad3b61-8b6c-4852-90a4-1cfe0b1f8a92\'');
+  say('        and source_row in (31, 32);');
+  say('     delete from ticket_rounds');
+  say('      where source_block_id = \'84d315a5-6c69-4c5a-97e3-72108fc32f01\'');
+  say('        and source_row = 11;');
+  say();
+  say('   Check before and after that those are the three rows and nothing else:');
+  say();
+  say('     select source_row, label, total from budget_lines');
+  say('      where source_block_id = \'66ad3b61-8b6c-4852-90a4-1cfe0b1f8a92\'');
+  say('        and source_row in (31, 32);');
+  say('     -- expect exactly: 31 תקציב מחנה 42000.00, 32 יעד גיוס 22375.30');
+  say();
+  say('   So: re-promoting 66ad3b61 or 84d315a5 after a cutover is an action that');
+  say('   requires those deletes afterwards. Until a lead can veto a row at confirm');
+  say('   time, or block bounds become editable, there is no better remedy than');
+  say('   knowing this before pressing the button.');
   say();
   say('6. ברן 26\'s ticket projection DOUBLES, to 310,125.');
   say('   171,000 seeded — כרטיסים עד כה 60,000, סבב ג׳ 33,000, סבב ד׳ 78,000, from');
