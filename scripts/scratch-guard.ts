@@ -1,8 +1,9 @@
 /**
- * The guard that keeps `scripts/dry-run-promote.ts` off the live database.
+ * The guard that keeps `scripts/dry-run-promote.ts` and `scripts/cutover.ts`
+ * off the live database.
  *
- * It lives in its own module so it can be unit-tested: importing
- * `dry-run-promote.ts` would run it.
+ * It lives in its own module so it can be unit-tested: importing either script
+ * would run it.
  *
  * It is an ALLOWLIST, not a blacklist. A blacklist on "is the name `shliff`?"
  * has two holes, and both of them land on live:
@@ -21,12 +22,35 @@
  *     session opens on live.
  *
  * So the name is resolved the way postgres.js resolves it and then has to
- * *equal* the expected scratch database. Anything else — including a name
- * this module cannot determine — is refused.
+ * *equal* one of the expected scratch databases. Anything else — including a
+ * name this module cannot determine — is refused.
+ *
+ * A third hole, found while writing the cutover and closed here: a repeated
+ * query key. `URLSearchParams.get('database')` returns the FIRST value, while
+ * postgres.js builds its query object by assigning every entry in order
+ * (`[...url.searchParams].reduce((a, [k, v]) => (a[k] = v, a), {})`) and so
+ * keeps the LAST. `?database=shliff_cutover&database=shliff` therefore read as
+ * the clone here and opened live on the wire. `getAll(...).at(-1)` is what
+ * matches postgres.js, and it is what this module uses.
  */
 
-/** The only database `dry-run-promote.ts` is allowed to open. */
+/** The clone `dry-run-promote.ts` is allowed to open. */
 export const SCRATCH_DATABASE = 'shliff_evidence';
+
+/** The clone `cutover.ts` is allowed to open. It deletes real financial rows,
+ *  so it names this one on its own rather than taking the whole allowlist. */
+export const CUTOVER_DATABASE = 'shliff_cutover';
+
+/**
+ * Every database any script in this directory may open — the allowlist in
+ * full, and the default for `assertScratchDatabase`.
+ *
+ * Listing two names does not widen the guard toward live: both are clones,
+ * created with `create database … template shliff`, and `shliff` itself is in
+ * neither this list nor any other code path here. A caller that wants a
+ * narrower gate passes its own single name.
+ */
+export const SCRATCH_DATABASES: readonly string[] = [SCRATCH_DATABASE, CUTOVER_DATABASE];
 
 /**
  * The environment the resolution reads: `PGDATABASE`, `PGUSERNAME`, `PGUSER`.
@@ -51,7 +75,9 @@ export type DatabaseEnv = Record<string, string | undefined>;
  *  - `o.database` / `o.db` are the *options object*, which `@/db` never
  *    passes. The query parameters `?database=` / `?db=` are read in their
  *    place because they reach the same decision by the other route described
- *    in this module's header.
+ *    in this module's header. Each is read with `getAll(...).at(-1)`, not
+ *    `get(...)`: postgres.js's reduce over the entries keeps the last value of
+ *    a repeated key, and `get` returns the first.
  *  - `osUsername()` is not consulted. A URL that gets that far resolves to ''
  *    here, and `assertScratchDatabase` refuses an empty name outright rather
  *    than guess which database the process would land in.
@@ -72,39 +98,42 @@ export function resolveDatabaseName(url: string, env: DatabaseEnv = process.env)
     || env.PGUSER
     || '';
 
-  return parsed.searchParams.get('database')
-    || parsed.searchParams.get('db')
+  return parsed.searchParams.getAll('database').at(-1)
+    || parsed.searchParams.getAll('db').at(-1)
     || decodeURIComponent(parsed.pathname.replace(/^\//, ''))
     || env.PGDATABASE
     || user;
 }
 
 /**
- * Returns the database name, or throws unless it is exactly `expected`.
+ * Returns the database name, or throws unless it is one of `expected`.
  *
- * `dry-run-promote.ts` calls this before it imports `@/db`, which builds its
- * client at import time — so a refused URL is never even connected to.
+ * `dry-run-promote.ts` and `cutover.ts` both call this before they import
+ * `@/db`, which builds its client at import time — so a refused URL is never
+ * even connected to.
  */
 export function assertScratchDatabase(
   url: string,
-  expected: string = SCRATCH_DATABASE,
+  expected: string | readonly string[] = SCRATCH_DATABASES,
   env: DatabaseEnv = process.env,
 ): string {
+  const allowed = typeof expected === 'string' ? [expected] : [...expected];
+  const named = allowed.join(', ');
   const name = resolveDatabaseName(url, env);
 
   if (name === '') {
     throw new Error(
       'refusing to run: DATABASE_URL names no database, and postgres.js would '
       + 'fall through to the operating-system user name to pick one. Point '
-      + `DATABASE_URL at ${expected} explicitly.`,
+      + `DATABASE_URL at ${named} explicitly.`,
     );
   }
-  if (name !== expected) {
+  if (!allowed.includes(name)) {
     throw new Error(
       `refusing to run against the database "${name}". This script writes `
       + 'season labels, authority flags and block confirmations, so it may '
-      + `only run on the scratch clone "${expected}". Create it with: create `
-      + `database ${expected} template shliff;`,
+      + `only run on a scratch clone: ${named}. Create one with: create `
+      + `database ${allowed[0]} template shliff;`,
     );
   }
   return name;
