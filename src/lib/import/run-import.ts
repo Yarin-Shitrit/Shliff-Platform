@@ -8,6 +8,7 @@ import { classifyBlock } from '@/lib/classify/rules';
 import { mapColumns, findHeaderRow, type ColumnMapping } from '@/lib/classify/map-columns';
 import { layoutFingerprint } from '@/lib/classify/signature';
 import { CONFIDENCE_THRESHOLD, type BlockArchetype } from '@/lib/classify/types';
+import type { BudgetCategory } from '@/db/schema/money';
 import { PIPELINE_VERSION } from '@/lib/version';
 import type { SheetGrid } from '@/lib/xlsx/types';
 import type { CellRange } from '@/lib/blocks/types';
@@ -143,6 +144,11 @@ export async function runImport(
           let confidence = classification.confidence;
           let columnMap: ColumnMapping[] = [];
           let mappingSource: 'rules' | 'signature' = 'rules';
+          // Null until a recognized signature says otherwise (Task 15) — the
+          // same "no lever yet" state a fresh, never-confirmed block starts
+          // in, since auto-recognition only reuses a mapping, it does not
+          // confirm the block (see `promoteBlock`'s `confirmedAt` check).
+          let budgetCategory: BudgetCategory | null = null;
 
           const known = fingerprint
             ? await tx.select().from(layoutSignatures)
@@ -154,6 +160,7 @@ export async function runImport(
             columnMap = known[0].columnMap;
             confidence = 1;
             mappingSource = 'signature';
+            budgetCategory = known[0].budgetCategory;
             autoRecognized += 1;
           } else {
             columnMap = mapColumns(grid, range, archetype).mappings;
@@ -177,6 +184,7 @@ export async function runImport(
             blockId: blockRow.id,
             columnMap,
             source: mappingSource,
+            budgetCategory,
           });
 
           summaries.push({
