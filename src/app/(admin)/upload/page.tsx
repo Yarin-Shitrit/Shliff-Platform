@@ -1,8 +1,13 @@
+import { notFound } from 'next/navigation';
+import { requireAdmin } from '@/lib/auth/guard';
 import { UploadForm } from './upload-form';
 import { SeedButton } from './seed-button';
 import { CampSeedButton } from './camp-seed-button';
 
-export default function UploadPage() {
+export default async function UploadPage() {
+  const admin = await requireAdmin();
+  if (!admin.ok) notFound();
+
   return (
     <main>
       <h1>העלאת קובץ</h1>
