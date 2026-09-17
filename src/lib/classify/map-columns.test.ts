@@ -145,6 +145,20 @@ describe('mapColumns', () => {
     });
   });
 
+  it('maps a תאריך header on an obligations block to date', () => {
+    const grid = buildGrid([
+      ['תאריך', 'שם', 'פירוט', 'סכום'],
+      ['20/05/2025', 'יוסף', 'חוב יוסף', '15240'],
+    ]);
+    const { mappings } = mapColumns(grid, fullRange(grid), 'obligations');
+    const field = (col: number) => mappings.find((m) => m.column === col)?.field;
+
+    expect(field(1)).toBe('date');
+    expect(field(2)).toBe('party');
+    expect(field(3)).toBe('description');
+    expect(field(4)).toBe('amount');
+  });
+
   describe('header run alignment', () => {
     it('maps only the columns in the leading contiguous run of non-blank header cells', () => {
       // Column 3's header is blank, so column 4 sits outside the header run

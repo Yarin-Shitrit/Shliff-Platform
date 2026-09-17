@@ -66,6 +66,7 @@ const FIELD_TERMS: Partial<Record<BlockArchetype, Record<string, string[]>>> = {
     paid: ['שולם'],
   },
   obligations: {
+    date: ['תאריך'],
     description: ['פירוט', 'תיאור'],
     amount: ['סכום', 'סה"כ'],
     party: ['שם', 'אצל מי'],

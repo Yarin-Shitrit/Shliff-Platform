@@ -149,7 +149,12 @@ export const obligations = pgTable('obligations', {
   description: text('description').notNull(),
   amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
   seasonId: uuid('season_id').references(() => seasons.id, { onDelete: 'set null' }),
-  openedOn: timestamp('opened_on', { withTimezone: true }).notNull().defaultNow(),
+  /**
+   * Nullable, with no default: the workbook does not always say when a debt
+   * opened, and null is that true fact rather than today's date stamped in
+   * for it. See `obligationRow` in `src/lib/import/promote/obligations.ts`.
+   */
+  openedOn: timestamp('opened_on', { withTimezone: true }),
   sourceBlockId: uuid('source_block_id').references(() => blocks.id, { onDelete: 'set null' }),
   sourceRow: integer('source_row'),
 }, (table) => [

@@ -74,13 +74,34 @@ describe('obligationRow', () => {
     expect(out.refusal.reason).toBe('no-amount');
   });
 
-  it('refuses a row with no readable date', () => {
+  it('promotes with a null openedOn when the sheet gives no date, and carries the note', () => {
     const out = obligationRow(row({
       party: 'יוסף', description: 'חוב יוסף', amount: '15240', date: '',
+    }), CTX);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.input.openedOn).toBeNull();
+    expect(out.notes.join(' ')).toMatch(/בגיליון אין תאריך/);
+  });
+
+  it('promotes with a null openedOn when there is no date mapping at all', () => {
+    const out = obligationRow(row({
+      party: 'יוסף', description: 'חוב יוסף', amount: '15240',
+    }), CTX);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.input.openedOn).toBeNull();
+    expect(out.notes.join(' ')).toMatch(/בגיליון אין תאריך/);
+  });
+
+  it('still refuses an unparseable, non-blank date such as 01/052024', () => {
+    const out = obligationRow(row({
+      party: 'יוסף', description: 'חוב יוסף', amount: '15240', date: '01/052024',
     }), CTX);
     expect(out.ok).toBe(false);
     if (out.ok) return;
     expect(out.refusal.reason).toBe('no-date');
+    expect(out.refusal.message).toMatch(/01\/052024/);
   });
 
   it('refuses a row with no description', () => {
