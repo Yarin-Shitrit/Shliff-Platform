@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the fourteen files that every screen in the redesign is assembled from, so that no screen plan writes a table, a pill, a drawer or a button again — and so that the five page stylesheets that each carry their own copy of a button and an input can be deleted rather than re-styled.
+**Goal:** Build the fifteen files that every screen in the redesign is assembled from, so that no screen plan writes a table, a pill, a drawer, a toast or a button again — and so that the five page stylesheets that each carry their own copy of a button and an input can be deleted rather than re-styled.
 
-**Architecture:** One flat directory, `src/components/ui/`. Each component is `<name>.tsx` + `<name>.module.css` + `<name>.test.tsx`, exports its props type, and reads only `src/app/tokens.css` and its own module. No component imports another's stylesheet. The kit holds no data, no queries and no server actions: every component takes what it renders as props, and every navigation it performs is an `href` the caller built. Only four files carry `'use client'` — `Drawer`, `ConfirmDialog`, `Popover` and `FilterBar`, which owns a `Popover` and a debounced search box. Every other component calls no hook, so the same module renders on the server when the page is a Server Component and inside the client tree when a page hands it state and callbacks. The four that do need the DOM hand-write their focus trap, their `esc` handling and their outside-click, because R1 forbids the headless UI library that would otherwise supply them.
+**Architecture:** One flat directory, `src/components/ui/`. Each component is `<name>.tsx` + `<name>.module.css` + `<name>.test.tsx`, exports its props type, and reads only `src/app/tokens.css` and its own module. No component imports another's stylesheet. The kit holds no data, no queries and no server actions: every component takes what it renders as props, and every navigation it performs is an `href` the caller built. Only five files carry `'use client'` — `Drawer`, `ConfirmDialog`, `Popover`, `FilterBar`, which owns a `Popover` and a debounced search box, and `Toaster`, which integration ruling I4 added to this plan as Task 15 and which holds a list, a timer per message and a look at `document.activeElement`. Every other component calls no hook, so the same module renders on the server when the page is a Server Component and inside the client tree when a page hands it state and callbacks. The four overlays among those five hand-write their focus trap, their `esc` handling and their outside-click, because R1 forbids the headless UI library that would otherwise supply them.
 
 **Tech Stack:** Next.js 16 (App Router), React 19, TypeScript, CSS Modules. Vitest + `@testing-library/react` under jsdom. No new dependencies.
 
@@ -15,7 +15,7 @@
 Every task's requirements implicitly include all of these.
 
 - **No new runtime dependencies (R1).** No component library, no CSS framework, no icon package, no focus-trap package, no `clsx`. If a step seems to need one, stop and report NEEDS_CONTEXT.
-- **Server Components by default (R7).** A file gets `'use client'` only when it calls a hook or touches the DOM, and every such file opens with a comment naming the reason. Exactly four files in this plan carry the directive — `popover.tsx`, `filter-bar.tsx`, `drawer.tsx`, `confirm-dialog.tsx`. A directive on any other file is a defect. Taking a callback prop is not a reason for one: a component with no hooks renders inside whichever tree its caller is in.
+- **Server Components by default (R7).** A file gets `'use client'` only when it calls a hook or touches the DOM, and every such file opens with a comment naming the reason. Exactly five files in this plan carry the directive — `popover.tsx`, `filter-bar.tsx`, `drawer.tsx`, `confirm-dialog.tsx`, `toaster.tsx`. A directive on any other file is a defect. Taking a callback prop is not a reason for one: a component with no hooks renders inside whichever tree its caller is in.
 - **Colours, spacing and radii come from tokens only.** No hex literal in any `.module.css` in this plan, with exactly one documented exception: `avatar.module.css`, whose six tints are that component's own palette and are not named by A2/A3. Structure is drawn with `1px solid var(--line)`; shadows appear only on the overlay components (A7).
 - **Logical properties throughout (A10)** — `padding-inline`, `inset-inline-start`, `text-align: start`, `margin-inline-start`. Never `left`/`right`. The single exception is a numeric table column, which is physically `text-align: right` with `font-variant-numeric: tabular-nums`, and it carries a comment saying so.
 - **Money is produced by `formatILS` from `@/lib/money` and rendered inside `<bdi>` with `₪` last (A11).** Never string-concatenate an amount. Never render a signed amount; direction is the column's job.
@@ -58,6 +58,7 @@ Every task's requirements implicitly include all of these.
 | `drawer-url.ts` (+ test) | `PEEK_PARAM`, `ACT_PARAM`, `openPeekHref`, `closePeekHref`. The URL contract every screen shares. | R6 |
 | `confirm-dialog.tsx` (+ css, test) | `ConfirmDialog`: a 400px modal naming the action and its consequence, the verb on the confirm button. | C7, R8 |
 | `bulk-bar.tsx` (+ css, test) | `BulkBar`: the count, the actions, destructive ones behind `עוד`, a clear button. | C8 |
+| `toaster.tsx` (+ css, test) | `ToastProvider`, `useToast`, `Toast`: two live regions mounted from first paint — polite for results, assertive for failures — a dwell of 6s or 10s with undo, and a Hebrew dismiss control. Added by integration ruling I4; **plan 02 mounts the provider**, not this plan (A4). | E2, E4 |
 
 **Modified:**
 
@@ -90,7 +91,7 @@ Every task's requirements implicitly include all of these.
 
 **Button leads, though the spec does not number it.** The spec's C list names the composites and assumes the atoms. There is no `Button` in C1–C14, yet C1's `w0` action column, C7's confirm verb, C8's bulk actions, C9's banner action and C10's empty-state action each render one, and `fees.module.css`, `members.module.css`, `tasks.module.css`, `import-review.module.css` and `data.module.css` each carry their own copy of the same 34px control down to the same `:hover:not(:disabled) { border-color: var(--flare) }`. Five copies is the problem this plan exists to end, so `Button` is Task 1. **If plan 01 already shipped `src/components/ui/button.tsx`, Task 1 becomes a read-and-verify:** confirm its props match the table in Task 1's Interfaces, extend it if they do not, and move to Task 2.
 
-**Task order is most-used-first**, so a screen plan that starts before this one finishes still has what it needs: Button, Table, Pill, Avatar, Banner, EmptyState, StatTile, SourceChip, Field, SavedViews, FilterBar, Drawer, ConfirmDialog, BulkBar. Numbered, that is Task 1 through Task 14 in that order. Within the plan, Task 11 (FilterBar) builds `Popover`, Task 13 (ConfirmDialog) uses Task 9's `Checkbox`, and Task 14 (BulkBar) reuses Task 11's `Popover`; those are the only dependencies between tasks other than every task's use of `Button` and `cx` from Task 1.
+**Task order is most-used-first**, so a screen plan that starts before this one finishes still has what it needs: Button, Table, Pill, Avatar, Banner, EmptyState, StatTile, SourceChip, Field, SavedViews, FilterBar, Drawer, ConfirmDialog, BulkBar. Numbered, that is Task 1 through Task 14 in that order. **Task 15 (the toaster) sits after all fourteen** because integration ruling I4 added it to this plan rather than the spec's C list, and because nothing in the kit depends on it — only the screens do. Within the plan, Task 11 (FilterBar) builds `Popover`, Task 13 (ConfirmDialog) uses Task 9's `Checkbox`, and Task 14 (BulkBar) reuses Task 11's `Popover`; those are the only dependencies between tasks other than every task's use of `Button` and `cx` from Task 1.
 
 **Dependents.** Plans 04 and later — D1–D11. Each of them deletes the page CSS this plan's "Retires" notes name. Nothing in those plans may re-implement a component listed here.
 
@@ -4779,7 +4780,7 @@ Expected: PASS — 1 file, 6 tests.
 - [ ] **Step 6: Run the whole kit**
 
 Run: `npx vitest run src/components/ui`
-Expected: PASS — 18 files. Read the COUNT and record it in the report; a file that did not load is a silent zero.
+Expected: PASS — 19 files, the nineteenth being Task 15's `toaster.test.tsx` (I4). If Task 15 has not been run yet the count is 18, which is not a failure; Task 15's own Step 8 repeats this run and expects 19. Read the COUNT and record it in the report; a file that did not load is a silent zero.
 
 - [ ] **Step 7: Typecheck and lint**
 
@@ -4799,6 +4800,482 @@ feat(ui): the bar that appears when something is selected
 
 It renders nothing at zero, announces its count politely, and keeps the
 destructive actions behind עוד so an export and a delete are never neighbours.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+MSG
+```
+
+---
+
+### Task 15: Every write says what it did, out loud
+
+**Files:**
+- Create: `src/components/ui/toaster.tsx`, `src/components/ui/toaster.module.css`, `src/components/ui/toaster.test.tsx`
+
+**Why the kit owns this, and where it stops.** E2 says *every action that writes shows its result: a toast naming what happened, with undo where the domain allows it*. Integration ruling **I4** puts the toaster here rather than in plan 12, because three screens want toasts in waves 2–4 and plan 12 does not run until wave 5; plan 12 keeps the undo table and extends this component. Addendum **A4** narrows I4's word "the mount": **this task does not edit `src/app/(admin)/layout.tsx`.** Integration §3 gives that file to plan 02, which mounts `<ToastProvider>` in the shell it is already rewriting, in this same wave. So when this task is done, `show()` works and the two regions are in the DOM of any tree wrapped in the provider, and **no screen shows a toast yet.** That is expected. Do not "fix" it by editing the layout or by adding a second provider somewhere a screen can see it: two parallel worktrees editing the shell is exactly what §3 exists to prevent. The test file is the only proof this task gets, which is why it is the largest part of it.
+
+**Rulings (binding):**
+
+1. **Two live regions, both mounted from first paint, both empty.** The provider renders an empty `<ol role="status" aria-live="polite">` for results and an empty `<ol role="alert">` for failures *before any toast exists*, and `show` inserts into the matching one. This is not symmetry for its own sake: a live region that gains its role and its first child in the same paint is not reliably announced, so a region created on demand announces nothing the first time — which is the one time it matters. An implementer who renders `{toasts.length > 0 && <ol …>}` has deleted the feature while keeping the component. The assertive region is `role="alert"`, whose implicit `aria-live` is `assertive`; I4 describes that region functionally and plan 12 Task 6 fixes the markup, so the markup wins and no redundant `aria-live` is written next to `role="alert"`.
+2. **Both regions are `aria-atomic="false"`.** `role="status"` and `role="alert"` both imply `aria-atomic="true"`, which re-reads the whole region on every change — so a second toast would re-announce the first. These are append-only logs.
+3. **No portal.** The regions are the provider's own last children. `Drawer`, `ConfirmDialog` and `BulkBar` all position themselves with CSS rather than relocating into `document.body`, and plan 12's tests read the regions with `container.querySelector` off the provider's own render, which a portal to `document.body` would break.
+4. **Toasts stack, newest last.** Two writes in quick succession — a payment and then another — must not silence each other, and an `<ol>` that never holds more than one item is a lie about its own markup. Newest last, so DOM order is the order things happened. No cap: the dwell already bounds the list, and a cap is a rule no requirement asks for.
+5. **The dwell is keyed on `undo`, never on `tone`.** Six seconds without an undo, ten with — plan 12 Task 6's binding numbers, for a lead who has to read the toast *and* reach it. A failure is not given a third duration: plan 12 keys the two numbers on undo and says nothing about tone, and inventing a third is unasked-for.
+6. **A toast under the reader's focus does not disappear.** When the timer fires, the toast checks whether it contains `document.activeElement`; if it does, it re-arms rather than removing itself. Taking `ביטול` away from under a hand reaching for it is worse than leaving the toast up all afternoon.
+7. **The dismiss control is named `סגירת ההודעה`, and never `ביטול`.** `ביטול` is the *undo* label plan 12 passes in, and two controls with the same accessible name inside one toast make plan 12's `getByRole('button', { name: 'ביטול' })` throw on multiple matches. It is icon-only, so the Hebrew name is its `iconLabel` (E4).
+8. **Taking undo removes the toast, and a refused undo becomes a failure toast.** Once the payment is deleted, `נרשם תשלום…` has stopped being true, so the sentence goes. And an undo is itself an action that writes, so E2 applies to it: a `{ ok: false }` comes back as a `bad` toast carrying `result.error` verbatim, because R9 and I3 guarantee the action boundary already made that string Hebrew. Swallowing it would leave a lead believing a write was undone when it was not.
+9. **`useToast` throws when there is no provider above it.** A no-op `show` turns a missing mount into a screen that silently stops reporting its writes — the exact E2 failure this component exists to prevent — and A4 has the mount landing in a different plan's worktree, so that mistake is available. A throw fails the first test that renders a screen without wrapping it. The message is Hebrew with the identifier in it, as `ConfirmDialog`'s own dev-time throw already is.
+10. **`position: fixed`, bottom inline-start, one step above every other overlay.** Fixed rather than absolute because plan 02 owns the mount point (A4) and these regions must not depend on which element it makes their offset parent. Bottom inline-start because there is no free corner and this is the least bad one: `Drawer` takes the whole inline-end side, `BulkBar` takes the bottom centre, `ConfirmDialog` takes the middle — and a toast that covers the control which produced it is worse than one that covers the sidebar's footer for six seconds. The z-index is `var(--z-toast, 70)`. **`--z-toast: 70` now exists in `tokens.css`**, so the fallback never fires; it is kept only as defence for the case where this file is read outside the token layer. 70 is one step above `confirm-dialog.module.css`'s 60, so a failure is readable over a dialog.
+
+Worth knowing why the token's value is 70 and not 50, because it was 50 for about an hour: wave 0 added the ladder by transcribing the mock's four overlay surfaces (`shared.css:302,305,314,326` → bulk 15, scrim 20, drawer 30, pop 40) and put toast at 50. **The mock has no confirm dialog** — C7 exists only in the spec — so the transcription was missing two surfaces, and 50 collided with this plan's own dialog scrim while sitting *below* the dialog at 60. A failure toast would have rendered underneath the modal that produced it, which is the exact stacking bug a shared ladder exists to prevent. The ladder is now `bulk 15 · scrim 20 · drawer 30 · pop 40 · dialog-scrim 50 · dialog 60 · toast 70`, where the first four are transcribed from the mock and the last three are reconciled against this plan's `ConfirmDialog` and this task.
+
+Do **not** add `--z-toast` to Task 1's `KIT_TOKENS`. That list is the set of tokens the kit *requires*, and the fallback is what keeps this one optional.
+11. **Nothing moves.** `grep -rnE "keyframes|transition|animation" docs/superpowers/mock/shared.css src/components/ui/*.module.css` returns nothing: the mock and the fourteen stylesheets before this one are entirely motion-free, so an animated toaster would be the only moving thing in the app. If a later polish task wants an entrance, it goes behind `@media (prefers-reduced-motion: reduce)`; this task writes none.
+
+**Interfaces:**
+- Consumes: `cx` (Task 1); `Button` (Task 1) for the undo and dismiss controls; `Icon` (plan 01, `@/components/ui/icon`); the `ActionResult` **type** from `@/lib/action-result`, imported and not modified — plan 12 Task 6 widens that module to `ActionResult<T = never>` additively, and `Promise<ActionResult>` reads the same before and after, so the global constraint that this plan touches exactly one file outside `src/components/` still holds.
+- Produces — **quoted from plan 12 Task 6, which is the concrete consumer; this shape is a contract, not a suggestion:**
+
+```ts
+// src/components/ui/toaster.tsx
+export interface Toast {
+  /** Hebrew, past tense, naming what happened: 'נרשם תשלום של 1,200 ₪ לאיתי כהן'. */
+  message: string;
+  tone?: 'ok' | 'bad';
+  undo?: { label: string; run: () => Promise<ActionResult> };
+}
+
+export function ToastProvider(props: { children: React.ReactNode }): React.ReactElement;
+export function useToast(): { show: (toast: Toast) => void };
+```
+
+`Toast` is an `interface` and not a `type` alias because that is how plan 12 writes it; `React.ReactNode` and `React.ReactElement` are written below as the named imports `ReactNode` and `ReactElement`, as the rest of the kit does, which are the same two types.
+
+**Retires:** nothing. No page stylesheet in the repo carries a toast today, and no screen reports its writes at all — which is the gap E2 names.
+
+- [ ] **Step 1: Write the failing test**
+
+`src/components/ui/toaster.test.tsx`:
+
+```tsx
+/** @vitest-environment jsdom */
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import { ToastProvider, useToast, type Toast } from './toaster';
+
+const PAID = 'נרשם תשלום של 1,200 ₪ לאיתי כהן';
+const PAID_TOO = 'נרשם תשלום של 800 ₪ לרוני אדלר';
+
+/** One button per toast, so a test can fire two of them in order. */
+function Harness({ toasts }: { toasts: Toast[] }) {
+  const { show } = useToast();
+  return (
+    <>
+      {toasts.map((toast, index) => (
+        <button key={toast.message} type="button" onClick={() => { show(toast); }}>
+          {`שלח ${index + 1}`}
+        </button>
+      ))}
+    </>
+  );
+}
+
+function mount(...toasts: Toast[]) {
+  const { container } = render(<ToastProvider><Harness toasts={toasts} /></ToastProvider>);
+  return {
+    fire: (nth: number) => {
+      fireEvent.click(screen.getByRole('button', { name: `שלח ${nth}` }));
+    },
+    polite: () => container.querySelector('[role="status"][aria-live="polite"]'),
+    assertive: () => container.querySelector('[role="alert"]'),
+  };
+}
+
+describe('the toaster', () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('keeps both live regions in the DOM before anything has happened', () => {
+    const { container } = render(<ToastProvider><span /></ToastProvider>);
+    const polite = container.querySelector('[role="status"][aria-live="polite"]');
+    const assertive = container.querySelector('[role="alert"]');
+    expect(polite).toBeTruthy();
+    expect(assertive).toBeTruthy();
+    // Empty: a region that gains its role and its first child in one paint is
+    // not reliably announced, which is why there are two of these and not one.
+    expect(polite?.textContent).toBe('');
+    expect(assertive?.textContent).toBe('');
+    // Append-only, so a second toast does not re-read the first.
+    expect(polite?.getAttribute('aria-atomic')).toBe('false');
+    expect(assertive?.getAttribute('aria-atomic')).toBe('false');
+  });
+
+  it('puts a result in the polite region and leaves the assertive one empty', () => {
+    const t = mount({ message: PAID });
+    t.fire(1);
+    expect(t.polite()?.textContent).toContain(PAID);
+    expect(t.assertive()?.textContent).toBe('');
+  });
+
+  it('puts a failure in the assertive region and leaves the polite one empty', () => {
+    const t = mount({ message: 'לא הצלחנו לשמור את התשלום', tone: 'bad' });
+    t.fire(1);
+    expect(t.assertive()?.textContent).toContain('לא הצלחנו לשמור את התשלום');
+    expect(t.polite()?.textContent).toBe('');
+  });
+
+  it('stacks, so a second write does not silence the first', () => {
+    const t = mount({ message: PAID }, { message: PAID_TOO });
+    t.fire(1);
+    t.fire(2);
+    const text = t.polite()?.textContent ?? '';
+    expect(text).toContain(PAID);
+    expect(text).toContain(PAID_TOO);
+    expect(text.indexOf(PAID)).toBeLessThan(text.indexOf(PAID_TOO));
+  });
+
+  it('closes when the reader closes it, under a Hebrew name of its own', () => {
+    const t = mount({ message: PAID });
+    t.fire(1);
+    fireEvent.click(screen.getByRole('button', { name: 'סגירת ההודעה' }));
+    expect(screen.queryByText(PAID)).toBeNull();
+  });
+
+  it('refuses to be used with no provider above it, rather than dropping the message', () => {
+    expect(() => render(<Harness toasts={[{ message: PAID }]} />)).toThrow(/ToastProvider/);
+  });
+
+  it('clears a result after six seconds', () => {
+    vi.useFakeTimers();
+    const t = mount({ message: PAID });
+    t.fire(1);
+    act(() => { vi.advanceTimersByTime(5_999); });
+    expect(screen.queryByText(PAID)).toBeTruthy();
+    act(() => { vi.advanceTimersByTime(1); });
+    expect(screen.queryByText(PAID)).toBeNull();
+  });
+
+  it('gives a toast carrying undo four seconds more, because a lead has to reach it', () => {
+    vi.useFakeTimers();
+    const t = mount({ message: PAID, undo: { label: 'ביטול', run: async () => ({ ok: true }) } });
+    t.fire(1);
+    act(() => { vi.advanceTimersByTime(6_000); });
+    expect(screen.queryByText(PAID)).toBeTruthy();
+    act(() => { vi.advanceTimersByTime(4_000); });
+    expect(screen.queryByText(PAID)).toBeNull();
+  });
+
+  it('does not take a toast away while the reader is inside it', () => {
+    vi.useFakeTimers();
+    const t = mount({ message: PAID, undo: { label: 'ביטול', run: async () => ({ ok: true }) } });
+    t.fire(1);
+    act(() => { screen.getByRole('button', { name: 'ביטול' }).focus(); });
+    act(() => { vi.advanceTimersByTime(30_000); });
+    expect(screen.queryByText(PAID)).toBeTruthy();
+  });
+
+  it('runs the domain inverse when undo is taken, and stops saying what is no longer true', async () => {
+    const run = vi.fn().mockResolvedValue({ ok: true });
+    const t = mount({ message: PAID, undo: { label: 'ביטול', run } });
+    t.fire(1);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'ביטול' })); });
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(PAID)).toBeNull();
+  });
+
+  it('reports a refused undo instead of swallowing it', async () => {
+    const run = vi.fn().mockResolvedValue({ ok: false, error: 'לא ניתן למחוק תשלום שסוכם' });
+    const t = mount({ message: PAID, undo: { label: 'ביטול', run } });
+    t.fire(1);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'ביטול' })); });
+    expect(t.assertive()?.textContent).toContain('לא ניתן למחוק תשלום שסוכם');
+  });
+});
+```
+
+**What each test is holding down.** A test that no implementation change can break is worse than no test, so each of the eleven names the change that breaks it. Do not weaken one of these into a restatement of the component's own source:
+
+| test | breaks if the implementation… |
+|---|---|
+| both regions in the DOM | renders a region only when it has a toast (`{toasts.length > 0 && …}`), or puts a visually-hidden label inside one, or leaves `aria-atomic` implicit |
+| result → polite | routes every toast to one region, or sends the default tone to `role="alert"` |
+| failure → assertive | ignores `tone` when choosing the region |
+| stacks | holds one toast in state instead of a list, or prepends instead of appends |
+| closes under its own name | ships no dismiss control, labels it in English, labels it `ביטול`, or leaves the click unwired |
+| refuses with no provider | gives the context a default value of `{ show: () => {} }` |
+| six seconds | arms no timer at all (toasts pile up until navigation), or picks a different number |
+| four seconds more | uses one duration for every toast, or keys the duration on `tone` instead of on `undo` |
+| focus hold | lets the timer remove a toast without looking at `document.activeElement` |
+| runs the inverse | renders `undo.label` without calling `undo.run`, or leaves the toast up afterwards |
+| refused undo | does `void undo.run()` and never reads what came back |
+
+- [ ] **Step 2: Run it and verify it fails**
+
+Run: `npx vitest run src/components/ui/toaster.test.tsx`
+Expected: FAIL — `Failed to resolve import "./toaster"`.
+
+- [ ] **Step 3: Write the component**
+
+`src/components/ui/toaster.tsx`:
+
+```tsx
+'use client';
+/**
+ * Client component: a toast is a reaction to something the reader just did. It
+ * needs state that outlives one render, a timer per message, and a look at
+ * `document.activeElement` before it takes a message away — none of which
+ * exists on the server. The two live regions are the reason the provider
+ * renders markup even when there is nothing to say (see the ruling above).
+ *
+ * This file holds no copy of its own except the dismiss button's name: every
+ * sentence a lead reads is the `message` its caller wrote in Hebrew, past
+ * tense, naming what happened.
+ */
+import {
+  createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
+  type ReactElement, type ReactNode,
+} from 'react';
+import type { ActionResult } from '@/lib/action-result';
+import { Icon } from '@/components/ui/icon';
+import { Button } from './button';
+import { cx } from './cx';
+import styles from './toaster.module.css';
+
+export interface Toast {
+  /** Hebrew, past tense, naming what happened: 'נרשם תשלום של 1,200 ₪ לאיתי כהן'. */
+  message: string;
+  tone?: 'ok' | 'bad';
+  undo?: { label: string; run: () => Promise<ActionResult> };
+}
+
+type ShownToast = Toast & { id: number };
+
+/** Plan 12 Task 6's binding numbers: read it, or read it and reach it. */
+const DWELL_MS = 6_000;
+const DWELL_WITH_UNDO_MS = 10_000;
+
+type ToastApi = { show: (toast: Toast) => void };
+
+const ToastContext = createContext<ToastApi | null>(null);
+
+export function useToast(): ToastApi {
+  const api = useContext(ToastContext);
+  if (api === null) {
+    // Not a no-op: a missing provider would otherwise be a screen that quietly
+    // stops reporting its writes, which is the whole of what E2 forbids.
+    throw new Error('useToast: אין ToastProvider מעל הרכיב הזה');
+  }
+  return api;
+}
+
+export function ToastProvider({ children }: { children: ReactNode }): ReactElement {
+  const [toasts, setToasts] = useState<ShownToast[]>([]);
+  const lastId = useRef(0);
+
+  const dismiss = useCallback((id: number) => {
+    setToasts((current) => current.filter((toast) => toast.id !== id));
+  }, []);
+
+  const show = useCallback((toast: Toast) => {
+    lastId.current += 1;
+    setToasts((current) => [...current, { ...toast, id: lastId.current }]);
+  }, []);
+
+  const api = useMemo<ToastApi>(() => ({ show }), [show]);
+
+  const results = toasts.filter((toast) => toast.tone !== 'bad');
+  const failures = toasts.filter((toast) => toast.tone === 'bad');
+
+  return (
+    <ToastContext.Provider value={api}>
+      {children}
+      {/*
+        Both regions are rendered unconditionally and both start empty. A live
+        region inserted at the same moment as its content is not reliably
+        announced, so these two exist from first paint and `show` only ever
+        appends. `aria-atomic="false"` overrides the implicit `true` that
+        `status` and `alert` carry, so a second toast does not re-read the first.
+
+        They sit inside the Provider, which is also what lets a toast's own undo
+        report a refusal through `useToast`.
+      */}
+      <div className={styles.toaster}>
+        <ol className={styles.region} role="alert" aria-atomic="false">
+          {failures.map((toast) => (
+            <ToastItem key={toast.id} toast={toast} onDismiss={dismiss} />
+          ))}
+        </ol>
+        <ol className={styles.region} role="status" aria-live="polite" aria-atomic="false">
+          {results.map((toast) => (
+            <ToastItem key={toast.id} toast={toast} onDismiss={dismiss} />
+          ))}
+        </ol>
+      </div>
+    </ToastContext.Provider>
+  );
+}
+
+function ToastItem(
+  { toast, onDismiss }: { toast: ShownToast; onDismiss: (id: number) => void },
+): ReactElement {
+  const { show } = useToast();
+  const itemRef = useRef<HTMLLIElement | null>(null);
+  /** A local, so the narrowing survives into the button's `onClick` closure. */
+  const undo = toast.undo;
+  const dwell = undo === undefined ? DWELL_MS : DWELL_WITH_UNDO_MS;
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const arm = () => {
+      timer = setTimeout(() => {
+        // Never out from under a hand reaching for ביטול.
+        if (itemRef.current?.contains(document.activeElement) === true) {
+          arm();
+          return;
+        }
+        onDismiss(toast.id);
+      }, dwell);
+    };
+    arm();
+    return () => { clearTimeout(timer); };
+  }, [dwell, onDismiss, toast.id]);
+
+  async function takeUndo(taken: NonNullable<Toast['undo']>) {
+    // The sentence has stopped being true, so it goes before the inverse runs.
+    onDismiss(toast.id);
+    const result = await taken.run();
+    // An undo is an action that writes, so E2 applies to it too. The message is
+    // already Hebrew: R9 and I3 map it at the action boundary.
+    if (!result.ok) show({ message: result.error, tone: 'bad' });
+  }
+
+  return (
+    <li className={cx(styles.toast, styles[toast.tone ?? 'ok'])} ref={itemRef}>
+      <span className={styles.icon}>
+        <Icon name={toast.tone === 'bad' ? 'alert' : 'check'} size={16} />
+      </span>
+      <span className={styles.message}>{toast.message}</span>
+      <span className={styles.actions}>
+        {undo === undefined ? null : (
+          <Button size="sm" tone="ghost" onClick={() => { void takeUndo(undo); }}>
+            {undo.label}
+          </Button>
+        )}
+        <Button
+          size="sm"
+          tone="ghost"
+          iconLabel="סגירת ההודעה"
+          onClick={() => { onDismiss(toast.id); }}
+        >
+          <Icon name="x" size={14} />
+        </Button>
+      </span>
+    </li>
+  );
+}
+```
+
+Two notes on the code above, both places an implementer will otherwise tidy. `undo` is a local rather than `toast.undo` read twice, because the narrowing from `undo === undefined` has to survive into the button's `onClick` closure and a property read does not; keep the local and keep `takeUndo`'s parameter, and do not reach for a non-null assertion. And the timer **re-arms** rather than clearing on focus: an `onFocus`/`onBlur` pair would depend on React's `focusin` delegation firing under fake timers, while checking `document.activeElement` when the timer fires depends on nothing.
+
+- [ ] **Step 4: Write the stylesheet**
+
+`src/components/ui/toaster.module.css`:
+
+```css
+/*
+  Derived, not copied: the mock has no toaster at all. The surface is `.pop`'s —
+  `--panel`, a 12px radius, `--shadow-pop` — because a toast is the same kind of
+  floating sheet as a popover, and the tone shows only in the icon's colour, as
+  `.banner` does. Nothing here moves: shared.css contains no transition and no
+  keyframes, so an animated toast would be the only motion in the app.
+*/
+.toaster {
+  /*
+    Fixed, not absolute: plan 02 owns the mount point (A4), so these regions
+    must not depend on which element it makes their offset parent. Bottom
+    inline-start is the one corner no other overlay claims — the drawer takes
+    the inline-end side, the bulk bar the bottom centre, the dialog the middle —
+    so a toast never covers the control that produced it. 70 is one step above
+    confirm-dialog's 60, so a failure is readable over a dialog; the fallback
+    keeps this correct both before and after the z-index ladder lands.
+  */
+  position: fixed; z-index: var(--z-toast, 70);
+  inset-block-end: 20px; inset-inline-start: 20px;
+  display: flex; flex-direction: column;
+  max-inline-size: 360px;
+}
+
+/*
+  Failures first in the DOM, so a reader walking the two regions finds the
+  failure before the results. Neither region is ever `display: none`, not even
+  when empty — a hidden live region is not in the accessibility tree, which
+  would put us back where a region announces nothing the first time it is used.
+*/
+.region { display: flex; flex-direction: column; }
+
+/*
+  The gap is a margin on every toast rather than a `gap` on the two regions,
+  because a `gap` between two flex items still applies when one of them is an
+  empty region. The 8px above the topmost toast is invisible: the container is
+  anchored at its bottom edge and grows upward.
+*/
+.toast {
+  margin-block-start: 8px;
+  display: flex; align-items: flex-start; gap: 10px;
+  padding-block: 10px; padding-inline: 14px 8px;
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--panel); box-shadow: var(--shadow-pop);
+  color: var(--ink); font-size: 13.5px;
+}
+
+.icon { display: inline-flex; flex-shrink: 0; margin-block-start: 2px; }
+.ok .icon { color: var(--ok); }
+.bad .icon { color: var(--bad); }
+
+.message { flex: 1; min-inline-size: 0; }
+.actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+
+/* B7/D11: on a phone a toast is the width of the screen, less the gutters. */
+@media (max-width: 768px) {
+  .toaster {
+    inset-inline: 8px; inset-block-end: 12px; max-inline-size: none;
+  }
+}
+```
+
+- [ ] **Step 5: Run it and verify it passes**
+
+Run: `npx vitest run src/components/ui/toaster.test.tsx`
+Expected: PASS — 1 file, 11 tests. React logs the thrown error during the no-provider test; that is expected, exactly as in Task 13. If `Icon` rejects `check` or `alert`, read plan 01's `IconName` union and use its nearest member rather than adding a path here.
+
+- [ ] **Step 6: Typecheck**
+
+Run: `npx tsc --noEmit`
+Expected: no output. `ActionResult` is imported as a type from `@/lib/action-result` and this task does not modify that file; plan 12 Task 6 widens it to `ActionResult<T = never>` additively, and `Promise<ActionResult>` means the same thing before and after.
+
+- [ ] **Step 7: Confirm the kit's client-file count is five, not four**
+
+Run: `grep -rln "use client" src/components/ui`
+Expected: exactly five files — `popover.tsx`, `filter-bar.tsx`, `drawer.tsx`, `confirm-dialog.tsx`, `toaster.tsx`. This plan's Architecture paragraph, its R7 constraint and its Self-review all name the same five; if the grep disagrees with them, one of the two is wrong and the report says which.
+
+- [ ] **Step 8: Run the whole kit**
+
+Run: `npx vitest run src/components/ui`
+Expected: PASS — 19 files. Read the COUNT; a file that did not load is a silent zero.
+
+- [ ] **Step 9: Commit**
+
+```
+git add src/components/ui && git commit -F - <<'MSG'
+feat(ui): every write says what it did, out loud
+
+Two live regions, both mounted from first paint and both empty, because a
+region that gains its role and its first message in one paint is not reliably
+announced. Results go to the polite one, failures to the assertive one. A
+toast carrying undo is given ten seconds instead of six, and none of them
+disappears while the reader's focus is inside it.
+
+The provider is mounted by plan 02, which owns the shell, so nothing shows a
+toast yet (integration A4).
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 MSG
@@ -4836,8 +5313,9 @@ Cross-cutting rulings each component must be re-checked against, one by one:
 - **R3** — every tone in `Pill`, `Banner` and `StatTile` is accompanied by a word or a label; `Pill` throws without one.
 - **R4** — the only place `--brand` is a background is `Button`'s `.primary`, and its colour is `--brand-ink`.
 - **R6** — `grep -rn "peek" src/components/ui` shows `drawer-url.ts` and its test only; no other file spells the param.
-- **R7** — `grep -rln "use client" src/components/ui` lists exactly four files: `popover.tsx`, `filter-bar.tsx`, `drawer.tsx`, `confirm-dialog.tsx`. Each opens with a comment naming the reason. Every other file is absent from that list, `bulk-bar.tsx` included — it takes callbacks but calls no hook, so it renders inside its list's client tree without a directive of its own.
+- **R7** — `grep -rln "use client" src/components/ui` lists exactly five files: `popover.tsx`, `filter-bar.tsx`, `drawer.tsx`, `confirm-dialog.tsx`, `toaster.tsx`. Each opens with a comment naming the reason. Every other file is absent from that list, `bulk-bar.tsx` included — it takes callbacks but calls no hook, so it renders inside its list's client tree without a directive of its own.
 - **R8** — `ConfirmDialog` refuses a nameless verb and opens focus on cancel.
+- **E2/I4** — `ToastProvider` renders both live regions with nothing in them: `render(<ToastProvider><span /></ToastProvider>)` has a `[role="status"][aria-live="polite"]` and a `[role="alert"]`, each with an empty `textContent`. `grep -rn "layout.tsx" src/components/ui` is empty and `git diff main -- 'src/app/(admin)/layout.tsx'` is empty — plan 02 mounts the provider (A4), so no screen shows a toast when this plan is done.
 - **R9/E5** — `grep -rnE "[A-Za-z]{4,}" src/components/ui --include="*.tsx"` returns only identifiers, attribute names and `IBM Plex Mono`; no English sentence reaches a screen.
 - **R10** — the only key handlers in the kit read `Escape` and `Tab`, neither of which is a letter, so no `event.key` comparison in this plan is layout-dependent.
 - **A9** — `grep -rn "outline" src/components/ui/*.module.css` shows a `:focus-visible` rule wherever an element is focusable and no bare `outline: none` without a replacement ring.

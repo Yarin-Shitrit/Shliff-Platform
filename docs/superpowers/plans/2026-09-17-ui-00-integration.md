@@ -267,12 +267,28 @@ the same terms as the rulings above.** Where one contradicts an earlier ruling i
 
 Written 2026-09-17, after plan 01 landed at `a41ffb6`.
 
-### A1 — The icon lives at `src/components/icon.tsx`
+### A1 — The icon lives at `src/components/ui/icon.tsx`
 
-Plans 03, 07 and 08 expect it under `src/components/ui/`. §3 assigns it to plan
-01, which shipped it at `src/components/icon.tsx` with all 65 glyphs. **Fix the
-import; never create a second icon file.** Plan 03's Dependencies already carries
-this escape hatch.
+**This entry was wrong when first written and has been corrected. §3's table is
+overruled here by the spec.**
+
+Plans 03, 07 and 08 all expect `src/components/ui/icon.tsx`. Plan 01's File
+Structure and §3 of this document both said `src/components/icon.tsx`, and the
+first version of this entry ruled for §3 on the grounds that §3 is binding.
+
+That was a misreading. **§3 resolves plan-against-plan conflicts; it does not
+overrule the spec**, which is the authority every plan argues from. Spec §C is
+explicit: *"Each component lives in `src/components/ui/` with its own CSS Module
+and its own test"* — and `Icon` is **C14**, inside §C. So three plans had read
+the spec correctly and two artefacts had not.
+
+The file was moved to `src/components/ui/icon.tsx` (with its module and test)
+while plan 01 was still the only consumer, costing two import sites. The file is
+declared frozen — no screen plan edits it again — so the move had to happen
+before wave 1 or become a sweep across every screen.
+
+`src/components/format.tsx` does **not** move: it is a formatting primitive, not
+a kit component, and no plan expects it under `ui/`.
 
 ### A2 — Plan 01's other shipped paths, which three plans cite wrongly
 
@@ -319,6 +335,19 @@ Per-plan rename surface, measured against the repo:
   record stays in `peek`, the second is named explicitly.
   `parsePeopleQuery` already rejects a merge param not naming exactly two
   different people.
+
+**A consequence of this ruling, which costs a dependency.** Requiring every
+screen to build these URLs through the kit's `drawer-url.ts` **creates a wave-1
+dependency that plan 07 did not previously have.** Plan 07 builds all of its URLs
+itself in `src/app/(admin)/fees/href.ts` and never mentions the kit helper, which
+is why its Dependencies section says "Tasks 1-4 are library and boundary work and
+are independent of plans 01-03; they can start immediately."
+
+That remains true of **Tasks 1, 2 and 3**. It is **no longer true of Task 4**,
+which creates `href.ts` and must now import plan 03's `drawer-url.ts` — so Task 4
+waits on plan 03's Task 12. Any attempt to run plan 07 early must stop after
+Task 3. The same applies wherever a plan's own "independent of the kit" claim
+rests on it spelling drawer params itself.
 
 ### A4 — Plan 03 authors the toaster; plan 02 mounts it
 
