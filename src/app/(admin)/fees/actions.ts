@@ -9,9 +9,15 @@ import {
 } from '@/lib/fees/dues';
 import { recordPayment, deletePayment } from '@/lib/fees/payments';
 import type { PaymentChannel } from '@/db/schema/camp';
+import { toHebrewError } from '@/lib/errors/hebrew';
+import { FEE_ERRORS } from './error-messages';
 
+/**
+ * The Hebrew boundary (R9). Until now this returned `error.message`, which put
+ * `an exception must carry a reason` into a `role="alert"` on a Hebrew page.
+ */
 function failed(error: unknown): ActionResult {
-  return { ok: false, error: error instanceof Error ? error.message : 'שגיאה' };
+  return { ok: false, error: toHebrewError(error, FEE_ERRORS) };
 }
 
 export async function issueDuesAction(seasonId: string): Promise<ActionResult> {
