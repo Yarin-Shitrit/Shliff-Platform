@@ -1,0 +1,15 @@
+.icon {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+/**
+ * C14. An icon that points along the line of text follows the line. `:dir()`
+ * is used rather than an unconditional flip because a cell reference renders
+ * in an LTR run inside an RTL page, and an arrow inside one of those must not
+ * turn around.
+ */
+.icon[data-direction='inline']:dir(rtl) {
+  transform: scaleX(-1);
+}
