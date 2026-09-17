@@ -43,6 +43,13 @@
       "when": 1789481095326,
       "tag": "0005_regular_harpoon",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789665242713,
+      "tag": "0006_steady_ben_grimm",
+      "breakpoints": true
     }
   ]
 }

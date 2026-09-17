@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { eq } from 'drizzle-orm';
 import type { TestDb } from '@/test/db';
 import { createTestDb } from '@/test/db';
 import { obligations } from '@/db/schema/money';
@@ -148,6 +149,37 @@ describe('obligations', () => {
     await expect(settleObligation(db, {
       obligationId: row.id, amount: 500, kind: 'cash', settledOn: WHEN, recordedBy: LEAD,
     })).rejects.toThrow(/בלי שם/);
+  });
+
+  /**
+   * `opened_on` is nullable with no default: the workbook does not always say
+   * when a debt opened, and a caller must say so explicitly rather than have
+   * today's date stamped in for it.
+   */
+  it('round-trips a null openedOn when the workbook gives no date', async () => {
+    const id = await createObligation(db, {
+      direction: 'camp_owes', partyName: 'יוסף',
+      description: 'חוב יוסף', amount: 100, openedOn: null,
+    });
+    const [row] = await db.select().from(obligations).where(eq(obligations.id, id));
+    expect(row.openedOn).toBeNull();
+  });
+
+  it('orders by openedOn ascending with dateless obligations last', async () => {
+    await createObligation(db, {
+      direction: 'camp_owes', partyName: 'ב', description: 'ב',
+      amount: 10, openedOn: null,
+    });
+    await createObligation(db, {
+      direction: 'camp_owes', partyName: 'א', description: 'א',
+      amount: 10, openedOn: new Date('2026-01-01T00:00:00Z'),
+    });
+    await createObligation(db, {
+      direction: 'camp_owes', partyName: 'ג', description: 'ג',
+      amount: 10, openedOn: new Date('2026-03-01T00:00:00Z'),
+    });
+    const rows = await listObligations(db);
+    expect(rows.map((r) => r.description)).toEqual(['א', 'ג', 'ב']);
   });
 
   it('separates the two directions', async () => {

@@ -1,4 +1,6 @@
-import { and, asc, eq } from 'drizzle-orm';
+import {
+  and, asc, eq, sql,
+} from 'drizzle-orm';
 import type { AnyDb } from '@/lib/db-types';
 import { obligations, obligationSettlements } from '@/db/schema/money';
 import type { ObligationDirection, SettlementKind } from '@/db/schema/money';
@@ -13,7 +15,10 @@ export interface NewObligation {
   description: string;
   amount: number;
   seasonId?: string;
-  openedOn: Date;
+  /** `null` means the workbook does not say when this debt opened — a
+   * required key, so callers must say "no date" explicitly rather than
+   * have one stamped in for them. */
+  openedOn: Date | null;
   sourceBlockId?: string;
   sourceRow?: number;
 }
@@ -96,7 +101,10 @@ export async function listObligations(
     .from(obligations)
     .leftJoin(persons, eq(persons.id, obligations.partyPersonId))
     .where(where.length ? and(...where) : undefined)
-    .orderBy(asc(obligations.openedOn));
+    // Explicit nulls-last rather than relying on Postgres's ASC default: a
+    // dateless obligation (the workbook did not say) belongs after every
+    // dated one, and that has to be stated, not assumed.
+    .orderBy(sql`${obligations.openedOn} asc nulls last`);
 
   const all = await db.select().from(obligationSettlements)
     .orderBy(asc(obligationSettlements.settledOn));
