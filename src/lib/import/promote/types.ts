@@ -22,7 +22,11 @@ export type RefusalReason =
   /** A signed amount appears in a direction-carrying column. The column
    *  name already specifies the direction, so a negative sign cannot be
    *  resolved without guessing at intent. Refuse rather than flip. */
-  | 'negative-amount';
+  | 'negative-amount'
+  /** A value the target column cannot hold: money beyond `numeric(12,2)`,
+   *  or a count beyond Postgres `integer`. Refused before the dry-run branch,
+   *  so a dry run never reports a row that a commit would fail on. */
+  | 'out-of-range';
 
 export interface Refusal {
   /** Absolute 1-indexed sheet row, or the block's own top row for a
@@ -47,14 +51,34 @@ export interface PromotedRow {
   notes: string[];
 }
 
+/**
+ * A row this block no longer produces, kept because something else depends
+ * on it. Deleting it would cascade or silently unlink a decision a lead made
+ * that the sheet cannot recreate — a settlement, a task's budget line.
+ */
+export interface RetainedRow {
+  table: PromotedRow['table'];
+  id: string;
+  /** The row's `source_row`. */
+  sheetRow: number | null;
+  /** Hebrew, naming what depends on the row. */
+  reason: string;
+}
+
 export interface PromotionResult {
   blockId: string;
   archetype: BlockArchetype;
   dryRun: boolean;
   written: PromotedRow[];
   refused: Refusal[];
-  /** Rows removed because this block no longer produces them (W5). */
+  /** Rows removed because this block no longer produces them (W5), in any
+   *  of the four target tables. On a dry run, the rows a commit would
+   *  remove; nothing is removed. */
   deleted: number;
+  /** Rows this block no longer produces but that were kept because
+   *  something references them. Filled on a dry run too. A plain array, so
+   *  results for several blocks concatenate. */
+  retained: RetainedRow[];
 }
 
 export interface PromoteContext {
