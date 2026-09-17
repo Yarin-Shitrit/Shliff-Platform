@@ -129,41 +129,83 @@ describe('seedCampBaseline', () => {
   });
 
   /**
-   * The one test that actually looks at ברן 25's own movements. Without it,
-   * seeding the 44,647 `מעבר לקובץ חדש` row as income (exactly the mistake
-   * `LEDGER_25`'s own comment explains) passes every other test in this file,
-   * because the ברן 26 ledger test below is filtered to ברן 26 and never
-   * sees a ברן 25 row at all.
+   * This used to assert ברן 25's bottom line — 50,306.55 in, 50,770 out,
+   * −463.45 net — from seven hand-transcribed rows, and its stated purpose was
+   * to catch the 44,647 `מעבר לקובץ חדש` carry-forward being seeded as income.
+   *
+   * The seed writes no ברן 25 ledger row at all now: block
+   * `ac5a9d6e-8b52-40a9-bfea-a22771a2e4c6` (`סיכום כללי` of `קופת קאמפ 25’`)
+   * produces all seven, and refuses the carry-forward row itself with reason
+   * `carry-forward`. So the expected value is zero, and the gate it holds is
+   * the stronger one: the seed must not put a ברן 25 movement back, by any
+   * route, because a seeded row and a promoted row are not deduplicated
+   * anywhere and the season would be counted twice.
    */
-  it('reproduces the ברן 25 ledger bottom line, with no carry-forward row', async () => {
+  it('writes no ברן 25 ledger movement — block ac5a9d6e owns all seven', async () => {
     await seedCampBaseline(db, LEAD);
     const { ledgerTotals } = await import('@/lib/money/ledger');
     const s25 = (await getSeasonByName(db, 'ברן 25'))!;
     const totals = await ledgerTotals(db, { seasonId: s25.id });
-    expect(totals.outAgorot).toBe(5077000);
-    expect(totals.inAgorot).toBe(5030655);
-    expect(totals.netAgorot).toBe(-46345);
+    expect(totals.count).toBe(0);
+    expect(totals.outAgorot).toBe(0);
+    expect(totals.inAgorot).toBe(0);
+    expect(totals.netAgorot).toBe(0);
   });
 
-  it('reproduces the ברן 26 ledger bottom line', async () => {
+  /**
+   * Was 62,000 in / 45,271 out / 16,729 net, from twelve transcribed rows.
+   * Block `6f1a7fc4-03ac-4ec3-abe4-0b5a863e133f` (`סיכום כללי` of
+   * `קופת קאמפ 2026`) produces all twelve now. Kept season-scoped rather than
+   * folded into the ברן 25 test above: each season has its own owning block,
+   * and a regression that re-seeded only one of them must fail on its own.
+   */
+  it('writes no ברן 26 ledger movement — block 6f1a7fc4 owns all twelve', async () => {
     await seedCampBaseline(db, LEAD);
     const { ledgerTotals } = await import('@/lib/money/ledger');
     const s26 = (await getSeasonByName(db, 'ברן 26'))!;
     const totals = await ledgerTotals(db, { seasonId: s26.id });
-    expect(totals.outAgorot).toBe(4527100);
-    expect(totals.inAgorot).toBe(6200000);
-    expect(totals.netAgorot).toBe(1672900);
+    expect(totals.count).toBe(0);
+    expect(totals.outAgorot).toBe(0);
+    expect(totals.inAgorot).toBe(0);
+    expect(totals.netAgorot).toBe(0);
   });
 
-  it('closes the ברן 26 dues/fundraising identity from seeded rows', async () => {
+  /**
+   * The twenty-four ברן 26 `camp` budget lines are block
+   * `66ad3b61-8b6c-4852-90a4-1cfe0b1f8a92`'s now. Nothing else in this file
+   * looks at ברן 26's budget lines directly — the identity test below sees the
+   * total, but a seed that wrote the lines back under the wrong category would
+   * leave that total at 0 and pass. This asserts the rows themselves.
+   */
+  it('writes no ברן 26 budget line — block 66ad3b61 owns all twenty-four', async () => {
+    await seedCampBaseline(db, LEAD);
+    const { listBudgetLines } = await import('@/lib/money/budget');
+    const s26 = (await getSeasonByName(db, 'ברן 26'))!;
+    expect(await listBudgetLines(db, s26.id)).toEqual([]);
+  });
+
+  /**
+   * Was: budget 64,375.30, per head 1,839.29, and the identity closes.
+   *
+   * It cannot close from seeded rows any more, and that is the honest result
+   * rather than a lowered gate: the identity's budget half is exactly what the
+   * seed gave up. `campBudgetFundingAgorot` and `perPersonFundingAgorot` are
+   * unchanged at 22,375.30 and 639.29 — `funding_targets` has no archetype, so
+   * the seed still owns that half — which is what makes this test discriminate
+   * between "the budget moved to the promoter" (expected) and "the fundraising
+   * plan was dropped too" (a bug). The identity closing again is verified
+   * after promotion, in the cutover's scratch run, not here.
+   */
+  it('cannot close the ברן 26 identity alone — the budget half is the promoter\'s', async () => {
     await seedCampBaseline(db, LEAD);
     const { duesFundingIdentity } = await import('@/lib/money/funding');
     const s26 = (await getSeasonByName(db, 'ברן 26'))!;
     const identity = await duesFundingIdentity(db, s26.id);
-    expect(identity.budgetTotalAgorot).toBe(6437530);
-    expect(identity.perPersonFullAgorot).toBe(183929);
+    expect(identity.budgetTotalAgorot).toBe(0);
+    expect(identity.perPersonFullAgorot).toBe(0);
     expect(identity.perPersonFundingAgorot).toBe(63929);
-    expect(identity.closes).toBe(true);
+    expect(identity.flatRateAgorot).toBe(120000);
+    expect(identity.closes).toBe(false);
   });
 
   it('seeds חוב יוסף with 910 outstanding', async () => {
@@ -186,12 +228,24 @@ describe('seedCampBaseline', () => {
     expect(await unnamedObligations(db)).toHaveLength(2);
   });
 
+  /**
+   * `first.movements` used to be the third assertion here. There is no
+   * `movements` counter any more — the seed writes no ledger row on any run,
+   * first or second — so the assertion is re-pointed at the fact it was
+   * guarding rather than deleted: the ledger stays empty across two runs.
+   * `listMovements` with no filter is camp-wide, so this also catches a row
+   * seeded against no season at all, which the two season-scoped tests above
+   * would both miss.
+   */
   it('is idempotent — the money side', async () => {
     await seedCampBaseline(db, LEAD);
     const first = await seedCampBaseline(db, LEAD);
     expect(first.accounts).toBe(0);
-    expect(first.movements).toBe(0);
     expect(first.obligations).toBe(0);
+    expect(first.budgetLines).toBe(0);
+
+    const { listMovements } = await import('@/lib/money/ledger');
+    expect(await listMovements(db, {})).toEqual([]);
   });
 
   /**
@@ -286,7 +340,16 @@ describe('seedCampBaseline', () => {
     expect(await ticketTotalAgorot(db, s26.id)).toBe(17100000);
   });
 
-  it('the identity still closes against the seeded plan', async () => {
+  /**
+   * Was `perPersonFullAgorot` 183929 and `closes` true. The two figures that
+   * come from the seeded fundraising plan — 22,375.30 and 639.29 per head —
+   * are unchanged and still pinned; the two that came from the budget the
+   * promoter now owns are 0 and false. Deliberately kept beside the funding
+   * tests rather than merged with the identity test above: this one reaches
+   * the identity through `fundingTargetAgorot`, and a plan that stopped being
+   * flagged `countsTowardCampBudget` would fail here first.
+   */
+  it('keeps the funding half of the identity, and only that half', async () => {
     await seedCampBaseline(db, LEAD);
     const { getSeasonByName } = await import('@/lib/members/roster');
     const { duesFundingIdentity } = await import('@/lib/money/funding');
@@ -294,8 +357,8 @@ describe('seedCampBaseline', () => {
 
     const id = await duesFundingIdentity(db, s26.id);
     expect(id.fundingTargetAgorot).toBe(2237530);
-    expect(id.perPersonFullAgorot).toBe(183929);
     expect(id.perPersonFundingAgorot).toBe(63929);
-    expect(id.closes).toBe(true);
+    expect(id.perPersonFullAgorot).toBe(0);
+    expect(id.closes).toBe(false);
   });
 });

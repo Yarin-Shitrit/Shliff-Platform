@@ -24,19 +24,38 @@ beforeEach(async () => {
  * holds in the camp's own sheets, reproduced from database rows. They exist so
  * that a change which quietly breaks one of the camp's real totals fails here
  * rather than in front of a lead.
+ *
+ * Three of them no longer close from the seed alone, and their expected values
+ * changed rather than being removed. The seed stopped transcribing the ledger
+ * and the ברן 26 camp budget when the promoter took ownership of them, and a
+ * test on `createTestDb()` cannot promote anything: PGlite holds no uploads,
+ * no sheets and no blocks, so there is nothing to confirm. Those three
+ * identities are verified after promotion instead, in the cutover script's
+ * scratch run against a clone of live, and the figures they used to assert are
+ * kept here in the comments so the change is a re-pointing and not a loss.
  */
 describe('the workbooks own arithmetic', () => {
-  it('ברן 26 ledger: 62,000 in, 45,271 out, 16,729 net', async () => {
+  /**
+   * Was 62,000 in / 45,271 out / 16,729 net. Block
+   * `6f1a7fc4-03ac-4ec3-abe4-0b5a863e133f` produces those twelve movements
+   * now. Zero here is the assertion that the seed does not ALSO produce them:
+   * nothing deduplicates a seeded row against a promoted one, so a regression
+   * that put them back would double the season in front of a lead.
+   */
+  it('ברן 26 ledger: nothing seeded — block 6f1a7fc4 owns all twelve', async () => {
     const s26 = (await getSeasonByName(db, 'ברן 26'))!;
     const totals = await ledgerTotals(db, { seasonId: s26.id });
-    expect(totals.inAgorot).toBe(6200000);
-    expect(totals.outAgorot).toBe(4527100);
-    expect(totals.netAgorot).toBe(1672900);
+    expect(totals.count).toBe(0);
+    expect(totals.inAgorot).toBe(0);
+    expect(totals.outAgorot).toBe(0);
+    expect(totals.netAgorot).toBe(0);
   });
 
-  it('ברן 26 budget: 64,375.30', async () => {
+  /** Was 64,375.30, from twenty-four seeded `camp` lines. Block
+   *  `66ad3b61-8b6c-4852-90a4-1cfe0b1f8a92` owns them now. */
+  it('ברן 26 budget: nothing seeded — block 66ad3b61 owns all twenty-four', async () => {
     const s26 = (await getSeasonByName(db, 'ברן 26'))!;
-    expect(await budgetTotalAgorot(db, s26.id)).toBe(6437530);
+    expect(await budgetTotalAgorot(db, s26.id)).toBe(0);
   });
 
   it('ברן 26 fundraising plan: 135,375.30', async () => {
@@ -49,7 +68,18 @@ describe('the workbooks own arithmetic', () => {
     expect(await ticketTotalAgorot(db, s26.id)).toBe(17100000);
   });
 
-  it('the dues/fundraising identity closes: 1,200 + 639.29 = 1,839.29', async () => {
+  /**
+   * Was: 1,200 + 639.29 = 1,839.29, and `closes` true.
+   *
+   * The funding half is untouched — `funding_targets` has no archetype in
+   * `BLOCK_ARCHETYPES`, so the seed still owns all eight targets — and both of
+   * its figures are still pinned here. The full per-head figure was the camp
+   * budget divided by 35, and the camp budget is the promoter's, so it reads 0
+   * and the identity does not close. That asymmetry is the assertion: if the
+   * fundraising plan had been dropped along with the budget, 22,375.30 and
+   * 639.29 would go to 0 too and this test would fail.
+   */
+  it('the dues/fundraising identity keeps its funding half: 1,200 + 639.29', async () => {
     const s26 = (await getSeasonByName(db, 'ברן 26'))!;
     // Pinned directly, not only through the rounded per-head figure below —
     // the identity divides this by 35 before comparing, so a drift of a few
@@ -59,8 +89,8 @@ describe('the workbooks own arithmetic', () => {
     const identity = await duesFundingIdentity(db, s26.id);
     expect(identity.flatRateAgorot).toBe(120000);
     expect(identity.perPersonFundingAgorot).toBe(63929);
-    expect(identity.perPersonFullAgorot).toBe(183929);
-    expect(identity.closes).toBe(true);
+    expect(identity.perPersonFullAgorot).toBe(0);
+    expect(identity.closes).toBe(false);
   });
 
   it('חוב יוסף: 15,240 − 14,330 = 910', async () => {
@@ -96,27 +126,31 @@ describe('the workbooks own arithmetic', () => {
    * The workbook's ברן 25 sheet nets to 44,183.55 — but only because its
    * income column includes `מעבר לקובץ חדש 44,647`, the previous book's
    * closing balance. Under a continuous ledger that row is not income, so the
-   * seeded season nets to −463.45 and the 44,647 lives as an opening balance.
-   * The identity still has to close; it just closes honestly.
+   * season nets to −463.45 and the 44,647 lives as an opening balance.
+   *
+   * This used to assert 50,306.55 in / 50,770 out / −463.45 net from seven
+   * seeded rows, and then reconcile that net against the מיקום block. Block
+   * `ac5a9d6e-8b52-40a9-bfea-a22771a2e4c6` produces the seven now, and refuses
+   * the carry-forward row on its own rule (`carry-forward`), so the judgement
+   * survives the seed losing it.
+   *
+   * What is still checkable here is the other side of the same identity, and
+   * it is kept whole: the מיקום openings must come to exactly 44,647 − 463.45.
+   * `accountBalances` is a separate query over opening balances only, so a
+   * drift in any of the three still fails this, and the −463.45 the promoter
+   * has to produce stays written down rather than becoming folklore. The two
+   * halves actually meet in the cutover's scratch run, which promotes the
+   * block into a clone that holds these same openings.
    */
-  it('ברן 25 nets to −463.45 once the carry-forward is not income', async () => {
+  it('ברן 25: the מיקום openings reconcile to −463.45 plus the 44,647 carry-forward', async () => {
     const s25 = (await getSeasonByName(db, 'ברן 25'))!;
     const totals = await ledgerTotals(db, { seasonId: s25.id });
-    expect(totals.inAgorot).toBe(5030655);
-    expect(totals.outAgorot).toBe(5077000);
-    expect(totals.netAgorot).toBe(-46345);
+    expect(totals.count).toBe(0);
+    expect(totals.netAgorot).toBe(0);
 
-    // and the 44,647 the workbook booked as income is exactly what reconciles
-    // that net back to the מיקום block's own derived total — not a second
-    // hardcoded figure standing in for it. `accountBalances` is a completely
-    // separate query (opening balances only, no ledger rows), so this fails
-    // on its own if either side drifts: a bad ledger entry moves `netAgorot`,
-    // a bad opening balance moves `mikomTotalAgorot`, and 44,647 is the one
-    // constant that can never come from a query, because it is deliberately
-    // the one row this seed refuses to store (see `LEDGER_25`'s comment).
     const mikomTotalAgorot = (await accountBalances(db))
       .reduce((n, row) => n + row.balanceAgorot, 0);
-    expect(totals.netAgorot + 4464700).toBe(mikomTotalAgorot);
+    expect(mikomTotalAgorot - 4464700).toBe(-46345);
   });
 
   /**
