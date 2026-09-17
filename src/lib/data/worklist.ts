@@ -74,9 +74,14 @@ export interface CoverageCell {
   archetype: BlockArchetype;
   /** Sum of `rowCount` over this cell's `promoted` blocks. */
   promoted: number;
-  /** Every block in this cell, whatever its state — including one that
-   *  never produced a row, so a lead sees the gap rather than an absent
-   *  cell. */
+  /**
+   * Every block assigned to this season and archetype, regardless of state —
+   * confirmed or not, promoted, refused, superseded. Deliberate, not
+   * incidental: the register's whole job is "what has not settled yet", so a
+   * cell holding three still-unconfirmed tables and zero promoted rows must
+   * read as three blocks with nothing promoted, not as an empty cell that
+   * implies there is nothing to do.
+   */
   blocks: number;
 }
 

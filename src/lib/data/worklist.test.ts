@@ -5,7 +5,9 @@ import { createTestDb } from '@/test/db';
 import { createSeason } from '@/lib/members/roster';
 import { createPerson } from '@/lib/members/link';
 import { uploads, sheets, blocks, blockMappings } from '@/db/schema/source';
-import { ledgerEntries, budgetLines, obligations } from '@/db/schema/money';
+import {
+  ledgerEntries, budgetLines, ticketRounds, obligations,
+} from '@/db/schema/money';
 import { promoteBlock } from '@/lib/import/promote/promote';
 import { settleObligation } from '@/lib/money/obligations';
 import { setSheetSeason, setSheetAuthority } from '@/lib/import/sheets';
@@ -84,6 +86,22 @@ const LEDGER_GRID_3 = [
   ['20/05/2025', 'מקדמה מייצג', '4000', ''],
   ['30/10/2025', 'מסיבת פקאנים', '', '57000'],
   ['01/11/2025', 'עוד תנועה', '100', ''],
+];
+
+const BUDGET_GRID = [
+  ['סוג הוצאה', 'כמות', 'מחיר', 'עלות כוללת', 'למה'],
+  ['בסיס', '1', '58523', '58523', ''],
+];
+
+const TICKET_MAP: ColumnMapping[] = [
+  { column: 1, field: 'round', confidence: 1 },
+  { column: 2, field: 'quantity', confidence: 1 },
+  { column: 3, field: 'price', confidence: 1 },
+  { column: 4, field: 'total', confidence: 1 },
+];
+const TICKET_GRID = [
+  ['סבב', 'כמות', 'מחיר', 'לסבב'],
+  ['סבב א׳', '100', '150', '15000'],
 ];
 
 const OBL_MAP: ColumnMapping[] = [
@@ -181,10 +199,14 @@ describe('worklist', () => {
     expect(row?.refusals.map((r) => r.reason).sort()).toEqual(['carry-forward', 'total-row']);
   });
 
-  it('never writes anything — the ledger is still empty afterwards', async () => {
+  it('never writes anything — every promotable table is still empty afterwards', async () => {
     await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
+    await addBlock(sheetId, 'budget_lines', BUDGET_GRID, BUDGET_MAP, { top: 20 });
+    await addBlock(sheetId, 'ticket_rounds', TICKET_GRID, TICKET_MAP, { top: 30 });
     await worklist(db, LEAD);
     expect(await db.select().from(ledgerEntries)).toHaveLength(0);
+    expect(await db.select().from(budgetLines)).toHaveLength(0);
+    expect(await db.select().from(ticketRounds)).toHaveLength(0);
   });
 
   it('carries a retained row through when a settlement depends on it', async () => {
@@ -243,6 +265,21 @@ describe('coverage', () => {
     expect(cell?.promoted).toBe(0);
     expect(cell?.blocks).toBe(1);
   });
+
+  it('counts an unconfirmed block into its cell without counting it toward promoted', async () => {
+    await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP, { confirmed: false });
+
+    const rows = await worklist(db, LEAD);
+    const cells = coverage(rows);
+    const cell = cells.find((c) => c.seasonName === 'ברן 26' && c.archetype === 'ledger');
+
+    // The register's job is "what has not settled yet": a cell holding an
+    // unconfirmed table and nothing promoted must still show the block, not
+    // read as an empty cell that implies there is nothing to do.
+    expect(cell).toBeDefined();
+    expect(cell?.blocks).toBe(1);
+    expect(cell?.promoted).toBe(0);
+  });
 });
 
 describe('collisionGroups', () => {
@@ -289,6 +326,21 @@ describe('collisionGroups', () => {
     const group = groups.find((g) => g.name === 'סיכום כללי');
 
     expect(group?.state).toBe('ambiguous');
+  });
+
+  it('keeps a group to only the sheets in its own season, even with a third same-named sheet elsewhere', async () => {
+    const other = await addSheet('25.xlsx', 'סיכום כללי');
+    await setSheetSeason(db, other, s26);
+    const s27 = (await createSeason(db, { name: 'ברן 27', year: 2027, flatRate: 1300, plannedSize: 30 })).id;
+    const third = await addSheet('27.xlsx', 'סיכום כללי');
+    await setSheetSeason(db, third, s27);
+
+    const groups = await collisionGroups(db);
+    const group = groups.find((g) => g.name === 'סיכום כללי');
+
+    expect(group).toBeDefined();
+    expect(group?.sheets.map((s) => s.id).sort()).toEqual([sheetId, other].sort());
+    expect(group?.sheets.map((s) => s.id)).not.toContain(third);
   });
 });
 
