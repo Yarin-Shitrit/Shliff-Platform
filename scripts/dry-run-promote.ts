@@ -7,8 +7,10 @@
  * puts them in the same database and writes down the difference.
  *
  * It labels sheets and confirms blocks, so it is NOT read-only — which is why
- * it refuses outright to run against the live `shliff` database (see
- * `assertScratchDatabase`). Point it at a clone:
+ * it refuses to open any database but the scratch clone. The check is an
+ * allowlist over the name postgres.js would actually resolve, not a blacklist
+ * over the URL path; see `scripts/scratch-guard.ts` for the two ways a
+ * path-only blacklist lands on live. Point it at a clone:
  *
  *   docker exec shliff-pg psql -U shliff -d postgres \
  *     -c "create database shliff_evidence template shliff;"
@@ -42,38 +44,7 @@ import type { PromotionResult, PromotedRow } from '@/lib/import/promote/types';
 import type { BlockArchetype } from '@/lib/classify/types';
 import type { AnyDb } from '@/lib/db-types';
 import { normalizeHebrew } from '@/lib/text/normalize';
-
-// ---------------------------------------------------------------------------
-// Guard
-// ---------------------------------------------------------------------------
-
-/** The live database. Nothing in this file may ever touch it. */
-const LIVE_DATABASE = 'shliff';
-
-function databaseNameOf(url: string): string {
-  // `postgres://user:pw@host:port/name?opts` — `URL` parses the non-http
-  // scheme fine and `pathname` is `/name`.
-  const parsed = new URL(url);
-  return decodeURIComponent(parsed.pathname.replace(/^\//, ''));
-}
-
-/**
- * A hard stop, not a comment. This script writes season labels, authority
- * flags and confirmations; on the live database those are exactly the rows
- * Task 12 promised would stay untouched, and a mistyped `DATABASE_URL` is the
- * only way they ever could be.
- */
-function assertScratchDatabase(url: string): string {
-  const name = databaseNameOf(url);
-  if (name === LIVE_DATABASE) {
-    throw new Error(
-      `refusing to run against the live database "${LIVE_DATABASE}". `
-      + 'Clone it first (create database shliff_evidence template shliff) and '
-      + 'point DATABASE_URL at the clone.',
-    );
-  }
-  return name;
-}
+import { assertScratchDatabase } from './scratch-guard';
 
 // ---------------------------------------------------------------------------
 // The judgement a lead would make, written down
@@ -195,13 +166,15 @@ function cellsOf(raw: string[]): string {
 }
 
 /**
- * The key two rows are "the same fact" by: the camp's own wording, under the
- * same season.
+ * The candidate key: the camp's own wording, under the same season.
  *
  * The season belongs in the key. `הובלה` is a ברן 26 camp line of 9,000 and
  * also a ברן 25 dancefloor line of 4,000; matching on the label alone would
  * tell the next task that one re-creates the other, and it would delete a
  * real row on the strength of it.
+ *
+ * This only narrows the candidates. A candidate becomes a re-creation only if
+ * `sameMoney` also holds — see the three buckets in the per-table section.
  */
 function factKey(season: string | null, text: string): string {
   return `${season ?? 'no-season'}|${normalizeHebrew(text).toLowerCase()}`;
@@ -579,7 +552,10 @@ async function main(): Promise<void> {
   // -- Per-table difference ------------------------------------------------
   say('## 4. Per-table difference against the seeded rows');
   say();
-  say('Matching is on (season, label) — never label alone; see `factKey`.');
+  say('A seeded row counts as re-created only on (season, label, amount).');
+  say('Season is in the key because `הובלה` is a ברן 26 camp line of 9,000 and');
+  say('a ברן 25 dancefloor line of 4,000. Amount gates the verdict because a');
+  say('replacement holding a different number is not a replacement.');
   say();
   for (const table of TARGET_TABLES) {
     const written = facts.filter((fact) => fact.table === table);
@@ -610,25 +586,52 @@ async function main(): Promise<void> {
     }
     say();
 
-    const recreated = seeded.filter((row) => writtenByKey.has(factKey(row.season, row.fact)));
-    const orphaned = seeded.filter((row) => !writtenByKey.has(factKey(row.season, row.fact)));
+    // A label match is not a re-creation. The amount has to agree too, or the
+    // "safe to delete" list would carry a row whose replacement holds a
+    // different number — which is how a real figure gets lost. Three buckets,
+    // and every seeded row lands in exactly one of them.
+    const sameLabel = (row: SeededRow): WrittenFact[] => (
+      writtenByKey.get(factKey(row.season, row.fact)) ?? []
+    );
+    const recreated = seeded.filter(
+      (row) => sameLabel(row).some((fact) => sameMoney(row.amount, fact.amount)),
+    );
+    const mismatched = seeded.filter(
+      (row) => sameLabel(row).length > 0
+        && !sameLabel(row).some((fact) => sameMoney(row.amount, fact.amount)),
+    );
+    const orphaned = seeded.filter((row) => sameLabel(row).length === 0);
     const novel = written.filter(
       (fact) => !seededKeys.has(factKey(fact.block.seasonName, fact.label)),
     );
 
-    say(`seeded rows the promoter WOULD re-create (same season + label): ${recreated.length}`);
-    for (const row of seeded) {
-      const matches = writtenByKey.get(factKey(row.season, row.fact));
-      if (!matches) continue;
-      for (const fact of matches) {
-        const verdict = sameMoney(row.amount, fact.amount)
-          ? 'same amount'
-          : `AMOUNT DIFFERS: seeded ${row.amount} vs promoted ${fact.amount ?? '?'}`;
-        say(`  ${row.id}  ${row.fact}  (${row.extra})`);
-        say(`      <- ${fact.block.sheet.name} r${fact.sheetRow} (${fact.detail}) — ${verdict}`);
+    say(`seeded rows the promoter WOULD re-create`
+      + ` (same season + label + amount to the agora): ${recreated.length}`);
+    for (const row of recreated) {
+      for (const fact of writtenByKey.get(factKey(row.season, row.fact)) ?? []) {
+        if (!sameMoney(row.amount, fact.amount)) continue;
+        say(`  ${row.id}  ${row.fact}  ${row.amount}  (${row.extra})`);
+        say(`      <- ${fact.block.sheet.name} r${fact.sheetRow}`
+          + ` sourceBlockId=${fact.block.id} (${fact.detail})`);
       }
     }
     say();
+    if (mismatched.length > 0) {
+      say(`!! ${mismatched.length} seeded rows match a written row's season and`
+        + ' label but NOT its amount. These are NOT re-created. Deleting one'
+        + ' would lose the amount the camp actually recorded.');
+      for (const row of mismatched) {
+        for (const fact of writtenByKey.get(factKey(row.season, row.fact)) ?? []) {
+          say(`  ${row.id}  ${row.fact}  seeded ${row.amount}`
+            + ` vs promoted ${fact.amount ?? '?'}`
+            + ` [${fact.block.sheet.name} r${fact.sheetRow}]`);
+        }
+      }
+      say();
+    } else {
+      say('amount mismatches (same season + label, different amount): none');
+      say();
+    }
     say(`seeded rows NO block re-creates: ${orphaned.length}`);
     for (const row of orphaned) {
       say(`  ${row.id}  ${row.fact}  ${row.amount}`
