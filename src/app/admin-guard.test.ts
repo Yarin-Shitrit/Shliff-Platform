@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
-import { basename, join, relative } from 'node:path';
+import { basename, join, relative, sep } from 'node:path';
 
 /**
  * Spec req 31's "guard lint rule", done as a test rather than a lint plugin:
@@ -59,6 +59,56 @@ describe('every admin entry point calls requireAdmin', () => {
     (_label, file) => {
       const source = readFileSync(file, 'utf8');
       expect(source).toContain('requireAdmin(');
+    },
+  );
+});
+
+/**
+ * Ruling 1 of the promotion-blockers hardening pass: production code never
+ * imports from `src/test/`. `src/test/` reads real files off disk (the
+ * camp's actual workbooks, by way of `src/test/fixtures.ts`) and exists only
+ * to support tests; a `'use server'` file that reaches it drags dev-only file
+ * reads into what gets deployed.
+ *
+ * `import type { X } from '@/test/...'` is exempt: a type-only import is
+ * erased at compile time (see `src/lib/db-types.ts`), so it can never smuggle
+ * runtime behaviour into a production bundle no matter which module it names.
+ * What's forbidden is a *value* import — anything not spelled `import type`.
+ */
+const SRC_DIR = join(process.cwd(), 'src');
+const TEST_DIR = join(SRC_DIR, 'test');
+
+// Matches one whole import statement that names `@/test/...`. Bounded by the
+// next `;`, which is safe because import clauses never contain a semicolon
+// of their own — so this can't run on past a multi-line brace list into an
+// unrelated later statement.
+const TEST_IMPORT_RE = /import\s+[^;]*from\s+['"]@\/test\/[^'"]*['"]/g;
+
+function valueImportsFromTest(source: string): string[] {
+  const matches = source.match(TEST_IMPORT_RE) ?? [];
+  return matches.filter((statement) => !/^import\s+type\s/.test(statement));
+}
+
+function isTestOnlyFile(file: string): boolean {
+  return file.startsWith(TEST_DIR + sep) || /\.test\.tsx?$/.test(file);
+}
+
+const productionFiles = walk(SRC_DIR).filter(
+  (file) => /\.tsx?$/.test(file) && !isTestOnlyFile(file),
+);
+
+describe('no production file imports a value from @/test/', () => {
+  // Same defence as the admin-entry-points check above: a silent empty walk
+  // would make every assertion below vacuously pass.
+  it('found production files to check', () => {
+    expect(productionFiles.length).toBeGreaterThan(0);
+  });
+
+  it.each(productionFiles.map((file) => [relative(process.cwd(), file), file] as const))(
+    '%s does not value-import from @/test/',
+    (_label, file) => {
+      const source = readFileSync(file, 'utf8');
+      expect(valueImportsFromTest(source)).toEqual([]);
     },
   );
 });

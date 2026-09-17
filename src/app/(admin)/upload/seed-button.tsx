@@ -21,8 +21,13 @@ export function SeedButton() {
           : 'כל הקבצים כבר במסד',
       );
       router.refresh();
-    } catch {
-      setError('הטעינה נכשלה, נסו שוב.');
+    } catch (error) {
+      // Surface the action's own message (e.g. the production refusal)
+      // instead of a generic one, so an admin who somehow still sees this
+      // button — a stale client bundle from before a deploy, say — gets a
+      // real explanation rather than "try again" for something retrying
+      // can't fix.
+      setError(error instanceof Error ? error.message : 'הטעינה נכשלה, נסו שוב.');
     } finally {
       setBusy(false);
     }

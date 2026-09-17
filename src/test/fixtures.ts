@@ -1,16 +1,11 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-
-const DIR = join(process.cwd(), 'docs', 'reference-data');
-
-export const FIXTURES = {
-  /** Straight ASCII apostrophes (U+0027). */
-  y2324: "קופת קאמפ 23'-24'.xlsx",
-  /** Right single quotation mark (U+2019), not an apostrophe. */
-  y25: 'קופת קאמפ 25’.xlsx',
-  y26: 'קופת קאמפ 2026.xlsx',
-} as const;
-
-export function fixtureBuffer(name: string): Buffer {
-  return readFileSync(join(DIR, name));
-}
+/**
+ * Thin re-export so every existing test can keep importing `FIXTURES` and
+ * `fixtureBuffer` from `@/test/fixtures` unchanged. The real list and reader
+ * live in `src/lib/import/reference-workbooks.ts` — a production module,
+ * because `seedReferenceWorkbooks` needs it too, and production code must
+ * never import from `src/test/` (see `src/app/admin-guard.test.ts`).
+ */
+export {
+  REFERENCE_WORKBOOKS as FIXTURES,
+  referenceWorkbookBuffer as fixtureBuffer,
+} from '@/lib/import/reference-workbooks';
