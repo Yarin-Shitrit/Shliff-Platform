@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Frank_Ruhl_Libre, Heebo } from 'next/font/google';
+import { Frank_Ruhl_Libre, Heebo, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
 
 /**
@@ -11,6 +11,16 @@ import './globals.css';
  * particular — without them. The nav's wordmark then fell through to Georgia,
  * which has no Hebrew glyphs, so "קופת שליף" rendered in an arbitrary browser
  * fallback on every admin page.
+ *
+ * A5 assigns each face one job. Heebo is the interface: it has the Hebrew
+ * coverage, it carries tabular numerals, and it is the only face a table,
+ * a form or a figure is ever set in. Frank Ruhl Libre is a display serif and
+ * is kept for the wordmark and the sign-in page and nowhere else — a serif at
+ * 12.5px in a table is a legibility cost with nothing bought for it. IBM Plex
+ * Mono exists for one thing: a spreadsheet cell reference such as
+ * `תנועות קופה!A14`, where the Latin run has to line up like the workbook
+ * shows it. Its Hebrew sheet name falls through to the system mono, which is
+ * correct — Plex Mono has no Hebrew.
  */
 const display = Frank_Ruhl_Libre({
   subsets: ['hebrew', 'latin'],
@@ -19,8 +29,13 @@ const display = Frank_Ruhl_Libre({
 });
 const body = Heebo({
   subsets: ['hebrew', 'latin'],
-  weight: ['400', '500', '600'],
+  weight: ['400', '500', '600', '700'],
   variable: '--font-body',
+});
+const mono = IBM_Plex_Mono({
+  subsets: ['latin'],
+  weight: ['400'],
+  variable: '--font-mono',
 });
 
 export const metadata: Metadata = {
@@ -30,7 +45,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="he" dir="rtl" className={`${display.variable} ${body.variable}`}>
+    <html
+      lang="he"
+      dir="rtl"
+      className={`${display.variable} ${body.variable} ${mono.variable}`}
+    >
       <body>{children}</body>
     </html>
   );
