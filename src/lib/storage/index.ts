@@ -16,10 +16,24 @@ export function sha256Hex(data: Buffer): string {
  * personal financial data, so the directory must never be served publicly.
  */
 function localStorage(): Storage {
-  const root = resolve(process.env.LOCAL_STORAGE_DIR ?? './.uploads');
+  // `LOCAL_STORAGE_DIR` is an env var, so Turbopack's output-file tracer
+  // can't resolve this `resolve(...)` call's argument statically and flags
+  // it: "Dynamic filesystem access causes tracing of the whole project." Its
+  // own fix menu is: scope the path to a static subfolder, use it only in
+  // development, or opt out with an ignore comment on the flagged call
+  // itself — `path.join(/*turbopackIgnore: true*/ ...)`, right before the
+  // call's first argument. This driver's dev/test-only role already covers
+  // "development only"; `turbopackIgnore` silences the diagnostic at the
+  // actual flagged call, not at whatever `fs.*` call later consumes its
+  // result (which Turbopack never flags — only the `path.resolve`/`path.join`
+  // calls that construct the unresolvable value are highlighted).
+  const root = resolve(/* turbopackIgnore: true */ process.env.LOCAL_STORAGE_DIR ?? './.uploads');
 
   const safePath = (key: string): string => {
-    const full = resolve(join(root, key));
+    // Same diagnostic, same fix, for the two calls that build the per-key
+    // path: `key` is a runtime argument, so both the inner `join` and the
+    // `resolve` wrapping it are flagged too.
+    const full = resolve(/* turbopackIgnore: true */ join(/* turbopackIgnore: true */ root, key));
     if (full !== root && !full.startsWith(root + sep)) {
       throw new Error(`storage key escapes the storage directory: ${key}`);
     }
@@ -29,22 +43,12 @@ function localStorage(): Storage {
   return {
     async put(key, data) {
       const path = safePath(key);
-      // `path` is computed from `LOCAL_STORAGE_DIR` (an env var) and the
-      // caller's `key`, so Next's output-file tracer can't resolve it
-      // statically — its own diagnostic for this ("Dynamic filesystem access
-      // causes tracing of the whole project") names three fixes: scope the
-      // path to a static subfolder, use it only in development, or opt out
-      // with an ignore comment on the flagged call. This driver's dev/test
-      // role already covers "development only"; the ignore comment silences
-      // the diagnostic itself, which fires regardless of which driver
-      // `getStorage()` picks at runtime, since both are defined in the same
-      // traced module.
-      await mkdir(/* turbopackIgnore: true */ dirname(path), { recursive: true });
-      await writeFile(/* turbopackIgnore: true */ path, data);
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, data);
       return key;
     },
     async get(key) {
-      return readFile(/* turbopackIgnore: true */ safePath(key));
+      return readFile(safePath(key));
     },
   };
 }
