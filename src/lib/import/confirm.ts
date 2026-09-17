@@ -4,6 +4,7 @@ import type { TestDb } from '@/test/db';
 import { blocks, blockMappings, layoutSignatures } from '@/db/schema/source';
 import { mapColumns, type ColumnMapping } from '@/lib/classify/map-columns';
 import type { BlockArchetype } from '@/lib/classify/types';
+import type { BudgetCategory } from '@/db/schema/money';
 import type { Cell, SheetGrid } from '@/lib/xlsx/types';
 
 type AnyDb = Db | TestDb;
@@ -78,6 +79,12 @@ function gridFromBlock(block: StoredBlock): SheetGrid {
  * without `DATABASE_URL` set. It is also why this lives outside the
  * `'use server'` actions file: a server action may only take serializable
  * arguments, and a database handle is not one.
+ *
+ * `budgetCategory` (Task 15) is a lead's explicit statement of which budget a
+ * `budget_lines` block belongs to — never inferred from the sheet name or
+ * anything else. It is meaningful only for that archetype: stored as given,
+ * defaulting to `'camp'` when omitted; every other archetype stores null,
+ * even if a caller passes one, because the question does not apply to it.
  */
 export async function applyConfirmation(
   db: AnyDb,
@@ -85,9 +92,14 @@ export async function applyConfirmation(
   blockId: string,
   archetype: BlockArchetype,
   columnMap: ColumnMapping[],
+  budgetCategory?: BudgetCategory,
 ): Promise<void> {
   const [block] = await db.select().from(blocks).where(eq(blocks.id, blockId));
   if (!block) throw new Error(`unknown block ${blockId}`);
+
+  const storedCategory: BudgetCategory | null = archetype === 'budget_lines'
+    ? (budgetCategory ?? 'camp')
+    : null;
 
   // A column map is tied to the archetype it was built for — budget_lines
   // maps a column to `item`/`total`, ledger maps the same position to
@@ -116,7 +128,7 @@ export async function applyConfirmation(
     .where(eq(blocks.id, blockId));
 
   await db.update(blockMappings)
-    .set({ columnMap: resolvedMap, source: 'admin' })
+    .set({ columnMap: resolvedMap, source: 'admin', budgetCategory: storedCategory })
     .where(eq(blockMappings.blockId, blockId));
 
   // Headerless blocks never fingerprinted, so there is nothing for a future
@@ -127,10 +139,13 @@ export async function applyConfirmation(
     fingerprint: block.fingerprint,
     archetype,
     columnMap: resolvedMap,
+    budgetCategory: storedCategory,
     pipelineVersion: block.pipelineVersion,
     confirmedBy: email,
   }).onConflictDoUpdate({
     target: layoutSignatures.fingerprint,
-    set: { archetype, columnMap: resolvedMap, confirmedBy: email },
+    set: {
+      archetype, columnMap: resolvedMap, budgetCategory: storedCategory, confirmedBy: email,
+    },
   });
 }

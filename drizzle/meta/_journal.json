@@ -50,6 +50,13 @@
       "when": 1789665242713,
       "tag": "0006_steady_ben_grimm",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789678612144,
+      "tag": "0007_tiny_sabretooth",
+      "breakpoints": true
     }
   ]
 }

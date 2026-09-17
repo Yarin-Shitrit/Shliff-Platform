@@ -1,4 +1,5 @@
 import type { BlockArchetype } from '@/lib/classify/types';
+import type { BudgetCategory } from '@/db/schema/money';
 
 /** Every reason the promoter can decline to write a row. */
 export type RefusalReason =
@@ -86,4 +87,11 @@ export interface PromoteContext {
   seasonId: string | null;
   recordedBy: string;
   blockId: string;
+  /**
+   * The block mapping's stored budget category decision (Task 15) — a lead's
+   * statement of which budget this block is, never inferred. Undefined or
+   * null both mean "no decision stored"; `budgetRow` defaults either to
+   * `'camp'`, so every existing caller keeps working.
+   */
+  budgetCategory?: BudgetCategory | null;
 }

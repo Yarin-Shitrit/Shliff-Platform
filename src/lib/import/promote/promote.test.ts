@@ -16,6 +16,7 @@ import { listObligations, createObligation, settleObligation } from '@/lib/money
 import { createTask } from '@/lib/work/tasks';
 import { listUnlinkedNames } from '@/lib/members/identity';
 import { setSheetSeason, setSheetAuthority } from '@/lib/import/sheets';
+import { applyConfirmation } from '@/lib/import/confirm';
 import type { ColumnMapping } from '@/lib/classify/map-columns';
 import type { BlockArchetype } from '@/lib/classify/types';
 import { promoteBlock, promoteAll } from './promote';
@@ -367,7 +368,7 @@ describe('promoteBlock — idempotency', () => {
     expect(await db.select().from(ledgerEntries)).toHaveLength(2);
   });
 
-  it('a re-run keeps a hand-set ledger account and budget category', async () => {
+  it('a re-run keeps a hand-set ledger account, but a fresh confirm decision always wins the budget category (Task 15)', async () => {
     const ledgerBlock = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
     const budgetBlock = await addBlock(sheetId, 'budget_lines', BUDGET_GRID, BUDGET_MAP, { top: 20 });
     await promoteBlock(db, ledgerBlock, LEAD);
@@ -376,6 +377,9 @@ describe('promoteBlock — idempotency', () => {
     const [account] = await db.insert(accounts).values({ name: 'קופה', kind: 'cash' }).returning();
     await db.update(ledgerEntries).set({ accountId: account.id })
       .where(eq(ledgerEntries.sourceRow, 2));
+    // A category set by hand directly on the row, bypassing confirmation —
+    // unlike accountId, this is not a decision the block's mapping ever
+    // made, so it must not survive the way accountId does.
     await db.update(budgetLines).set({ category: 'dancefloor' })
       .where(eq(budgetLines.sourceBlockId, budgetBlock));
 
@@ -385,7 +389,11 @@ describe('promoteBlock — idempotency', () => {
     const [entry] = await db.select().from(ledgerEntries).where(eq(ledgerEntries.sourceRow, 2));
     const [line] = await db.select().from(budgetLines);
     expect(entry.accountId).toBe(account.id);
-    expect(line.category).toBe('dancefloor');
+    // The block's mapping was never confirmed with a category, so it still
+    // carries the 'camp' default — and a fresh confirm decision (even an
+    // implicit, defaulted one) overwrites a hand-set value on the row,
+    // because the category lives on the mapping, not the row.
+    expect(line.category).toBe('camp');
   });
 
   it('a re-run keeps every other decision made after import', async () => {
@@ -419,6 +427,63 @@ describe('promoteBlock — idempotency', () => {
     });
     const [round] = await db.select().from(ticketRounds);
     expect(round).toMatchObject({ eventId: event.id, sold: true });
+  });
+});
+
+describe('promoteBlock — the budget category a lead confirms (Task 15)', () => {
+  it('promotes as camp when the block is confirmed with no category — the unchanged default', async () => {
+    const blockId = await addBlock(sheetId, 'budget_lines', BUDGET_GRID, BUDGET_MAP);
+    await applyConfirmation(db, 'lead@shliff.test', blockId, 'budget_lines', BUDGET_MAP);
+
+    await promoteBlock(db, blockId, LEAD);
+
+    const [line] = await db.select().from(budgetLines);
+    expect(line.category).toBe('camp');
+  });
+
+  it('promotes a block confirmed as dancefloor with that category', async () => {
+    const blockId = await addBlock(sheetId, 'budget_lines', BUDGET_GRID, BUDGET_MAP);
+    await applyConfirmation(db, 'lead@shliff.test', blockId, 'budget_lines', BUDGET_MAP, 'dancefloor');
+
+    await promoteBlock(db, blockId, LEAD);
+
+    const [line] = await db.select().from(budgetLines);
+    expect(line.category).toBe('dancefloor');
+  });
+
+  it('re-confirming the same block back to camp and re-promoting moves its rows back', async () => {
+    const blockId = await addBlock(sheetId, 'budget_lines', BUDGET_GRID, BUDGET_MAP);
+    await applyConfirmation(db, 'lead@shliff.test', blockId, 'budget_lines', BUDGET_MAP, 'dancefloor');
+    await promoteBlock(db, blockId, LEAD);
+    expect((await db.select().from(budgetLines))[0].category).toBe('dancefloor');
+
+    await applyConfirmation(db, 'lead@shliff.test', blockId, 'budget_lines', BUDGET_MAP, 'camp');
+    await promoteBlock(db, blockId, LEAD);
+
+    expect((await db.select().from(budgetLines))[0].category).toBe('camp');
+  });
+
+  it('keeps a dancefloor-confirmed block out of the camp budget identity', async () => {
+    // ברן 25's measured defect: the dancefloor's spend, promoted as camp,
+    // inflated the camp identity 2.7x. This asserts the identity figure
+    // itself — budgetTotalAgorot filtered to 'camp' — not just the stored
+    // column, since that figure is the one the per-head cost is built on.
+    const campBlock = await addBlock(sheetId, 'budget_lines', BUDGET_GRID, BUDGET_MAP);
+    const floorGrid = [
+      ['סוג הוצאה', 'כמות', 'מחיר', 'עלות כוללת', 'למה'],
+      ['הגברה', '1', '89060', '89060', ''],
+    ];
+    const floorBlock = await addBlock(sheetId, 'budget_lines', floorGrid, BUDGET_MAP, { top: 20 });
+    await applyConfirmation(db, 'lead@shliff.test', campBlock, 'budget_lines', BUDGET_MAP);
+    await applyConfirmation(
+      db, 'lead@shliff.test', floorBlock, 'budget_lines', BUDGET_MAP, 'dancefloor',
+    );
+
+    await promoteBlock(db, campBlock, LEAD);
+    await promoteBlock(db, floorBlock, LEAD);
+
+    expect(await budgetTotalAgorot(db, s26, 'camp')).toBe(5852300);
+    expect(await budgetTotalAgorot(db, s26)).toBe(5852300 + 8906000);
   });
 });
 

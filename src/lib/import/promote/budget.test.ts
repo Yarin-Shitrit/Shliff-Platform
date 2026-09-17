@@ -111,4 +111,31 @@ describe('budgetRow', () => {
     if (!out.ok) return;
     expect(out.notes).toContain('החשבון בשורה לא מסתדר: כמות × מחיר ליחידה שונה מהעלות הכוללת');
   });
+
+  it('writes camp when the context carries no budget category, the unchanged default', () => {
+    const out = budgetRow(row({
+      item: 'חשמל לקאמפ', quantity: '', unit_cost: '', total: '7500', note: '',
+    }), CTX);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.input.category).toBe('camp');
+  });
+
+  it('writes the category the block\'s mapping was confirmed with', () => {
+    const out = budgetRow(row({
+      item: 'הגברה', quantity: '', unit_cost: '', total: '89060', note: '',
+    }), { ...CTX, budgetCategory: 'dancefloor' });
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.input.category).toBe('dancefloor');
+  });
+
+  it('falls back to camp when the context carries an explicit null category', () => {
+    const out = budgetRow(row({
+      item: 'חשמל לקאמפ', quantity: '', unit_cost: '', total: '7500', note: '',
+    }), { ...CTX, budgetCategory: null });
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.input.category).toBe('camp');
+  });
 });

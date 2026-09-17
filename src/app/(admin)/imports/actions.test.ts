@@ -10,13 +10,16 @@ import { setSheetSeason } from '@/lib/import/sheets';
 import type { ColumnMapping } from '@/lib/classify/map-columns';
 import type { BlockArchetype } from '@/lib/classify/types';
 
-async function seedBlock(db: TestDb, fingerprint: string | null, archetype: BlockArchetype = 'unknown') {
+async function seedBlock(
+  db: TestDb, fingerprint: string | null, archetype: BlockArchetype = 'unknown',
+  sheetName = 'סיכום כללי',
+) {
   const [upload] = await db.insert(uploads).values({
     filename: 'x.xlsx', sha256: 'a'.repeat(64), storageKey: 'k',
     sizeBytes: 1, uploadedBy: 'admin@example.com',
   }).returning();
   const [sheet] = await db.insert(sheets).values({
-    uploadId: upload.id, name: 'סיכום כללי', index: 0, rowCount: 10, colCount: 4,
+    uploadId: upload.id, name: sheetName, index: 0, rowCount: 10, colCount: 4,
   }).returning();
   const [block] = await db.insert(blocks).values({
     sheetId: sheet.id, top: 1, left: 1, bottom: 5, right: 4,
@@ -248,5 +251,62 @@ describe('applyConfirmation — re-picking the archetype remaps the columns', ()
     const [mapping] = await db.select().from(blockMappings)
       .where(eq(blockMappings.blockId, blockId));
     expect(mapping.columnMap).toEqual([]);
+  });
+});
+
+describe('applyConfirmation — the budget category (Task 15)', () => {
+  let db: TestDb;
+
+  beforeEach(async () => {
+    db = await createTestDb();
+  });
+
+  it('defaults to camp when a budget block is confirmed with no category given', async () => {
+    const blockId = await seedBlock(db, 'f'.repeat(32), 'budget_lines');
+    await applyConfirmation(db, 'admin@example.com', blockId, 'budget_lines', []);
+
+    const [mapping] = await db.select().from(blockMappings)
+      .where(eq(blockMappings.blockId, blockId));
+    expect(mapping.budgetCategory).toBe('camp');
+  });
+
+  it('stores an explicit dancefloor decision', async () => {
+    const blockId = await seedBlock(db, 'f'.repeat(32), 'budget_lines');
+    await applyConfirmation(db, 'admin@example.com', blockId, 'budget_lines', [], 'dancefloor');
+
+    const [mapping] = await db.select().from(blockMappings)
+      .where(eq(blockMappings.blockId, blockId));
+    expect(mapping.budgetCategory).toBe('dancefloor');
+  });
+
+  it('never infers the category from a sheet name that reads as the dancefloor\'s budget', async () => {
+    // A human reads 'תקציב רחבה ברן 25' as the dancefloor's budget. A
+    // substring rule would be exactly the guess this wave refuses
+    // everywhere else — confirming with no category must still default to
+    // camp, proving nothing reads the sheet's name.
+    const blockId = await seedBlock(db, 'f'.repeat(32), 'budget_lines', 'תקציב רחבה ברן 25');
+    await applyConfirmation(db, 'admin@example.com', blockId, 'budget_lines', []);
+
+    const [mapping] = await db.select().from(blockMappings)
+      .where(eq(blockMappings.blockId, blockId));
+    expect(mapping.budgetCategory).toBe('camp');
+  });
+
+  it('stores null for a non-budget archetype', async () => {
+    const blockId = await seedBlock(db, 'f'.repeat(32), 'ledger');
+    await applyConfirmation(db, 'admin@example.com', blockId, 'ledger', []);
+
+    const [mapping] = await db.select().from(blockMappings)
+      .where(eq(blockMappings.blockId, blockId));
+    expect(mapping.budgetCategory).toBeNull();
+  });
+
+  it('stores the category in the layout signature too, for a recognized repeat layout', async () => {
+    const blockId = await seedBlock(db, 'f'.repeat(32), 'budget_lines');
+    await applyConfirmation(db, 'admin@example.com', blockId, 'budget_lines', [], 'dancefloor');
+
+    const [signature] = await db.select().from(layoutSignatures)
+      .where(eq(layoutSignatures.fingerprint, 'f'.repeat(32)));
+    expect(signature.budgetCategory).toBe('dancefloor');
   });
 });

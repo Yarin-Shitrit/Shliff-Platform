@@ -2,8 +2,14 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { PgDatabase } from 'drizzle-orm/pg-core';
 import { createTestDb, type TestDb } from '@/test/db';
-import { uploads, sheets, blocks, layoutSignatures } from '@/db/schema/source';
+import { uploads, sheets, blocks, blockMappings, layoutSignatures } from '@/db/schema/source';
+import { budgetLines } from '@/db/schema/money';
 import { runImport } from '@/lib/import/run-import';
+import { applyConfirmation } from '@/lib/import/confirm';
+import { promoteBlock } from '@/lib/import/promote/promote';
+import { createSeason } from '@/lib/members/roster';
+import { setSheetSeason } from '@/lib/import/sheets';
+import { budgetTotalAgorot } from '@/lib/money/budget';
 import { FIXTURES, fixtureBuffer } from '@/test/fixtures';
 
 async function seedUpload(db: TestDb, sha: string): Promise<string> {
@@ -89,6 +95,88 @@ describe('runImport', () => {
 
     const report = await runImport(db, second.id, fixtureBuffer(FIXTURES.y26));
     expect(report.autoRecognized).toBeGreaterThan(0);
+  });
+
+  it('propagates a previously confirmed budget category through a recognized repeat layout (Task 15 fix)', async () => {
+    // Import the 25 file, then a lead confirms its budget block as the
+    // dancefloor's — the real path (applyConfirmation), which stores the
+    // category on both the mapping and the reusable signature.
+    const firstId = await seedUpload(db, 'category-first'.padEnd(64, '0'));
+    await runImport(db, firstId, fixtureBuffer(FIXTURES.y25));
+
+    // Both fixtures share sheet names (same camp, consecutive years' copy of
+    // the same template) — label the first upload's sheets into their own
+    // season so they don't leave the second upload's same-named sheet stuck
+    // 'undecided' (sheetEligibility treats a null-season sheet as an
+    // unresolved duplicate of any same-named sheet, per `conflicts()` in
+    // sheets.ts). Unrelated to the category propagation under test.
+    const season25 = await createSeason(
+      db, { name: 'ברן 25', year: 2025, flatRate: 1200, plannedSize: 35 },
+    );
+    const firstSheetIds = (await db.select().from(sheets)
+      .where(eq(sheets.uploadId, firstId))).map((s) => s.id);
+    for (const id of firstSheetIds) {
+      await setSheetSeason(db, id, season25.id);
+    }
+
+    const budgetBlock = (await db.select().from(blocks))
+      .find((b) => b.archetype === 'budget_lines' && b.fingerprint !== null);
+    expect(budgetBlock).toBeDefined();
+    const [firstMapping] = await db.select().from(blockMappings)
+      .where(eq(blockMappings.blockId, budgetBlock!.id));
+
+    await applyConfirmation(
+      db, 'lead@shliff.test', budgetBlock!.id, 'budget_lines', firstMapping.columnMap, 'dancefloor',
+    );
+
+    // A second upload whose block shares the same fingerprint gets
+    // auto-recognized — this is the path under test.
+    const [second] = await db.insert(uploads).values({
+      filename: FIXTURES.y26,
+      sha256: 'category-second'.padEnd(64, '0'),
+      storageKey: 'uploads/category-second.xlsx',
+      sizeBytes: 22002,
+      uploadedBy: 'admin@example.com',
+    }).returning();
+    const report = await runImport(db, second.id, fixtureBuffer(FIXTURES.y26));
+    expect(report.autoRecognized).toBeGreaterThan(0);
+
+    const secondSheetIds = (await db.select().from(sheets)
+      .where(eq(sheets.uploadId, second.id))).map((s) => s.id);
+    const recognizedBlock = (await db.select().from(blocks))
+      .find((b) => secondSheetIds.includes(b.sheetId) && b.fingerprint === budgetBlock!.fingerprint);
+    expect(recognizedBlock).toBeDefined();
+
+    // The stored column: the new block's mapping must carry the lead's
+    // decision, not silently re-default to camp.
+    const [recognizedMapping] = await db.select().from(blockMappings)
+      .where(eq(blockMappings.blockId, recognizedBlock!.id));
+    expect(recognizedMapping.budgetCategory).toBe('dancefloor');
+
+    // The promoted result: give the block the season and confirmed state a
+    // lead's real confirm click on the pre-filled screen would produce.
+    // Marked confirmed directly (not via a second applyConfirmation call)
+    // so this test isolates run-import.ts's propagation from confirm.ts —
+    // a second explicit category argument would decide the category again
+    // and mask exactly the bug this test exists to catch.
+    const season = await createSeason(
+      db, { name: 'ברן 26', year: 2026, flatRate: 1200, plannedSize: 35 },
+    );
+    await setSheetSeason(db, recognizedBlock!.sheetId, season.id);
+    await db.update(blocks)
+      .set({ confirmedBy: 'lead@shliff.test', confirmedAt: new Date() })
+      .where(eq(blocks.id, recognizedBlock!.id));
+
+    const result = await promoteBlock(
+      db, recognizedBlock!.id, { dryRun: false, recordedBy: 'lead@shliff.test' },
+    );
+    expect(result.written.length).toBeGreaterThan(0);
+
+    const rows = await db.select().from(budgetLines)
+      .where(eq(budgetLines.sourceBlockId, recognizedBlock!.id));
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.category === 'dancefloor')).toBe(true);
+    expect(await budgetTotalAgorot(db, season.id, 'camp')).toBe(0);
   });
 
   it('records the failure and rethrows when the file is not a workbook', async () => {
