@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import { Frank_Ruhl_Libre, Heebo, IBM_Plex_Mono } from 'next/font/google';
+import { cookies } from 'next/headers';
+import { parseTheme, THEME_COOKIE } from '@/lib/theme';
 import './globals.css';
 
 /**
@@ -43,11 +45,24 @@ export const metadata: Metadata = {
   description: 'ניהול נתוני הקאמפ',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+/**
+ * A13. The theme is read from the cookie on the server and written onto
+ * <html> before anything renders, so the first paint is already the palette
+ * the reader chose. With no cookie the attribute is omitted entirely, which
+ * is what lets tokens.css's guarded `prefers-color-scheme` rule decide.
+ *
+ * This is a request-time read, so it opts every route into dynamic rendering.
+ * Every route here is already dynamic: they are all behind requireAdmin() and
+ * they all read the database.
+ */
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
+
   return (
     <html
       lang="he"
       dir="rtl"
+      data-theme={theme ?? undefined}
       className={`${display.variable} ${body.variable} ${mono.variable}`}
     >
       <body>{children}</body>

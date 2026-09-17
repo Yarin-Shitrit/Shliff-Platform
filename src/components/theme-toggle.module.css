@@ -1,0 +1,46 @@
+/**
+ * `.row` is temporary: it gives the button somewhere to sit while the old nav
+ * is still the shell. Plan 02 puts the button in the sidebar footer beside the
+ * signed-in user (B1) and deletes this rule.
+ */
+.row {
+  display: flex;
+  justify-content: flex-end;
+  padding-inline: var(--space-4);
+  padding-block-start: var(--space-2);
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--control-h);
+  block-size: var(--control-h);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.button:hover {
+  background: var(--sunken);
+  color: var(--ink);
+}
+
+/**
+ * Which glyph is showing has to be decided by the same rules that decide the
+ * palette, or the button will offer the theme the reader is already in. The
+ * three cases are the three in tokens.css, in the same order.
+ */
+.whenDark { display: none; }
+.whenLight { display: inline-flex; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .whenDark { display: inline-flex; }
+  :root:not([data-theme='light']) .whenLight { display: none; }
+}
+
+:root[data-theme='dark'] .whenDark { display: inline-flex; }
+:root[data-theme='dark'] .whenLight { display: none; }

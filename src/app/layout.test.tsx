@@ -33,11 +33,22 @@ vi.mock('next/font/google', () => {
   };
 });
 
+const cookieValue = vi.hoisted(() => ({ current: undefined as string | undefined }));
+
+vi.mock('next/headers', () => ({
+  cookies: async () => ({
+    get: (name: string) =>
+      name === 'shliff_theme' && cookieValue.current !== undefined
+        ? { name, value: cookieValue.current }
+        : undefined,
+  }),
+}));
+
 import RootLayout from '@/app/layout';
 
 describe('RootLayout', () => {
-  it('renders the document right-to-left in Hebrew', () => {
-    const element = RootLayout({ children: null }) as React.ReactElement<{
+  it('renders the document right-to-left in Hebrew', async () => {
+    const element = (await RootLayout({ children: null })) as React.ReactElement<{
       lang: string; dir: string;
     }>;
     expect(element.props.lang).toBe('he');
@@ -50,16 +61,16 @@ describe('RootLayout', () => {
    * page. Without them the Hebrew wordmark falls through to Georgia, which has
    * no Hebrew glyphs.
    */
-  it('declares the font custom properties on <html>, above every page', () => {
-    const element = RootLayout({ children: null }) as React.ReactElement<{
+  it('declares the font custom properties on <html>, above every page', async () => {
+    const element = (await RootLayout({ children: null })) as React.ReactElement<{
       className: string;
     }>;
     expect(element.props.className).toContain('__mock_var_--font-display');
     expect(element.props.className).toContain('__mock_var_--font-body');
   });
 
-  it('declares the mono face for spreadsheet cell references', () => {
-    const element = RootLayout({ children: null }) as React.ReactElement<{
+  it('declares the mono face for spreadsheet cell references', async () => {
+    const element = (await RootLayout({ children: null })) as React.ReactElement<{
       className: string;
     }>;
     expect(element.props.className).toContain('__mock_var_--font-mono');
@@ -71,12 +82,54 @@ describe('RootLayout', () => {
    * the few places a figure has to shout. Frank Ruhl Libre is down to the
    * wordmark and the sign-in page and needs one.
    */
-  it('loads each face at the weights its job needs', () => {
+  it('loads each face at the weights its job needs', async () => {
     expect(fontCalls.find((call) => call.family === 'Heebo')?.weight)
       .toEqual(['400', '500', '600', '700']);
     expect(fontCalls.find((call) => call.family === 'Frank_Ruhl_Libre')?.weight)
       .toEqual(['500']);
     expect(fontCalls.find((call) => call.family === 'IBM_Plex_Mono')?.weight)
       .toEqual(['400']);
+  });
+});
+
+describe('RootLayout theme', () => {
+  /**
+   * A13: the choice is on <html> before the first byte of body renders, so
+   * there is no flash of the palette the reader did not choose.
+   */
+  it('puts the chosen theme on <html>', async () => {
+    cookieValue.current = 'dark';
+    const element = (await RootLayout({ children: null })) as React.ReactElement<{
+      'data-theme'?: string;
+    }>;
+    expect(element.props['data-theme']).toBe('dark');
+  });
+
+  it('carries an explicit light choice too, so it can beat the OS preference', async () => {
+    cookieValue.current = 'light';
+    const element = (await RootLayout({ children: null })) as React.ReactElement<{
+      'data-theme'?: string;
+    }>;
+    expect(element.props['data-theme']).toBe('light');
+  });
+
+  /**
+   * No cookie means no attribute, which is what lets the guarded
+   * `prefers-color-scheme` rule in tokens.css apply.
+   */
+  it('leaves the attribute off when nobody has chosen', async () => {
+    cookieValue.current = undefined;
+    const element = (await RootLayout({ children: null })) as React.ReactElement<{
+      'data-theme'?: string;
+    }>;
+    expect(element.props['data-theme']).toBeUndefined();
+  });
+
+  it('ignores a cookie value that is not a theme', async () => {
+    cookieValue.current = 'midnight';
+    const element = (await RootLayout({ children: null })) as React.ReactElement<{
+      'data-theme'?: string;
+    }>;
+    expect(element.props['data-theme']).toBeUndefined();
   });
 });
