@@ -1,0 +1,35 @@
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  block-size: 34px; padding-inline: 12px;
+  border: 1px solid var(--line-strong); border-radius: 8px;
+  background: var(--panel); color: var(--ink);
+  font-size: 13.5px; font-weight: 500;
+  white-space: nowrap; cursor: pointer; text-decoration: none;
+}
+.btn:hover { background: var(--hover); }
+.btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.primary { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); font-weight: 600; }
+.primary:hover { background: var(--brand-hover); }
+
+.ghost { border-color: transparent; background: transparent; color: var(--ink-2); }
+.ghost:hover { background: var(--sunken); color: var(--ink); }
+
+.danger { color: var(--bad); }
+
+.sm { block-size: 28px; padding-inline: 9px; font-size: 12.5px; border-radius: 7px; }
+
+.icon { inline-size: 34px; padding-inline: 0; }
+.sm.icon { inline-size: 28px; }
+
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn:disabled:hover { background: var(--panel); }
+.ghost:disabled:hover { background: transparent; }
+
+/* Phone targets are at least 44px (A8). */
+@media (pointer: coarse) {
+  .btn { block-size: 44px; padding-inline: 16px; }
+  .sm { block-size: 44px; }
+  .icon { inline-size: 44px; }
+  .sm.icon { inline-size: 44px; }
+}
