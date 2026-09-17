@@ -1,7 +1,11 @@
 /**
  * The one place a colour, a type step, a space step, a radius or a row height
- * is named. Nothing else belongs here, and no CSS Module may declare a colour
- * of its own.
+ * is named. A CSS Module may declare a colour of its own only where that
+ * colour is scoped data rather than a theme value: the standing example is
+ * the chart series and status palette in `charts.module.css`'s `.viz`, kept
+ * inside `.viz` so that no page stylesheet can reach it and no mark outside a
+ * chart can be painted in it. Everything that is a surface, a text colour or
+ * a state colour comes from this file.
  *
  * Light is the default and dark is a choice (R2). The dark palette is written
  * twice because plain CSS cannot share one declaration block between a media

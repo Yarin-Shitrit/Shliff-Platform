@@ -43,9 +43,23 @@ bdi {
 }
 
 /**
- * A10's single documented exception. A money column must line up by place
- * value; `text-align: start` would push it to the wrong edge of an RTL table.
- * This class is the only physical direction in the codebase.
+ * A10's single documented exception — and not for the reason this comment
+ * used to give. `text-align: start` would NOT push a numeric column to the
+ * wrong edge: this page is `direction: rtl`, so `start` computes to `right`,
+ * the same edge `.num` uses. Against the `th, td { text-align: start }` rule
+ * below, `.num`'s `text-align: right` is a no-op today.
+ *
+ * The exception is real anyway, for a different reason: it pins the
+ * *physical* edge, so a cell whose value carries `dir="ltr"` — every `Money`
+ * and `DateText` value, per `format.tsx` — still aligns by place value with
+ * its RTL neighbours regardless of the page's own direction. This class is
+ * the only physical direction in the codebase.
+ *
+ * `src/app/(admin)/data/data.module.css:121` already ships a module-scoped
+ * `.num` that takes `text-align: end` — the opposite physical edge. CSS
+ * Modules hash the class name, so there is no collision, but the two screens
+ * disagree on which edge a number sits against until plan 05 replaces
+ * `/data`.
  */
 .num {
   text-align: right;
@@ -106,10 +120,20 @@ th {
 }
 
 /* Most uses of this class are `role="alert"` error messages, so it takes the
-   error colour, not the warning colour (R3). Some are status indicators — an
-   outstanding balance, an understaffed task — carried alongside a Hebrew
-   word, so the colour is not load-bearing for meaning; those will be revisited
-   when their screens are redesigned and this class's uses there are removed. */
+   error colour, not the warning colour (R3). Most of the remaining uses are
+   status indicators — an outstanding balance, an understaffed task — carried
+   alongside a Hebrew word, so the colour is not the only cue there.
+   Four of the twenty-seven uses today carry no word at all, so for those the
+   colour IS the only cue — which is exactly what R3 forbids. They are
+   colour-only and noncompliant as shipped:
+     - src/app/(admin)/fees/page.tsx:68     — a bare <dd> holding an amount
+     - src/app/(admin)/page.tsx:65          — a bare <dd> holding an amount
+     - src/app/(admin)/members/page.tsx:93  — a bare <td> holding an amount
+     - src/app/(admin)/money/page.tsx:352   — a <span> whose only text is the
+       glyph "⚠", with the explanation in a `title` attribute, which is not
+       an accessible substitute for a word
+   Each is fixed by the plan that owns and rewrites that screen, not here:
+   /fees → plan 07, / → plan 04, /members → plan 06, /money → plan 08. */
 .badge-warn {
   color: var(--bad);
 }
