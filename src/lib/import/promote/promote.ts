@@ -301,6 +301,89 @@ async function runInTransaction<T>(
   return (db as Db).transaction((tx) => fn(tx as unknown as AnyDb));
 }
 
+export interface BulkResult {
+  results: PromotionResult[];
+  writtenCount: number;
+  refusedCount: number;
+  /** Rows removed across every promoted block, in any target table. On a
+   *  dry run, the rows a commit WOULD remove — summed across blocks, but
+   *  nothing is actually removed. */
+  deletedCount: number;
+  /** Rows kept across every promoted block because something references
+   *  them. Filled on a dry run too, for the same reason `deletedCount` is:
+   *  a dry run reports what a commit would do, not what it did. */
+  retainedCount: number;
+  /** Blocks whose promotion threw a genuine database error rather than
+   *  returning a business refusal — the two are not the same thing: a
+   *  refusal is a normal outcome and lives in `results[].refused`; a
+   *  failure here means the database itself rejected the write and the
+   *  register cannot explain it to a lead in Hebrew. A failed block wrote
+   *  nothing — its savepoint rolled back to before its own writes — while
+   *  every block around it in the same run still committed normally. */
+  failures: { blockId: string; message: string }[];
+  /** `failures.length`, for a caller that only wants the count. */
+  failedCount: number;
+}
+
+/**
+ * Promotes every confirmed block, in a stable order (`sheets.name`, then
+ * `blocks.top`) so two runs produce comparable output. Refusals are kept in
+ * `results`: the register is a list of what could not be settled, so a
+ * refused block is the point, not noise.
+ *
+ * The whole run is ONE outer transaction. Each `promoteBlock` call nests
+ * inside it as a savepoint — both drivers support this (drizzle's PGlite
+ * session opens `savepoint spN`; postgres-js delegates to
+ * `client.savepoint`) — so a block whose write throws a genuine database
+ * error rolls back only that block's savepoint; the loop catches the error,
+ * records it in `failures`, and moves on to the next block. The outer
+ * transaction then commits normally, so a bulk run always returns a
+ * complete `BulkResult` and always persists whatever succeeded — a lead can
+ * tell "18 of 20 promoted, block 19 failed, block 20 was fine" from the
+ * result, rather than the caller seeing nothing at all because one block
+ * out of many hit a bug. `promoteBlock` itself is unchanged for callers
+ * that promote a single block directly: it still opens its own top-level
+ * transaction and still throws on a genuine database error.
+ */
+export async function promoteAll(
+  db: AnyDb, opts: { dryRun: boolean; recordedBy: string },
+): Promise<BulkResult> {
+  return runInTransaction(db, async (tx) => {
+    const confirmed = await tx.select({ id: blocks.id })
+      .from(blocks)
+      .innerJoin(sheets, eq(sheets.id, blocks.sheetId))
+      .where(isNotNull(blocks.confirmedAt))
+      .orderBy(sheets.name, blocks.top);
+
+    const results: PromotionResult[] = [];
+    const failures: { blockId: string; message: string }[] = [];
+    for (const { id } of confirmed) {
+      try {
+        // Deliberately sequential: each block must finish (and, on
+        // failure, roll back to its own savepoint) before the next one
+        // starts. Running them concurrently would interleave writes and
+        // sweeps against the same shared transaction.
+        results.push(await promoteBlock(tx, id, opts));
+      } catch (error) {
+        failures.push({
+          blockId: id,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    return {
+      results,
+      writtenCount: results.reduce((n, r) => n + r.written.length, 0),
+      refusedCount: results.reduce((n, r) => n + r.refused.length, 0),
+      deletedCount: results.reduce((n, r) => n + r.deleted, 0),
+      retainedCount: results.reduce((n, r) => n + r.retained.length, 0),
+      failures,
+      failedCount: failures.length,
+    };
+  });
+}
+
 /**
  * Turns one confirmed block into domain rows, or says why not.
  *
