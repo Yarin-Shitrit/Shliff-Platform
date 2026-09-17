@@ -388,9 +388,20 @@ Plan 07's Task 3 must additionally:
 1. add `unpaid: UnpaidMember[]`, largest outstanding first, with plan 04's shape
    verbatim (`personId`, `displayName`, `dueId`, `kind`, `amountAgorot`,
    `paidAgorot`, `outstandingAgorot`);
-2. add plan 04's `.innerJoin(persons, eq(persons.id, dues.personId))` to the dues
-   read — `summary.ts` has no persons join today, and a due belonging to someone
-   off the roster must still carry a name;
+2. add plan 04's `.innerJoin(persons, eq(persons.id, dues.personId))` **to the
+   dues read specifically**. Stated precisely, because the file is easy to
+   misread: `summary.ts` *does* already join `persons`, but on the **roster**
+   read (`:36`, `eq(persons.id, memberships.personId)`). The **dues** read
+   (`:39-42`) selects only `dues.id`, `personId`, `amount`, `kind` — no join.
+
+   So today a due's person name is resolvable **only** through the roster map,
+   and a due belonging to someone who is not on this season's roster has no name
+   available at all. That is not hypothetical: it is precisely the row a lead
+   most needs to see in `unpaid`, since someone who left the roster still owing
+   money is the collection case that gets forgotten. `UnpaidMember.displayName`
+   cannot be populated for them without this join;
+
+
 3. update the `SUMMARY` fixture in its own Task 9 (`fee-rollup.test.tsx`), which
    builds a `SeasonFeeSummary` literal with no `unpaid` field and will stop
    typechecking once the interface widens.
