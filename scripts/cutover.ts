@@ -1,6 +1,6 @@
 /**
- * The cutover: promote every confirmed block and remove the seeded rows the
- * promotion replaces, in ONE transaction.
+ * The cutover: promote the confirmed blocks of one season — or of every season
+ * — and remove the seeded rows the promotion replaces, in ONE transaction.
  *
  * Until now the camp's money was written twice over — once by hand into
  * `src/lib/seed/camp-seed.ts`, and now by the promoter out of the confirmed
@@ -8,16 +8,41 @@
  * already wrote into a live database are still standing, and this script is
  * what takes them out.
  *
+ * ## Runbook, with the three things that actually bite
+ *
+ * `create database … template shliff` FAILS while anything holds a connection
+ * to `shliff` — "source database is being accessed by other users" — and a dev
+ * server holds one all day. Dump and restore instead; it needs no exclusive
+ * lock and no write to live:
+ *
  *   docker exec shliff-pg psql -U shliff -d postgres \
- *     -c "drop database if exists shliff_cutover;" \
- *     -c "create database shliff_cutover template shliff;"
+ *     -c "drop database if exists shliff_cutover;" -c "create database shliff_cutover;"
+ *   docker exec shliff-pg bash -lc \
+ *     "pg_dump -U shliff -d shliff --no-owner --no-acl | \
+ *      psql -U shliff -d shliff_cutover -q -v ON_ERROR_STOP=1"
+ *
+ * Migrations 0005 (`sheets.season_id` / `authoritative`) and 0006
+ * (`obligations.opened_on` nullable) are NOT applied to live. 0002-0004 were
+ * applied there by `drizzle-kit push`, so the journal does not know them and
+ * `migrate` would try to re-run them; record those three by file sha256 in the
+ * clone's journal first, then:
+ *
  *   DATABASE_URL=postgres://shliff:<pw>@localhost:5433/shliff_cutover \
  *     ./node_modules/.bin/drizzle-kit migrate
- *   DATABASE_URL=… npx tsx scripts/dry-run-promote.ts   # labels and confirms
- *   DATABASE_URL=… npx tsx scripts/cutover.ts           # dry run
- *   DATABASE_URL=… npx tsx scripts/cutover.ts --commit  # keeps the result
  *
- * Four rules this script exists to obey, each of them learned the hard way:
+ * Live has ZERO confirmed blocks. This script does not confirm anything —
+ * that is a lead's decision in the import UI — so on live today it would
+ * promote nothing, find no replacements and refuse. Before it can do anything
+ * a lead must label the eleven labellable sheets, set the four authority
+ * flags, re-pick `fa78b9be` as `budget_lines`, and confirm the blocks. On a
+ * scratch clone `dry-run-promote.ts` does all of that:
+ *
+ *   DATABASE_URL=… npx tsx scripts/dry-run-promote.ts       # labels and confirms
+ *   DATABASE_URL=… npx tsx scripts/cutover.ts --season "ברן 26"
+ *   DATABASE_URL=… npx tsx scripts/cutover.ts --season "ברן 26" \
+ *     --commit --include-truncations
+ *
+ * Seven rules this script exists to obey, each of them learned the hard way:
  *
  *  1. ONE transaction. The obvious order — promote, check, then delete —
  *     leaves a window in which the database holds both copies of everything:
@@ -44,7 +69,26 @@
  *     `(source_block_id, source_row)` and agrees on season, label and amount
  *     to the agora.
  *
- *  4. The scratch guard is an allowlist. This script deletes real financial
+ *  4. Check the POPULATION, not only the ids. A list of 41 ids catches a row
+ *     that has gone; it cannot see a row that has been ADDED since the evidence
+ *     was reviewed, and that row would be left standing with no replacement and
+ *     nobody told. So the seeded counts must be exactly 19 / 28 / 3 / 13 or the
+ *     run stops before it promotes anything.
+ *
+ *  5. SCOPE it. The seasons are not equally ready: ברן 26 reproduces its
+ *     workbook to the agora, while ברן 25's budget lands at 158,507 against a
+ *     workbook that says 59,587, because the dancefloor block comes back
+ *     categorised `camp`. `--season` narrows the promotion and the deletion set
+ *     together, so a lead can take the half that is right without the half that
+ *     is not.
+ *
+ *  6. Make the lead ANSWER the truncation question before committing. Leaving
+ *     the two truncated rows is not a neutral default — their replacements are
+ *     already written at the same amounts, so 5,000 ₪ and 1,000 ₪ end up
+ *     counted twice and the ברן 26 identity stops closing. `--commit` refuses
+ *     without `--include-truncations` or `--keep-truncations`.
+ *
+ *  7. The scratch guard is an allowlist. This script deletes real financial
  *     records, so it refuses to open anything but `shliff_cutover`. The guard
  *     resolves the database name the way postgres.js resolves it — including
  *     reading the LAST of a repeated `?database=` key, which is what
@@ -71,17 +115,21 @@
  * obtained: `@/db` builds its client at import time from `DATABASE_URL`, so it
  * is imported dynamically, after the guard has run.
  */
-import { inArray, isNull, sql } from 'drizzle-orm';
+import {
+  and, eq, inArray, isNotNull, isNull, sql,
+} from 'drizzle-orm';
 import { blocks, sheets } from '@/db/schema/source';
 import { seasons } from '@/db/schema/camp';
 import {
   ledgerEntries, budgetLines, ticketRounds, obligations,
 } from '@/db/schema/money';
-import { promoteAll } from '@/lib/import/promote/promote';
+import { promoteBlock, type BulkResult } from '@/lib/import/promote/promote';
+import type { PromotionResult } from '@/lib/import/promote/types';
 import { seasonMoneySummary } from '@/lib/money/summary';
 import { budgetTotalAgorot } from '@/lib/money/budget';
+import { ticketTotalAgorot, fundingTotalAgorot } from '@/lib/money/funding';
 import { normalizeHebrew } from '@/lib/text/normalize';
-import { formatILS } from '@/lib/money';
+import { formatILS, toAgorot } from '@/lib/money';
 import type { AnyDb } from '@/lib/db-types';
 import { assertScratchDatabase, CUTOVER_DATABASE } from './scratch-guard';
 
@@ -202,21 +250,38 @@ interface JunkRow {
   blockId: string;
   sourceRow: number;
   label: string;
+  /**
+   * The amount the evidence recorded, as the column stores it.
+   *
+   * Gated exactly like a replacement's, and for the same reason: a block whose
+   * rows shifted could put a real budget line under the label this list
+   * expects, and the label alone would not notice. The amount is the second
+   * lock.
+   */
+  amount: string;
   why: string;
 }
 
 const JUNK: JunkRow[] = [
   {
     table: 'budget_lines', blockId: BLOCK_BUDGET_26, sourceRow: 31, label: 'תקציב מחנה',
+    amount: '42000.00',
     why: 'the season’s dues × head-count (42,000), from a neighbouring sub-table — not a line to spend',
   },
   {
     table: 'budget_lines', blockId: BLOCK_BUDGET_26, sourceRow: 32, label: 'יעד גיוס',
+    amount: '22375.30',
     why: 'the fundraising target (22,375.30), same sub-table — it is a funding_target, not a budget line',
   },
   {
+    // The evidence reads this cell as 0.6666666667, a profit-split percentage.
+    // `total` is `numeric(12,2)`, so what `ticketRow` actually writes is 0.67
+    // — the figure this gate has to hold, since it compares what the column
+    // stores. Both are named so neither looks like a typo for the other.
     table: 'ticket_rounds', blockId: BLOCK_TICKETS_SN, sourceRow: 11, label: 'אסף',
-    why: 'a profit-split percentage (0.6666…) that the total=c9 mapping reads as money, quantity 0',
+    amount: '0.67',
+    why: 'a profit-split percentage (0.6666… → 0.67 in numeric(12,2)) that the '
+      + 'total=c9 mapping reads as money, quantity 0',
   },
 ];
 
@@ -267,9 +332,12 @@ function say(line = ''): void {
 }
 
 /** `numeric(12,2)` text compared as the money it is, never as a string: `0.00`
- *  and `0` are the same amount and different strings. */
+ *  and `0` are the same amount and different strings. `toAgorot` is the
+ *  project's only converter and does exactly this — a second copy of
+ *  `Math.round(n * 100)` in the file that decides what gets deleted is the
+ *  last place worth having one. */
 function sameMoney(a: string, b: string): boolean {
-  return Math.round(Number(a) * 100) === Math.round(Number(b) * 100);
+  return toAgorot(a) === toAgorot(b);
 }
 
 function sameLabel(a: string, b: string): boolean {
@@ -399,6 +467,57 @@ async function countRows(db: AnyDb): Promise<TableCounts> {
   };
 }
 
+/**
+ * The seeded population the evidence was taken against, exactly.
+ *
+ * R31 has two halves and the id list only covers one of them. A listed id that
+ * has GONE is caught when its row cannot be found; a seeded row that has been
+ * ADDED since the evidence was written is invisible to a list of 41 ids — the
+ * run would delete the 41 it knows and leave the new one standing, unreviewed,
+ * with no replacement and nobody told. So the population is checked first, and
+ * a population this evidence cannot account for stops the run.
+ */
+const EVIDENCE_SEEDED = {
+  ledger_entries: 19, budget_lines: 28, ticket_rounds: 3, obligations: 13,
+} as const;
+
+type SeededTable = keyof typeof EVIDENCE_SEEDED;
+
+/**
+ * Compares the seeded population against the evidence, allowing for rows a
+ * PREVIOUS run of this script already deleted.
+ *
+ * A flat "must equal 19 / 28 / 3 / 13" would be wrong the moment `--season` is
+ * used as intended: cut ברן 26 over today and the ledger holds 7 seeded rows,
+ * so a flat check would refuse to ever cut ברן 25 over tomorrow. The
+ * expectation is therefore the evidence's count MINUS the enumerated ids that
+ * are no longer there — every one of which this script, and only this script,
+ * is meant to have removed. Anything left over is a row the evidence never saw.
+ */
+function populationProblems(
+  counts: TableCounts, seededIds: Map<SeededTable, Set<string>>,
+): string[] {
+  const seen: Record<SeededTable, number> = {
+    ledger_entries: counts.ledgerSeeded,
+    budget_lines: counts.budgetSeeded,
+    ticket_rounds: counts.ticketSeeded,
+    obligations: counts.obligationSeeded,
+  };
+  const enumerated = [...REPLACED, ...TRUNCATIONS];
+
+  return (Object.keys(EVIDENCE_SEEDED) as SeededTable[]).flatMap((table) => {
+    const present = seededIds.get(table) ?? new Set<string>();
+    const alreadyGone = enumerated
+      .filter((row) => row.table === table && !present.has(row.id))
+      .length;
+    const expected = EVIDENCE_SEEDED[table] - alreadyGone;
+    if (seen[table] === expected) return [];
+    return [`${table}: ${seen[table]} seeded rows, but the evidence accounts for `
+      + `${expected} (${EVIDENCE_SEEDED[table]} reviewed, ${alreadyGone} of them `
+      + 'already deleted by an earlier run)'];
+  });
+}
+
 function sayCounts(title: string, counts: TableCounts): void {
   say(`${title}:`);
   say(`  ledger_entries  seeded=${counts.ledgerSeeded} promoted=${counts.ledgerPromoted}`);
@@ -511,7 +630,8 @@ function verifyReplacement(
 }
 
 /** The junk row itself is what gets deleted, so it is located by the
- *  promoter's own key and checked against the label the evidence recorded. */
+ *  promoter's own key and checked against the label AND the amount the
+ *  evidence recorded — both sides, exactly as a replacement is. */
 function verifyJunk(
   junk: JunkRow, rows: Row[],
 ): { ok: true; row: Verified; amount: string } | { ok: false; why: string } {
@@ -533,10 +653,110 @@ function verifyJunk(
         + `"${junk.label}" — the block's rows have moved, so this is not the junk row`,
     };
   }
+  if (!sameMoney(row.amount, junk.amount)) {
+    return {
+      ok: false,
+      why: `(${junk.blockId.slice(0, 8)}, r${junk.sourceRow}) "${junk.label}" holds `
+        + `${row.amount}, the evidence recorded ${junk.amount} — a row this script `
+        + 'has not seen before is not junk it may delete',
+    };
+  }
   return {
     ok: true,
     amount: row.amount,
     row: { table: junk.table, id: row.id, what: `${junk.label} ${row.amount} — ${junk.why}` },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Scope — one season at a time, because the seasons are not equally ready
+// ---------------------------------------------------------------------------
+
+/**
+ * Which season this run is allowed to touch. `null` means all of them.
+ *
+ * ברן 26 reproduces its workbook to the agora once promoted; ברן 25 does not,
+ * because the dancefloor block comes back categorised `camp` and its budget
+ * lands at 158,507 against a workbook that says 59,587. Running the whole
+ * corpus in one transaction makes those one decision, and a lead who wants the
+ * good half has no way to take it without the bad half. So the scope is a
+ * parameter: it narrows the promotion AND the deletion set together, and
+ * anything enumerated for another season is left exactly where it is.
+ */
+interface Scope {
+  seasonId: string | null;
+  seasonName: string | null;
+}
+
+interface BlockSeason {
+  seasonId: string | null;
+  seasonName: string | null;
+  sheetName: string;
+}
+
+/** The season each evidence block's sheet carries. The block's season, not the
+ *  row's, decides scope: it is the same thing that decides whether the block is
+ *  promoted at all, so the two halves cannot disagree. */
+async function blockSeasons(db: AnyDb): Promise<Map<string, BlockSeason>> {
+  const rows = await db.select({
+    id: blocks.id,
+    seasonId: sheets.seasonId,
+    seasonName: seasons.name,
+    sheetName: sheets.name,
+  })
+    .from(blocks)
+    .innerJoin(sheets, eq(sheets.id, blocks.sheetId))
+    .leftJoin(seasons, eq(seasons.id, sheets.seasonId));
+  return new Map(rows.map((row) => [row.id, {
+    seasonId: row.seasonId, seasonName: row.seasonName, sheetName: row.sheetName,
+  }]));
+}
+
+/**
+ * Promotes every confirmed block whose sheet is in scope.
+ *
+ * With `scope.seasonId === null` the selection is character for character the
+ * one `promoteAll` makes — confirmed blocks, ordered by `sheets.name` then
+ * `blocks.top` — and the per-block savepoint behaviour is the same, because
+ * this calls the same `promoteBlock`. It is written out here rather than
+ * passing a filter into `promoteAll` because `promoteAll` is the register's
+ * shared entry point and four lanes are editing this repo; a season parameter
+ * on it is a change to everyone's API for one script's benefit.
+ */
+async function promoteScoped(
+  db: AnyDb, opts: { dryRun: boolean; recordedBy: string }, scope: Scope,
+): Promise<BulkResult> {
+  const confirmed = await db.select({ id: blocks.id })
+    .from(blocks)
+    .innerJoin(sheets, eq(sheets.id, blocks.sheetId))
+    .where(scope.seasonId === null
+      ? isNotNull(blocks.confirmedAt)
+      : and(isNotNull(blocks.confirmedAt), eq(sheets.seasonId, scope.seasonId)))
+    .orderBy(sheets.name, blocks.top);
+
+  const results: PromotionResult[] = [];
+  const failures: { blockId: string; message: string }[] = [];
+  for (const { id } of confirmed) {
+    try {
+      // Sequential on purpose, as in `promoteAll`: each block must finish, or
+      // roll back to its own savepoint, before the next one starts.
+      results.push(await promoteBlock(db, id, opts));
+    } catch (error) {
+      failures.push({
+        blockId: id,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return {
+    results,
+    writtenCount: results.reduce((n, r) => n + r.written.length, 0),
+    refusedCount: results.reduce((n, r) => n + r.refused.length, 0),
+    deletedCount: results.reduce((n, r) => n + r.deleted, 0),
+    retainedCount: results.reduce((n, r) => n + r.retained.length, 0),
+    failures,
+    failedCount: failures.length,
   };
 }
 
@@ -567,6 +787,17 @@ async function sayMoney(db: AnyDb, title: string): Promise<void> {
       + `funding/head=${summary.identity.perPersonFundingAgorot === null
         ? 'n/a' : formatILS(summary.identity.perPersonFundingAgorot)} `
       + `closes=${summary.identity.closes}`);
+    // Tickets and funding are printed because tickets is the figure that
+    // doubles: the three seeded rounds (171,000, from an unmapped sub-table of
+    // `תקציב קאמפ ברן 26`) stay, and `SuperNature 3.10` adds four more
+    // (139,125). They are two projections of two different things and
+    // `ticketTotalAgorot` sums them without a word. Leaving the one number
+    // this cutover visibly breaks out of the report would be the report
+    // choosing what not to look at.
+    const [tickets, funding] = await Promise.all([
+      ticketTotalAgorot(db, season.id), fundingTotalAgorot(db, season.id),
+    ]);
+    say(`    tickets: ${formatILS(tickets)}   funding plan: ${formatILS(funding)}`);
     say(`    accounts: ${formatILS(summary.totalBalanceAgorot)} `
       + `(${summary.accounts.length}) — camp-wide, not season-scoped`);
     say(`    campOwes: ${formatILS(summary.campOwesAgorot)} `
@@ -579,11 +810,49 @@ async function sayMoney(db: AnyDb, title: string): Promise<void> {
 // Run
 // ---------------------------------------------------------------------------
 
+/** `--flag value` or `--flag=value`, so a Hebrew season name can be quoted
+ *  either way. Returns undefined when the flag is absent. */
+function flagValue(name: string): string | undefined {
+  const inline = process.argv.find((arg) => arg.startsWith(`${name}=`));
+  if (inline) return inline.slice(name.length + 1);
+  const at = process.argv.indexOf(name);
+  if (at === -1) return undefined;
+  const next = process.argv[at + 1];
+  if (next === undefined || next.startsWith('--')) {
+    throw new Error(`${name} needs a value, e.g. ${name} "ברן 26"`);
+  }
+  return next;
+}
+
 async function main(): Promise<void> {
   const commit = process.argv.includes('--commit');
   const includeTruncations = process.argv.includes('--include-truncations');
-  const actorArg = process.argv.find((arg) => arg.startsWith('--actor='));
-  const actor = actorArg ? actorArg.slice('--actor='.length) : 'cutover@shliff.camp';
+  const keepTruncations = process.argv.includes('--keep-truncations');
+  const actor = flagValue('--actor') ?? 'cutover@shliff.camp';
+  const seasonArg = flagValue('--season');
+
+  /**
+   * The truncation question has to be ANSWERED before anything is kept.
+   *
+   * Leaving the two truncated rows in place is not a neutral default: their
+   * replacements are already written at the same amounts, so the 5,000 and the
+   * 1,000 are counted twice and the ברן 26 identity stops closing. Committing
+   * that silently makes the wrong answer the one nobody chose. Both answers
+   * are one flag; only having no answer is refused.
+   */
+  if (commit && includeTruncations === keepTruncations) {
+    throw new CutoverRefusal(
+      includeTruncations
+        ? 'pass either --include-truncations or --keep-truncations, not both.'
+        : 'refusing to commit without an answer on the two truncated labels. '
+        + 'Leaving them is not free: their replacements are already written at '
+        + 'the same amounts, so 5,000 ₪ and 1,000 ₪ end up counted twice and the '
+        + 'ברן 26 dues/fundraising identity stops closing. Pass '
+        + '--include-truncations to delete them (the labels lengthen to the '
+        + "workbook's wording), or --keep-truncations to accept the double count "
+        + 'deliberately. A dry run needs neither.',
+    );
+  }
 
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error('DATABASE_URL is not set');
@@ -592,6 +861,21 @@ async function main(): Promise<void> {
   // Imported here, not at the top: `@/db` connects at import time.
   const { db } = await import('@/db');
 
+  const seasonRows = await db.select({ id: seasons.id, name: seasons.name })
+    .from(seasons).orderBy(seasons.name);
+  const scope: Scope = { seasonId: null, seasonName: null };
+  if (seasonArg !== undefined) {
+    const match = seasonRows.find((row) => row.name === seasonArg);
+    if (!match) {
+      throw new CutoverRefusal(
+        `no season named "${seasonArg}". This database has: `
+        + `${seasonRows.map((row) => row.name).join(', ') || '(none)'}.`,
+      );
+    }
+    scope.seasonId = match.id;
+    scope.seasonName = match.name;
+  }
+
   say(`# Cutover — database "${dbName}"`);
   say(`generated ${new Date().toISOString()}`);
   say(commit
@@ -599,7 +883,24 @@ async function main(): Promise<void> {
     : 'MODE: dry run. Everything below really happens, inside one transaction, '
       + 'and the transaction is then rolled back. Pass --commit to keep it.');
   say(`actor: ${actor}`);
-  say(`truncated-label rows: ${includeTruncations ? 'DELETED (--include-truncations)' : 'kept'}`);
+  say(`truncated-label rows: ${includeTruncations ? 'DELETED (--include-truncations)'
+    : (keepTruncations ? 'kept (--keep-truncations)' : 'kept (dry run — undecided)')}`);
+  say();
+
+  say('## Scope');
+  say();
+  if (scope.seasonId === null) {
+    say('acting on: EVERY season, and every confirmed block.');
+    say('  No --season was given. ברן 25 and ברן 26 are not equally ready — see');
+    say('  "Left for the camp lead" — so consider --season "ברן 26" first.');
+  } else {
+    say(`acting on: ${scope.seasonName} only.`);
+  }
+  for (const season of seasonRows) {
+    if (season.id === scope.seasonId || scope.seasonId === null) continue;
+    say(`not acting on: ${season.name} — its blocks are not promoted and its `
+      + 'enumerated rows are left exactly where they are.');
+  }
   say();
 
   const confirmedBlocks = await db.select({ n: sql<string>`count(*)` })
@@ -617,12 +918,37 @@ async function main(): Promise<void> {
       const before = await countRows(tx);
       sayCounts('## Before', before);
       say();
+
+      // -- 0. The population the evidence was taken against ------------------
+      // Read before the promotion, so "seeded" means what it meant when the
+      // evidence was reviewed rather than whatever the promoter just wrote.
+      const seededIds = new Map<SeededTable, Set<string>>();
+      for (const table of ['ledger_entries', 'budget_lines', 'ticket_rounds'] as const) {
+        seededIds.set(table, new Set(
+          (await readTable(tx, table))
+            .filter((row) => row.sourceBlockId === null)
+            .map((row) => row.id),
+        ));
+      }
+      const grown = populationProblems(before, seededIds);
+      if (grown.length > 0) {
+        for (const problem of grown) say(`  !! ${problem}`);
+        say();
+        throw new CutoverRefusal(
+          'the seeded population is not one this evidence can account for: '
+          + `${grown.join('; ')}. A seeded row the evidence never saw has no `
+          + 'enumerated id and no reviewed replacement, so it would be left standing '
+          + 'with nobody told. Re-derive the evidence before running this.',
+        );
+      }
+
       await sayMoney(tx, 'Money before');
 
-      // -- 1. Promote ------------------------------------------------------
-      const bulk = await promoteAll(tx, { dryRun: false, recordedBy: actor });
+      // -- 1. Promote, in scope ---------------------------------------------
+      const bulk = await promoteScoped(tx, { dryRun: false, recordedBy: actor }, scope);
       say('## Promotion');
       say();
+      say(`scope: ${scope.seasonName ?? 'every season'}`);
       say(`blocks promoted: ${bulk.results.length}`);
       say(`rows written: ${bulk.writtenCount}`);
       say(`rows refused: ${bulk.refusedCount}`);
@@ -649,24 +975,61 @@ async function main(): Promise<void> {
       const verified: Verified[] = [];
       const problems: string[] = [];
 
+      // The block's season decides scope, because it is the same thing that
+      // decided whether the block was promoted a moment ago. A target whose
+      // block is out of scope has no replacement in this transaction — by
+      // design — so it must be skipped rather than verified and failed.
+      const byBlock = await blockSeasons(tx);
+      const inScope = (blockId: string): boolean => (
+        scope.seasonId === null || byBlock.get(blockId)?.seasonId === scope.seasonId
+      );
+
+      const chosen = includeTruncations ? [...REPLACED, ...TRUNCATIONS] : REPLACED;
+      const targets = chosen.filter((target) => inScope(target.blockId));
+      const skipped = chosen.filter((target) => !inScope(target.blockId));
+      const skippedJunk = JUNK.filter((junk) => !inScope(junk.blockId));
+      const junkTargets = JUNK.filter((junk) => inScope(junk.blockId));
+
+      if (skipped.length > 0 || skippedJunk.length > 0) {
+        say('## Out of scope — enumerated, and deliberately left alone');
+        say();
+        for (const target of [...skipped, ...skippedJunk]) {
+          const block = byBlock.get(target.blockId);
+          say(`  --  ${target.table}  ${target.label}  `
+            + `(${target.blockId.slice(0, 8)} r${target.sourceRow}, `
+            + `${block?.seasonName ?? 'no season'})`);
+        }
+        say();
+      }
+
       say('## Replacements verified, one row at a time');
       say();
-      const targets = includeTruncations ? [...REPLACED, ...TRUNCATIONS] : REPLACED;
       for (const target of targets) {
         const outcome = verifyReplacement(target, snapshot.get(target.table) ?? []);
-        if (outcome.ok) {
-          verified.push(outcome.row);
-          say(`  ok  ${target.table}  ${outcome.row.what}`);
-        } else {
+        if (!outcome.ok) {
           problems.push(outcome.why);
           say(`  !!  ${target.table}  ${outcome.why}`);
+          continue;
         }
+        // Belt and braces on the scope. `verifyReplacement` already proved the
+        // seeded row and its replacement share a season; this says out loud
+        // that the season is the one asked for, so a block whose sheet label
+        // moved cannot smuggle another season's row into a scoped run.
+        const seeded = (snapshot.get(target.table) ?? []).find((row) => row.id === target.id);
+        if (scope.seasonId !== null && seeded?.seasonId !== scope.seasonId) {
+          problems.push(`${target.label} (${target.id}) belongs to a season other than `
+            + `${scope.seasonName}, but its block is labelled ${scope.seasonName}`);
+          say(`  !!  ${target.table}  ${target.label} — season mismatch against the scope`);
+          continue;
+        }
+        verified.push(outcome.row);
+        say(`  ok  ${target.table}  ${outcome.row.what}`);
       }
       say();
 
       say('## Junk the promotion wrote, identified and removed');
       say();
-      for (const junk of JUNK) {
+      for (const junk of junkTargets) {
         const outcome = verifyJunk(junk, snapshot.get(junk.table) ?? []);
         if (outcome.ok) {
           verified.push(outcome.row);
@@ -676,13 +1039,14 @@ async function main(): Promise<void> {
           say(`  !!  ${junk.table}  ${outcome.why}`);
         }
       }
+      if (junkTargets.length === 0) say('  (none in scope)');
       say();
 
       if (problems.length > 0) {
         throw new CutoverRefusal(
-          `${problems.length} of ${targets.length + JUNK.length} rows could not be `
-          + 'verified. The evidence and the database disagree, so nothing is deleted '
-          + 'and the promotion is rolled back with it.',
+          `${problems.length} of ${targets.length + junkTargets.length} in-scope rows `
+          + 'could not be verified. The evidence and the database disagree, so nothing '
+          + 'is deleted and the promotion is rolled back with it.',
         );
       }
 
@@ -774,7 +1138,30 @@ function reportDecisions(): void {
   say('   sub-tables that `detectBlocks` never carved out, so no column map reaches');
   say('   them. They are real data with no workbook route in.');
   say();
-  say('5. One promoted row is a false positive this script does NOT delete:');
+  say('5. THE JUNK DELETION IS NOT DURABLE, and nothing in the schema makes it so.');
+  say('   The promoter upserts on `(source_block_id, source_row)`. Once');
+  say('   `(66ad3b61, r31)` and `(66ad3b61, r32)` are deleted, that conflict target');
+  say('   no longer exists — so the NEXT promotion of block 66ad3b61 does not update');
+  say('   them, it re-INSERTS them: 42,000 + 22,375.30 of non-budget back onto');
+  say('   ברן 26, which is 64,375.30 on a budget of 64,375.30. It exactly doubles.');
+  say('   Re-running this script is evidence of it: the second run finds those rows');
+  say('   present and verified, because re-promotion put them back. The W5 sweep');
+  say('   cannot help — it only removes rows the block no longer produces, and the');
+  say('   block still produces these.');
+  say('   Until a lead can veto a row at confirm time, or block bounds become');
+  say('   editable, treat re-promoting 66ad3b61 (and 84d315a5) as an action that');
+  say('   requires running this script again afterwards.');
+  say();
+  say('6. ברן 26\'s ticket projection DOUBLES, to 310,125.');
+  say('   171,000 seeded — כרטיסים עד כה 60,000, סבב ג׳ 33,000, סבב ד׳ 78,000, from');
+  say('   the unmapped sub-table of `תקציב קאמפ ברן 26` — plus 139,125 promoted from');
+  say('   `SuperNature 3.10` (מוקדמות 7,000, ראשון 18,000, שני 38,500, אחרון 75,625).');
+  say('   They are two projections of two different things and `ticketTotalAgorot`');
+  say('   sums them with nothing to tell them apart. Neither replaces the other, so');
+  say('   this script deletes neither; a lead has to say what the season\'s ticket');
+  say('   figure is meant to be.');
+  say();
+  say('7. One promoted row is a false positive this script does NOT delete:');
   say('     budget_lines  (fa78b9be r20)  צפי להחזרי מע״מ  5,550');
   say('   It is the head of a VAT-reclaim sub-table, not a budget line, and it');
   say('   inflates ברן 25\'s camp budget by 5,550 ₪. The cutover evidence names it');
