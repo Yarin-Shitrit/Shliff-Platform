@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { notFound } from 'next/navigation';
+import { requireAdmin } from '@/lib/auth/guard';
 import { extractWorkbook } from '@/lib/xlsx/extract';
 import { detectBlocks } from '@/lib/blocks/detect';
 import { parseNumber } from '@/lib/coerce/number';
@@ -61,6 +63,9 @@ function totalsByItem(lines: BudgetLine[]): Map<string, number> {
 }
 
 export default async function DataPage() {
+  const admin = await requireAdmin();
+  if (!admin.ok) notFound();
+
   const raw = await Promise.all(
     FILES.map(async ({ file, year }) => ({
       file,
