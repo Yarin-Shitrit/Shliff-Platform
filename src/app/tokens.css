@@ -110,6 +110,48 @@
   --tap-min: 44px;
   --input-font-phone: 16px;
 
+  /* ── Z-index ladder ───────────────────────────────────────────────
+     Six plans own overlapping surfaces and would otherwise each pick their
+     own number: B5's command palette, B7's bottom tab bar, C6's drawer, C7's
+     confirm dialog, C8's bulk bar, E2's toasts. Not all of it is transcription
+     from one source: `--z-bulk`/`--z-scrim`/`--z-drawer`/`--z-pop` are copied
+     verbatim from the mock's four overlay surfaces
+     (`docs/superpowers/mock/shared.css:302,305,314,326`), which has no confirm
+     dialog. `--z-dialog-scrim`/`--z-dialog` have no mock source either — they
+     are copied from plan 03's own `confirm-dialog.module.css` (`.scrim` and
+     `.dialog`), so C7's dialog does not collide with, or sit under, anything
+     already on this ladder. `--z-toast` has no source at all: it is one step
+     above the highest existing surface, the dialog, so a failure toast reads
+     over an open confirm dialog and not just an open drawer.
+
+     Deliberately absent: duration and easing tokens. The mock has none, so
+     any number here would be an aesthetic choice this plan has no authority
+     to make. Plan 03 defines them when it writes the first animated
+     component. */
+  --z-bulk: 15;
+  --z-scrim: 20;
+  --z-drawer: 30;
+  --z-pop: 40;
+  --z-dialog-scrim: 50;
+  --z-dialog: 60;
+  --z-toast: 70;
+
+  /* ── Avatar tints (C5) ────────────────────────────────────────────
+     Copied verbatim from `docs/superpowers/mock/shared.css:232-237`, as
+     background/ink pairs — theme values, not scoped data, so they belong
+     here rather than in a CSS Module. The mock darkens them in dark mode
+     with a filter rather than redefining them
+     (`.app.dark .av { filter: saturate(.9) brightness(.9); }`,
+     shared.css:239); there is no dark copy of these six pairs here for the
+     same reason — plan 03 applies that same filter inside the avatar
+     component's own module. */
+  --av-1-bg: #F3D9C4; --av-1-ink: #6B3413;
+  --av-2-bg: #D7E6F7; --av-2-ink: #1D4477;
+  --av-3-bg: #D5EEDF; --av-3-ink: #1B5A38;
+  --av-4-bg: #EADCF5; --av-4-ink: #542C7A;
+  --av-5-bg: #F6E3B4; --av-5-ink: #6A4A00;
+  --av-6-bg: #F5D5DA; --av-6-ink: #7A2433;
+
   /* ── Aliases from the pre-redesign palette ────────────────────────
      Every CSS Module written before this plan reads these six names. They
      are kept, mapped onto the new tokens, so the redesign lands one screen

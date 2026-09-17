@@ -97,6 +97,12 @@ export type IconSize = 14 | 15 | 16 | 20;
  * so does a media transport control — a skip-back button points the way it
  * points on every remote control in the world, and mirroring it reverses what
  * it says. Vertical arrows are unaffected by direction by definition.
+ *
+ * The names below are physical; the behaviour they get is logical. On this
+ * RTL page `<Icon name="right" />` draws a chevron pointing left — "right"
+ * names the glyph as drawn on its 24×24 canvas, not the direction it points
+ * once `icon.module.css` mirrors it. Read it as "onward along the line of
+ * text", not "points right".
  */
 const DIRECTIONAL: ReadonlySet<IconName> = new Set<IconName>([
   'left', 'right', 'arrowl', 'arrowr', 'enter', 'logout',
@@ -111,7 +117,9 @@ export function Icon({
   /** Hebrew. Present only when the icon is the whole control (E4). */
   label?: string;
 }) {
-  const labelled = label !== undefined;
+  /* An empty string is not a label: `label={person.role ?? ''}` must not
+     render `role="img"` with an empty accessible name. */
+  const labelled = label !== undefined && label !== '';
   return (
     <svg
       className={styles.icon}

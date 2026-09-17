@@ -3,7 +3,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { Icon } from '@/components/icon';
+import { Icon } from '@/components/ui/icon';
 
 describe('Icon', () => {
   it('draws the glyph the name asks for', () => {
@@ -27,6 +27,18 @@ describe('Icon', () => {
     render(<Icon name="x" label="סגירה" />);
     const labelled = screen.getByRole('img', { name: 'סגירה' });
     expect(labelled.getAttribute('aria-hidden')).toBeNull();
+  });
+
+  /**
+   * `label={person.role ?? ''}` is a real call shape a screen plan would
+   * write. An empty string is not a label, so this must render exactly like
+   * no `label` prop at all — decorative, not an unnamed `img`.
+   */
+  it('treats an empty label as no label', () => {
+    const { container } = render(<Icon name="x" label="" />);
+    expect(container.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+    expect(container.querySelector('svg')?.hasAttribute('aria-label')).toBe(false);
+    expect(screen.queryByRole('img')).toBeNull();
   });
 
   /**

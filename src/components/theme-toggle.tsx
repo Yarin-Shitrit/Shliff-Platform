@@ -13,7 +13,7 @@
  * a soft navigation could put out of step.
  */
 
-import { Icon } from './icon';
+import { Icon } from './ui/icon';
 import { parseTheme, THEME_COOKIE, THEME_MAX_AGE_SECONDS, type Theme } from '@/lib/theme';
 import styles from './theme-toggle.module.css';
 

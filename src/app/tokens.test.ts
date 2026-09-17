@@ -109,8 +109,28 @@ describe('tokens.css', () => {
     expect(css).toContain('@media (prefers-color-scheme: dark)');
     const guarded = css.indexOf(":root:not([data-theme='light'])");
     const media = css.indexOf('@media (prefers-color-scheme: dark)');
-    expect(media).toBeGreaterThanOrEqual(0);
     expect(guarded).toBeGreaterThan(media);
+  });
+
+  /**
+   * `--warn-line` and the two shadows are declared in both dark blocks but
+   * appear in no value table above, so the parity check two tests up catches
+   * the two copies drifting apart from EACH OTHER but not both drifting away
+   * from their source. Pinned here against
+   * `docs/superpowers/mock/shared.css:58,63,64`, the mock committed at
+   * `a83144d`.
+   */
+  it('pins the three unlisted dark values to the mock', () => {
+    const css = tokens();
+    const byPreference = block(css, ":root:not([data-theme='light'])");
+    const byAttribute = block(css, ":root[data-theme='dark']");
+    for (const body of [byPreference, byAttribute]) {
+      expect(tokenValue(body, 'warn-line')).toBe('#4A3A1A');
+      expect(tokenValue(body, 'shadow-pop'))
+        .toBe('0 0 0 1px #2B2724, 0 8px 24px rgba(0, 0, 0, .5)');
+      expect(tokenValue(body, 'shadow-drawer'))
+        .toBe('0 0 0 1px #2B2724, 0 16px 48px rgba(0, 0, 0, .6)');
+    }
   });
 
   it('lets native controls and scrollbars follow the theme', () => {
