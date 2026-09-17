@@ -301,6 +301,60 @@ async function runInTransaction<T>(
   return (db as Db).transaction((tx) => fn(tx as unknown as AnyDb));
 }
 
+export interface BulkResult {
+  results: PromotionResult[];
+  writtenCount: number;
+  refusedCount: number;
+  /** Rows removed across every promoted block, in any target table. On a
+   *  dry run, the rows a commit WOULD remove — summed across blocks, but
+   *  nothing is actually removed. */
+  deletedCount: number;
+  /** Rows kept across every promoted block because something references
+   *  them. Filled on a dry run too, for the same reason `deletedCount` is:
+   *  a dry run reports what a commit would do, not what it did. */
+  retainedCount: number;
+}
+
+/**
+ * Promotes every confirmed block, in a stable order (`sheets.name`, then
+ * `blocks.top`) so two runs produce comparable output. Refusals are kept in
+ * `results`: the register is a list of what could not be settled, so a
+ * refused block is the point, not noise.
+ *
+ * Each block runs in its own `promoteBlock` transaction (top-level, not
+ * nested under a shared one — see the block comment above `promoteBlock`).
+ * A block that fails with a genuine database error therefore rolls back
+ * only its own rows; blocks already processed earlier in this run keep
+ * what they wrote, and `promoteAll` itself rejects rather than silently
+ * skipping the rest of the run. A normal business refusal never reaches
+ * here as a throw — `promoteBlock` returns those in `refused` — so a thrown
+ * error out of this loop means something the register cannot explain to a
+ * lead in Hebrew, and the caller should see it as a failure, not a partial
+ * bulk result with a gap in it.
+ */
+export async function promoteAll(
+  db: AnyDb, opts: { dryRun: boolean; recordedBy: string },
+): Promise<BulkResult> {
+  const confirmed = await db.select({ id: blocks.id })
+    .from(blocks)
+    .innerJoin(sheets, eq(sheets.id, blocks.sheetId))
+    .where(isNotNull(blocks.confirmedAt))
+    .orderBy(sheets.name, blocks.top);
+
+  const results: PromotionResult[] = [];
+  for (const { id } of confirmed) {
+    results.push(await promoteBlock(db, id, opts));
+  }
+
+  return {
+    results,
+    writtenCount: results.reduce((n, r) => n + r.written.length, 0),
+    refusedCount: results.reduce((n, r) => n + r.refused.length, 0),
+    deletedCount: results.reduce((n, r) => n + r.deleted, 0),
+    retainedCount: results.reduce((n, r) => n + r.retained.length, 0),
+  };
+}
+
 /**
  * Turns one confirmed block into domain rows, or says why not.
  *

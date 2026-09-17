@@ -18,7 +18,7 @@ import { listUnlinkedNames } from '@/lib/members/identity';
 import { setSheetSeason, setSheetAuthority } from '@/lib/import/sheets';
 import type { ColumnMapping } from '@/lib/classify/map-columns';
 import type { BlockArchetype } from '@/lib/classify/types';
-import { promoteBlock } from './promote';
+import { promoteBlock, promoteAll } from './promote';
 
 let db: TestDb;
 let s26: string;
@@ -978,5 +978,107 @@ describe('promoteBlock — party resolution', () => {
     await promoteBlock(db, blockId, DRY);
     expect(await listUnlinkedNames(db)).toHaveLength(0);
     expect(await db.select().from(obligations)).toHaveLength(0);
+  });
+});
+
+describe('promoteAll', () => {
+  it('promotes every eligible confirmed block and counts what it did', async () => {
+    const blockId = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
+    const parked = await addBlock(sheetId, 'event_lines', LEDGER_GRID, LEDGER_MAP, { top: 10 });
+    const result = await promoteAll(db, { dryRun: false, recordedBy: 'lead@shliff.test' });
+
+    expect(result.writtenCount).toBe(2);
+    expect(result.results.map((r) => r.blockId).sort()).toEqual([blockId, parked].sort());
+    const parkedResult = result.results.find((r) => r.blockId === parked);
+    expect(parkedResult?.refused[0].reason).toBe('no-promoter');
+  });
+
+  it('skips unconfirmed blocks entirely rather than reporting them as refusals', async () => {
+    await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP, { confirmed: false });
+    const result = await promoteAll(db, { dryRun: false, recordedBy: 'lead@shliff.test' });
+    expect(result.results).toHaveLength(0);
+  });
+
+  it('is a no-op on a second run when nothing changed', async () => {
+    await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
+    await promoteAll(db, { dryRun: false, recordedBy: 'lead@shliff.test' });
+    const second = await promoteAll(db, { dryRun: false, recordedBy: 'lead@shliff.test' });
+    expect(second.deletedCount).toBe(0);
+    expect(await db.select().from(ledgerEntries)).toHaveLength(2);
+  });
+
+  it('aggregates written, refused, deleted and retained counts across every block', async () => {
+    const ledgerBlock = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP, { top: 1 });
+    await promoteBlock(db, ledgerBlock, LEAD);
+    const changed = copy(LEDGER_GRID);
+    changed[2][1] = 'סה"כ'; // the second data row becomes a total; the ledger block stops producing it
+    await setGrid(ledgerBlock, changed);
+
+    await createPerson(db, 'יוסף', 'lead@shliff.test');
+    const oblBlock = await addBlock(sheetId, 'obligations', OBL_GRID, OBL_MAP, { top: 20 });
+    await promoteBlock(db, oblBlock, LEAD);
+    const [joseph] = await db.select().from(obligations).where(eq(obligations.sourceRow, 21));
+    await settleObligation(db, {
+      obligationId: joseph.id, amount: 6000, kind: 'offset', note: 'קיזוז מול דמי קאמפ',
+      settledOn: new Date(), recordedBy: 'lead@shliff.test',
+    });
+    const obChanged = copy(OBL_GRID);
+    obChanged[1][2] = '';
+    obChanged[2][2] = '';
+    await setGrid(oblBlock, obChanged);
+
+    const result = await promoteAll(db, { dryRun: false, recordedBy: 'lead@shliff.test' });
+
+    // The stale ledger row and the nameless obligation row, from two
+    // different blocks — one deletedCount, summed.
+    expect(result.deletedCount).toBe(2);
+    expect(result.retainedCount).toBe(1); // the settled obligation
+    expect(await db.select().from(ledgerEntries)).toHaveLength(1);
+    expect(await db.select().from(obligations)).toHaveLength(1);
+  });
+
+  it('a dry run aggregates what a bulk commit would delete and retain, and changes nothing', async () => {
+    const ledgerBlock = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP, { top: 1 });
+    await promoteBlock(db, ledgerBlock, LEAD);
+    const changed = copy(LEDGER_GRID);
+    changed[2][1] = 'סה"כ';
+    await setGrid(ledgerBlock, changed);
+
+    await createPerson(db, 'יוסף', 'lead@shliff.test');
+    const oblBlock = await addBlock(sheetId, 'obligations', OBL_GRID, OBL_MAP, { top: 20 });
+    await promoteBlock(db, oblBlock, LEAD);
+    const [joseph] = await db.select().from(obligations).where(eq(obligations.sourceRow, 21));
+    await settleObligation(db, {
+      obligationId: joseph.id, amount: 6000, kind: 'offset', note: 'קיזוז מול דמי קאמפ',
+      settledOn: new Date(), recordedBy: 'lead@shliff.test',
+    });
+    const obChanged = copy(OBL_GRID);
+    obChanged[1][2] = '';
+    obChanged[2][2] = '';
+    await setGrid(oblBlock, obChanged);
+
+    const dry = await promoteAll(db, { dryRun: true, recordedBy: 'lead@shliff.test' });
+
+    expect(dry.deletedCount).toBe(2);
+    expect(dry.retainedCount).toBe(1);
+    expect(await db.select().from(ledgerEntries)).toHaveLength(2);
+    expect(await db.select().from(obligations)).toHaveLength(2);
+  });
+
+  it('one block failing mid-write leaves an earlier block\'s commit standing, and its own rows untouched', async () => {
+    const first = await addBlock(sheetId, 'ledger', LEDGER_GRID_3, LEDGER_MAP, { top: 1 });
+    const second = await addBlock(sheetId, 'ledger', LEDGER_GRID_3, LEDGER_MAP, { top: 20 });
+    await db.execute(sql.raw(
+      "ALTER TABLE ledger_entries ADD CONSTRAINT test_no_boom CHECK (description <> 'בום')",
+    ));
+    const badGrid = copy(LEDGER_GRID_3);
+    badGrid[2][1] = 'בום';
+    await setGrid(second, badGrid);
+
+    await expect(promoteAll(db, { dryRun: false, recordedBy: 'lead@shliff.test' })).rejects.toThrow();
+
+    const rows = await db.select().from(ledgerEntries);
+    expect(rows.filter((r) => r.sourceBlockId === first)).toHaveLength(3);
+    expect(rows.filter((r) => r.sourceBlockId === second)).toHaveLength(0);
   });
 });
