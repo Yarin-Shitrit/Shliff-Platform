@@ -755,3 +755,36 @@ writing the third copy.
 Its test has to cover a repeated param (two `tag` values, say), because the
 module's private `build()` uses `append`, not `set`: a test with only
 single-valued params passes just as happily against the regression.
+
+### A20 — A Hebrew refusal should say it is one, not be guessed at by alphabet
+
+`toHebrewError(error, map)` resolves in three steps: the map by English prefix
+first, then a passthrough for a message that carries a Hebrew letter and no Latin
+one, then the generic fallback with a log.
+
+Step two is an inference, and two deliberate refusals now depend on it —
+`recordPaymentAction`'s `הקופה שנבחרה לא קיימת או נסגרה.` and the season screen's.
+Both survive today because neither happens to contain a Latin character.
+
+**The failure is silent and it is one interpolation away.** A refusal that names
+the thing it is refusing — an account called `Petty Cash`, a person's email, a
+row id — contains Latin letters, fails the predicate, and is replaced by
+`משהו השתבש. הפעולה לא נשמרה.` The lead loses the specific reason, the screen
+looks correct, and no test goes red: the assertion that would catch it is one
+nobody writes, because the author of the refusal believes they wrote Hebrew and
+they did. This is the taxonomy's *instrument that cannot report absence* — the
+predicate answers "is this Hebrew?" when the question is "did someone mean this?"
+
+**Ruling: mark the refusal instead of sniffing it.** A `HebrewRefusal` error type,
+checked **before** the map, whose message is returned verbatim. This is purely
+additive — no signature changes, no existing call site moves — so the two
+refusals above migrate to `throw new HebrewRefusal(...)` and nothing else needs
+to. The alphabet passthrough stays as a fallback but **starts logging when it
+fires**, which turns a silent inference into a visible one and gives us the list
+of call sites still relying on it. It can be deleted when that list empties.
+
+**Sequencing: this lands after the current wave-2 lanes, not during.** Plans 07
+and 10 are both consuming `src/lib/errors/hebrew.ts` right now. Editing a file
+two running lanes depend on is the shared-file collision that this session has
+already ruled must serialise — and the fix being additive does not make the merge
+safe, only the design.
