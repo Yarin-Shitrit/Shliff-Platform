@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import { db } from '@/db';
 import { resolveSeason } from '@/lib/seasons/current';
+import { CommandPalette } from './command-palette';
 import { NavList } from './nav-list';
 import { SeasonSwitch, type SwitchSeason } from './season-switch';
 import styles from './sidebar.module.css';
@@ -47,6 +48,7 @@ export async function Sidebar() {
         <span className={styles.wordmark}>קופת שליף</span>
       </div>
       <SeasonSwitch seasons={options} />
+      <CommandPalette />
       <NavList />
     </aside>
   );

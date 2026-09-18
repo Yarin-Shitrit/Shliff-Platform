@@ -4,6 +4,7 @@ import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import { resolveSeason } from '@/lib/seasons/current';
 import { shellCounts, type ShellCounts } from '@/lib/shell/counts';
+import { searchPalette, type PaletteHit } from '@/lib/search/palette';
 
 /**
  * The two season-scoped counts depend on `?season=`, which a layout cannot
@@ -24,4 +25,19 @@ export async function loadShellCounts(
 
   const { current } = await resolveSeason(db, requested ?? undefined);
   return shellCounts(db, current?.id ?? null);
+}
+
+/**
+ * The palette asks per keystroke, so this stays a read with no side effects.
+ * A non-admin gets an empty list, never an error: the guard on every page is
+ * the enforcement, and this is a search box.
+ */
+export async function searchCommandPalette(
+  query: string, requested: string | null,
+): Promise<PaletteHit[]> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return [];
+
+  const { current } = await resolveSeason(db, requested ?? undefined);
+  return searchPalette(db, query, current?.id ?? null);
 }
