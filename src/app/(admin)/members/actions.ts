@@ -14,6 +14,7 @@ import { addMember } from '@/lib/members/roster';
 import { issueFlatDueFor } from '@/lib/fees/dues';
 import { toHebrewError, type HebrewErrors } from '@/lib/errors/hebrew';
 import { isBlank } from '@/lib/text/normalize';
+import { UNLINK_ERROR_PARAM } from './unlink-error';
 
 export async function linkNameAction(
   aliasId: string, personId: string,
@@ -227,9 +228,6 @@ export async function unlinkAliasAction(aliasId: string): Promise<ActionResult> 
   revalidatePath('/members');
   return { ok: true };
 }
-
-/** The param a refused unlink comes back in, so the page and the action agree. */
-export const UNLINK_ERROR_PARAM = 'unlinkError';
 
 /**
  * A38 (BINDING): **a server-rendered dialog may not swallow a refusal.**

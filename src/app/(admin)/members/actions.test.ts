@@ -35,8 +35,9 @@ vi.mock('@/lib/members/link', () => ({
 
 import {
   addToSeasonBulkAction, issueDuesBulkAction, unlinkAliasAction,
-  unlinkAliasAndReturn, UNLINK_ERROR_PARAM,
+  unlinkAliasAndReturn,
 } from './actions';
+import { UNLINK_ERROR_PARAM } from './unlink-error';
 
 const LAST_ALIAS_REFUSAL =
   'לא ניתן לבטל את הכינוי האחרון של אדם — בלעדיו אי אפשר יהיה לזהות אותו בקבצים.';

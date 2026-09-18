@@ -28,7 +28,8 @@ import { Icon } from '@/components/ui/icon';
 import { Money, DateText } from '@/components/format';
 import { formatShekels } from '@/lib/money';
 import { AddToSeason } from '../add-member';
-import { unlinkAliasAndReturn, UNLINK_ERROR_PARAM } from '../actions';
+import { unlinkAliasAndReturn } from '../actions';
+import { UNLINK_ERROR_PARAM } from '../unlink-error';
 import styles from './person.module.css';
 
 export const dynamic = 'force-dynamic';
