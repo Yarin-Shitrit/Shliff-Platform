@@ -2,6 +2,7 @@
 
 import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
+import { signOut } from '@/lib/auth/config';
 import { resolveSeason } from '@/lib/seasons/current';
 import { shellCounts, type ShellCounts } from '@/lib/shell/counts';
 import { searchPalette, type PaletteHit } from '@/lib/search/palette';
@@ -40,4 +41,13 @@ export async function searchCommandPalette(
 
   const { current } = await resolveSeason(db, requested ?? undefined);
   return searchPalette(db, query, current?.id ?? null);
+}
+
+/**
+ * Deliberately not behind `requireAdmin`: leaving the account is the one
+ * action a person who may see nothing must still be able to take. The file
+ * satisfies the guard net through the two reads above.
+ */
+export async function signOutAction(): Promise<void> {
+  await signOut({ redirectTo: '/signin' });
 }

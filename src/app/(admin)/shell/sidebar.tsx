@@ -1,9 +1,13 @@
 import Image from 'next/image';
 import { db } from '@/db';
+import { requireAdmin } from '@/lib/auth/guard';
 import { resolveSeason } from '@/lib/seasons/current';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { signOutAction } from './actions';
 import { CommandPalette } from './command-palette';
 import { NavList } from './nav-list';
 import { SeasonSwitch, type SwitchSeason } from './season-switch';
+import { UserBlock } from './user-block';
 import styles from './sidebar.module.css';
 
 /**
@@ -28,9 +32,14 @@ function stateOf(index: number, flatRate: string): string {
  * Two logos rather than one tinted mark: the wordmark's lockup differs
  * between the light and dark files, and CSS cannot recolour a PNG.
  *
- * The search entry and footer (settings, signed-in user, theme toggle) are
- * B1's remaining pieces — Tasks 6, 9 and 10 add those into this file in turn
- * (see the lane ledger's pre-flight conflict scan).
+ * The search entry (Task 6) sits above the groups; the footer — the signed-in
+ * user, a way out, and the theme toggle beside it (B9, Task 10) — sits below
+ * them, pinned to the bottom by `.sidefoot`. A non-admin session renders no
+ * footer at all: `requireAdmin` here is a display decision, not the
+ * enforcement, which every page still performs on its own (B9's ruling).
+ * The responsive collapse below 1024px (Task 9) wraps this component from
+ * the outside — `SidebarFrame` in `layout.tsx`, and `.rail`/`.railScrim` in
+ * the stylesheet — so this file itself needed no change for it.
  */
 export async function Sidebar() {
   const { seasons } = await resolveSeason(db);
@@ -39,6 +48,7 @@ export async function Sidebar() {
     name: season.name,
     state: stateOf(index, season.flatRate),
   }));
+  const admin = await requireAdmin();
 
   return (
     <aside className={styles.side}>
@@ -50,6 +60,13 @@ export async function Sidebar() {
       <SeasonSwitch seasons={options} />
       <CommandPalette />
       <NavList />
+      <div className={styles.sidefoot}>
+        {admin.ok && (
+          <UserBlock email={admin.email} onSignOut={signOutAction}>
+            <ThemeToggle />
+          </UserBlock>
+        )}
+      </div>
     </aside>
   );
 }
