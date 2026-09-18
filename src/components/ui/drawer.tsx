@@ -1,19 +1,19 @@
 'use client';
 /**
- * Client component: trapping Tab inside the panel, closing on `esc`, and
- * giving focus back to whatever opened it are all DOM lifecycle. R1 rules out
- * the headless-UI dependency that would supply them, so this is hand-written
- * and the test above is what keeps it honest.
+ * Client component: it opens with focus on the title and hands the rest of
+ * its DOM lifecycle — trapping Tab, closing on `esc`, restoring the opener —
+ * to the shared `useFocusTrap` (also used by `ConfirmDialog`).
  *
  * Everything the drawer *shows* is still server-rendered: the page reads
  * `?peek=` in its Server Component, loads the record, and passes it as
  * `children`. This file holds behaviour, never data.
  */
-import { useEffect, useId, useRef, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
+import { useId, useRef, type ReactElement, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { Icon } from '@/components/ui/icon';
 import { Button, ButtonLink } from './button';
 import { cx } from './cx';
+import { useFocusTrap } from './use-focus-trap';
 import styles from './drawer.module.css';
 
 export type DrawerStepper = {
@@ -41,59 +41,17 @@ export type DrawerProps = {
   children: ReactNode;
 };
 
-const TABBABLE = [
-  'a[href]', 'button:not([disabled])', 'input:not([disabled])',
-  'select:not([disabled])', 'textarea:not([disabled])', '[tabindex]:not([tabindex="-1"])',
-].join(', ');
-
-function tabbableIn(root: HTMLElement | null): HTMLElement[] {
-  if (root === null) return [];
-  return [...root.querySelectorAll<HTMLElement>(TABBABLE)]
-    .filter((element) => element.closest('[hidden]') === null);
-}
-
 export function Drawer({
   title, subtitle, lead, stepper, expandHref, closeHref, width = 460, footer, children,
 }: DrawerProps): ReactElement {
   const router = useRouter();
   const titleId = useId();
-  const panelRef = useRef<HTMLElement | null>(null);
-  const openerRef = useRef<Element | null>(null);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
-
-  useEffect(() => {
-    openerRef.current = document.activeElement;
-    headingRef.current?.focus();
-    return () => {
-      const opener = openerRef.current;
-      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
-      else document.body.focus();
-    };
-  }, []);
-
-  function onKeyDown(event: KeyboardEvent<HTMLElement>) {
-    if (event.key === 'Escape') {
-      // Only the innermost overlay closes: a ConfirmDialog or a Popover over
-      // this drawer stops the event before it reaches here.
-      event.stopPropagation();
-      event.preventDefault();
-      router.replace(closeHref);
-      return;
-    }
-    if (event.key !== 'Tab') return;
-    const focusable = tabbableIn(panelRef.current);
-    if (focusable.length === 0) return;
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    const active = document.activeElement;
-    if (event.shiftKey && (active === first || active === headingRef.current)) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && active === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
+  const { rootRef: panelRef, onKeyDown } = useFocusTrap<HTMLElement>({
+    onEscape: () => router.replace(closeHref),
+    getInitialFocus: () => headingRef.current,
+    getExtraStart: () => headingRef.current,
+  });
 
   return (
     <>

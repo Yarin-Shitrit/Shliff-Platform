@@ -1,13 +1,15 @@
 'use client';
 /**
- * Client component: it opens with focus on cancel, closes on `esc` without
- * disturbing an enclosing Drawer, and holds a verb disabled behind an
- * acknowledgement. All three are DOM lifecycle.
+ * Client component: it opens with focus on cancel and holds a verb disabled
+ * behind an acknowledgement, which is DOM lifecycle. Trapping Tab, closing on
+ * `esc` without disturbing an enclosing Drawer, and restoring the opener are
+ * the shared `useFocusTrap` (also used by `Drawer`).
  */
-import { useEffect, useId, useRef, type ReactElement, type ReactNode } from 'react';
+import { useId, useRef, type ReactElement, type ReactNode } from 'react';
 import { Button } from './button';
 import { Checkbox } from './field';
 import { cx } from './cx';
+import { useFocusTrap } from './use-focus-trap';
 import styles from './confirm-dialog.module.css';
 
 export type ConfirmDialogProps = {
@@ -44,16 +46,10 @@ export function ConfirmDialog({
   const bodyId = useId();
   /** A wrapper, because `Button` does not forward a ref and does not need to. */
   const cancelRef = useRef<HTMLDivElement | null>(null);
-  const openerRef = useRef<Element | null>(null);
-
-  useEffect(() => {
-    openerRef.current = document.activeElement;
-    cancelRef.current?.querySelector('button')?.focus();
-    return () => {
-      const opener = openerRef.current;
-      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
-    };
-  }, []);
+  const { rootRef, onKeyDown } = useFocusTrap<HTMLDivElement>({
+    onEscape: onCancel,
+    getInitialFocus: () => cancelRef.current?.querySelector('button') ?? null,
+  });
 
   const blocked = acknowledge !== undefined && !acknowledge.checked;
 
@@ -73,16 +69,12 @@ export function ConfirmDialog({
       <div className={styles.scrim} aria-hidden="true" onClick={onCancel} />
       <div
         className={styles.dialog}
+        ref={rootRef}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={bodyId}
-        onKeyDown={(event) => {
-          if (event.key !== 'Escape') return;
-          event.stopPropagation();   // the drawer beneath stays open
-          event.preventDefault();
-          onCancel();
-        }}
+        onKeyDown={onKeyDown}
       >
         <h2 className={styles.title} id={titleId}>{title}</h2>
         <p className={cx(styles.consequence, tone === 'danger' && styles.danger)} id={bodyId}>
