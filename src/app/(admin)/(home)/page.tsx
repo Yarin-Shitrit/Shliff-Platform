@@ -10,6 +10,8 @@ import { ButtonLink } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Figures } from './figures';
 import { InboxPreview } from './inbox-preview';
+import { Understaffed } from './understaffed';
+import { UnpaidList } from './unpaid-list';
 import type { PreviewItem } from './inbox-preview';
 import styles from './home.module.css';
 
@@ -125,7 +127,15 @@ export default async function HomePage(
             href={null}
           />
         </div>
-        <div className={styles.narrow} />
+        <div className={styles.narrow}>
+          <Understaffed
+            tasks={overview.understaffed}
+            coverage={overview.coverage}
+            seasonId={season.id}
+            seasonName={season.name}
+          />
+          <UnpaidList dues={overview.dues} seasonId={season.id} seasonName={season.name} />
+        </div>
       </div>
     </main>
   );

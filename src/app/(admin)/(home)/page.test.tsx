@@ -6,6 +6,8 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { render, screen, within } from '@testing-library/react';
 import type { SeasonOverview } from '@/lib/overview/summary';
+import type { TaskCoverage } from '@/lib/work/coverage';
+import type { UnpaidMember } from '@/lib/fees/summary';
 
 /**
  * `vi.mock` factories are hoisted above every other statement, so a plain
@@ -355,5 +357,170 @@ describe('HomePage — the לטיפול preview', () => {
     // Seven names are one row and one decision — linking them is one sitting
     // on /members. A badge reading 7 would promise seven separate places to go.
     expect(within(inboxPanel()).getByText('החלטה אחת')).toBeTruthy();
+  });
+});
+
+function task(overrides: Partial<TaskCoverage> = {}): TaskCoverage {
+  return {
+    taskId: 't1', title: 'הקמת הצל והמבנה', kind: 'build', status: 'open',
+    peopleNeeded: 8, accepted: 5, uncovered: true, eventName: null,
+    budgetAgorot: null, startsAt: null, endsAt: null, dueOn: null,
+    assignees: [
+      { assignmentId: 'a1', personId: 'p1', displayName: 'רן אבידן', status: 'accepted' },
+      { assignmentId: 'a2', personId: 'p2', displayName: 'יעל לוי', status: 'accepted' },
+    ],
+    eventHeldOn: null,
+    budgetLineId: null, budgetLineLabel: null, budgetLineTotalAgorot: null,
+    ...overrides,
+  };
+}
+
+function unpaidRow(overrides: Partial<UnpaidMember> = {}): UnpaidMember {
+  return {
+    personId: 'p9', displayName: 'איתי כהן', dueId: 'd9', kind: 'flat',
+    amountAgorot: 120000, paidAgorot: 0, outstandingAgorot: 120000,
+    ...overrides,
+  };
+}
+
+describe('HomePage — the two side panels', () => {
+  function panelFor(heading: string): HTMLElement {
+    return screen.getByRole('heading', { name: heading }).closest('section') as HTMLElement;
+  }
+
+  it('lists the tasks still short of people, with their coverage', async () => {
+    seasonOverview.mockResolvedValue(overview({
+      ...FULL,
+      understaffed: [
+        task({ taskId: 't1', title: 'פירוק ו־MOOP', peopleNeeded: 6, accepted: 0, assignees: [] }),
+        task({ taskId: 't2', title: 'הקמת הצל והמבנה', peopleNeeded: 8, accepted: 5 }),
+        task({
+          taskId: 't3', title: 'מסיבת גיוס — דלת', kind: 'event_task',
+          peopleNeeded: 2, accepted: 0, eventName: 'מסיבת אוקטובר', assignees: [],
+        }),
+      ],
+    }));
+    render(await HomePage({ searchParams: Promise.resolve({ season: 's26' }) }));
+
+    const panel = panelFor('חסרים אנשים');
+    const rows = within(panel).getAllByRole('listitem');
+    expect(within(rows[0]).getByText('פירוק ו־MOOP')).toBeTruthy();
+    expect(within(rows[0]).getByText('0/6')).toBeTruthy();
+    expect(within(rows[1]).getByText('5/8')).toBeTruthy();
+    // The kind reads in words, and an event task names its event.
+    expect(rows[0].textContent).toContain('הקמה ולוגיסטיקה');
+    expect(rows[2].textContent).toContain('משימה באירוע');
+    expect(rows[2].textContent).toContain('מסיבת אוקטובר');
+
+    const link = within(panel).getByRole('link', { name: /לכל המשימות/ });
+    expect(link.getAttribute('href')).toBe('/tasks?season=s26');
+  });
+
+  it('says what did not fit rather than quietly dropping it', async () => {
+    seasonOverview.mockResolvedValue(overview({
+      ...FULL,
+      understaffed: [0, 1, 2, 3, 4, 5].map((i) => task({ taskId: `t${i}`, title: `משימה ${i}` })),
+    }));
+    render(await HomePage({ searchParams: Promise.resolve({ season: 's26' }) }));
+
+    // Six tasks are short; the panel shows four. The other two are stated, not
+    // silently cut — FULL.coverage.uncoveredTasks is the honest total.
+    expect(within(panelFor('חסרים אנשים')).getAllByRole('listitem')).toHaveLength(4);
+    expect(within(panelFor('חסרים אנשים')).getByText('ועוד 2 משימות חסרות אנשים')).toBeTruthy();
+  });
+
+  it('celebrates a fully staffed season rather than showing an empty list', async () => {
+    seasonOverview.mockResolvedValue(overview({ ...FULL, understaffed: [] }));
+    render(await HomePage({ searchParams: Promise.resolve({ season: 's26' }) }));
+
+    const panel = panelFor('חסרים אנשים');
+    expect(within(panel).getByText('הכול מטופל')).toBeTruthy();
+    expect(within(panel).getByText('ברן 26')).toBeTruthy();
+  });
+
+  it('drops the staffing panel entirely for a season with no open task', async () => {
+    seasonOverview.mockResolvedValue(overview({ ...FULL, coverage: null, understaffed: [] }));
+    render(await HomePage({ searchParams: Promise.resolve({ season: 's26' }) }));
+    // Nobody has made a task yet, so "הכול מטופל" would congratulate the camp
+    // for work it has not started — the same lie the unpaid panel refuses.
+    expect(screen.queryByRole('heading', { name: 'חסרים אנשים' })).toBeNull();
+  });
+
+  it('names who has not paid, what they owe, and where to record it', async () => {
+    seasonOverview.mockResolvedValue(overview({
+      ...FULL,
+      dues: {
+        ...FULL.dues,
+        missingDuesCount: 2,
+        unpaid: [
+          unpaidRow(),
+          unpaidRow({
+            personId: 'p8', displayName: 'גיל ברק', dueId: 'd8', kind: 'exception',
+            amountAgorot: 90000, outstandingAgorot: 90000,
+          }),
+          unpaidRow({
+            personId: 'p7', displayName: 'הילה נחום', dueId: 'd7',
+            amountAgorot: 120000, paidAgorot: 50000, outstandingAgorot: 70000,
+          }),
+        ],
+      },
+    }));
+    render(await HomePage({ searchParams: Promise.resolve({ season: 's26' }) }));
+
+    const panel = panelFor('טרם שילמו');
+    const rows = within(panel).getAllByRole('listitem');
+
+    const itay = within(rows[0]).getByRole('link', { name: 'איתי כהן' });
+    expect(itay.getAttribute('href')).toBe('/members/p9');
+    expect(rows[0].textContent).toContain('תעריף רגיל');
+    expect(rows[0].textContent).toContain('1,200');
+
+    expect(within(rows[1]).getByText('חריג')).toBeTruthy();
+    expect(rows[1].textContent).toContain('900');
+
+    // A part payment says what arrived, in the passive — the database knows no
+    // gender, and "שילמה" would be a guess.
+    expect(within(rows[2]).getByText('שולם 500 ₪')).toBeTruthy();
+    expect(rows[2].textContent).toContain('700');
+    expect(rows[2].textContent).not.toContain('שילמה');
+    expect(rows[2].textContent).not.toContain('שילם ');
+
+    // I9: the fees drawer is `?peek=<personId>&act=pay`, built by the kit's
+    // helper rather than spelled here, so it opens a drawer that exists.
+    const record = within(rows[0]).getByRole('link', { name: 'רישום תשלום לאיתי כהן' });
+    expect(record.getAttribute('href')).toBe('/fees?season=s26&peek=p9&act=pay');
+  });
+
+  it('reports the charges nobody has issued, and links to where billing happens', async () => {
+    seasonOverview.mockResolvedValue(overview({
+      ...FULL,
+      dues: { ...FULL.dues, missingDuesCount: 2, unpaid: [unpaidRow()] },
+    }));
+    render(await HomePage({ searchParams: Promise.resolve({ season: 's26' }) }));
+
+    const panel = panelFor('טרם שילמו');
+    // Said about the charge, not about the people — the database records no
+    // gender, and /fees already states it this way.
+    expect(within(panel).getByText('2 חיובים עדיין לא הונפקו')).toBeTruthy();
+    // This screen writes nothing: issuing a due is D5's action, behind a link.
+    expect(within(panel).queryByRole('button')).toBeNull();
+  });
+
+  it('celebrates when everybody who was billed has paid', async () => {
+    seasonOverview.mockResolvedValue(overview({
+      ...FULL,
+      dues: { ...FULL.dues, unpaidCount: 0, partlyPaidCount: 0, missingDuesCount: 0, unpaid: [] },
+    }));
+    render(await HomePage({ searchParams: Promise.resolve({ season: 's26' }) }));
+
+    expect(within(panelFor('טרם שילמו')).getByText('הכול מטופל')).toBeTruthy();
+  });
+
+  it('drops the unpaid panel entirely when no due has been issued', async () => {
+    seasonOverview.mockResolvedValue(overview({ ...FULL, dues: null }));
+    render(await HomePage({ searchParams: Promise.resolve({ season: 's26' }) }));
+    // Nothing has been billed, so "הכול מטופל" would be a congratulation for
+    // work nobody has started.
+    expect(screen.queryByRole('heading', { name: 'טרם שילמו' })).toBeNull();
   });
 });
