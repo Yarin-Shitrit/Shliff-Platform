@@ -3,13 +3,9 @@ import type { BlockState } from '@/lib/import/register';
 import type { PillTone } from '@/components/ui/pill';
 
 /**
- * Moved verbatim out of `block-card.tsx` (E5), which Task 15 deletes.
- *
- * `block-card.tsx` keeps its own private copy until then: it belongs to
- * hardening lane B and Tasks 12-15 rewrite that directory, so editing it from
- * here would collide with a running lane for no gain. The duplication is
- * deliberate and transient, and the strings are identical character for
- * character.
+ * Moved verbatim out of `block-card.tsx` (E5), which Task 15 deleted along
+ * with its private copy of this record. This is now the only one: the rail,
+ * the detail pane and the archetype picker all read it from here.
  */
 export const ARCHETYPE_LABELS: Record<BlockArchetype, string> = {
   ledger: 'תנועות קופה',
