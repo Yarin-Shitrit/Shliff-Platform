@@ -1256,12 +1256,33 @@ why.**
 
 `promoteBlock` deletes a block's prior rows before writing, which makes
 re-promotion idempotent — **except for rows something else references.** Those
-are `retained`, not deleted (`promote.ts:251`). So re-promoting a block whose
-rows are referenced keeps the old rows *and* writes new ones. That is not a
-variant of A23's hazard; **it is the same hazard**, and it explains A23's
-arithmetic: the four dancefloor budget lines carry four task references and no
-foreign key, so they are retained, and a re-promotion adds a second copy on top
-rather than replacing them.
+are `retained`, not deleted (`promote.ts:251`). Re-promoting a block whose rows
+are referenced can therefore keep the old rows *and* write new ones. That is not
+a variant of A23's hazard; **it is the same hazard.**
+
+**CORRECTED 2026-09-19 — the precondition matters and this section originally
+understated it.** A *plain* repeated press does **not** duplicate. `staleRows`
+skips rows the run itself produces, so the retained class is never entered
+(`deleted: 0, retained: 0`), and the upsert on `(source_block_id, source_row)`
+refreshes each row in place, id and all. Measured on a rolled-back probe against
+the real dancefloor block: a plain re-promotion re-creates only the junk row,
+`93,370 → 98,920`.
+
+**The duplication requires that the produced row set stop matching what is
+stored.** Forcing that — moving one referenced row's `source_row` off the
+produced set — reproduces it exactly: `retained: 1`, a second מייצג written
+beside the retained one, the task still following the old row,
+`93,370 → 140,220`. **So the trigger is a re-detection — changed block bounds, or
+a re-import that shifts a `source_row` — not a re-confirm and not a repeated
+press.**
+
+The ruling below is unchanged and still right: a re-import followed by this
+button is exactly the dangerous sequence, and the button cannot know whether one
+happened. But the risk sits in **anything that changes which rows a block claims
+to produce while rows are already stored against the old numbering**, not in
+pressing promote twice. The A34 fix's own implementer said as much — "the
+duplication bites when the re-run differs from the original, which is the only
+reason to re-run at all" — and this document under-weighted it.
 
 **Ruling: the per-file promote button covers blocks in state `confirmed` only.
 Its count and its action must be the same set — narrow the action, not widen the
@@ -1412,9 +1433,16 @@ lane mid-RED (`Cannot find module './items'`) and will clear.
 A peer landing the dancefloor table re-points four `tasks.budget_line_id`
 references from the seeded rows onto the promoted ones — it must, or the
 references dangle. **That makes those four promoted rows referenced rows**, so
-block `fa78b9be` becomes an instance of A34's hazard by construction: a
-re-promotion would retain them and write a second set beside them, taking the
-dancefloor 93,370 → 186,740 by the same arithmetic as 64,375.30 → 119,375.30.
+block `fa78b9be` becomes eligible for A34's hazard by construction.
+
+**CORRECTED 2026-09-19 — `186,740` was wrong, and so was the framing.** A plain
+re-promotion of that block does not double it: `staleRows` skips rows the run
+itself produces, so nothing is retained and the upsert refreshes each row in
+place. Measured on a rolled-back probe, a plain re-promotion re-creates only the
+junk row — **`93,370 → 98,920`**. Doubling requires the produced row set to stop
+matching what is stored; forcing that gave `retained: 1` and
+**`93,370 → 140,220`**, not `186,740`. See A34's correction: the trigger is a
+re-detection or a re-import that shifts a `source_row`, not a repeated press.
 
 **Verified that this branch's per-file promote cannot do that**, end to end rather
 than by assurance:
