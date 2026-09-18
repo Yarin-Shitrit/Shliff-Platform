@@ -689,3 +689,38 @@ where two *independent* amounts sit adjacent with no shared phrase between them.
 cheap fix is to weaken the query — `getByText(/1/)`, or an assertion on
 `textContent` — and a weakened query is a test that stops checking the thing the
 phrase exists to say. The markup is what should change.
+
+### A18 — The plans' sample code predates the rulings, and systematically contradicts them
+
+Across wave 1, **five independent implementers refused defects in their own
+briefs' sample code**. Not one was a typo; every one was the brief faithfully
+reflecting a world that no longer exists, because the sample code was written
+before the tokens and rulings it now has to obey.
+
+| defect in brief | contradicts | found in |
+|---|---|---|
+| `outline: none` in sample CSS | **A9**, never remove a focus ring | 3 separate tasks |
+| `<bdi>{a}</bdi> word <bdi>{b}</bdi>` | its own paired test — see **A17** | 2 tasks, independently |
+| literal `z-index: 40` | the z-index ladder tokens | 2 tasks |
+| `` `${formatILS(x)}₪` `` | `money.ts`'s explicit prohibition | 1 task |
+| `role="menu"`/`"menuitem"` on link panels | the shipped `season-switch.tsx` ruling | 1 task |
+| hard-coded `16px` phone input | `--input-font-phone` | 1 task |
+| icon sizes 12/13 | **C14**'s 14/15/16/20 ladder | 1 task |
+| a `lock` glyph | the frozen 65-glyph set — see **A16** | 1 task |
+
+**What made this work is worth keeping.** Every dispatch carried the standing
+constraints *in the prompt itself*, with the line "these override the brief."
+Without that, a faithful implementer would have shipped each defect — and each
+would have been defensible, because the plan said so. Five agents each chose the
+constraint over the sample and said so in their reports.
+
+**The rule for waves 2 through 5:** a plan's prose states intent and is
+authoritative; a plan's **sample code is a sketch from before the foundation
+existed** and loses to any standing constraint it contradicts. An implementer who
+finds such a conflict should refuse the sample, follow the constraint, and record
+it — not silently do either one.
+
+The deeper reason this keeps happening: twelve plans were drafted in parallel
+against a spec, then wave 0 built the foundation they all assume. Everything
+written before that foundation landed is, in effect, a prediction of it — and
+predictions drift. **Trust the plan's argument; verify its code.**
