@@ -27,19 +27,14 @@
 .bar > i { display: block; block-size: 100%; }
 
 /*
- * Plan 01's tokens.css defines `--viz-track` but not `--viz-dues`,
- * `--viz-fund` or `--viz-reserve`, even though the mock declares all three at
- * `:root` (`docs/superpowers/mock/shared.css:23-25`) and `charts.module.css`
- * already carries the identical values, scoped to `.viz`, as `--series-1/2/3`
- * (comment there records the contrast: 3.88:1, 3.64:1, 3.41:1 on the light
- * panel). Rather than import `charts.module.css` into the kit — which would
- * put a `src/components/ui/` stylesheet back in a dependency on
- * `src/components/charts/`, the coupling this migration removes — the same
- * validated values are repeated here as the literals `charts.module.css`
- * itself uses, following that file's own precedent for scoped, non-theme
- * chart colour. Flagged in the task report; the token gap belongs to plan 01.
+ * K6: these read the shared tokens in tokens.css — `--viz-dues`/`--viz-fund`/
+ * `--viz-reserve`, transcribed from the mock's foundation block — rather than
+ * declaring the palette a second time. `charts.module.css` keeps
+ * `--series-1/2/3` scoped to `.viz` unchanged, so nothing outside a chart can
+ * reach the series palette and no mark is ever painted in the brand accent.
+ * This file declares no colour of its own.
  */
-.dues { background: #D95926; }
-.fund { background: #3987E5; }
-.reserve { background: #199E70; }
+.dues { background: var(--viz-dues); }
+.fund { background: var(--viz-fund); }
+.reserve { background: var(--viz-reserve); }
 .partial { background: var(--warn-line); }

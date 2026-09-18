@@ -60,10 +60,18 @@
   --info-soft: #EAF1FD;
 
   /* ── Chart track (A4) ─────────────────────────────────────────────
-     The three series colours are not here. They stay scoped to `.viz` in
-     charts.module.css so that no page stylesheet can reach them and no mark
-     can accidentally be painted in the accent. Only the unfilled track
-     follows the theme. */
+     The ordinal series palette (chart marks) is not here: it stays scoped to
+     `.viz` in charts.module.css as `--series-1/2/3`, so no page stylesheet
+     can reach it and no mark can accidentally be painted in the accent.
+     `--viz-dues`/`--viz-fund`/`--viz-reserve` are the same validated values
+     under their semantic names, transcribed from the mock's foundation block
+     (`docs/superpowers/mock/shared.css:23-25`) — wave 0 transcribed
+     `--viz-track` from that block and missed these three siblings (K6). They
+     exist for the one non-chart consumer, StatTile's bar; `.viz` is
+     unchanged. Only the unfilled track follows the theme. */
+  --viz-dues: #d95926;
+  --viz-fund: #3987e5;
+  --viz-reserve: #199e70;
   --viz-track: #EEEAE5;
 
   /* ── Shadow (A7): overlays only. Structure is drawn with 1px borders. ── */
