@@ -24,6 +24,18 @@ describe('toHebrewError', () => {
     expect(toHebrewError(new Error(hebrew), MAP)).toBe(hebrew);
   });
 
+  /**
+   * "Contains a Hebrew character" is too weak a test for "was written for a
+   * lead": this schema's own enum labels are Hebrew, so a driver-level
+   * message that merely quotes one — Latin letters and all — must not be
+   * echoed raw. Requires Hebrew AND no Latin letters.
+   */
+  it('falls back for a message with Latin letters even if it also contains Hebrew', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const driverMessage = 'invalid input value for enum payment_channel: "מזומן"';
+    expect(toHebrewError(new Error(driverMessage), MAP)).toBe(HEBREW_FALLBACK);
+  });
+
   it('renders the generic Hebrew fallback for an unmapped English message', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(toHebrewError(new Error('duplicate key value violates unique constraint'), MAP))
