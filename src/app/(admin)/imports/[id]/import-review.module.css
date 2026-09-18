@@ -446,3 +446,85 @@
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
+
+/* ------------------------------------------- the block exactly as it sits */
+
+.seg {
+  display: inline-flex;
+  margin-inline-start: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+
+.segButton {
+  padding-inline: var(--space-3);
+  padding-block: var(--space-1);
+  font: var(--text-meta);
+  color: var(--ink-2);
+  border-inline-start: 1px solid var(--line);
+}
+
+.segButton:first-child {
+  border-inline-start: none;
+}
+
+.segButton:hover {
+  background: var(--hover);
+}
+
+.segOn {
+  background: var(--selected);
+  color: var(--ink);
+}
+
+.segButton:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.rawGrid {
+  font: var(--text-dense);
+}
+
+.rawGrid th,
+.rawGrid td {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.rawGrid thead th {
+  background: var(--row-head);
+  color: var(--ink-3);
+  font: var(--text-meta);
+}
+
+.rowHeader th {
+  color: var(--ink);
+  font: var(--text-label);
+}
+
+.rowNoted {
+  background: var(--warn-soft);
+}
+
+.rowRefused {
+  background: var(--bad-soft);
+}
+
+.rowMessage {
+  white-space: normal;
+  font: var(--text-meta);
+  color: var(--ink-2);
+}
+
+.inboxLink {
+  color: var(--brand-text);
+}
+
+.gridEmpty {
+  font: var(--text-body);
+  color: var(--ink-2);
+}
