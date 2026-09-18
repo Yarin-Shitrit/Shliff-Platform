@@ -69,16 +69,25 @@ export const SCRATCH_DATABASE = 'shliff_evidence';
  *  so it names this one on its own rather than taking the whole allowlist. */
 export const CUTOVER_DATABASE = 'shliff_cutover';
 
+/** The clone `land-dancefloor.ts` is allowed to open. Like `cutover.ts` it
+ *  deletes real financial rows — the four seeded `dancefloor` budget lines —
+ *  and additionally rewrites `tasks.budget_line_id`, which no foreign key
+ *  protects, so it too names this one on its own rather than taking the whole
+ *  allowlist. */
+export const DANCEFLOOR_DATABASE = 'shliff_dancefloor';
+
 /**
  * Every database any script in this directory may open — the allowlist in
  * full, and the default for `assertScratchDatabase`.
  *
- * Listing two names does not widen the guard toward live: both are clones,
- * created with `create database … template shliff`, and `shliff` itself is in
- * neither this list nor any other code path here. A caller that wants a
- * narrower gate passes its own single name.
+ * Listing three names does not widen the guard toward live: all three are
+ * clones, and `shliff` itself is in neither this list nor any other code path
+ * here. A caller that wants a narrower gate passes its own single name, and
+ * every script that deletes anything does exactly that.
  */
-export const SCRATCH_DATABASES: readonly string[] = [SCRATCH_DATABASE, CUTOVER_DATABASE];
+export const SCRATCH_DATABASES: readonly string[] = [
+  SCRATCH_DATABASE, CUTOVER_DATABASE, DANCEFLOOR_DATABASE,
+];
 
 /**
  * The environment the resolution reads: `PGDATABASE`, `PGUSERNAME`, `PGUSER`.

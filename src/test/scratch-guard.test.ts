@@ -10,13 +10,14 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  SCRATCH_DATABASE, CUTOVER_DATABASE, SCRATCH_DATABASES,
+  SCRATCH_DATABASE, CUTOVER_DATABASE, DANCEFLOOR_DATABASE, SCRATCH_DATABASES,
   resolveDatabaseName, assertScratchDatabase,
 } from '../../scripts/scratch-guard';
 
 /** The real clone URL, with the password elided. */
 const CLONE = `postgres://shliff:pw@localhost:5433/${SCRATCH_DATABASE}`;
 const CUTOVER = `postgres://shliff:pw@localhost:5433/${CUTOVER_DATABASE}`;
+const DANCEFLOOR = `postgres://shliff:pw@localhost:5433/${DANCEFLOOR_DATABASE}`;
 const LIVE = 'postgres://shliff:pw@localhost:5433/shliff';
 
 describe('resolveDatabaseName — the name postgres.js would actually open', () => {
@@ -238,8 +239,25 @@ describe('assertScratchDatabase — an allowlist, not a blacklist', () => {
  * either script relaxing into a blacklist.
  */
 describe('assertScratchDatabase — an allowlist of several scratch names', () => {
-  it('names both scratch clones and nothing else', () => {
-    expect([...SCRATCH_DATABASES]).toEqual(['shliff_evidence', 'shliff_cutover']);
+  it('names every scratch clone and nothing else', () => {
+    expect([...SCRATCH_DATABASES])
+      .toEqual(['shliff_evidence', 'shliff_cutover', 'shliff_dancefloor']);
+  });
+
+  /** Nothing about the resolution changed when the third name was added, so
+   *  the two URLs that used to reach live still do not. Restated against the
+   *  widened default allowlist rather than against a single name, because that
+   *  is the list a new entry could have loosened. */
+  it('still refuses the empty-path URL that falls through to the user name', () => {
+    expect(() => assertScratchDatabase(
+      'postgres://shliff:pw@localhost:5433', SCRATCH_DATABASES, {},
+    )).toThrow(/refusing to run against the database "shliff"/);
+  });
+
+  it('still refuses a ?database= override onto live under three allowed names', () => {
+    expect(() => assertScratchDatabase(
+      `${DANCEFLOOR}?database=shliff`, SCRATCH_DATABASES, {},
+    )).toThrow(/refusing to run against the database "shliff"/);
   });
 
   it('allows the cutover clone under the default allowlist', () => {
@@ -265,5 +283,29 @@ describe('assertScratchDatabase — an allowlist of several scratch names', () =
   it('refuses the evidence clone when only the cutover clone is expected', () => {
     expect(() => assertScratchDatabase(CLONE, CUTOVER_DATABASE, {}))
       .toThrow(/refusing to run against the database "shliff_evidence"/);
+  });
+
+  it('allows the dancefloor clone under the default allowlist', () => {
+    expect(assertScratchDatabase(DANCEFLOOR, SCRATCH_DATABASES, {}))
+      .toBe('shliff_dancefloor');
+  });
+
+  /** `land-dancefloor.ts` narrows to its own name for the same reason
+   *  `cutover.ts` does: it deletes financial rows and rewrites
+   *  `tasks.budget_line_id`, so the other two clones are as wrong for it as
+   *  live is. */
+  it('refuses the cutover clone when only the dancefloor clone is expected', () => {
+    expect(() => assertScratchDatabase(CUTOVER, DANCEFLOOR_DATABASE, {}))
+      .toThrow(/refusing to run against the database "shliff_cutover"/);
+  });
+
+  it('refuses live when only the dancefloor clone is expected', () => {
+    expect(() => assertScratchDatabase(LIVE, DANCEFLOOR_DATABASE, {}))
+      .toThrow(/refusing to run against the database "shliff"/);
+  });
+
+  it('names the dancefloor clone in its own refusal, so the fix is obvious', () => {
+    expect(() => assertScratchDatabase(LIVE, DANCEFLOOR_DATABASE, {}))
+      .toThrow(/shliff_dancefloor/);
   });
 });
