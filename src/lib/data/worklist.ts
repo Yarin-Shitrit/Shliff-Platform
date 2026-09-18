@@ -1,11 +1,8 @@
-import { asc, count, inArray } from 'drizzle-orm';
+import { asc } from 'drizzle-orm';
 import type { AnyDb } from '@/lib/db-types';
 import { blocks } from '@/db/schema/source';
-import {
-  ledgerEntries, budgetLines, ticketRounds, obligations,
-} from '@/db/schema/money';
 import type { BlockArchetype } from '@/lib/classify/types';
-import { promoteBlock } from '@/lib/import/promote/promote';
+import { promoteBlock, promotedRowCounts } from '@/lib/import/promote/promote';
 import type { Refusal, RefusalReason, RetainedRow } from '@/lib/import/promote/types';
 import { listSheets, sheetEligibility } from '@/lib/import/sheets';
 import type { SheetRow, SheetState } from '@/lib/import/sheets';
@@ -33,7 +30,8 @@ import type { BudgetLineRow } from '@/lib/money/budget';
  * eligible block nobody had ever promoted read `promoted` with a row count
  * against zero rows in the database, and `coverage().promoted` summed rows
  * that did not exist. So the state also reads a real count of rows carrying
- * this block's `source_block_id`, from `promotedRowCounts` below.
+ * this block's `source_block_id`, from `promotedRowCounts` (imported from
+ * `promote.ts`, which also gates `promoteAllAction` on the same fact).
  *
  * | block record          | dry-run result                                          | rows exist | state         |
  * |-----------------------|---------------------------------------------------------|------------|---------------|
@@ -171,53 +169,6 @@ function stateOfConfirmed(written: number, refused: Refusal[], existingRows: num
   // Would write something. Whether it HAS been written is a different fact,
   // and only the database knows it.
   return existingRows > 0 ? 'promoted' : 'confirmed-not-promoted';
-}
-
-/**
- * How many rows each of these blocks actually has in each target table,
- * summed across the four — the count that makes `promoted` mean promoted.
- *
- * Four queries for the whole register, not four per block: each is a single
- * grouped `count(*) … where source_block_id in (…)`. The register lists every
- * block in the workbooks, so a per-block count would be hundreds of round
- * trips for a number that one group-by gives.
- *
- * A block appears in the result only if it has rows, so callers read it with
- * `?? 0`. Every archetype writes to exactly one of these four tables (W6), but
- * counting all four per block costs nothing extra here and means a block whose
- * archetype was re-decided after a promotion still reports the rows it really
- * owns rather than zero.
- */
-async function promotedRowCounts(db: AnyDb, blockIds: string[]): Promise<Map<string, number>> {
-  const totals = new Map<string, number>();
-  if (blockIds.length === 0) return totals;
-
-  const groups = await Promise.all([
-    db.select({ blockId: ledgerEntries.sourceBlockId, n: count() })
-      .from(ledgerEntries)
-      .where(inArray(ledgerEntries.sourceBlockId, blockIds))
-      .groupBy(ledgerEntries.sourceBlockId),
-    db.select({ blockId: budgetLines.sourceBlockId, n: count() })
-      .from(budgetLines)
-      .where(inArray(budgetLines.sourceBlockId, blockIds))
-      .groupBy(budgetLines.sourceBlockId),
-    db.select({ blockId: ticketRounds.sourceBlockId, n: count() })
-      .from(ticketRounds)
-      .where(inArray(ticketRounds.sourceBlockId, blockIds))
-      .groupBy(ticketRounds.sourceBlockId),
-    db.select({ blockId: obligations.sourceBlockId, n: count() })
-      .from(obligations)
-      .where(inArray(obligations.sourceBlockId, blockIds))
-      .groupBy(obligations.sourceBlockId),
-  ]);
-
-  for (const rows of groups) {
-    for (const row of rows) {
-      if (row.blockId === null) continue;
-      totals.set(row.blockId, (totals.get(row.blockId) ?? 0) + Number(row.n));
-    }
-  }
-  return totals;
 }
 
 /**
