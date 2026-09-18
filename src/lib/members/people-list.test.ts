@@ -6,8 +6,11 @@ import { issueFlatDues, setException } from '@/lib/fees/dues';
 import { recordPayment } from '@/lib/fees/payments';
 import { createTask } from '@/lib/work/tasks';
 import { assignPerson } from '@/lib/work/coverage';
-import { dues, persons } from '@/db/schema/camp';
+import {
+  dues, persons, personAliases, memberships, payments, taskAssignments,
+} from '@/db/schema/camp';
 import { eq, and } from 'drizzle-orm';
+import { toAgorot } from '@/lib/money';
 import { listPeopleForSeason } from './people-list';
 
 const LEAD = 'lead@shliff.camp';
@@ -73,6 +76,31 @@ describe('listPeopleForSeason', () => {
     expect(byName.get('עומר ביטון')?.outstandingAgorot).toBe(70000);
     expect(byName.get('תמר גולן')?.dues?.state).toBe('unpaid');
     expect(byName.get('תמר גולן')?.outstandingAgorot).toBe(120000);
+  });
+
+  it('sums outstandingAgorot across every season a person owes on, not the scope one', async () => {
+    // A debt from ברן 25 must still show on someone who rolls onto ברן 26's
+    // roster — a roster that scoped the number to the season being viewed is
+    // exactly how that debt gets forgotten. Two seasons, two unpaid dues, one
+    // person: the total may not depend on which season (or none) is the scope.
+    const y25 = await createSeason(db, { name: 'ברן 25', year: 2025, flatRate: 1500 });
+    const y26 = await createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1200 });
+    const owesBoth = await createPerson(db, 'עומר ביטון', LEAD);
+    await addMember(db, owesBoth, y25.id);
+    await addMember(db, owesBoth, y26.id);
+    await issueFlatDues(db, y25.id);
+    await issueFlatDues(db, y26.id);
+
+    const totalAgorot = toAgorot(y25.flatRate) + toAgorot(y26.flatRate);
+
+    const [scopedToB] = await listPeopleForSeason(db, y26.id);
+    expect(scopedToB.outstandingAgorot).toBe(totalAgorot);
+
+    const [scopedToA] = await listPeopleForSeason(db, y25.id);
+    expect(scopedToA.outstandingAgorot).toBe(totalAgorot);
+
+    const [campWide] = await listPeopleForSeason(db, null);
+    expect(campWide.outstandingAgorot).toBe(totalAgorot);
   });
 
   it('calls a zero-amount exception פטור and an un-issued due אין חיוב, never both nothing', async () => {
@@ -189,20 +217,41 @@ describe('listPeopleForSeason — the facts the list columns need', () => {
     expect(rows[0].aliases).toContain('אופק');
   });
 
-  it('dates last activity from the newest stamp, not from the person row', async () => {
+  it('takes lastActivityAt from whichever of several stamps is newest', async () => {
+    // A fixture where every candidate stamp agrees, or where only one exists,
+    // passes no matter which source (or none) the implementation actually
+    // reads — that is the exact test this replaces. Here all five candidates
+    // (persons.createdAt, the alias confirmedAt, the membership joinedAt, a
+    // payment's createdAt, and a task assignment's createdAt) are forced to
+    // distinct, ordered moments, and only the true maximum — the assignment,
+    // deliberately not the last one created — may satisfy the assertion.
     const y26 = await createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1200 });
     const person = await createPerson(db, 'מיכל רוזן', LEAD);
     await addMember(db, person, y26.id);
     await issueFlatDues(db, y26.id);
-    await recordPayment(db, {
+    const paymentId = await recordPayment(db, {
       dueId: await dueIdFor(person, y26.id), amount: 1200, channel: 'העברה',
       paidOn: new Date('2026-09-12'), recordedBy: LEAD,
     });
+    const task = await createTask(db, {
+      seasonId: y26.id, kind: 'build', title: 'הקמת הצל', peopleNeeded: 1,
+    });
+    const assignmentId = await assignPerson(db, task, person, LEAD, 'accepted');
+
+    await db.update(persons).set({ createdAt: new Date('2020-01-01') })
+      .where(eq(persons.id, person));
+    await db.update(personAliases).set({ confirmedAt: new Date('2021-01-01') })
+      .where(eq(personAliases.personId, person));
+    await db.update(memberships).set({ joinedAt: new Date('2022-01-01') })
+      .where(and(eq(memberships.personId, person), eq(memberships.seasonId, y26.id)));
+    await db.update(payments).set({ createdAt: new Date('2023-01-01') })
+      .where(eq(payments.id, paymentId));
+    const newestStamp = new Date('2024-06-01');
+    await db.update(taskAssignments).set({ createdAt: newestStamp })
+      .where(eq(taskAssignments.id, assignmentId));
 
     const [row] = await listPeopleForSeason(db, y26.id);
-    const [{ createdAt }] = await db.select().from(persons)
-      .where(eq(persons.id, person));
-    expect(row.lastActivityAt.getTime()).toBeGreaterThanOrEqual(createdAt.getTime());
+    expect(row.lastActivityAt.getTime()).toBe(newestStamp.getTime());
   });
 
   it('issues the same number of statements for forty people as for two', async () => {
