@@ -307,3 +307,142 @@
   gap: var(--space-4);
   flex-wrap: wrap;
 }
+
+/* ----------------------------------------------------- the block's own type */
+
+.picker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+}
+
+.pickerLabel {
+  font: var(--text-label);
+  color: var(--ink);
+}
+
+/* A28: no select control in the kit, so a native one on the kit's tokens. */
+.pickerSelect {
+  min-block-size: var(--control-h);
+  padding-inline: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--canvas);
+  color: var(--ink);
+  font: var(--text-body);
+}
+
+.pickerSelect:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.pickerHint {
+  flex-basis: 100%;
+  font: var(--text-meta);
+  color: var(--ink-3);
+}
+
+/* ------------------------------------------------- a section of the detail */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  padding: var(--space-4);
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font: var(--text-label);
+  color: var(--ink);
+}
+
+.sectionNote {
+  font: var(--text-meta);
+  color: var(--ink-3);
+}
+
+.tableScroll {
+  overflow-x: auto;
+}
+
+.columnTable th,
+.columnTable td {
+  padding: var(--space-2);
+  border-block-end: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.columnTable th {
+  font: var(--text-meta);
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.columnHead {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.columnHeader {
+  font: var(--text-cell);
+  color: var(--ink);
+}
+
+.columnLetter {
+  font: var(--text-meta);
+  color: var(--ink-3);
+}
+
+.samples {
+  font: var(--text-meta);
+  color: var(--ink-2);
+}
+
+.fieldSelect {
+  min-block-size: var(--control-h);
+  min-inline-size: 11rem;
+  padding-inline: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--canvas);
+  color: var(--ink);
+  font: var(--text-body);
+}
+
+.excludeToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--tap-min);
+  block-size: var(--tap-min);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--canvas);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.excludeToggle[aria-pressed='true'] {
+  background: var(--sunken);
+  border-color: var(--ink-3);
+}
+
+.fieldSelect:focus-visible,
+.excludeToggle:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
