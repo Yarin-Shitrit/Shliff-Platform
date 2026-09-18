@@ -1,11 +1,24 @@
 /**
- * The shared admin ground. It owns the full-viewport black field and the body
- * colour for every page under `(admin)`, so the page shells nested inside it
- * must not repeat either — nesting a second `min-block-size: 100vh` inside
- * this one forces 100vh plus the nav height on every page.
+ * The shared admin ground. It owns the full-viewport field and the flex row
+ * that seats the rail beside the main panel, so nothing nested inside it
+ * repeats either.
  */
 .ground {
-  min-block-size: 100vh;
-  background: var(--ground);
-  color: var(--sand);
+  display: flex;
+  min-block-size: 100dvh;
+  background: var(--canvas);
+  color: var(--ink);
+}
+/* The panel is inset from the canvas and drawn with one border (B6). */
+.main {
+  flex: 1;
+  min-inline-size: 0;
+  margin-block: 8px;
+  margin-inline-end: 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
