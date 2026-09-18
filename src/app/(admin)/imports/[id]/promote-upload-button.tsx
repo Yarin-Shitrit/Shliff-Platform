@@ -23,13 +23,18 @@ export function PromoteUploadButton(
   { uploadId, confirmedCount, alreadyPromoted }: {
     uploadId: string;
     /**
-     * Every block `promoteUpload` will touch — state `confirmed` OR
-     * `promoted`, because W4/W5 make a re-run the way a lead fixes a column
-     * map. Counting only the unwritten ones would name one table and rewrite
-     * four; on the camp's first workbook today that is exactly 1 against 4.
+     * Every block `promoteUpload` will touch: state `confirmed`, and only
+     * that (A34). The count and the action are one set, so this number is
+     * both what the button promises and what it does.
      */
     confirmedCount: number;
-    /** How many of those have already written rows, and will write them again. */
+    /**
+     * Blocks of this file that already wrote rows. They are NOT included —
+     * re-promoting a block whose rows something references keeps the old rows
+     * and writes new ones — so the dialog names them as being left alone and
+     * points at the per-block promotion, which shows what it keeps and what
+     * it replaces before it runs.
+     */
     alreadyPromoted: number;
   },
 ) {
@@ -73,11 +78,18 @@ export function PromoteUploadButton(
           title="לקדם את הטבלאות המאושרות של הקובץ הזה?"
           consequence={(
             <>
-              {/* A17: one isolate per phrase, and the re-write is said out
-                  loud rather than left to be inferred from a count. */}
+              {/* A17: one isolate per phrase. What is left out is said out
+                  loud, so the count beside the filename is not read as a
+                  count of the file's tables. */}
               <bdi>{`${confirmedCount} טבלאות ייכתבו לנתוני הקאמפ. `}</bdi>
               {alreadyPromoted > 0
-                ? <bdi>{`${alreadyPromoted} מתוכן כבר קודמו, והשורות שלהן ייכתבו מחדש. `}</bdi>
+                ? (
+                  <bdi>
+                    {`${alreadyPromoted} טבלאות בקובץ כבר קודמו ואינן נכללות — `}
+                    אפשר לקדם כל אחת מהן בנפרד ממסך הסקירה של אותה טבלה.
+                    {' '}
+                  </bdi>
+                )
                 : null}
               רק הטבלאות של הקובץ הזה — שום קובץ אחר לא ייגע.
             </>

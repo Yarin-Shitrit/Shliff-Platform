@@ -174,7 +174,12 @@ export async function confirmAndPromoteAction(
 }
 
 /**
- * Promotes every eligible block of ONE file, and only that file.
+ * Promotes the confirmed blocks of ONE file, and only that file.
+ *
+ * A34: confirmed blocks, never the ones that already promoted. A re-promotion
+ * keeps the rows something else references and writes new ones beside them, so
+ * it stays a per-block action on the review screen, where the rows it would
+ * keep and the rows it would replace are on the page before it runs.
  *
  * `promoteUpload` composes `promoteBlock` over one upload's blocks. It does not
  * call `promoteAll`, and nothing on this screen may: re-promoting one known

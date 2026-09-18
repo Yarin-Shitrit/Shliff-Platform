@@ -250,15 +250,21 @@ describe('/imports/[id]', () => {
     expect(screen.getByRole('button', { name: 'קידום 2 טבלאות מאושרות' })).toBeTruthy();
   });
 
-  /** The count is of every block promoteUpload touches, re-runs included. */
-  it('counts an already-promoted table among the ones it will write again', async () => {
+  /**
+   * A34: the count is the set the action touches, and the action leaves an
+   * already-promoted table alone — re-promoting a block whose rows something
+   * references keeps the old rows and writes new ones. One confirmed table
+   * beside one promoted table reads 1, and the promoted one is still
+   * promotable on its own from the review screen.
+   */
+  it('leaves an already-promoted table out of the count, and out of the action', async () => {
     blockStates.mockResolvedValue([
       block({ blockId: 'b1', state: 'confirmed', confirmedAt: new Date() }),
       block({ blockId: 'b2', state: 'promoted', confirmedAt: new Date(), promotedRows: 52 }),
       block({ blockId: 'b3', state: 'needs-review' }),
     ]);
     render(await open());
-    expect(screen.getByRole('button', { name: 'קידום 2 טבלאות מאושרות' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'קידום 1 טבלאות מאושרות' })).toBeTruthy();
   });
 
   it('offers no bulk promotion while nothing is confirmed', async () => {

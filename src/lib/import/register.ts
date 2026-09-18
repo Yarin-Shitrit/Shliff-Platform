@@ -260,19 +260,32 @@ export async function blockStates(
  * blocks; the ordering costs nothing and the failure mode it avoids is the
  * expensive kind.
  *
- * The blocks it acts on are those in state `confirmed` or `promoted` —
- * confirmed because they are ready, already-promoted because W4 and W5 make a
- * re-run the way a lead fixes a column map. The rest are skipped:
- * `promoteBlock` would refuse each of them anyway, and calling it only to
- * collect a refusal turns a clean "3 tables" into a report about eight.
+ * The blocks it acts on are those in state `confirmed`, and nothing else
+ * (integration A34). An already-`promoted` block is deliberately not among
+ * them, and the reason is the mechanism rather than tidiness: `promoteBlock`
+ * sweeps a block's prior rows before writing, which makes a re-run a
+ * replacement — except for a row something else references. That one is
+ * `retained`, not deleted, so when the re-run produces rows the old ones did
+ * not cover, the retained rows stay and the new ones land beside them. The
+ * count grows, and the growth is the camp's money counted twice. Measured on
+ * a real database in `register.test.ts`: two dancefloor lines carrying task
+ * references, one corrected column map, and ₪64,375.30 becomes ₪119,375.30.
+ *
+ * Re-promotion is still how a lead fixes a column map (W4, W5) — as a
+ * SINGLE-block action on the review screen, which renders that block's
+ * `deleted` and `retained` before anything is written. That is the difference
+ * A34 rests on: there a lead consents to a known outcome, whereas one
+ * file-wide button hides the same outcome behind a single number.
+ *
+ * The rest are skipped: `promoteBlock` would refuse each of them anyway, and
+ * calling it only to collect a refusal turns a clean "3 tables" into a report
+ * about eight.
  */
 export async function promoteUpload(
   db: AnyDb, uploadId: string, opts: { dryRun: boolean; recordedBy: string },
 ): Promise<PromotionResult[]> {
   const states = await blockStates(db, uploadId);
-  const eligible = states.filter(
-    (b) => b.state === 'confirmed' || b.state === 'promoted',
-  );
+  const eligible = states.filter((b) => b.state === 'confirmed');
 
   const results: PromotionResult[] = [];
   for (const block of eligible) {

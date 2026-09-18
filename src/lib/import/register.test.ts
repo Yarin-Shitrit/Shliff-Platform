@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { createTestDb, type TestDb } from '@/test/db';
 import { uploads, sheets, blocks, blockMappings } from '@/db/schema/source';
-import { seasons } from '@/db/schema/camp';
-import { ledgerEntries } from '@/db/schema/money';
+import { seasons, tasks } from '@/db/schema/camp';
+import { ledgerEntries, budgetLines } from '@/db/schema/money';
 import { BLOCK_ARCHETYPES } from '@/lib/classify/types';
 import { promoteBlock } from '@/lib/import/promote/promote';
 import {
@@ -296,6 +296,163 @@ describe('promoteUpload', () => {
     const mineBlocks = await blockStates(db, mine.id);
     expect(results).toHaveLength(1);
     expect(results[0].blockId).toBe(mineBlocks[0].blockId);
+  });
+});
+
+/**
+ * A34: the per-file button covers `confirmed` blocks only, and the reason is
+ * not tidiness — it is that a re-promotion can leave two copies of the same
+ * money standing.
+ *
+ * `promoteBlock` sweeps a block's prior rows before writing, so a re-run is
+ * normally a replacement. The exception is a row something else references:
+ * that one is `retained`, not deleted. When the re-run then produces rows the
+ * old ones did not cover, the retained rows stay and the new ones land beside
+ * them — the count grows, and the growth is money counted twice.
+ *
+ * The workbook below is the shape A23 recorded: a dancefloor budget with two
+ * cost columns, promoted off the wrong one, its lines carrying task references
+ * and no foreign key. Fixing the column map is the blessed reason to re-run
+ * (W4/W5) and is exactly what makes the retained rows bite.
+ */
+describe('promoteUpload and an already-promoted block (A34)', () => {
+  let db: TestDb;
+  beforeEach(async () => { db = await createTestDb(); });
+
+  const DANCEFLOOR_GRID = [
+    ['פריט', 'עלות ברן 25', 'עלות ברן 26'],
+    ['רחבה — הגברה', '42000', ''],
+    ['רחבה — תאורה', '22375.30', ''],
+    ['רחבה — הגברה', '', '30000'],
+    ['רחבה — תאורה', '', '25000'],
+  ];
+
+  /** The column a lead first mapped as the total: ברן 25's. */
+  const COL_25 = [
+    { column: 1, field: 'item', confidence: 1 },
+    { column: 2, field: 'total', confidence: 1 },
+  ];
+  /** The column they meant, corrected on the review screen. */
+  const COL_26 = [
+    { column: 1, field: 'item', confidence: 1 },
+    { column: 3, field: 'total', confidence: 1 },
+  ];
+
+  /** 42,000 + 22,375.30, in agorot — ברן 26's whole budget, per A23. */
+  const BERN_25_AGOROT = 6_437_530;
+  /** 30,000 + 25,000, in agorot: what the corrected map produces. */
+  const BERN_26_AGOROT = 5_500_000;
+
+  async function dancefloorUpload() {
+    const [season] = await db.insert(seasons)
+      .values({ name: 'ברן 26', year: 2026, flatRate: '1200.00' }).returning();
+    const upload = await makeUpload(db, 'קופת קאמפ 2026.xlsx', 'a34');
+    const sheet = await makeSheet(db, upload.id, 'תקציב רחבה', season.id);
+    const block = await makeBlock(db, sheet.id, {
+      archetype: 'budget_lines', top: 1, bottom: 5, left: 1, right: 3, headerRow: 1,
+      confirmedBy: LEAD, confirmedAt: new Date(), confidence: '1.0000',
+      rawGrid: DANCEFLOOR_GRID,
+    });
+    await db.update(blockMappings)
+      .set({ source: 'admin', columnMap: COL_25, budgetCategory: 'dancefloor' })
+      .where(eq(blockMappings.blockId, block.id));
+    return { season, upload, block };
+  }
+
+  /** What the camp's budget actually holds right now. */
+  async function linesNow() {
+    const rows = await db.select().from(budgetLines).orderBy(budgetLines.sourceRow);
+    return {
+      count: rows.length,
+      ids: rows.map((row) => row.id),
+      agorot: rows.reduce((n, row) => n + Math.round(Number(row.total) * 100), 0),
+    };
+  }
+
+  /** A task against every line: the reference that makes a row `retained`. */
+  async function assignTasks(seasonId: string) {
+    const rows = await db.select().from(budgetLines);
+    for (const line of rows) {
+      await db.insert(tasks).values({
+        seasonId, kind: 'deliverable', title: `רחבה: ${line.label}`,
+        budgetLineId: line.id,
+      });
+    }
+  }
+
+  async function fixTheColumnMap(blockId: string) {
+    await db.update(blockMappings).set({ columnMap: COL_26 })
+      .where(eq(blockMappings.blockId, blockId));
+  }
+
+  it('leaves the rows of an already-promoted block exactly as they were', async () => {
+    const { season, upload, block } = await dancefloorUpload();
+    await promoteUpload(db, upload.id, { dryRun: false, recordedBy: LEAD });
+    const before = await linesNow();
+    expect(before.count).toBe(2);
+    expect(before.agorot).toBe(BERN_25_AGOROT);
+
+    await assignTasks(season.id);
+    await fixTheColumnMap(block.id);
+
+    await promoteUpload(db, upload.id, { dryRun: false, recordedBy: LEAD });
+
+    // Not "the same number of rows": the same rows. A sweep that deleted two
+    // and wrote two would also count 2, and would not be what happened here.
+    // Asserted as one shape so a regression prints the count, the identities
+    // and the money together — the three facts a lead would be lied to about.
+    expect(await linesNow()).toEqual(before);
+  });
+
+  it('still promotes a confirmed block that has never been promoted', async () => {
+    const { upload } = await dancefloorUpload();
+
+    const results = await promoteUpload(db, upload.id, { dryRun: false, recordedBy: LEAD });
+
+    expect(results).toHaveLength(1);
+    const after = await linesNow();
+    expect(after.count).toBe(2);
+    expect(after.agorot).toBe(BERN_25_AGOROT);
+  });
+
+  /**
+   * The per-block path stays, and this is what it does: the review screen
+   * renders `retained` and `deleted` before a lead presses it, so the four
+   * rows below are a known outcome rather than a surprise behind one number.
+   */
+  it('keeps the single-block re-promotion a lead uses after editing a sheet', async () => {
+    const { season, upload, block } = await dancefloorUpload();
+    await promoteUpload(db, upload.id, { dryRun: false, recordedBy: LEAD });
+    await assignTasks(season.id);
+    await fixTheColumnMap(block.id);
+
+    const result = await promoteBlock(db, block.id, { dryRun: false, recordedBy: LEAD });
+
+    expect(result.written).toHaveLength(2);
+    expect(result.retained).toHaveLength(2);
+    expect(result.deleted).toBe(0);
+    const after = await linesNow();
+    expect(after.count).toBe(4);
+    expect(after.agorot).toBe(BERN_25_AGOROT + BERN_26_AGOROT);
+  });
+
+  /**
+   * The positive control for the test above: with nothing referencing them,
+   * the same re-promotion replaces the rows outright. So the growth up there
+   * comes from `retained` specifically, not from re-running as such.
+   */
+  it('replaces the rows outright when nothing references them', async () => {
+    const { upload, block } = await dancefloorUpload();
+    await promoteUpload(db, upload.id, { dryRun: false, recordedBy: LEAD });
+    await fixTheColumnMap(block.id);
+
+    const result = await promoteBlock(db, block.id, { dryRun: false, recordedBy: LEAD });
+
+    expect(result.deleted).toBe(2);
+    expect(result.retained).toHaveLength(0);
+    const after = await linesNow();
+    expect(after.count).toBe(2);
+    expect(after.agorot).toBe(BERN_26_AGOROT);
   });
 });
 

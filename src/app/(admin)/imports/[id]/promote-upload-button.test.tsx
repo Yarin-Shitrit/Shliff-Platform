@@ -86,28 +86,29 @@ describe('PromoteUploadButton', () => {
   });
 
   /**
-   * `promoteUpload` acts on every block in state `confirmed` OR `promoted` —
-   * a re-run is how W4/W5 say a lead fixes a column map. So the count here has
-   * to be of both, or the button names one table and rewrites four. Measured
-   * on the real database: the first workbook is confirmed 1, promoted 3.
+   * A34: the count is of `confirmed` tables only, which is exactly the set
+   * `promoteUpload` acts on. A table this file already promoted is left out of
+   * both — re-promoting a block whose rows something references keeps the old
+   * rows and writes new ones, and one file-wide number cannot show that.
    */
-  it('counts the tables it will actually touch, not only the unwritten ones', () => {
-    renderButton(4, 3);
-    expect(screen.getByRole('button', { name: 'קידום 4 טבלאות מאושרות' })).toBeTruthy();
+  it('names the confirmed tables only, however many were promoted before', () => {
+    renderButton(1, 3);
+    expect(screen.getByRole('button', { name: 'קידום 1 טבלאות מאושרות' })).toBeTruthy();
   });
 
   /**
-   * Re-writing rows that already exist is the hazard this whole screen is
-   * careful about, so it is said out loud before anything is written rather
-   * than left for a lead to infer from a count.
+   * What is left out is said before anything is written, so the count beside
+   * the filename is not read as a count of the file's tables — and the lead is
+   * pointed at the per-block promotion, which shows what it keeps and what it
+   * replaces.
    */
-  it('says out loud that already-promoted tables are written again', () => {
-    renderButton(4, 3);
+  it('says which tables it is leaving alone, and where to promote them', () => {
+    renderButton(1, 3);
     fireEvent.click(screen.getByRole('button', { name: /קידום/ }));
-    expect(within(dialog()).getByText(/3 מתוכן כבר קודמו/)).toBeTruthy();
+    expect(within(dialog()).getByText(/3 טבלאות בקובץ כבר קודמו ואינן נכללות/)).toBeTruthy();
   });
 
-  it('says nothing about re-writing when nothing has been promoted yet', () => {
+  it('says nothing about already-promoted tables when there are none', () => {
     renderButton(3, 0);
     fireEvent.click(screen.getByRole('button', { name: /קידום/ }));
     expect(within(dialog()).queryByText(/כבר קודמו/)).toBeNull();

@@ -96,17 +96,17 @@ export default async function ImportReviewPage(
   /**
    * A23: a control scoped to this file's blocks, never the database.
    *
-   * The count is of every block `promoteUpload` will touch — `confirmed` and
-   * `promoted` both, because W4/W5 make a re-run the way a lead fixes a column
-   * map. Counting only the unwritten ones would name one table and rewrite
-   * four; on the camp's first workbook that is exactly 1 against 4 today, and
-   * a button that understates what it touches is the same lie as one that
-   * promises a count it cannot keep.
+   * A34: the count is of the `confirmed` blocks, which is exactly the set
+   * `promoteUpload` acts on. The two must be one set — an earlier pass found
+   * the button naming 1 table while the action touched 4 and widened the
+   * count, but re-promoting a block whose rows are referenced keeps the old
+   * rows and writes new ones, so the honest repair is the narrower action.
+   * `alreadyPromoted` is what the button says it is LEAVING ALONE, and each
+   * of those stays promotable one block at a time from the review screen,
+   * where its `deleted` and `retained` counts are on the page.
    */
   const alreadyPromoted = blocks.filter((b) => b.state === 'promoted').length;
-  const readyToPromote = blocks.filter(
-    (b) => b.state === 'confirmed' || b.state === 'promoted',
-  ).length;
+  const readyToPromote = blocks.filter((b) => b.state === 'confirmed').length;
 
   /**
    * Everything the detail pane needs that does not depend on a draft is built
