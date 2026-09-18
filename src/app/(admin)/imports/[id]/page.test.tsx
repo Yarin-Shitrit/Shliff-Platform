@@ -250,6 +250,17 @@ describe('/imports/[id]', () => {
     expect(screen.getByRole('button', { name: 'קידום 2 טבלאות מאושרות' })).toBeTruthy();
   });
 
+  /** The count is of every block promoteUpload touches, re-runs included. */
+  it('counts an already-promoted table among the ones it will write again', async () => {
+    blockStates.mockResolvedValue([
+      block({ blockId: 'b1', state: 'confirmed', confirmedAt: new Date() }),
+      block({ blockId: 'b2', state: 'promoted', confirmedAt: new Date(), promotedRows: 52 }),
+      block({ blockId: 'b3', state: 'needs-review' }),
+    ]);
+    render(await open());
+    expect(screen.getByRole('button', { name: 'קידום 2 טבלאות מאושרות' })).toBeTruthy();
+  });
+
   it('offers no bulk promotion while nothing is confirmed', async () => {
     blockStates.mockResolvedValue([block({ state: 'needs-review' })]);
     render(await open());

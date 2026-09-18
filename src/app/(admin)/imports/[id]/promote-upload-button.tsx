@@ -20,7 +20,18 @@ import { promoteUploadAction } from './actions';
 import styles from './import-review.module.css';
 
 export function PromoteUploadButton(
-  { uploadId, confirmedCount }: { uploadId: string; confirmedCount: number },
+  { uploadId, confirmedCount, alreadyPromoted }: {
+    uploadId: string;
+    /**
+     * Every block `promoteUpload` will touch — state `confirmed` OR
+     * `promoted`, because W4/W5 make a re-run the way a lead fixes a column
+     * map. Counting only the unwritten ones would name one table and rewrite
+     * four; on the camp's first workbook today that is exactly 1 against 4.
+     */
+    confirmedCount: number;
+    /** How many of those have already written rows, and will write them again. */
+    alreadyPromoted: number;
+  },
 ) {
   const [asking, setAsking] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -61,10 +72,15 @@ export function PromoteUploadButton(
         <ConfirmDialog
           title="לקדם את הטבלאות המאושרות של הקובץ הזה?"
           consequence={(
-            <bdi>
-              {`${confirmedCount} טבלאות ייכתבו לנתוני הקאמפ. `}
+            <>
+              {/* A17: one isolate per phrase, and the re-write is said out
+                  loud rather than left to be inferred from a count. */}
+              <bdi>{`${confirmedCount} טבלאות ייכתבו לנתוני הקאמפ. `}</bdi>
+              {alreadyPromoted > 0
+                ? <bdi>{`${alreadyPromoted} מתוכן כבר קודמו, והשורות שלהן ייכתבו מחדש. `}</bdi>
+                : null}
               רק הטבלאות של הקובץ הזה — שום קובץ אחר לא ייגע.
-            </bdi>
+            </>
           )}
           confirmLabel="קידום הטבלאות"
           cancelLabel="חזרה"

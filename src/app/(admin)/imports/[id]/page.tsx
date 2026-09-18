@@ -93,8 +93,20 @@ export default async function ImportReviewPage(
     : [null, null];
 
   const confirmed = blocks.filter((b) => b.confirmedAt !== null).length;
-  /** A23: a control scoped to this file's confirmed blocks, never the database. */
-  const readyToPromote = blocks.filter((b) => b.state === 'confirmed').length;
+  /**
+   * A23: a control scoped to this file's blocks, never the database.
+   *
+   * The count is of every block `promoteUpload` will touch — `confirmed` and
+   * `promoted` both, because W4/W5 make a re-run the way a lead fixes a column
+   * map. Counting only the unwritten ones would name one table and rewrite
+   * four; on the camp's first workbook that is exactly 1 against 4 today, and
+   * a button that understates what it touches is the same lie as one that
+   * promises a count it cannot keep.
+   */
+  const alreadyPromoted = blocks.filter((b) => b.state === 'promoted').length;
+  const readyToPromote = blocks.filter(
+    (b) => b.state === 'confirmed' || b.state === 'promoted',
+  ).length;
 
   /**
    * Everything the detail pane needs that does not depend on a draft is built
@@ -132,7 +144,13 @@ export default async function ImportReviewPage(
         </div>
         <div className={styles.headActions}>
           {readyToPromote > 0
-            ? <PromoteUploadButton uploadId={id} confirmedCount={readyToPromote} />
+            ? (
+              <PromoteUploadButton
+                uploadId={id}
+                confirmedCount={readyToPromote}
+                alreadyPromoted={alreadyPromoted}
+              />
+            )
             : null}
           <Link className={styles.secondary} href="/imports">כל הקבצים</Link>
         </div>
