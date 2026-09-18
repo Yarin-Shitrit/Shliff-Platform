@@ -8,6 +8,7 @@ import { Money } from '@/components/format';
 import { Icon } from '@/components/ui/icon';
 import { ButtonLink } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Figures } from './figures';
 import styles from './home.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -83,6 +84,8 @@ export default async function HomePage(
           </ButtonLink>
         </div>
       </div>
+
+      <Figures overview={overview} />
 
       {nothingYet ? (
         <EmptyState
