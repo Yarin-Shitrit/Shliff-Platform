@@ -5,6 +5,7 @@ import { createSeason } from '@/lib/members/roster';
 import { uploads, sheets } from '@/db/schema/source';
 import {
   setSheetSeason, setSheetAuthority, listSheets, sheetEligibility,
+  retireSheet, unretireSheet,
 } from './sheets';
 
 let db: TestDb;
@@ -122,6 +123,17 @@ describe('eligibility', () => {
     expect(map.get(b)?.state).toBe('ambiguous');
   });
 
+  it('a retired sheet never conflicts with a live one, even sharing name and season (R44)', async () => {
+    const a = await addSheet('23.xlsx', 'סיכום כללי');
+    const b = await addSheet('2026.xlsx', 'סיכום כללי');
+    await setSheetSeason(db, a, s26);
+    await setSheetSeason(db, b, s26);
+    await retireSheet(db, a, 'lead@shliff.test');
+    const map = await sheetEligibility(db);
+    expect(map.get(b)?.state).toBe('eligible');
+    expect(map.get(b)?.contestedWith).toEqual([]);
+  });
+
   it('an unlabelled sheet contests a same-named labelled one, and labelling it clears both', async () => {
     const a = await addSheet('25.xlsx', 'סיכום כללי');
     const b = await addSheet('2026.xlsx', 'סיכום כללי');
@@ -204,5 +216,54 @@ describe('authority guard', () => {
     const unknownId = '00000000-0000-0000-0000-000000000000';
     await expect(setSheetSeason(db, unknownId, s25))
       .rejects.toThrow(`unknown sheet ${unknownId}`);
+  });
+});
+
+describe('retirement', () => {
+  it('retireSheet stamps both columns', async () => {
+    const id = await addSheet('23.xlsx', 'תקציב קאמפ ברן 23');
+    await retireSheet(db, id, 'lead@shliff.test');
+    const [row] = await listSheets(db);
+    expect(row.retiredAt).not.toBeNull();
+    expect(row.retiredBy).toBe('lead@shliff.test');
+  });
+
+  it('unretireSheet clears both columns', async () => {
+    const id = await addSheet('23.xlsx', 'תקציב קאמפ ברן 23');
+    await retireSheet(db, id, 'lead@shliff.test');
+    await unretireSheet(db, id);
+    const [row] = await listSheets(db);
+    expect(row.retiredAt).toBeNull();
+    expect(row.retiredBy).toBeNull();
+  });
+
+  it('retiring an unknown sheet refuses rather than silently no-oping', async () => {
+    const unknownId = '00000000-0000-0000-0000-000000000000';
+    await expect(retireSheet(db, unknownId, 'lead@shliff.test'))
+      .rejects.toThrow(`unknown sheet ${unknownId}`);
+  });
+
+  it('unretiring an unknown sheet refuses rather than silently no-oping', async () => {
+    const unknownId = '00000000-0000-0000-0000-000000000000';
+    await expect(unretireSheet(db, unknownId))
+      .rejects.toThrow(`unknown sheet ${unknownId}`);
+  });
+
+  it('retirement is orthogonal to season and authority — a retired sheet keeps both', async () => {
+    const id = await addSheet('26.xlsx', 'תקציב קאמפ ברן 26');
+    await setSheetSeason(db, id, s26);
+    await setSheetAuthority(db, id, true);
+    await retireSheet(db, id, 'lead@shliff.test');
+    const [row] = await listSheets(db);
+    expect(row.seasonId).toBe(s26);
+    expect(row.authoritative).toBe(true);
+  });
+
+  it('a retired sheet with no season stays exactly that — retiring records the fact, not a season', async () => {
+    const id = await addSheet('23.xlsx', 'תקציב קאמפ ברן 23');
+    await retireSheet(db, id, 'lead@shliff.test');
+    const [row] = await listSheets(db);
+    expect(row.seasonId).toBeNull();
+    expect(row.retiredAt).not.toBeNull();
   });
 });

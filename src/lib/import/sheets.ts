@@ -11,6 +11,9 @@ export interface SheetRow {
   seasonId: string | null;
   seasonName: string | null;
   authoritative: boolean | null;
+  /** When a lead marked this sheet as history (R42). Null means live. */
+  retiredAt: Date | null;
+  retiredBy: string | null;
 }
 
 export type SheetState = 'eligible' | 'undecided' | 'ambiguous' | 'superseded';
@@ -79,6 +82,40 @@ export async function setSheetAuthority(
   await db.update(sheets).set({ authoritative }).where(eq(sheets.id, sheetId));
 }
 
+/**
+ * Marks a sheet as retired — history, not a decision waiting (R42). Refuses
+ * an unknown `sheetId`, the same not-found error `setSheetSeason` throws: a
+ * bad id here is a programmer error, not a state a lead can act on.
+ *
+ * Orthogonal to season and authority (R45): neither column is touched, and
+ * neither is required. The eight closed-season sheets this exists for are
+ * retired precisely because they have no season — the column records the
+ * retirement, never the reason for it.
+ */
+export async function retireSheet(db: AnyDb, sheetId: string, email: string): Promise<void> {
+  const [sheet] = await db.select({ id: sheets.id }).from(sheets)
+    .where(eq(sheets.id, sheetId));
+  if (!sheet) throw new Error(`unknown sheet ${sheetId}`);
+
+  await db.update(sheets)
+    .set({ retiredAt: new Date(), retiredBy: email })
+    .where(eq(sheets.id, sheetId));
+}
+
+/**
+ * Clears retirement. Season and authority are left exactly as they were —
+ * see `retireSheet`. Refuses an unknown `sheetId` the same way.
+ */
+export async function unretireSheet(db: AnyDb, sheetId: string): Promise<void> {
+  const [sheet] = await db.select({ id: sheets.id }).from(sheets)
+    .where(eq(sheets.id, sheetId));
+  if (!sheet) throw new Error(`unknown sheet ${sheetId}`);
+
+  await db.update(sheets)
+    .set({ retiredAt: null, retiredBy: null })
+    .where(eq(sheets.id, sheetId));
+}
+
 export async function listSheets(db: AnyDb): Promise<SheetRow[]> {
   const rows = await db.select({
     id: sheets.id,
@@ -88,6 +125,8 @@ export async function listSheets(db: AnyDb): Promise<SheetRow[]> {
     seasonId: sheets.seasonId,
     seasonName: seasons.name,
     authoritative: sheets.authoritative,
+    retiredAt: sheets.retiredAt,
+    retiredBy: sheets.retiredBy,
   })
     .from(sheets)
     .innerJoin(uploads, eq(uploads.id, sheets.uploadId))
@@ -97,7 +136,13 @@ export async function listSheets(db: AnyDb): Promise<SheetRow[]> {
 
 /**
  * Two sheets conflict when they share a name and either share a season or
- * either one's season is unset.
+ * either one's season is unset — and neither one is retired (R44). A
+ * retired sheet is history: it cannot contest a live sheet's copy, and two
+ * retired sheets have nothing left to resolve between them either. Checked
+ * ahead of the season comparison so the null-season wildcard below never
+ * pulls a retired, season-less sheet into a live sheet's collision — which
+ * matters in practice, because the sheets this exists for (closed seasons,
+ * no season set) are exactly the ones the wildcard would otherwise catch.
  *
  * The unset case is deliberate: until a lead says which season a sheet
  * belongs to, the system genuinely cannot tell a second revision of one
@@ -106,6 +151,7 @@ export async function listSheets(db: AnyDb): Promise<SheetRow[]> {
  */
 function conflicts(a: SheetRow, b: SheetRow): boolean {
   if (a.id === b.id || a.name !== b.name) return false;
+  if (a.retiredAt !== null || b.retiredAt !== null) return false;
   return a.seasonId === b.seasonId || a.seasonId === null || b.seasonId === null;
 }
 
