@@ -28,8 +28,8 @@ If a plan or a reviewer asks you to break one of these, stop and ask.
 ## Running the tests
 
 ```sh
-npx vitest run --maxWorkers=4 --hookTimeout 60000 \
-  --outputFile ".vitest/json/run-$$.json"
+npx vitest run --maxWorkers=4 --hookTimeout 60000 --testTimeout 60000 \
+  --reporter=default --reporter=json --outputFile ".vitest/json/run-$$.json"
 ```
 
 Every flag is load-bearing:
@@ -41,9 +41,35 @@ Every flag is load-bearing:
   the wrong number from it.
 - **`--hookTimeout 60000`** covers what the worker cap does not: two people running
   pglite suites at once can still lose a suite to `createTestDb` timing out.
+- **`--testTimeout 60000` is a separate cap from `--hookTimeout`.** The config
+  pins `testTimeout: 20_000`, and the hook flag does not raise it. A suite that
+  builds its pglite database *inside the test body* rather than in a `beforeEach`
+  blows the 20s cap while every hook sits comfortably inside its 60s one. The
+  symptom reads `Test timed out in 20000ms` — **Test**, not Hook — so it does not
+  match the signature above and is a real timeout, not a fabricated one. It is
+  load-conditional: measured at 28,913 ms under four concurrent lanes, passing
+  inside 20s with two drained.
 - **`--outputFile` must be unique per run.** The JSON reporter's default path is
   shared, so concurrent runs overwrite each other and you can read a peer's verdict
   as your own.
+- **Keep `--reporter=default`.** Passing `--reporter=json` alone *replaces* the
+  default reporter, so the run loses the console summary **and** the
+  `Unhandled Errors` block — and a worker `SIGKILL` under memory pressure is an
+  unhandled error. The result is the worst possible reading: **exit code 1 with
+  `numFailedTests: 0`** and nothing on screen saying why. One such run claimed
+  `total 1662, passed 1614, failed 0`: 48 tests unaccounted for.
+
+**Always cross-check the exit code against the failure count. A non-zero exit
+with zero failures means workers died, not that the suite is green.** And a
+killed worker's un-run tests are reported **`pending`**, not failed — 32 tests
+across four files once came back "skipped" with **no `.skip` in any of them**.
+Verify that before believing a skip: a failure demands investigation, a skip
+reads as somebody's deliberate choice, so the suite stays green and the missing
+coverage is invisible.
+
+**A lane runs only its own scope; the full suite belongs to whoever is
+coordinating.** Three lanes each running a full-suite verification at once
+exhausted this box and killed all three.
 
 Before believing a mass red, check whether someone else is mid-run (`pgrep -fl
 vitest`). A failure that looks pre-existing usually is not — re-run it capped
@@ -57,6 +83,21 @@ before you label it that way.
   structurally (`<commit>^`, `merge-base`) instead of copying printed SHAs, and
   positive-control anything hook-wrapped: grep for a string you know is present,
   and if it returns 0 the instrument is dead, not the claim.
+- **The hook also truncates `grep` — and falsifies the count to match.** Listing
+  a plan's tasks with `grep -n "^### Task" <plan>.md` returned 11 rows and the
+  summary `(11)`; the file has **15**. `rtk proxy grep -c` and `grep … | wc -l`
+  both said 15. Acting on that reading, four tasks of a plan were never
+  dispatched and the gap surfaced only because the implementer wrote "Tasks 12-15
+  not started" in its report. A truncated list that announces itself costs
+  nothing; one reporting a count that matches its own truncation is
+  indistinguishable from a complete answer. **Never take a count that decides
+  scope from a hook-filtered `grep`.**
+- **The hook elides source lines from `cat`.** A filtered `cat -n` dropped a line
+  from a source file, which broke an exact-match edit until it was re-read with
+  the `Read` tool. **Read files with `Read`, not `cat`** — a missing line does not
+  announce itself, and the edit fails in a way that looks like your own mistake.
+  `npx eslint` is mangled too (it printed `npm error could not determine
+  executable to run` over a real lint error); use `rtk proxy` to see it.
 - **The git index is shared.** `git add` stages a path, but `git commit` takes the
   *whole index* — including what another session staged a second ago. One commit
   here has already swept in another lane's staged deletions and mislabelled them.
