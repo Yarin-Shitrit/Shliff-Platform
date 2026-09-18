@@ -29,6 +29,18 @@ export type BannerProps = {
   icon?: IconName;
   /** `role="status"` for a banner that appears in response to an action (E2). */
   live?: boolean;
+  /**
+   * The banner's own name — `שמות שלא שויכו`, `תוצאת הקידום`. `Banner` assumes
+   * a form layout, where the one banner on the page is found by reading down
+   * it; a screen carrying several needs each to be a landmark somebody can
+   * jump to and be told which one they landed on.
+   *
+   * A name with no role names nothing, so the name brings a role with it:
+   * `region` for a banner that was already on the page, and `status` — which
+   * `live` already sets — for one reporting what just happened. The name is
+   * what the banner is *about*, never a description of the widget.
+   */
+  label?: string;
 };
 
 const TONE_ICON: Record<BannerTone, IconName> = {
@@ -39,10 +51,13 @@ const TONE_ICON: Record<BannerTone, IconName> = {
 };
 
 export function Banner({
-  tone = 'neutral', headline, detail, action, icon, live,
+  tone = 'neutral', headline, detail, action, icon, live, label,
 }: BannerProps): ReactElement {
+  /* `live` wins: a banner that reports what just happened must stay announced,
+     and a `region` that replaced its `status` would go silent. */
+  const role = live ? 'status' : (label === undefined ? undefined : 'region');
   return (
-    <div className={cx(styles.banner, styles[tone])} role={live ? 'status' : undefined}>
+    <div className={cx(styles.banner, styles[tone])} role={role} aria-label={label}>
       <span className={styles.icon}>
         <Icon name={icon ?? TONE_ICON[tone]} size={16} />
       </span>
