@@ -889,3 +889,40 @@ the trust the screen exists to build.
 deliberately not re-tested against live.** The arithmetic was checked
 (`42000 + 22375.30 === 64375.30`); the duplication behaviour was not, because
 confirming it costs a write to the camp's real money.
+
+### A23a — How strong A23 actually is, stated honestly
+
+A23 is a paragraph in a document. A faithful implementer who reads it does not
+build the button; an implementer who misses it builds exactly what plan 05's file
+table tells them to build, and nothing in the code refuses. **The camp's budget
+is currently protected by an agreement between two sessions, not by a control.**
+
+The right fix is at the action layer: `promoteAllAction` requiring a scope, so
+that no page can re-promote `66ad3b61` whatever it chooses to render. That is
+this project's own stated principle — make the violation unexpressible rather
+than discouraged, the same move as `DestructiveBulkAction` leaving no raw
+callback for R8 to be forgotten through. A23 would then be a *consequence of the
+API* rather than a promise about a file.
+
+That change is in the promotion lane's half of the repo and has been put to the
+camp lead, who declared that work closed. **Until it lands, A23 is the only thing
+between a faithful implementer and a doubled budget — treat it as load-bearing,
+not as a filed note.** If it lands, this addendum records the signature and A23
+relaxes to a consequence.
+
+### A24 — The ticket figure is two incommensurable numbers, and must never render as one
+
+ברן 26's ticket total reads `310,125`. It is `171,000` plus `139,125`.
+
+**The first is the camp's own projection of ticket income. The second is what one
+party actually took at the gate.** One is a plan, the other is history, and
+**nothing in the schema currently knows the difference** — which is why they were
+summed at all.
+
+Any screen that surfaces a ticket figure (08 money, 09 ledger, 05 inbox, 04 home)
+**renders them as two numbers that do not reconcile, never as one total.** A sum
+of two incommensurable things is a guess wearing a total's clothing, and the
+platform's rule against guessing applies to arithmetic exactly as it applies to
+name matching: what cannot be resolved becomes a visible decision, not a silent
+one. Neither figure replaces the other; do not label either "actual" or
+"expected" as though the schema supported the distinction. It does not.
