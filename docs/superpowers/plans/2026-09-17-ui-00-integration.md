@@ -641,6 +641,28 @@ narrow: **derive block state from the corrected projection when it lands, and do
 not calibrate any copy — counts, empty states, "most common refusal" — against
 numbers measured before it.**
 
+**Update, 2026-09-18 — fixed upstream, and NOT YET ON THIS BRANCH.** The peer
+session merged the correction into `main` (`45fa275`) and deleted
+`feat/camp-members-fees`. `BlockState` gains `confirmed-not-promoted`;
+`WorklistRow` splits the one count into two, `rowCount` (rows that exist,
+counted in the four target tables) and `wouldWrite` (what a commit would write
+now); `coverage().promoted` sums the honest one. The season-less budget block
+reads `refused`.
+
+**The trap this leaves is worth naming, because checking for it the obvious way
+gives the wrong answer.** `src/lib/data/worklist.ts` exists on
+`feat/ui-01-foundation` — it has existed all along — so "is the file there?"
+answers yes while the branch still carries the version that lies. The gate on
+plan 05 was never about the file's presence; it is about *which* copy is
+underneath it. Verify with content, not a path:
+`grep -c confirmed-not-promoted src/lib/data/worklist.ts` must be non-zero, and
+`git diff HEAD main -- src/lib/data/worklist.ts` must be empty.
+
+**Therefore plan 05 and plan 11 remain BLOCKED on this branch until `main` is
+merged in** (at the time of writing: main +21, this branch +102). Neither the
+corrected register nor plan 11's `confirmBlock(…, budgetCategory?)` lever is
+reachable from here yet.
+
 ### A16 — The icon set is frozen at 65; two plans cite glyphs that do not exist
 
 `src/components/ui/icon.tsx` ships the whole set at once and **no screen plan
