@@ -15,6 +15,7 @@
 - **Never guess.** Where the system is unsure — a name that might be an existing person, an amount that does not reconcile — it surfaces the uncertainty rather than resolving it silently. Import **never** merges two people automatically.
 - **Admin-only.** Every server action and route calls `requireAdmin()` from `@/lib/auth/guard`. UI hiding is never the enforcement mechanism. No page is public.
 - **Ingested data warns, never blocks.** Reconciliation mismatches are flags, not errors. **Exception:** a lead typing a new record in the UI is not ingestion — an exception due with an empty reason is refused on write (spec §3).
+- **Blankness on user input is checked with `isBlank` from `@/lib/text/normalize`, never `.trim()`.** `.trim()` leaves LRM, RLM and zero-width marks standing, and an RTL browser injects those invisibly on copy-paste, so a field that looks empty to a human passes a trim check and gets stored. This defect was found three separate times before it got a name. Validate with `isBlank`; store the original string unchanged, because the spelling is evidence.
 - **Hebrew RTL.** All UI copy in Hebrew. CSS uses **logical properties only** — `margin-inline`, `padding-block`, `inset-block-start`, `border-inline-start/end`, `text-align: start/end`. Never `left`/`right`/`margin-left`. Wrap Latin/neutral runs inside Hebrew text in `<bdi>`.
 - **Money is `numeric(12,2)` in Postgres, integer agorot in JS.** Never do arithmetic on floats. Never sum strings.
 - **`@/db` throws at import time without `DATABASE_URL`.** Never import it — even transitively — into a `'use server'` module's dependency graph at module scope, or into a test. Logic modules take `db: AnyDb` as their first parameter. This bit the project three times in Phase 1.
@@ -70,7 +71,7 @@
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: `toAgorot(value: string | number): number`, `fromAgorot(agorot: number): string`, `sumAgorot(values: Array<string | number>): number`, `formatILS(agorot: number): string`. Tables `persons`, `personAliases`, `seasons`, `memberships`, `dues`, `payments`, `campEvents`, `tasks`, `taskAssignments`, and the union types `DueKind`, `PaymentChannel`, `TaskKind`, `TaskStatus`, `AssignmentStatus`, `PAYMENT_CHANNELS`.
+- Produces: `toAgorot(value: string | number): number`, `fromAgorot(agorot: number): string`, `sumAgorot(values: Array<string | number>): number`, `formatILS(agorot: number): string`. Tables `persons`, `personAliases`, `seasons`, `memberships`, `dues`, `payments`, `campEvents`, `tasks`, `taskAssignments`, and the union types `DueKind`, `PaymentChannel`, `TaskKind`, `TaskStatus`, `AssignmentStatus`, `EventKind`, `PAYMENT_CHANNELS`.
 
 - [ ] **Step 1: Write the failing money test**
 
@@ -697,6 +698,7 @@ Create `src/lib/members/identity.test.ts`:
 
 ```ts
 import { describe, it, expect, beforeEach } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { createTestDb, type TestDb } from '@/test/db';
 import { persons, personAliases } from '@/db/schema/camp';
 import {
@@ -772,6 +774,26 @@ describe('resolveName', () => {
     expect(result.personId).toBeNull();
     expect(result.candidates).toEqual([]);
     expect(result.normalized).toBe('עמירם דהן');
+  });
+
+  /**
+   * `resolveName` filters on `isNull(persons.mergedIntoId)`. Without this test
+   * nothing would catch that filter being dropped, and a person folded into
+   * someone else would start answering to their old name again — quietly
+   * re-splitting an identity a lead had already merged.
+   */
+  it('ignores a person who was merged into someone else', async () => {
+    const survivor = await personWithAlias('אופק', 'אופק');
+    // A name sharing no prefix with the survivor, so the only thing that could
+    // make it resolve is the merged-away row itself.
+    const folded = await personWithAlias('עמירם דהן', 'עמירם דהן');
+    await db.update(persons)
+      .set({ mergedIntoId: survivor.id })
+      .where(eq(persons.id, folded.id));
+
+    const result = await resolveName(db, 'עמירם דהן');
+    expect(result.personId).toBeNull();
+    expect(result.candidates).toEqual([]);
   });
 
   it('ignores aliases that are not linked to anyone', async () => {
@@ -928,7 +950,7 @@ export async function listUnlinkedNames(db: AnyDb): Promise<UnlinkedName[]> {
 - [ ] **Step 4: Run it and watch it pass**
 
 Run: `npx vitest run src/lib/members/identity.test.ts`
-Expected: PASS, 9 tests.
+Expected: PASS, 10 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -956,6 +978,26 @@ subsystem exists to prevent; and restricting the merge to aliases makes it
 exactly reversible from `person_aliases.merged_from_person_id`, with no audit
 table. The real-world case — "this unlinked name is the same as that person" —
 always has an alias-only source.
+
+**Amended after the Task 4 review** (commit `07e7ee1`), which probed that
+reversibility claim and broke it twice. Two further refusals are required to
+make the claim true rather than merely plausible:
+
+- **`'מיזוג קודם'` — a person who has themselves absorbed someone cannot be
+  merged onward.** `merged_from_person_id` records one origin per alias, not a
+  chain. Merging X into A and then A into B restamps X's alias with A and
+  destroys the only pointer back to X, so `unmergePerson(X)` matches nothing
+  and silently does nothing while reporting success. Refusing the chain keeps
+  the no-audit-table design honest; a lead unmerges X first.
+- **`'כינוי זהה קיים'` — two people who already own the same spelling cannot be
+  merged.** `person_aliases` is unique on `(person_id, normalized)` but
+  deliberately NOT on `normalized` alone, because two real people may share a
+  Hebrew first name — `דניאל פינטו` and `דניאל ענבר` are both in these
+  workbooks. That makes the collision reachable, and the alias UPDATE would
+  throw a raw database error instead of a `MergeResult` a lead can read.
+
+Both guards are mutation-checked in the shipped tests. Do not remove either
+without replacing the reversibility design wholesale.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1236,7 +1278,12 @@ git commit -m "feat(members): link, merge and unmerge people"
 - Produces: `issueFlatDues(db, seasonId): Promise<number>`, `setException(db, input): Promise<void>`, `clearException(db, personId, seasonId): Promise<void>`, `listDues(db, seasonId): Promise<DueRow[]>`, `type DueRow`, `type ExceptionInput`.
 
 **The rule this task exists to enforce:** an exception with a blank reason or
-no decider is **refused on write**. `עמירם דהן 0`, recorded with neither, is
+no decider is **refused on write**. *(Amended after review, commit `0e92548`:
+blankness is judged with `normalizeHebrew`, not `.trim()`. `.trim()` leaves
+LRM, RLM and zero-width marks standing, and in an RTL UI a browser injects
+those invisibly on copy-paste — a reason made only of them looked blank to a
+human and passed. `clearException` likewise refuses rather than silently
+no-opping when no due exists.)* `עמירם דהן 0`, recorded with neither, is
 the failure the whole subsystem was commissioned to prevent. This is not the
 "warn, never block" rule — that governs *ingested* data; a lead typing into
 the UI is not ingestion.
@@ -2413,6 +2460,25 @@ git commit -m "feat(work): events and the four kinds of task"
 **Interfaces:**
 - Consumes: `AnyDb`; `tasks`, `taskAssignments`, `persons`, `seasons`, `campEvents`, `type AssignmentStatus`; `TaskRow` from `@/lib/work/tasks`.
 - Produces: `assignPerson(db, taskId, personId, email, status?): Promise<string>`, `setAssignmentStatus(db, assignmentId, status): Promise<void>`, `removeAssignment(db, assignmentId): Promise<void>`, `coverageFor(db, seasonId): Promise<TaskCoverage[]>`, `uncoveredTasks(db, seasonId): Promise<TaskCoverage[]>`, `responsibilitiesOf(db, personId): Promise<Responsibility[]>`, `type TaskCoverage`, `type Assignee`, `type Responsibility`.
+
+**Amended after the Task 9 design review** (three findings, all in this plan):
+
+1. **`TaskCoverage` and `Responsibility` must carry `startsAt`, `endsAt` and
+   `dueOn`, and `TaskCoverage` must carry `budgetAgorot`.** The reviewer read
+   the unbuilt Task 12 and 14 briefs and found the omission already biting
+   both: Task 14's page calls `coverageFor` *and* `listTasks` for the same
+   season purely to backfill budgets, and Task 12's person page renders a
+   `shift` responsibility with no way to say when the shift starts — which
+   defeats the module's own stated purpose of answering what one person is on
+   the hook for.
+2. **`assignPerson` must refuse a person who was merged away.** `mergePersons`
+   refuses to merge someone who already has an assignment, but nothing stopped
+   a *new* assignment landing on the merged-away id afterwards. Such a row is
+   counted as staffed on the board while being invisible on every page a lead
+   would look at, because `listPeople` and `resolveName` both hide merged rows.
+3. **Both orderings need a stable tiebreaker.** `title` is not unique, and
+   recurring shifts realistically share one. Ties have no defined order in
+   Postgres and can silently reorder between calls.
 
 **Ruling on what counts as covered:** only `accepted` and `done` assignments
 count toward `peopleNeeded`. A `proposed` assignment is a lead's intention, not
@@ -4842,7 +4908,6 @@ import { notFound } from 'next/navigation';
 import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import { listSeasons } from '@/lib/members/roster';
-import { listTasks } from '@/lib/work/tasks';
 import { coverageFor } from '@/lib/work/coverage';
 import { listPeople } from '@/lib/members/dossier';
 import { formatILS } from '@/lib/money';
@@ -4876,9 +4941,9 @@ export default async function TasksPage(
 
   const { season: requested } = await searchParams;
   const season = seasons.find((s) => s.id === requested) ?? seasons[0];
+  // `coverageFor` carries budgetAgorot and the timing fields since the Task 9
+  // amendment — do NOT re-query listTasks here just to backfill them.
   const coverage = await coverageFor(db, season.id);
-  const tasks = await listTasks(db, season.id);
-  const budgets = new Map(tasks.map((task) => [task.taskId, task.budgetAgorot]));
   const people = await listPeople(db);
   const roster = people.map((p) => ({ personId: p.personId, displayName: p.displayName }));
 
@@ -4931,9 +4996,8 @@ export default async function TasksPage(
               <h3>{task.title}</h3>
               <p className="muted">
                 {task.eventName && <><bdi>{task.eventName}</bdi>{' · '}</>}
-                {budgets.get(task.taskId) !== null
-                  && budgets.get(task.taskId) !== undefined && (
-                  <>תקציב <bdi>{formatILS(budgets.get(task.taskId)!)} ₪</bdi></>
+                {task.budgetAgorot !== null && (
+                  <>תקציב <bdi>{formatILS(task.budgetAgorot)} ₪</bdi></>
                 )}
               </p>
               <AssignControl
@@ -5009,7 +5073,11 @@ git commit -m "feat(work): task board built around the coverage gap"
 
 **Files:**
 - Modify: `src/app/(admin)/nav.tsx`
-- Create: `src/app/(admin)/nav.test.tsx`
+- Modify: `src/app/(admin)/nav.test.tsx` — **it already exists** (Phase 1). Its
+  third case, `shows planned sections as disabled rather than hiding them`,
+  asserts that `חברי מחנה` renders as a non-anchor with `aria-disabled`. That
+  assertion becomes false in this task and must be replaced, not left to fail.
+  The `planned` branch in `nav.tsx` stays in place for future sections.
 - Modify: `src/app/(admin)/page.tsx`
 - Modify: `src/app/(admin)/upload/page.tsx` (add the camp-baseline seed button)
 - Modify: `src/app/(admin)/upload/actions.ts` (add `seedCampAction`)

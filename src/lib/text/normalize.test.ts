@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeHebrew } from '@/lib/text/normalize';
+import { normalizeHebrew, isBlank } from '@/lib/text/normalize';
 
 describe('normalizeHebrew', () => {
   it('unifies gershayim variants', () => {
@@ -43,5 +43,33 @@ describe('normalizeHebrew', () => {
 
   it('leaves plain text unchanged', () => {
     expect(normalizeHebrew('SuperNature 18.7')).toBe('SuperNature 18.7');
+  });
+});
+
+describe('isBlank', () => {
+  it('treats visible text as present', () => {
+    expect(isBlank('פטור מלא')).toBe(false);
+    expect(isBlank('0')).toBe(false);
+  });
+
+  it('treats whitespace as blank', () => {
+    expect(isBlank('')).toBe(true);
+    expect(isBlank('   ')).toBe(true);
+  });
+
+  /**
+   * The case `.trim()` misses, and the reason this helper exists: an RTL
+   * browser injects these invisibly on copy-paste, so the field looks empty
+   * to a human while passing a trim check.
+   */
+  it('treats a run of invisible directional marks as blank', () => {
+    const invisible = '‎‏​';
+    expect(invisible.trim()).not.toBe('');
+    expect(isBlank(invisible)).toBe(true);
+  });
+
+  it('treats null and undefined as blank', () => {
+    expect(isBlank(null)).toBe(true);
+    expect(isBlank(undefined)).toBe(true);
   });
 });

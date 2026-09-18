@@ -145,6 +145,20 @@ describe('mapColumns', () => {
     });
   });
 
+  it('maps a תאריך header on an obligations block to date', () => {
+    const grid = buildGrid([
+      ['תאריך', 'שם', 'פירוט', 'סכום'],
+      ['20/05/2025', 'יוסף', 'חוב יוסף', '15240'],
+    ]);
+    const { mappings } = mapColumns(grid, fullRange(grid), 'obligations');
+    const field = (col: number) => mappings.find((m) => m.column === col)?.field;
+
+    expect(field(1)).toBe('date');
+    expect(field(2)).toBe('party');
+    expect(field(3)).toBe('description');
+    expect(field(4)).toBe('amount');
+  });
+
   describe('header run alignment', () => {
     it('maps only the columns in the leading contiguous run of non-blank header cells', () => {
       // Column 3's header is blank, so column 4 sits outside the header run
@@ -161,6 +175,58 @@ describe('mapColumns', () => {
       expect(field(2)).toBe('outflow');
       expect(field(4)).toBeUndefined();
       expect(mappings).toHaveLength(2);
+    });
+  });
+
+  describe('explicit headerRow', () => {
+    // A merged decorative title mirrors its text onto every column it spans
+    // (ExcelJS's own behavior). `findHeaderRow` only recognizes that as one
+    // label, not one per column, when `isMerged` is set — a grid rebuilt from
+    // a block's stored, text-only rawGrid (confirm.ts's gridFromBlock) can
+    // never set it. Without `isMerged`, the title scores the same 4 text
+    // cells as the real header below it, and the earliest-row-wins tiebreak
+    // in findHeaderRow picks the title instead.
+    const grid: SheetGrid = {
+      name: 'ticket rounds', index: 0, rowCount: 3, colCount: 4,
+      cells: [
+        [
+          { row: 1, col: 1, value: 'כותרת', text: 'כותרת', isMerged: false },
+          { row: 1, col: 2, value: 'כותרת', text: 'כותרת', isMerged: false },
+          { row: 1, col: 3, value: 'כותרת', text: 'כותרת', isMerged: false },
+          { row: 1, col: 4, value: 'כותרת', text: 'כותרת', isMerged: false },
+        ],
+        [
+          { row: 2, col: 1, value: 'סוג כרטיס', text: 'סוג כרטיס', isMerged: false },
+          { row: 2, col: 2, value: 'כמות כרטיס', text: 'כמות כרטיס', isMerged: false },
+          { row: 2, col: 3, value: 'מחיר כרטיס', text: 'מחיר כרטיס', isMerged: false },
+          { row: 2, col: 4, value: 'סה"כ', text: 'סה"כ', isMerged: false },
+        ],
+        [
+          { row: 3, col: 1, value: 'בוקר', text: 'בוקר', isMerged: false },
+          { row: 3, col: 2, value: 50, text: '50', isMerged: false },
+          { row: 3, col: 3, value: 20, text: '20', isMerged: false },
+          { row: 3, col: 4, value: 1000, text: '1000', isMerged: false },
+        ],
+      ],
+    };
+    const range: CellRange = { top: 1, left: 1, bottom: 3, right: 4 };
+
+    it('without it, detection is fooled by the unmerged title row (the failure this parameter exists to route around)', () => {
+      expect(mapColumns(grid, range, 'ticket_rounds').headerRow).toBe(1);
+    });
+
+    it('uses the given headerRow instead of detecting one', () => {
+      const { headerRow, mappings } = mapColumns(grid, range, 'ticket_rounds', 2);
+      expect(headerRow).toBe(2);
+      expect(mappings.map((m) => m.field).sort()).toEqual(['price', 'quantity', 'round', 'total']);
+    });
+
+    it('falls back to detecting a header row when none is given', () => {
+      const plain = buildGrid([
+        ['תאריך', 'הוצאות', 'הכנסות'],
+        ['100', '5000', '3000'],
+      ]);
+      expect(mapColumns(plain, fullRange(plain), 'ledger').headerRow).toBe(1);
     });
   });
 });

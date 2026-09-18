@@ -23,12 +23,28 @@ describe('Nav', () => {
     expect(screen.getByRole('link', { name: 'ייבוא' }).getAttribute('aria-current')).toBeNull();
   });
 
-  it('shows planned sections as disabled rather than hiding them', () => {
+  it('leaves nothing marked בקרוב now that every section is built', () => {
     render(<Nav />);
-    // Planned sections communicate where the product is going; they must be
-    // visible but must not be links, so nobody clicks into a dead end.
-    const members = screen.getByText('חברי מחנה');
-    expect(members.tagName).not.toBe('A');
-    expect(members.getAttribute('aria-disabled')).toBe('true');
+    // The `planned` branch stays in nav.tsx for future sections, but no
+    // section uses it today — a built page behind a בקרוב badge is worse
+    // than not shipping it.
+    expect(screen.queryByText('בקרוב')).toBeNull();
+  });
+
+  it.each([
+    ['חברי מחנה', '/members'],
+    ['דמי קאמפ', '/fees'],
+    ['משימות', '/tasks'],
+  ])('links %s now that the section is built', (label, href) => {
+    render(<Nav />);
+    // Flipped ahead of Task 15: these pages exist and render real data, and a
+    // built section left behind a בקרוב badge is worse than not shipping it.
+    expect(screen.getByRole('link', { name: label }).getAttribute('href')).toBe(href);
+  });
+
+  it('links כספים', () => {
+    render(<Nav />);
+    const link = screen.getByRole('link', { name: 'כספים' });
+    expect(link.getAttribute('href')).toBe('/money');
   });
 });

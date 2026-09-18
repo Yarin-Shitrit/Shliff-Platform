@@ -3,9 +3,10 @@ import { users } from '@/db/schema/auth';
 import { hashPassword } from '@/lib/auth/password';
 
 async function main() {
-  const [email, password] = process.argv.slice(2);
+  const [email] = process.argv.slice(2);
+  const password = process.env.ADMIN_PASSWORD;
   if (!email || !password) {
-    console.error('usage: npx tsx scripts/create-admin.ts <email> <password>');
+    console.error('usage: ADMIN_PASSWORD=... npx tsx scripts/create-admin.ts <email>');
     process.exit(1);
   }
 

@@ -11,7 +11,7 @@ import { authConfig } from './edge-config';
  * (session shape, `authorized`/jwt/session callbacks, sign-in page) and adds
  * the Credentials provider, whose `authorize` needs the database and argon2
  * — neither of which the Edge runtime supports. Used by route handlers,
- * server actions, and `guard.ts`; never by `src/middleware.ts`.
+ * server actions, and `guard.ts`; never by `src/proxy.ts`.
  */
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,

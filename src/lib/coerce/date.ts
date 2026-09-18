@@ -8,13 +8,36 @@ export interface ParsedDate {
 }
 
 /**
- * Accepted forms: ISO, or slash/dot dates with a 4-digit year. The slash/dot
- * form is genuinely ambiguous in general (03/04/2024 is 3 April under DD/MM,
- * 4 March under MM/DD) — DD/MM is a deliberate, fixed assumption for these
- * Israeli workbooks, not a claim that the format is unambiguous.
+ * Accepted forms: a bare ISO date, an ISO date-time, or a slash/dot date
+ * with a 4-digit year. The slash/dot form is genuinely ambiguous in general
+ * (03/04/2024 is 3 April under DD/MM, 4 March under MM/DD) — DD/MM is a
+ * deliberate, fixed assumption for these Israeli workbooks, not a claim
+ * that the format is unambiguous.
  */
 const ISO = /^(\d{4})-(\d{2})-(\d{2})$/;
+/**
+ * `raw_grid` renders every Excel date cell with `Date.prototype.toISOString`
+ * (see `toText` in `src/lib/xlsx/extract.ts`), so the text a real workbook
+ * actually stores is a full timestamp like `2025-05-20T00:00:00.000Z`, not a
+ * bare date. Seconds, milliseconds and the trailing `Z` are each optional so
+ * `2025-05-20T00:00` also parses. A non-`Z` numeric offset (`+03:00`) is
+ * deliberately NOT matched here: an offset can shift the calendar date, and
+ * picking a day for it would be exactly the guess this parser refuses to
+ * make. `toText` never produces one — `toISOString()` is always `Z` — so an
+ * offset falls through to the final `ok: false` below with `raw` preserved.
+ */
+const ISO_DATETIME =
+  /^(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}(?::\d{2})?(?:\.\d{3})?Z?$/;
 const DMY = /^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/;
+
+/**
+ * Builds a ParsedDate from year/month/day components, or reports failure
+ * without inventing a date for a calendar-invalid combination.
+ */
+function fromComponents(year: number, month: number, day: number, raw: string): ParsedDate {
+  const date = buildDate(year, month, day);
+  return date ? { date, raw, ok: true } : { date: null, raw, ok: false };
+}
 
 /**
  * Builds a UTC date from year/month(1-12)/day components and verifies it
@@ -39,6 +62,11 @@ function buildDate(year: number, month: number, day: number): Date | null {
  * `2025-02-30` is equally rejected rather than silently rolled into the
  * next month — both are returned as raw text with ok=false so an admin can
  * correct them.
+ *
+ * An ISO date-time is accepted by taking its UTC calendar date and
+ * discarding the time of day: an Excel date cell carries midnight, and the
+ * workbook asserts nothing about when in the day a movement happened, so
+ * there is no time value worth keeping.
  */
 export function parseDate(value: CellValue): ParsedDate {
   if (value instanceof Date) {
@@ -55,16 +83,15 @@ export function parseDate(value: CellValue): ParsedDate {
   if (raw === '') return { date: null, raw: '', ok: false };
 
   const iso = ISO.exec(raw);
-  if (iso) {
-    const date = buildDate(+iso[1], +iso[2], +iso[3]);
-    return date ? { date, raw, ok: true } : { date: null, raw, ok: false };
+  if (iso) return fromComponents(+iso[1], +iso[2], +iso[3], raw);
+
+  const isoDateTime = ISO_DATETIME.exec(raw);
+  if (isoDateTime) {
+    return fromComponents(+isoDateTime[1], +isoDateTime[2], +isoDateTime[3], raw);
   }
 
   const dmy = DMY.exec(raw);
-  if (dmy) {
-    const date = buildDate(+dmy[3], +dmy[2], +dmy[1]);
-    return date ? { date, raw, ok: true } : { date: null, raw, ok: false };
-  }
+  if (dmy) return fromComponents(+dmy[3], +dmy[2], +dmy[1], raw);
 
   return { date: null, raw, ok: false };
 }
