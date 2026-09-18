@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { createTestDb, type TestDb } from '@/test/db';
 import { uploads, sheets, blocks, blockMappings, layoutSignatures } from '@/db/schema/source';
@@ -10,13 +12,16 @@ import { setSheetSeason } from '@/lib/import/sheets';
 import type { ColumnMapping } from '@/lib/classify/map-columns';
 import type { BlockArchetype } from '@/lib/classify/types';
 
-async function seedBlock(db: TestDb, fingerprint: string | null, archetype: BlockArchetype = 'unknown') {
+async function seedBlock(
+  db: TestDb, fingerprint: string | null, archetype: BlockArchetype = 'unknown',
+  sheetName = 'סיכום כללי',
+) {
   const [upload] = await db.insert(uploads).values({
     filename: 'x.xlsx', sha256: 'a'.repeat(64), storageKey: 'k',
     sizeBytes: 1, uploadedBy: 'admin@example.com',
   }).returning();
   const [sheet] = await db.insert(sheets).values({
-    uploadId: upload.id, name: 'סיכום כללי', index: 0, rowCount: 10, colCount: 4,
+    uploadId: upload.id, name: sheetName, index: 0, rowCount: 10, colCount: 4,
   }).returning();
   const [block] = await db.insert(blocks).values({
     sheetId: sheet.id, top: 1, left: 1, bottom: 5, right: 4,
@@ -240,13 +245,149 @@ describe('applyConfirmation — re-picking the archetype remaps the columns', ()
     expect(fields).toEqual(['price', 'quantity', 'round', 'total']);
   });
 
+  /**
+   * This test used to run on the grid `[['100'], ['200']]` and assert
+   * `columnMap` is `[]`. That grid has no header-like row at all, so the
+   * mapping is `[]` under every implementation of the behaviour the test
+   * claims to pin — including one that never detects a header, and one that
+   * ignores the re-picked archetype entirely. Both of those were among the
+   * defects that stopped real workbook data from promoting at all, so the
+   * assertion that was supposed to guard them could not fail.
+   *
+   * The grid now carries a header row `findHeaderRow` really does pick, and
+   * the assertion is the non-empty mapping detection produces from it. The
+   * block's own `headerRow` is null (that is what headerless means), so
+   * `applyConfirmation` must omit it and let `mapColumns` detect — which is
+   * exactly the claim in the name.
+   */
   it('a re-pick on a headerless block omits headerRow and keeps detecting one, as before', async () => {
-    const blockId = await seedHeaderlessBlock(db, [['100'], ['200']]);
+    const blockId = await seedHeaderlessBlock(db, [
+      ['שם', 'פירוט', 'סכום', 'תאריך'],
+      ['יוסף', 'חוב יוסף', '15240', '20/05/2025'],
+    ]);
 
     await applyConfirmation(db, 'admin@example.com', blockId, 'obligations', []);
 
     const [mapping] = await db.select().from(blockMappings)
       .where(eq(blockMappings.blockId, blockId));
-    expect(mapping.columnMap).toEqual([]);
+    // Detection found row 1 and mapped all four obligation fields. An empty
+    // map here would mean either no detection or no recompute on the re-pick.
+    expect(mapping.columnMap.map((m) => m.field).sort())
+      .toEqual(['amount', 'date', 'description', 'party']);
+    expect(mapping.columnMap.map((m) => m.column).sort((a, b) => a - b))
+      .toEqual([1, 2, 3, 4]);
+  });
+
+  /** The behaviour above, stated as the promotion it exists to allow: a block
+   *  re-picked as `obligations` must actually produce an obligation. */
+  it('promotes a re-picked headerless block through the map detection found', async () => {
+    const blockId = await seedHeaderlessBlock(db, [
+      ['שם', 'פירוט', 'סכום', 'תאריך'],
+      ['יוסף', 'חוב יוסף', '15240', '20/05/2025'],
+    ]);
+
+    await applyConfirmation(db, 'admin@example.com', blockId, 'obligations', []);
+    const result = await promoteBlock(
+      db, blockId, { dryRun: false, recordedBy: 'admin@example.com' },
+    );
+
+    expect(result.written).toHaveLength(1);
+    expect(result.written[0].sheetRow).toBe(2);
+    // The block's stored `headerRow` is null, so `blockRows` has no row to
+    // skip and the detected header row is walked as data too. It refuses on
+    // its own content, which is the right outcome and not this test's subject.
+    expect(result.refused.map((r) => r.sheetRow)).toEqual([1]);
+  });
+});
+
+describe('applyConfirmation — the budget category (Task 15)', () => {
+  let db: TestDb;
+
+  beforeEach(async () => {
+    db = await createTestDb();
+  });
+
+  it('defaults to camp when a budget block is confirmed with no category given', async () => {
+    const blockId = await seedBlock(db, 'f'.repeat(32), 'budget_lines');
+    await applyConfirmation(db, 'admin@example.com', blockId, 'budget_lines', []);
+
+    const [mapping] = await db.select().from(blockMappings)
+      .where(eq(blockMappings.blockId, blockId));
+    expect(mapping.budgetCategory).toBe('camp');
+  });
+
+  it('stores an explicit dancefloor decision', async () => {
+    const blockId = await seedBlock(db, 'f'.repeat(32), 'budget_lines');
+    await applyConfirmation(db, 'admin@example.com', blockId, 'budget_lines', [], 'dancefloor');
+
+    const [mapping] = await db.select().from(blockMappings)
+      .where(eq(blockMappings.blockId, blockId));
+    expect(mapping.budgetCategory).toBe('dancefloor');
+  });
+
+  it('never infers the category from a sheet name that reads as the dancefloor\'s budget', async () => {
+    // A human reads 'תקציב רחבה ברן 25' as the dancefloor's budget. A
+    // substring rule would be exactly the guess this wave refuses
+    // everywhere else — confirming with no category must still default to
+    // camp, proving nothing reads the sheet's name.
+    const blockId = await seedBlock(db, 'f'.repeat(32), 'budget_lines', 'תקציב רחבה ברן 25');
+    await applyConfirmation(db, 'admin@example.com', blockId, 'budget_lines', []);
+
+    const [mapping] = await db.select().from(blockMappings)
+      .where(eq(blockMappings.blockId, blockId));
+    expect(mapping.budgetCategory).toBe('camp');
+  });
+
+  it('stores null for a non-budget archetype', async () => {
+    const blockId = await seedBlock(db, 'f'.repeat(32), 'ledger');
+    await applyConfirmation(db, 'admin@example.com', blockId, 'ledger', []);
+
+    const [mapping] = await db.select().from(blockMappings)
+      .where(eq(blockMappings.blockId, blockId));
+    expect(mapping.budgetCategory).toBeNull();
+  });
+
+  it('stores the category in the layout signature too, for a recognized repeat layout', async () => {
+    const blockId = await seedBlock(db, 'f'.repeat(32), 'budget_lines');
+    await applyConfirmation(db, 'admin@example.com', blockId, 'budget_lines', [], 'dancefloor');
+
+    const [signature] = await db.select().from(layoutSignatures)
+      .where(eq(layoutSignatures.fingerprint, 'f'.repeat(32)));
+    expect(signature.budgetCategory).toBe('dancefloor');
+  });
+});
+
+/**
+ * The lever above had no caller. `confirmBlock` — the `'use server'` wrapper
+ * every lead's confirmation actually goes through — called `applyConfirmation`
+ * with five arguments, so the sixth defaulted and every budget block a lead
+ * confirmed was stamped `'camp'`, including `תקציב רחבה ברן 25`, which is the
+ * dancefloor's. That is R26's 158,507-against-59,587 defect reconstituted: the
+ * dancefloor's spend divided by the camp's headcount.
+ *
+ * Checked by reading the file rather than by calling it, deliberately and for
+ * the same reason `admin-guard.test.ts` reads `requireAdmin(` out of source:
+ * `[id]/actions.ts` imports `@/db`, which throws at import time without
+ * `DATABASE_URL` and must never enter a test's module graph (global
+ * constraint). The parameter itself is covered above, through
+ * `applyConfirmation` directly; what is unprovable any other way is that the
+ * wrapper hands it on.
+ */
+describe('confirmBlock threads the budget category to applyConfirmation', () => {
+  const ACTION = join(process.cwd(), 'src', 'app', '(admin)', 'imports', '[id]', 'actions.ts');
+  const source = readFileSync(ACTION, 'utf8');
+
+  it('accepts a budgetCategory parameter', () => {
+    expect(source).toMatch(/budgetCategory\?:\s*BudgetCategory/);
+  });
+
+  it('passes it to applyConfirmation rather than dropping it', () => {
+    expect(source).toMatch(
+      /applyConfirmation\(\s*db,\s*admin\.email,\s*blockId,\s*archetype,\s*columnMap,\s*budgetCategory\s*\)/,
+    );
+  });
+
+  it('still requires an admin before confirming anything', () => {
+    expect(source).toContain('requireAdmin(');
   });
 });

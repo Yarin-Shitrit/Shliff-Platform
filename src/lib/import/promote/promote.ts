@@ -188,6 +188,15 @@ async function dependents(
       addReason(held, id, `התנועה הזו רשומה כסילוק של חוב (${n}), ומחיקתה הייתה מנתקת אותו`);
     }
 
+    // Known asymmetry with the `budget_lines` check below, recorded rather
+    // than fixed: the peer query has no `leavingLedger` exclusion, so two legs
+    // of one transfer that are BOTH owned by this block retain each other
+    // permanently — each is the other's surviving peer, and neither can ever
+    // leave. Reaching that state takes a lead hand-setting `transferGroupId`
+    // on two rows of a single block; nothing in the promoter or the workbooks
+    // creates it, and no such pair exists in the camp's data. The fix is the
+    // same shape as `booked` below (exclude ids this sweep is removing), and
+    // it belongs with a test that can construct the pair.
     const grouped = await db
       .select({ id: ledgerEntries.id, group: ledgerEntries.transferGroupId })
       .from(ledgerEntries)
@@ -440,7 +449,11 @@ async function promoteWithin(
   }
 
   const ctx: PromoteContext = {
-    seasonId: sheet?.seasonId ?? null, recordedBy: opts.recordedBy, blockId,
+    seasonId: sheet?.seasonId ?? null,
+    recordedBy: opts.recordedBy,
+    blockId,
+    // Only meaningful to budgetRow; every other branch ignores it.
+    budgetCategory: mapping.budgetCategory,
   };
 
   const written: PromotedRow[] = [];
@@ -449,8 +462,11 @@ async function promoteWithin(
 
   // Each branch inserts the full row, but on conflict refreshes only what
   // the workbook row says (`fromSheet`). The rest is set once and is then a
-  // lead's to change — an account, an event, a category — and a re-run must
-  // not quietly undo it.
+  // lead's to change — an account, an event — and a re-run must not quietly
+  // undo it. `budget_lines.category` is the one exception: it is not a
+  // per-row decision made after promotion, it is the block mapping's own
+  // stored decision (Task 15), so `fromSheet` carries it for that branch and
+  // a fresh confirm wins on every re-promotion.
   for (const row of blockRows(block, mapping.columnMap)) {
     if (block.archetype === 'ledger') {
       const outcome = ledgerRow(row, ctx);
@@ -526,10 +542,17 @@ async function promoteWithin(
             ? null : fromAgorot(toAgorot(input.unitCost)),
           total: fromAgorot(toAgorot(input.total)),
           rationale: input.rationale ?? null,
+          // Unlike the rest of `promote.ts`'s "set once, then a lead's to
+          // change" convention (W9): `category` is not a per-row decision a
+          // lead makes on the promoted row, it is the block mapping's stored
+          // decision (Task 15). A fresh confirm — even an implicitly
+          // defaulted one — is a lead's current statement about the whole
+          // block and must win on re-promotion, including over a value set
+          // directly on the row some other way.
+          category: input.category,
         };
         const [saved] = await db.insert(budgetLines).values({
           ...fromSheet,
-          category: input.category,
           sourceBlockId: input.sourceBlockId ?? null,
           sourceRow: input.sourceRow ?? null,
         })

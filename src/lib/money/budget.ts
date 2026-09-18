@@ -85,7 +85,12 @@ export async function listBudgetLines(
       totalAgorot,
       rationale: row.rationale,
       category: row.category,
-      arithmeticOff: isArithmeticOff(row.quantityNum === null ? null : row.quantityNum, row.unitCost === null ? null : row.unitCost, totalAgorot),
+      // `isArithmeticOff` takes `string | number | null`, which is exactly
+      // what these two columns are, so they go straight in. The two
+      // `x === null ? null : x` ternaries that used to be on this line were
+      // both no-ops left over from an extraction.
+      arithmeticOff: isArithmeticOff(row.quantityNum, row.unitCost, totalAgorot),
+      // R11: every number keeps its provenance. Null on a line a lead typed.
       sourceBlockId: row.sourceBlockId,
       sourceRow: row.sourceRow,
     };

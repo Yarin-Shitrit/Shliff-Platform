@@ -9,21 +9,27 @@ import { createTask, listTasks, setTaskBudgetLine } from '@/lib/work/tasks';
 import { assignPerson, setAssignmentStatus } from '@/lib/work/coverage';
 import type { AccountKind } from '@/db/schema/money';
 import { createAccount, listAccounts } from '@/lib/money/accounts';
-import { recordEntry, listMovements } from '@/lib/money/ledger';
 import { createBudgetLine, listBudgetLines } from '@/lib/money/budget';
 import {
   createFundingTarget, listFundingTargets, createTicketRound, listTicketRounds,
 } from '@/lib/money/funding';
 import { createObligation, settleObligation, listObligations } from '@/lib/money/obligations';
-import { isBlank } from '@/lib/text/normalize';
 
+/**
+ * What one run created.
+ *
+ * There is no `movements` counter any more. The seed no longer writes a single
+ * `ledger_entries` row — the promoter owns them, from the two `סיכום כללי`
+ * blocks — and a counter that can only ever report 0 would read as "nothing
+ * was due" rather than "this is not the seed's job".
+ */
 export interface CampSeedResult {
   seasons: number;
   events: number;
   people: number;
   tasks: number;
   accounts: number;
-  movements: number;
+  /** Only the four ברן 25 `dancefloor` lines; see the loop that writes them. */
   budgetLines: number;
   fundingTargets: number;
   ticketRounds: number;
@@ -85,72 +91,50 @@ const ACCOUNTS: Array<{
   { name: 'וייבז קלוז פרינדס', kind: 'event_float', opening: 28520, openingOn: '2025-05-20' },
 ];
 
-/** `סיכום כללי` of `קופת קאמפ 25'`. The 44,647 `מעבר לקובץ חדש` row is NOT
- *  here: under a continuous ledger it is the previous book's closing balance,
- *  and importing it as income would double-count everything the three
- *  opening balances above already carry forward. */
-const LEDGER_25: Array<[string, 'in' | 'out', number, string]> = [
-  ['2025-06-10', 'out', 200, 'תרומה אבישי פרץ'],
-  ['2025-08-01', 'out', 8850, 'מכולה אוג 25-26'],
-  ['2025-08-01', 'out', 20660, 'מקדמה במה ברן 25'],
-  ['2025-09-27', 'in', 34646.55, 'רווח מסיבה נמל'],
-  ['2025-10-16', 'out', 20660, 'חצי שני למייצג נטלי'],
-  ['2025-10-16', 'out', 400, 'מברגה לקאמפ'],
-  ['2025-10-30', 'in', 15660, 'מסיבת האלווין 30/10'],
-];
+/**
+ * The nineteen ledger movements this seed used to transcribe are GONE, and
+ * with them the `LEDGER_25` and `LEDGER_26` tables that held them.
+ *
+ * They are produced by the promoter now, from two confirmed `ledger` blocks:
+ *
+ *  - `ac5a9d6e-8b52-40a9-bfea-a22771a2e4c6` — `סיכום כללי` of `קופת קאמפ 25’`,
+ *    which writes the seven ברן 25 movements.
+ *  - `6f1a7fc4-03ac-4ec3-abe4-0b5a863e133f` — `סיכום כללי` of
+ *    `קופת קאמפ 2026`, which writes the twelve ברן 26 ones.
+ *
+ * The cutover evidence checked all nineteen against the live database, row by
+ * row, on season + label + amount to the agora: eighteen come back identical,
+ * and the nineteenth (`קיזוז מול תקציב גיפטינג יוני`) comes back at the same
+ * 5,000 on the same date under the workbook's longer label
+ * `קיזוז מול תקציב גיפטינג יוניברן` — a truncation this seed introduced, not
+ * a fact the workbook lacks.
+ *
+ * One judgement made here does NOT survive into the promoter, and it is worth
+ * knowing: the 44,647 `מעבר לקובץ חדש` row was deliberately never seeded,
+ * because under a continuous ledger it is the previous book's closing balance
+ * and importing it as income would double-count what the three opening
+ * balances below already carry. The promoter reaches the same answer by its
+ * own route — it refuses that row `carry-forward` — so the judgement is
+ * preserved, but by the promoter's rule rather than by this file's silence.
+ */
 
-/** `סיכום כללי` of `קופת קאמפ 2026`. */
-const LEDGER_26: Array<[string, 'in' | 'out', number, string]> = [
-  ['2026-06-01', 'out', 14000, 'חוב לירון סלע על ברן 25'],
-  ['2026-06-01', 'out', 7350, 'עובדי הקמה יוניברן'],
-  ['2026-07-01', 'in', 5000, 'קיזוז מול תקציב גיפטינג יוני'],
-  ['2026-07-01', 'out', 3000, 'מקדמה מכולות ליולי עד נובמבר'],
-  ['2026-07-18', 'in', 57000, 'רווח מסיבת פקאנים'],
-  ['2026-07-22', 'out', 8820, '3 כרטיסי אומנים ברן'],
-  ['2026-07-22', 'out', 4000, 'ציוד מטבח חדש'],
-  ['2026-07-22', 'out', 2000, 'הובלות'],
-  ['2026-08-01', 'out', 1000, 'מקלחת'],
-  ['2026-08-01', 'out', 231, 'ציוד מכולה'],
-  ['2026-08-01', 'out', 1200, 'פינויים נסורת - להחזיר לאורי'],
-  ['2026-08-01', 'out', 3670, 'מכולה עד דצמבר'],
-];
-
-/** Only a plain integer or decimal counts as a real quantity — `12,000kw`,
- *  `מכולה` and `10% תקציב` stay text-only, the same rule the page's own
- *  `quantityText`/`quantityNum` split already tests for a single row. */
-const PLAIN_NUMBER = /^\d+(\.\d+)?$/;
-function budgetQuantityNum(quantityText: string): number | undefined {
-  return PLAIN_NUMBER.test(quantityText) ? Number(quantityText) : undefined;
-}
-
-/** `תקציב קאמפ ברן 26`, summing to 64,375.30. Category `camp`: these are the
- *  season's general running costs, not the dancefloor deliverables above. */
-const BUDGET_26: Array<[string, string, number | null, number, string]> = [
-  ['שירותים נסורת', '5', 125, 1625, 'תקציב ברן 25׳ בפועל'],
-  ['פינוי שירותים', '18', 125, 2250, 'תקציב ברן 25׳ בפועל'],
-  ['ציוד היגיינה', '1', 100, 100, 'תוספת של 70 ש״ח'],
-  ['מיכל מים לבנים + מתאם ברז', '2', 1534, 3068, 'תקציב ברן 25׳ צפי לעליית מחיר'],
-  ['מיכל מים אפורים', '1', 472, 472, 'תקציב ברן 25 - צריך לקנות'],
-  ['מילוי מי שתייה', '5', 590, 2950, 'תוספת מיכל למקלחות'],
-  ['פינוי מים אפורים', '4', 708, 2832, 'תוספת מיכל פינויים'],
-  ['מקלחות', '2', 750, 1500, 'תוספת 900 שקלים לטובת תאים'],
-  ['ציוד משלים למקלחת', '1', 500, 500, 'תוספת 400 שקלים לטובת נוחות'],
-  ['חשמל לקאמפ', '12,000kw', 7500, 7500, 'תוספת של עוד 3KWH'],
-  ['הובלה', 'מכולה', 12000, 9000, 'תוספת של 2000 שקלים'],
-  ['באלות', '20', 15, 300, 'ירידה של 150 שקלים'],
-  ['אוכל', 'תפריט שלם לשבוע', 8000, 8000, 'תוספת של 1,000 שקלים'],
-  ['ציוד מטבח - כירת גז + מיחם', '1', 850, 930, 'עוד כירת גז'],
-  ['מילוי גז', '1', 200, 200, 'מילוי בלון 12 ק״ג'],
-  ['מקרר + מקפיא', 'מקרר תעשייתי', null, 0, 'מקרר חדש תעשייתי'],
-  ['קרח', '38', 30, 1140, 'תקציב ברן 25׳'],
-  ['צילייה מחנה', '600', 14, 9156, 'ירידה של 100 מ״ר'],
-  ['גידור מחנה', '200', 14, 2800, 'ירידה של 50 מ״ר'],
-  ['הובלה צילייה', '1', 500, 500, 'עלות שקועה'],
-  ['100 ק"ג עצים + תוספת אחסנה', '1', 500, 500, 'ירידה של 1000 ש״ח'],
-  ['גנרטור', '1', 2200, 2200, 'קונים עוד אחד'],
-  ['30 מ׳ לייקרה + 50 מ׳ בד זול', '1', 1000, 1000, 'תוספת של 430 ש״ח'],
-  ['תקציב הפתעות דק׳ 90', '10% תקציב', 5852.3, 5852.3, ''],
-];
+/**
+ * `תקציב קאמפ ברן 26`'s twenty-four `camp` budget lines are gone too, along
+ * with the `BUDGET_26` table and the `budgetQuantityNum` helper that read its
+ * quantity column.
+ *
+ * Block `66ad3b61-8b6c-4852-90a4-1cfe0b1f8a92` (`תקציב קאמפ ברן 26` in
+ * `קופת קאמפ 2026`, the authoritative copy) produces them. Twenty-three come
+ * back identical — including `מקרר + מקפיא` at 0.00 and `תקציב הפתעות דק׳ 90`
+ * at 5,852.30 — and the twenty-fourth, `30 מ׳ לייקרה + 50 מ׳ בד זול`, comes
+ * back at the same 1,000 under the workbook's longer label.
+ *
+ * The four ברן 25 `dancefloor` lines above are NOT here and are still written
+ * by this seed. The same block-promoted route re-creates them at the right
+ * amounts but categorised `camp`, because `budgetRow` hard-codes the category;
+ * four `tasks.budget_line_id` values point at the seeded ids with no foreign
+ * key to protect them. Until a lead decides that question the seed keeps them.
+ */
 
 /** `תקציב גיוס לשנה` from `תקציב קאמפ ברן 26`, summing to 135,375.30. Only the
  *  dues line counts against the camp budget — the rest fund the dancefloor,
@@ -216,16 +200,35 @@ async function ensurePerson(
 }
 
 /**
- * Seeds the roster, dues, work and money the workbooks actually record.
+ * Seeds the roster, dues, work and money the workbooks record AND no confirmed
+ * block produces.
  *
- * Deliberately partial. Several things are NOT seeded, each for the same
- * reason: the system does not invent what the source does not say.
+ * That second clause is new. This function used to transcribe the workbooks by
+ * hand; the promoter derives the same facts from confirmed blocks now, so
+ * everything a block owns has been taken out — nineteen ledger movements and
+ * twenty-four ברן 26 camp budget lines, each removal carrying a comment naming
+ * the block that replaced it. What is left is the category no block contains:
+ *
+ *  - seasons, people, dues and the five ברן 25 exceptions;
+ *  - events and the four ברן 25 deliverable tasks;
+ *  - the four `dancefloor` budget lines those tasks point at (the promoter
+ *    re-creates them as `camp`, which would move the dancefloor's spend into
+ *    the camp identity and orphan four `tasks.budget_line_id` values);
+ *  - the three `מיקום` accounts and their opening balances, which are an
+ *    adjudication — `account_balances` has no promoter by design;
+ *  - the eight `funding_targets`, for which `BLOCK_ARCHETYPES` has no
+ *    archetype at all;
+ *  - the three ticket rounds and the thirteen obligations, all of which sit in
+ *    side-by-side sub-tables that no block's column map reaches;
+ *  - the four settlements that model the 6,000 offset as five members' dues.
+ *
+ * Deliberately partial for its own, older reasons too — the system does not
+ * invent what the source does not say:
  *  - ברן 23 and ברן 24 have no recorded flat rate, so they are not created.
  *  - The 38 anonymous `רגילים` are a count in a budget cell, not a roster;
  *    `plannedSize` carries the number instead.
  *  - `ראנצ׳ו ונטלי` is queued as an unlinked name rather than split into one
  *    or two people. A lead decides.
- *  - The `44,647 מעבר לקובץ חדש` row is not seeded as income — see `LEDGER_25`.
  *  - Two of the twelve reimbursements name no one — see `REIMBURSEMENTS_25`.
  *
  * Idempotent: safe to run against a database that already has some of this.
@@ -235,7 +238,7 @@ export async function seedCampBaseline(
 ): Promise<CampSeedResult> {
   const result: CampSeedResult = {
     seasons: 0, events: 0, people: 0, tasks: 0,
-    accounts: 0, movements: 0, budgetLines: 0, fundingTargets: 0, ticketRounds: 0,
+    accounts: 0, budgetLines: 0, fundingTargets: 0, ticketRounds: 0,
     obligations: 0,
   };
   const counter = { people: 0 };
@@ -386,48 +389,10 @@ export async function seedCampBaseline(
     result.accounts += 1;
   }
 
-  // Every ברן 25 and ברן 26 ledger movement — unattributed, because neither
-  // sheet's ledger rows name an account (see `ACCOUNTS`'s comment).
-  for (const [season, rows] of [[s25, LEDGER_25], [s26, LEDGER_26]] as const) {
-    const existingMoves = new Set(
-      (await listMovements(db, { seasonId: season.id }))
-        .filter((m) => m.source === 'ledger')
-        .map((m) => m.description),
-    );
-    for (const [date, direction, amount, description] of rows) {
-      if (existingMoves.has(description)) continue;
-      await recordEntry(db, {
-        occurredOn: new Date(`${date}T00:00:00Z`),
-        direction,
-        amount,
-        description,
-        seasonId: season.id,
-        recordedBy: email,
-      });
-      result.movements += 1;
-    }
-  }
-
-  // ברן 26's general running costs — the season's `budget_lines`, category
-  // `camp`. The four dancefloor lines above are separate: two categories on
-  // the same season, never summed into one figure by anything but the total.
-  const existingBudget26 = new Set(
-    (await listBudgetLines(db, s26.id)).map((line) => line.label),
-  );
-  for (const [label, quantityText, unitCost, total, rationale] of BUDGET_26) {
-    if (existingBudget26.has(label)) continue;
-    await createBudgetLine(db, {
-      seasonId: s26.id,
-      label,
-      quantityText,
-      quantityNum: budgetQuantityNum(quantityText),
-      unitCost: unitCost ?? undefined,
-      total,
-      rationale: isBlank(rationale) ? undefined : rationale,
-      category: 'camp',
-    });
-    result.budgetLines += 1;
-  }
+  // The ledger movements and the ברן 26 camp budget lines used to be written
+  // here. They are the promoter's now — see the two block comments above
+  // `FUNDING_26` for which block produces what, and what the cutover evidence
+  // checked before this loop was removed.
 
   // The whole ברן 26 fundraising plan — see `FUNDING_26`'s comment. Its own
   // existence guard, by label, independent of every other group's: nesting

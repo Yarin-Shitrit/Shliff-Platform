@@ -4,6 +4,9 @@ import {
 import type { ColumnMapping } from '@/lib/classify/map-columns';
 import type { BlockArchetype } from '@/lib/classify/types';
 import { seasons } from './camp';
+// Type-only: erased at compile time, so this does not create a runtime
+// circular import even though `money.ts` imports `blocks` from this file.
+import type { BudgetCategory } from './money';
 
 export const uploads = pgTable('uploads', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -64,6 +67,14 @@ export const blockMappings = pgTable('block_mappings', {
   columnMap: jsonb('column_map').$type<ColumnMapping[]>().notNull(),
   /** rules | signature | admin — where this mapping came from. */
   source: text('source').notNull(),
+  /**
+   * A lead's stored decision about which budget a `budget_lines` block
+   * belongs to (Task 15) — set at confirm time, defaulting to `camp`.
+   * Nullable: a mapping for a non-budget archetype has no category, and
+   * every mapping that predates this column has none either. Never
+   * inferred from the sheet name — see `applyConfirmation`.
+   */
+  budgetCategory: text('budget_category').$type<BudgetCategory>(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   unique('block_mappings_block_id_key').on(table.blockId),
@@ -75,6 +86,10 @@ export const layoutSignatures = pgTable('layout_signatures', {
   fingerprint: text('fingerprint').notNull().unique(),
   archetype: text('archetype').$type<BlockArchetype>().notNull(),
   columnMap: jsonb('column_map').$type<ColumnMapping[]>().notNull(),
+  /** The budget category the mapping carried when confirmed (Task 15), so a
+   *  recognized repeat layout carries the lead's decision rather than
+   *  re-defaulting. Null for a non-budget archetype. */
+  budgetCategory: text('budget_category').$type<BudgetCategory>(),
   pipelineVersion: integer('pipeline_version').notNull(),
   confirmedBy: text('confirmed_by').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
