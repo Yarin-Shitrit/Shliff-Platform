@@ -6,10 +6,20 @@ committed beside this file as `2026-09-15-cutover-evidence-run.txt`, so every
 number here can be checked without re-deriving it.
 
 - **First run:** 2026-09-17, before `parseDate` was fixed.
-- **This revision:** 2026-09-17, re-run on `5e10740`
+- **Second revision:** 2026-09-17, re-run on `5e10740`
   (`fix(coerce): read the ISO timestamp a real workbook date actually stores`),
   which was found *by* the first run. The whole `ledger_entries` section
-  changed; everything else is unchanged and is marked where it matters.
+  changed; everything else was unchanged and is marked where it matters.
+- **This revision:** 2026-09-18, re-run after
+  `fix(promote): a fractional ticket count is refused, not rounded to zero`,
+  which was found by defect 10 below. **Only the `ticket_rounds` section and
+  the refusal totals changed**, and the diff against the previous transcript is
+  exactly four facts: `ticket_rounds` would-write 5 → **4**, its
+  writes-matching-no-seeded-row 5 → **4**, total refusals 234 → **235**, and a
+  new `out-of-range` bucket holding one row. Every enumerated
+  `ledger_entries` and `budget_lines` id, every count, and `deleted: 0` are
+  byte-identical to the previous run — the ids are stable because the clone is
+  taken from live, where the blocks live.
 
 The cutover's one real failure mode is deleting a seeded fact that no workbook
 block re-creates, and no test can see it: tests run on a fresh `createTestDb()`
@@ -23,17 +33,28 @@ against the live data instead.
 ## How this was produced
 
 ```bash
-# 1. Clone. Never the live database.
+# 1. Clone. Never the live database. `create database … template shliff` fails
+#    with "source database is being accessed by other users" whenever a dev
+#    server holds a connection, so dump-and-restore is the recipe that works
+#    without stopping anything. pg_dump on live is read-only.
 docker exec shliff-pg psql -U shliff -d postgres \
   -c "drop database if exists shliff_evidence;" \
-  -c "create database shliff_evidence template shliff;"
+  -c "create database shliff_evidence;"
+docker exec shliff-pg sh -c \
+  'pg_dump -U shliff shliff | psql -q -U shliff shliff_evidence'
 
 # 2. Migrate the CLONE only. 0000-0001 were applied to shliff by
 #    `drizzle-kit migrate` and 0002-0004 by `drizzle-kit push`, so the journal
-#    knows only the first two; the three pushed ones are recorded in the
-#    clone's journal by file sha256 so `migrate` proceeds to 0005
-#    (sheets.season_id / authoritative) and 0006 (obligations.opened_on
-#    nullable).
+#    the clone inherits knows only the first two; the three pushed ones are
+#    recorded in the clone's journal by file sha256 so `migrate` proceeds.
+#    As of this revision that means 0005 (sheets.season_id / authoritative),
+#    0006 (obligations.opened_on nullable) and 0007 (the block mapping's
+#    budget category) — live is still at 0001 in its journal and 0004 on disk.
+docker exec shliff-pg psql -U shliff -d shliff_evidence -c "insert into \
+  drizzle.__drizzle_migrations (hash, created_at) values \
+  ('e3c398d7988db5d3c4f314c61569e6289f48d9bbc334c9d38c7edf4cc6bd8850', 1789017138982), \
+  ('abc04f2160d5810e995135f095800214b537a128265350ac0f341c7ff3f6f64b', 1789169288307), \
+  ('fe626b5a233baddfabc8a4b989cfa096dd7d4ce8451454df493eb57dcc67ef45', 1789184064527);"
 DATABASE_URL=postgres://shliff:<pw>@localhost:5433/shliff_evidence \
   ./node_modules/.bin/drizzle-kit migrate
 
@@ -42,12 +63,18 @@ DATABASE_URL=postgres://shliff:<pw>@localhost:5433/shliff_evidence \
   npx tsx scripts/dry-run-promote.ts
 ```
 
+Skipping step 2 does not produce a wrong report — it produces no report at all:
+`setSheetSeason` fails with `column "season_id" of relation "sheets" does not
+exist` on the first sheet, because the clone inherits live's schema and live is
+three migrations behind.
+
 ### The guard is an allowlist, and it was attacked before it was trusted
 
-`scripts/scratch-guard.ts` resolves the database name the way postgres.js
-resolves it — `?database=` / `?db=`, then the URL path, then `PGDATABASE`,
-then the user name — and refuses unless it is exactly `shliff_evidence`. A
-blacklist on "is the path `shliff`?" has two holes that both land on live:
+`scripts/scratch-guard.ts` resolves the database name from exactly the sources
+postgres.js honours — `?database=` (last value of a repeated key), then the raw
+URL path, then `PGDATABASE`, then the user name — and refuses unless it is
+exactly `shliff_evidence`. A blacklist on "is the path `shliff`?" has two holes
+that both land on live:
 
 | URL | path says | postgres.js opens |
 | --- | --- | --- |
@@ -56,10 +83,27 @@ blacklist on "is the path `shliff`?" has two holes that both land on live:
 
 Both, plus `…/shliff`, `…/shliff/` and `…/shliff?sslmode=require`, were run
 against the real URLs and all five were refused before `@/db` was imported.
-`src/test/scratch-guard.test.ts` covers the resolution and the allowlist (21
-tests); four deliberate mutations — allowlist→blacklist, dropping the query
-override, dropping the empty-name refusal, dropping the user-name fallback —
-each failed tests.
+
+**Correction, 2026-09-18.** This section used to say the guard read `?db=` as
+well, and the guard did. That was false about postgres.js and it was a live
+bypass, not a conservative extra: `index.js`'s
+`database: o.database || o.db || …` reads the **options object**, while a query
+key goes to `options.connection`, and `StartupMessage` merges that over
+`{ user, database, client_encoding }` — so only a key spelled `database` can
+change the startup packet. Measured against the installed package,
+`…/shliff?db=shliff_cutover` resolves to `database: 'shliff'` with
+`connection.db: 'shliff_cutover'`: the guard resolved `shliff_cutover` and
+ALLOWED a URL that opens live. A second, smaller untruth in the same function:
+it percent-decoded the path, while `parseUrl` returns `pathname` raw and
+decodes only username and password, so `sh%6Ciff_cutover` really is a database
+called `sh%6Ciff_cutover`. Both are fixed; `?db=` is now asserted INERT in both
+directions and the bypass URL above is a regression test.
+
+`src/test/scratch-guard.test.ts` covers the resolution and the allowlist (37
+tests). Six deliberate mutations failed tests: allowlist→blacklist, dropping
+the `?database=` override, dropping the empty-name refusal, dropping the
+user-name fallback, reinstating the `?db=` branch (6 failures, including the
+bypass regression) and reinstating the path decode (2 failures).
 
 ### The live database is untouched
 
@@ -119,7 +163,7 @@ seasons are ברן 23 and ברן 24, and `seasons` holds only ברן 25 and בר
 seed refuses to create a season whose flat rate no workbook records. A lead
 must either create those two seasons (deciding what their dues were, which no
 sheet says) or accept that a third of the workbook corpus stays unlabelled.
-The cost is visible below: 96 of the 234 refusals are `no-season`.
+The cost is visible below: 96 of the 235 refusals are `no-season`.
 
 ### Authority — two contested groups
 
@@ -148,14 +192,14 @@ header row 2 — correct; `אחראי` is left unmapped, which is right, because
 
 ## Headline
 
-93 rows would be written, 234 refused, 0 deleted, 0 retained, against 63
+92 rows would be written, 235 refused, 0 deleted, 0 retained, against 63
 seeded rows in the four target tables.
 
 | table | would write | seeded | re-created | NOT re-created | writes matching no seeded row |
 | --- | --- | --- | --- | --- | --- |
 | `ledger_entries` | 24 | 19 | **18** | 1 | 6 |
 | `budget_lines` | 64 | 28 | **27** | 1 | 36 |
-| `ticket_rounds` | 5 | 3 | **0** | 3 | 5 |
+| `ticket_rounds` | 4 | 3 | **0** | 3 | 4 |
 | `obligations` | 0 | 13 | **0** | 13 | 0 |
 
 **"Re-created" means `(season, label, amount-to-the-agora)` all agree.** A
@@ -324,14 +368,14 @@ The 36 writes matching no seeded row break down as:
 | `66ad3b61` r32 | יעד גיוס | 22,375.30 | the fundraising target, same sub-table |
 | `fa78b9be` r20 | צפי להחזרי מע״מ | 5,550 | the head of a VAT-reclaim sub-table |
 
-### ticket_rounds — unchanged
+### ticket_rounds — *re-derived against the fractional-quantity fix*
 
-| | count |
-| --- | --- |
-| would write | **5** |
-| seeded | 3 |
-| re-created | **0** |
-| NOT re-created | 3 |
+| | count | was |
+| --- | --- | --- |
+| would write | **4** | 5 |
+| seeded | 3 | 3 |
+| re-created | **0** | 0 |
+| NOT re-created | 3 | 3 |
 
 **Expected, and structural.** The three seeded rounds
 (`acbcb4ca` `כרטיסים עד כה` 60,000, `2c9a1d61` `סבב ג׳` 33,000,
@@ -339,10 +383,40 @@ The 36 writes matching no seeded row break down as:
 `תקציב קאמפ ברן 26` — inside a `budget_lines` block whose map stops at column
 4. Exactly like the reimbursements: real data in a sub-table no block covers.
 
-The 5 written rounds come from `SuperNature 3.10` F1:I12, a different
-projection entirely (מוקדמות/ראשון/שני/אחרון, 139,125 total). One is junk:
-`84d315a5` r11 `אסף` with total 0.6666666667 and quantity 0 — a profit-split
-percentage row that the `total=c9` mapping reads as money.
+The 4 written rounds come from `SuperNature 3.10` F1:I12, a different
+projection entirely (מוקדמות 7,000, ראשון 18,000, שני 38,500, אחרון 75,625 —
+139,125 total). All four reconcile exactly: 50×140, 100×180, 175×220, 275×275.
+
+**A fifth round used to be written, and it was fabricated.** `84d315a5` r11 was
+
+```
+אסף | 0.3333333333 | שליף | 0.6666666667
+```
+
+— a row of the profit-split table below the block's own `סה״כ`, which the
+block's bottom bound overran. The promoter read a person's name as a round
+label, `0.3333333333` as a quantity, and `0.6666666667` as a ₪0.67 total; the
+quantity was then **silently rounded to 0** by a `Math.round` that ran before
+`promote.ts`'s integer-range guard could ever see the fraction, so the guard's
+own `Number.isInteger` check never met one. `isTotalRow`, `isBlankRow`,
+`no-amount` and `no-label` all pass a row like that, and it sat in the ברן 26
+season this cutover promotes.
+
+`ticketRow` now refuses a present, non-integer quantity, and this run reports it
+under `out-of-range`:
+
+```
+[קופת קאמפ 2026.xlsx / SuperNature 3.10] r11
+  הערך 0.3333333333 בעמודת כמות אינו מספר שלם, וכמות כרטיסים חייבת להיות שלמה.
+  בדקו אם השורה היא בכלל סבב כרטיסים
+```
+
+`ticketRow` also gained `budgetRow`'s arithmetic reconciliation (quantity ×
+price against the stated total, flagged and never blocked), so a future
+bound-overrun row whose numbers do not close carries a note instead of waiting
+for someone to read every written line by hand, as happened here. It adds no
+note to this run:
+all four surviving rounds reconcile, and the run's note count is unchanged at 9.
 
 ### obligations — unchanged
 
@@ -387,10 +461,11 @@ A lead therefore sees 16 per-row `no-amount` refusals instead of one clear
 
 ---
 
-## Refusals — all 234, grouped
+## Refusals — all 235, grouped
 
 | reason | count | was | verdict |
 | --- | --- | --- | --- |
+| `out-of-range` | **1** | 0 | **new, and the point of this revision.** `84d315a5` r11 — the `אסף` profit-split row, refused for a quantity of `0.3333333333`. See the `ticket_rounds` section. |
 | `no-season` | 96 | 96 | **expected, and a decision waiting.** All four 23-24 ticket blocks (Gagarin 29, Collabo 30, Spring #2 24, Winter Rave 13). Resolves the moment ברן 23/24 exist as seasons. |
 | `no-amount` | 73 | 73 | **mostly a mapping defect.** Breakdown below. |
 | `negative-amount` | 27 | 27 | **expected.** All in `Shliff day2day spending`, which writes expenses as `-1170` in a column already headed `הוצאה`. A lead must decide once whether that sheet's sign is decoration. |
@@ -483,11 +558,47 @@ anywhere, and the promoter has no per-row veto. So do not tell a lead to
 - gate each delete on **its own** replacement, by `(source_block_id,
   source_row)` plus matching season, label and amount, exactly as tabulated
   below;
-- after promoting, delete `(66ad3b61, 31)` and `(66ad3b61, 32)` explicitly, in
-  the same transaction. They are junk this evidence identified, they are owned
-  by the block, and a later re-confirmation that stops producing those rows
-  would sweep them anyway;
-- the same applies to `(84d315a5, 11)` — the `אסף` 0.667 ticket round.
+- after promoting, delete the rows in **"Junk this run would write"** below,
+  explicitly, in the same transaction. They are junk this evidence identified,
+  they are owned by the block, and a later re-confirmation that stops producing
+  those rows would sweep them anyway.
+
+### Junk this run would write — 2 rows, delete after promoting
+
+These are **not test artifacts**. They are written for real the first time the
+cutover runs without `dryRun`, and nothing in the promoter can refuse them:
+`confirmBlock` takes an archetype and a column map, block bounds are not
+editable anywhere, and there is no per-row veto (defect 3). They are listed here
+as a table rather than only in prose above, because an implementer working from
+the tables must not be able to miss them.
+
+| table | `source_block_id` | `source_row` | label | amount | why it is junk | what to do |
+| --- | --- | --- | --- | --- | --- | --- |
+| `budget_lines` | `66ad3b61-8b6c-4852-90a4-1cfe0b1f8a92` | 31 | תקציב מחנה | 42,000.00 | Not a budget line: the season's flat rate × head-count, read out of a neighbouring sub-table the block's bounds overran. Double-counts the whole ברן 26 camp budget as one line. | Delete in the cutover transaction, gated on `(block, row)` + season + label + amount read back inside it. |
+| `budget_lines` | `66ad3b61-8b6c-4852-90a4-1cfe0b1f8a92` | 32 | יעד גיוס | 22,375.30 | Not a budget line: the fundraising target, from the same sub-table. It belongs to `funding_targets`, which is not a promotion target table at all. | Same. |
+
+**A third row was on this list and is now closed at the root.**
+`ticket_rounds` `(84d315a5-6c69-4c5a-97e3-72108fc32f01, 11)` — the `אסף` row —
+is refused by this revision's run and is no longer written, so **there is
+nothing to delete for it**. Its raw quantity cell was `0.3333333333`, silently
+reduced to a stored quantity of `0`: the silent rounding was part of the defect,
+not incidental to it, which is why the fix refuses the fraction rather than
+noting it. If a cutover was already run against an older build, check for the
+row before assuming it is absent:
+
+```sql
+select id, label, quantity, total from ticket_rounds
+ where source_block_id = '84d315a5-6c69-4c5a-97e3-72108fc32f01'
+   and source_row = 11;
+-- expect zero rows on any build at or after the fractional-quantity fix
+```
+
+One more written row is junk that this cutover does **not** delete:
+`budget_lines` `(fa78b9be, 20)` `צפי להחזרי מע״מ` 5,550, the head of a
+VAT-reclaim sub-table, which inflates ברן 25's camp budget. It is listed in the
+false-positive table above but was never enumerated for deletion, and R31
+forbids re-deriving the set at run time — add it to `JUNK` only once a reviewer
+has checked the row the same way these two were checked.
 
 ### Safe to delete — 41 rows
 
@@ -594,11 +705,20 @@ replaceable, 6 need a decision, and 16 must stay.**
    merged as `5e10740`**, and this document re-derived against it. Kept on the
    list because the cause is worth remembering: every test wrote its dates by
    hand, in the one format the real pipeline never produces.
-2. **`budgetRow` hard-codes `category: 'camp'`**, so the dancefloor budget
-   cannot be promoted as dancefloor.
-3. **No per-row veto and no editable block bounds.** `confirmBlock` offers only
-   an archetype and a column map, so a lead cannot refuse `66ad3b61` r31/r32
-   or `84d315a5` r11. Today they must be deleted after the fact.
+2. ~~**`budgetRow` hard-codes `category: 'camp'`**~~ — **the mechanism is in
+   place.** `budgetRow` reads `ctx.budgetCategory`, `applyConfirmation` stores a
+   lead's decision on the block's mapping (Task 15), and `confirmBlock` threads
+   it through (the missing link, fixed 2026-09-18). Still open in practice: no
+   screen renders the choice, so every block confirmed today is stamped `'camp'`
+   by the default — including `תקציב רחבה ברן 25`, which is the dancefloor's.
+   **The four dancefloor lines in "delete only with a decision" below are still
+   not safe to delete** until that choice is made and the tasks relinked.
+3. **No per-row veto and no editable block bounds.** `confirmBlock` offers an
+   archetype, a column map and (now) a budget category, so a lead still cannot
+   refuse `66ad3b61` r31/r32. Today they must be deleted after the fact — see
+   "Junk this run would write". `84d315a5` r11 is no longer an instance: the
+   promoter refuses it at the root, which is what a per-row veto would otherwise
+   have been needed for.
 4. **`isTotalRow` scans unmapped columns**, so a neighbouring sub-table's
    `סה״כ` cell silently drops a good row.
 5. **`unmapped-column` is unreachable** when `block_mappings` holds an empty
@@ -618,3 +738,52 @@ replaceable, 6 need a decision, and 16 must stay.**
    `קיזוז מול תקציב גיפטינג יוני`, `30 מ׳ לייקרה + 50 מ׳ בד זול` and
    `השלמות מקלחת סלון`. Harmless, but it means label equality alone can never
    be the delete key.
+10. **A block's bottom bound overruns its own `סה״כ` into an unrelated
+    sub-table, and a row of that sub-table with numeric-looking cells in the
+    mapped columns is promoted with zero refusals and no note.** This is the
+    failure mode that produced the `אסף` ticket round, and it is the one the
+    previous revision of this document flagged as a single bad row without
+    naming the class. Three instances are already known — `84d315a5` r11,
+    `66ad3b61` r31 and r32 — and they came from three different sub-tables
+    (a profit split, a dues×head-count calculation, a fundraising target),
+    which is what makes it a class rather than three accidents.
+
+    Two things have changed since. *Refusal:* `ticketRow` refuses a non-integer
+    quantity, so a percentage read as a count is now stopped at the promoter
+    rather than rounded to 0 and written. *Detection:* `ticketRow` gained
+    `budgetRow`'s reconciliation (quantity × price vs the stated total, flagged
+    never blocked), so a sub-table row whose arithmetic does not close carries a
+    note automatically — the asymmetry where `budgetRow` had that check and
+    `ticketRow` returned `notes: []` unconditionally is why the `אסף` row was
+    found by a human reading all 93 written lines rather than by the run.
+
+    **Neither is a fix for the class.** A sub-table row whose numbers happen to
+    close, and whose quantity happens to be whole, still promotes silently. The
+    real remedies are editable block bounds or a per-row veto (defect 3), and
+    `detectBlocks` learning to stop at a `סה״כ` row.
+11. **`budget_lines` has no equivalent of the integer guard**, because its
+    `quantity_num` is `numeric` and a fractional quantity there is legitimate
+    (`0.5` of a unit). So the bound-overrun rows at `66ad3b61` r31 and r32 are
+    not catchable the same way, and the arithmetic note is the only automatic
+    signal available for them.
+
+---
+
+## Open questions for Wave 3
+
+1. **ברן 26's `ticket_rounds` would hold two incommensurable things.** After the
+   cutover: four promoted rows of one party's gate takings (`SuperNature 3.10`,
+   139,125) beside the camp's three seeded projection rows (171,000), with
+   nothing in the schema or the UI reconciling them. No money identity breaks
+   today — nothing on `/money` renders tickets — but the register's coverage
+   cell and any trace would present a party's takings as the camp's ticket plan,
+   and `ticketTotalAgorot` already sums both. The spec question is **whether a
+   party's ticket table is a `ticket_rounds` block at all**, or whether it
+   belongs to an `event_income` archetype that does not exist yet. Not a bug to
+   patch: recorded here so the decision is made deliberately rather than
+   inherited.
+2. **`הובלה` ברן 25 is one fact or two.** Two different blocks each produce a
+   ברן 25 line labelled `הובלה` for 4,000 — the dancefloor deliverable
+   (`fa78b9be` r6) and the camp budget's own transport line (`254bef9f` r13).
+   A lead has to say. Until then `2f8b932f` is in the "decision attached"
+   bucket, not the safe one.

@@ -56,13 +56,17 @@ describe('traceRow', () => {
 
     const source = await traceRow(db, 'ledger_entries', entry.id);
 
-    expect(source).not.toBeNull();
-    expect(source!.blockId).toBe(blockId);
-    expect(source!.sheetId).toBe(sheetId);
-    expect(source!.sheetName).toBe('סיכום כללי');
-    expect(source!.filename).toBe('2026.xlsx');
-    expect(source!.sheetRow).toBe(4);
-    expect(source!.reference).toBe('סיכום כללי!B4');
+    // `expect(source).not.toBeNull()` also passes on `undefined`, so it proved
+    // nothing about a function whose contract is "a `SourceCell` or null".
+    // Asserting the value covers both, and covers every field at once.
+    expect(source).toEqual({
+      blockId,
+      sheetId,
+      sheetName: 'סיכום כללי',
+      filename: '2026.xlsx',
+      sheetRow: 4,
+      reference: 'סיכום כללי!B4',
+    });
   });
 
   it('the reference string is exactly סיכום כללי!A6 for a block at left: 1, top: 5, row 6', async () => {

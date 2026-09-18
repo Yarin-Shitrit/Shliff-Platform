@@ -86,6 +86,14 @@ export function obligationRow(row: BlockRow, ctx: PromoteContext): ObligationOut
   }
 
   const input: NewObligation = {
+    // Hardcoded because no workbook can state a direction: the obligations
+    // archetype's column vocabulary has party, description, amount and date
+    // and no field that could carry one. Every debt table in the camp's books
+    // is a list of what the camp owes, so `camp_owes` is the reading of the
+    // sheet rather than a default. A row that is really money owed TO the camp
+    // has to be corrected by hand afterwards — which is what the
+    // `negative-amount` refusal above tells a lead, in the one case the sheet
+    // gives any hint of the other direction.
     direction: 'camp_owes',
     description,
     amount,

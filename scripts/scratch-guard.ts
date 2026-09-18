@@ -21,9 +21,9 @@
  *     query parameter overrides the database in the startup packet and the
  *     session opens on live.
  *
- * So the name is resolved the way postgres.js resolves it and then has to
- * *equal* one of the expected scratch databases. Anything else — including a
- * name this module cannot determine — is refused.
+ * So the name is resolved from exactly the sources postgres.js honours, and
+ * then has to *equal* one of the expected scratch databases. Anything else —
+ * including a name this module cannot determine — is refused.
  *
  * A third hole, found while writing the cutover and closed here: a repeated
  * query key. `URLSearchParams.get('database')` returns the FIRST value, while
@@ -32,6 +32,34 @@
  * keeps the LAST. `?database=shliff_cutover&database=shliff` therefore read as
  * the clone here and opened live on the wire. `getAll(...).at(-1)` is what
  * matches postgres.js, and it is what this module uses.
+ *
+ * ## Exactly which sources postgres.js honours
+ *
+ * This module used to say it resolved the name "the way postgres.js resolves
+ * it". That claim was too loose and it was wrong in two places. Both were
+ * verified against the installed package, by reading it and by running
+ * `postgres(url)` and printing `options.database` / `options.connection`:
+ *
+ *  - **`?db=` is INERT.** `index.js`'s `database: o.database || o.db || …`
+ *    reads the *options object*, not the query string; the query string goes
+ *    to `options.connection` (`index.js` `connection: { …, ...query }`), and
+ *    `connection.js`'s `StartupMessage` merges `options.connection` over a
+ *    literal `{ user, database, client_encoding }`. A merge only overrides a
+ *    key of the same name, so `?database=` lands on `database` and changes the
+ *    startup packet, while `?db=` lands on a *separate* `db` key and cannot.
+ *    Measured: `…/shliff?db=shliff_cutover` resolves to `database: 'shliff'`
+ *    with `connection.db = 'shliff_cutover'`. Treating `?db=` as an override
+ *    is therefore not conservative — it is a live bypass, because it lets a
+ *    URL whose only wire-relevant part is the live path read as a clone.
+ *  - **The path is NOT percent-decoded.** `parseUrl` returns
+ *    `pathname: urlObj.pathname` raw and decodes only `username` and
+ *    `password`. Measured: a path of `sh%6Ciff_cutover` is the literal
+ *    database name `"sh%6Ciff_cutover"`, not `shliff_cutover`. So the
+ *    comparison here is against the raw path, and `decodeURIComponent` is
+ *    applied only to the user name, where the library applies it too.
+ *
+ * The resolution below is that list and nothing more:
+ * `?database=` (last value) → raw path → `PGDATABASE` → user.
  */
 
 /** The clone `dry-run-promote.ts` is allowed to open. */
@@ -63,21 +91,28 @@ export type DatabaseEnv = Record<string, string | undefined>;
 /**
  * The database a `postgres()` call on this URL would actually open.
  *
- * Mirrors `parseOptions` in `node_modules/postgres/cjs/src/index.js`:
+ * Mirrors `parseOptions` in `node_modules/postgres/src/index.js`:
  *
  *     database: o.database || o.db || (url.pathname || '').slice(1)
  *               || env.PGDATABASE || user
  *     user:     o.user || o.username || url.username
  *               || env.PGUSERNAME || env.PGUSER || osUsername()
  *
- * with two deliberate differences, both of which can only make this stricter:
+ * with three deliberate differences, none of which lets a live URL through:
  *
  *  - `o.database` / `o.db` are the *options object*, which `@/db` never
- *    passes. The query parameters `?database=` / `?db=` are read in their
- *    place because they reach the same decision by the other route described
- *    in this module's header. Each is read with `getAll(...).at(-1)`, not
- *    `get(...)`: postgres.js's reduce over the entries keeps the last value of
- *    a repeated key, and `get` returns the first.
+ *    passes, so neither is reachable from a URL. `?database=` is read in
+ *    `o.database`'s place, because it reaches the same decision by the
+ *    `options.connection` → `StartupMessage` route described in this module's
+ *    header. It is read with `getAll(...).at(-1)`, not `get(...)`:
+ *    postgres.js's reduce over the entries keeps the last value of a repeated
+ *    key, and `get` returns the first. **`?db=` is deliberately NOT read** —
+ *    see the header; it cannot change the database postgres.js opens, and
+ *    honouring it here would let `…/shliff?db=shliff_cutover` pass as a clone.
+ *  - The path is compared raw. postgres.js uses `urlObj.pathname` verbatim, so
+ *    `sh%6Ciff_cutover` really is a database called `sh%6Ciff_cutover`.
+ *    `decodeURIComponent` is applied only to the user name, which the library
+ *    does decode.
  *  - `osUsername()` is not consulted. A URL that gets that far resolves to ''
  *    here, and `assertScratchDatabase` refuses an empty name outright rather
  *    than guess which database the process would land in.
@@ -99,8 +134,7 @@ export function resolveDatabaseName(url: string, env: DatabaseEnv = process.env)
     || '';
 
   return parsed.searchParams.getAll('database').at(-1)
-    || parsed.searchParams.getAll('db').at(-1)
-    || decodeURIComponent(parsed.pathname.replace(/^\//, ''))
+    || parsed.pathname.replace(/^\//, '')
     || env.PGDATABASE
     || user;
 }

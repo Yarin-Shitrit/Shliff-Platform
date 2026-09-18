@@ -147,8 +147,13 @@ const BLOCK_LEDGER_25 = 'ac5a9d6e-8b52-40a9-bfea-a22771a2e4c6';
 const BLOCK_LEDGER_26 = '6f1a7fc4-03ac-4ec3-abe4-0b5a863e133f';
 /** `תקציב קאמפ ברן 26` in `קופת קאמפ 2026`, the authoritative copy. */
 const BLOCK_BUDGET_26 = '66ad3b61-8b6c-4852-90a4-1cfe0b1f8a92';
-/** `SuperNature 3.10` F1:I12 — five promoted ticket rounds, one of them junk. */
-const BLOCK_TICKETS_SN = '84d315a5-6c69-4c5a-97e3-72108fc32f01';
+/**
+ * `SuperNature 3.10` F1:I12 — four promoted ticket rounds. A fifth, the `אסף`
+ * profit-split row at r11, was junk this script deleted; the promoter refuses it
+ * now, so it is neither written nor enumerated here. Kept as a named constant
+ * because the JUNK note below and the report both name the block.
+ */
+export const BLOCK_TICKETS_SN = '84d315a5-6c69-4c5a-97e3-72108fc32f01';
 
 type ReplaceableTable = 'ledger_entries' | 'budget_lines';
 
@@ -277,16 +282,19 @@ const JUNK: JunkRow[] = [
     amount: '22375.30',
     why: 'the fundraising target (22,375.30), same sub-table — it is a funding_target, not a budget line',
   },
-  {
-    // The evidence reads this cell as 0.6666666667, a profit-split percentage.
-    // `total` is `numeric(12,2)`, so what `ticketRow` actually writes is 0.67
-    // — the figure this gate has to hold, since it compares what the column
-    // stores. Both are named so neither looks like a typo for the other.
-    table: 'ticket_rounds', blockId: BLOCK_TICKETS_SN, sourceRow: 11, label: 'אסף',
-    amount: '0.67',
-    why: 'a profit-split percentage (0.6666… → 0.67 in numeric(12,2)) that the '
-      + 'total=c9 mapping reads as money, quantity 0',
-  },
+  // `(BLOCK_TICKETS_SN, 11)` — the `אסף` profit-split row, total 0.6666666667
+  // → 0.67 with a quantity silently rounded to 0 — WAS the third entry here,
+  // and has been REMOVED because the promoter no longer writes it:
+  // `ticketRow` refuses a non-integer quantity as of
+  // `fix(promote): a fractional ticket count is refused, not rounded to zero`,
+  // and the 2026-09-18 evidence re-run reports it under `out-of-range`.
+  //
+  // Removing it was not optional. `verifyJunk` refuses when the enumerated row
+  // is not found EXACTLY once, so leaving it listed would make every cutover
+  // run fail its verification and roll the whole promotion back — a row that is
+  // never written can never be verified or deleted. Nothing else changed: the
+  // `ledger_entries` and `budget_lines` enumerations are byte-identical to the
+  // previous evidence run, and JUNK is not part of the seeded-population check.
 ];
 
 /**
@@ -1200,21 +1208,22 @@ function reportDecisions(): void {
   say('     delete from budget_lines');
   say('      where source_block_id = \'66ad3b61-8b6c-4852-90a4-1cfe0b1f8a92\'');
   say('        and source_row in (31, 32);');
-  say('     delete from ticket_rounds');
-  say('      where source_block_id = \'84d315a5-6c69-4c5a-97e3-72108fc32f01\'');
-  say('        and source_row = 11;');
   say();
-  say('   Check before and after that those are the three rows and nothing else:');
+  say('   Check before and after that those are the two rows and nothing else:');
   say();
   say('     select source_row, label, total from budget_lines');
   say('      where source_block_id = \'66ad3b61-8b6c-4852-90a4-1cfe0b1f8a92\'');
   say('        and source_row in (31, 32);');
   say('     -- expect exactly: 31 תקציב מחנה 42000.00, 32 יעד גיוס 22375.30');
   say();
-  say('   So: re-promoting 66ad3b61 or 84d315a5 after a cutover is an action that');
-  say('   requires those deletes afterwards. Until a lead can veto a row at confirm');
-  say('   time, or block bounds become editable, there is no better remedy than');
-  say('   knowing this before pressing the button.');
+  say('   `(84d315a5, r11)` — the אסף profit-split row — used to be on this list and');
+  say('   is NOT any more. `ticketRow` refuses a non-integer quantity now, so it is');
+  say('   never written and there is nothing to delete. Re-promoting 84d315a5 is safe.');
+  say();
+  say('   So: re-promoting 66ad3b61 after a cutover is an action that requires those');
+  say('   deletes afterwards. Until a lead can veto a row at confirm time, or block');
+  say('   bounds become editable, there is no better remedy than knowing this before');
+  say('   pressing the button.');
   say();
   say('6. ברן 26\'s ticket projection DOUBLES, to 310,125.');
   say('   171,000 seeded — כרטיסים עד כה 60,000, סבב ג׳ 33,000, סבב ד׳ 78,000, from');
@@ -1238,8 +1247,13 @@ function reportDecisions(): void {
 }
 
 main().catch((error) => {
+  // The report buffer is flushed on EVERY exit, not only a refusal. A crash
+  // rolls the transaction back just as cleanly, but the lead still needs the
+  // before-counts, the money snapshot and the per-row verification to know how
+  // far the run got — and on a crash they need it more, not less. Printing it
+  // before the error keeps the stack trace as the last thing on screen.
+  process.stdout.write(`${out.join('\n')}\n\n`);
   if (error instanceof CutoverRefusal) {
-    process.stdout.write(`${out.join('\n')}\n\n`);
     console.error(`REFUSED: ${error.message}`);
     process.exit(2);
   }
