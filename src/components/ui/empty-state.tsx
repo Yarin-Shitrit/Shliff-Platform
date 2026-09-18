@@ -30,6 +30,16 @@ export type EmptyStateProps =
   | { kind: 'nothing-yet'; noun: string; action?: EmptyStateAction }
   | { kind: 'nothing-this-season'; noun: string; seasonName: string; action?: EmptyStateAction }
   | { kind: 'no-matches'; filterSummary?: string; action?: EmptyStateAction }
+  /**
+   * We looked, and there is none of this kind here. Reported twice by the
+   * imports lane — a workbook that parsed and holds no tables, and a filter
+   * under which nothing was refused — and it is neither of its neighbours:
+   * `nothing-yet` says nobody has added one, which is wrong when something
+   * was added and read; `no-matches` sends a reader off to remove a filter
+   * they may never have set. Telling a lead to go looking for something that
+   * is not there is exactly what this union exists to prevent.
+   */
+  | { kind: 'none-of-this-kind'; noun: string; action?: EmptyStateAction }
   | { kind: 'not-permitted' }
   | { kind: 'all-clear' };
 
@@ -37,6 +47,7 @@ export const EMPTY_TITLES: Readonly<Record<EmptyStateProps['kind'], string>> = {
   'nothing-yet': 'אין כאן כלום עדיין',
   'nothing-this-season': 'אין כאן כלום לשנה הזו',
   'no-matches': 'אין תוצאות לסינון הזה',
+  'none-of-this-kind': 'אין כאן כלום מהסוג הזה',
   'not-permitted': 'אין לך גישה לתוכן הזה',
   'all-clear': 'הכול מטופל',
 };
@@ -45,6 +56,9 @@ const KIND_ICON: Readonly<Record<EmptyStateProps['kind'], IconName>> = {
   'nothing-yet': 'inbox',
   'nothing-this-season': 'calendar',
   'no-matches': 'filter',
+  /* `search`: the glyph for having looked, which is the whole difference
+     between this kind and `nothing-yet`. */
+  'none-of-this-kind': 'search',
   'not-permitted': 'ban',
   'all-clear': 'check',
 };
@@ -64,6 +78,11 @@ export function emptyStateBody(props: EmptyStateProps): string {
       return props.filterSummary === undefined
         ? 'נסו להסיר סינון או לשנות את החיפוש.'
         : `נסו להסיר את הסינון ״${props.filterSummary}״.`;
+    /* Says that something was read, which is the fact `nothing-yet` gets
+       wrong here. The invitation, if there is one, is the screen's `action` —
+       a screen still passes a plural noun and never a sentence (C10). */
+    case 'none-of-this-kind':
+      return `נבדק הכול — אין כאן ${props.noun}.`;
     case 'not-permitted':
       return 'החלק הזה פתוח למנהלי הקאמפ בלבד. אם זו טעות, פנו למי שנתן לכם את הגישה.';
     case 'all-clear':
