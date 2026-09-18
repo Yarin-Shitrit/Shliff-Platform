@@ -191,9 +191,14 @@ Three things the mock gets wrong, where the plans are right: gendered Hebrew
 (`טרם שילמה`) the schema cannot express; a phone and email on the person page,
 which `persons` does not have; and an event task filed inside the shifts group.
 
-## 10. Your first change
+## 10. Your first session, and your first change
 
-Something small, end to end, so the loop is proven before it matters: branch off
+There is a kickoff prompt for the first session in
+[`kickoff-logistics.md`](kickoff-logistics.md) — paste it into a fresh Claude
+Code session started in the repository root. It walks setup, the reading order,
+checking what is actually in flight, and designing logistics before building it.
+
+After that: something small, end to end, so the loop is proven before it matters: branch off
 `main`, make the change, run the two commands from §6, push, open a PR, get it
 reviewed. Then read `protocol.md` again — it will mean more once you have been
 through the loop once.
