@@ -1,0 +1,131 @@
+/* The home is a column of bands: the head, the four figures, then the two
+   panel columns. Every inline offset is logical, so the whole screen mirrors
+   with `dir` rather than with a second stylesheet (A10). Spacing and radii
+   come from the token scale (A7) rather than from loose pixels. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.head { display: flex; align-items: flex-start; gap: var(--space-4); }
+.head h1 {
+  font-size: var(--text-title);
+  line-height: var(--leading-title);
+  font-weight: 600;
+  margin: 0;
+}
+.sub { color: var(--ink-3); margin-block: var(--space-1) 0; }
+.headActions { margin-inline-start: auto; display: flex; gap: var(--space-2); }
+
+.figures {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.columns { display: flex; gap: var(--space-4); align-items: flex-start; }
+.wide { flex: 1.6; min-inline-size: 0; }
+.narrow {
+  flex: 1;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+}
+.panelHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-block: var(--space-3);
+  padding-inline: var(--space-4);
+  border-block-end: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.panelHead h2 { font-size: 14.5px; font-weight: 600; margin: 0; }
+.panelLead { color: var(--ink-3); font-size: var(--text-meta); }
+.more { margin-inline-start: auto; color: var(--brand-text); font-weight: 500; }
+
+.rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-block: var(--space-2);
+  padding-inline: var(--space-4);
+  border-block-end: 1px solid var(--line);
+}
+.row:last-child { border-block-end: 0; }
+.rowMain { flex: 1; min-inline-size: 0; }
+.rowTitle { display: flex; align-items: center; gap: var(--space-2); font-weight: 500; }
+.rowDetail { display: block; color: var(--ink-3); font-size: var(--text-meta); }
+.rowName { flex: 1; font-weight: 500; color: var(--ink); text-decoration: none; }
+.rowName:hover { text-decoration: underline; }
+
+/* A10's documented exception: a money column is physically right-aligned with
+   tabular figures so place values line up under one another. */
+.amount { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+
+.source {
+  display: inline-flex;
+  align-items: center;
+  block-size: 22px;
+  padding-inline: 7px;
+  border-radius: var(--radius-sm);
+  background: var(--sunken);
+  color: var(--ink-3);
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: var(--text-label);
+  direction: ltr;
+  white-space: nowrap;
+}
+
+/* The gold line under a tile. R3: it carries a sentence and a glyph, never a
+   colour alone — the kit's `StatTile` has no `warning` slot, so this composes
+   into its `derivation` node instead of being faked as muted prose. */
+.warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--warn-line);
+  font-size: var(--text-meta);
+}
+
+.panelFoot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-block: var(--space-2);
+  padding-inline: var(--space-4);
+  border-block-start: 1px solid var(--line);
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+.panelFoot .more { margin-inline-start: auto; }
+
+.emptyBody { padding-block: var(--space-5); padding-inline: var(--space-4); }
+
+.srOnly {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* B7: below 1024 the layout is one column of two; below 768 it is one column. */
+@media (max-width: 1024px) {
+  .figures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .columns { flex-direction: column; }
+  .wide, .narrow { inline-size: 100%; }
+}
+@media (max-width: 768px) {
+  .figures { grid-template-columns: minmax(0, 1fr); }
+}
