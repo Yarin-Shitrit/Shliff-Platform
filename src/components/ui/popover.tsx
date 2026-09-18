@@ -4,6 +4,9 @@
  * `esc`, and on a choice made inside it needs `document` listeners and a ref
  * to the trigger it restores focus to. R1 forbids the headless-UI dependency
  * that would supply this, so the kit owns one copy and C3 and C8 share it.
+ * Positioning the panel also needs `document` (a portal target, the trigger's
+ * measured rect, the viewport width) rather than the CSS this file used to
+ * rely on — see `computePanelPosition` below.
  *
  * No `role="menu"`/`"menuitem"` here, on purpose: `season-switch.tsx` already
  * shipped this popover pattern once and settled the question for a panel of
@@ -15,7 +18,8 @@
  * on the trigger is the same generic `"true"` `season-switch.tsx` uses, not
  * `"menu"`, for the same reason.
  */
-import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { cx } from './cx';
 import styles from './popover.module.css';
 
@@ -42,25 +46,70 @@ const TONE_CLASS: Record<PopoverTriggerTone, string> = {
   bulk: 'bulk',
 };
 
+type PanelPosition = { top: number; left: number };
+const GAP = 6;
+
+/**
+ * Physical `left`/`top`, not a logical inset: the panel is portaled to
+ * `document.body` and `position: fixed`, so its offset has to be measured
+ * from the trigger's real rect and the real viewport width. "Inline-start"
+ * is the trigger's *right* edge and "inline-end" its *left* in this app's
+ * fixed RTL, but that fact only picks which candidate is tried first — the
+ * one actually used is whichever fits, from the rect and viewport width.
+ */
+function computePanelPosition(
+  trigger: DOMRect, panelWidth: number, preferredAlign: 'start' | 'end',
+): PanelPosition {
+  const viewportWidth = window.innerWidth;
+  const startLeft = trigger.right - panelWidth; // panel's start (right) edge meets the trigger's
+  const endLeft = trigger.left;                 // panel's end (left) edge meets the trigger's
+  const preferred = preferredAlign === 'start' ? startLeft : endLeft;
+  const fallback = preferredAlign === 'start' ? endLeft : startLeft;
+  const fits = (left: number) => left >= 0 && left + panelWidth <= viewportWidth;
+  const left = fits(preferred)
+    ? preferred
+    : fits(fallback) ? fallback : Math.min(Math.max(preferred, 0), Math.max(viewportWidth - panelWidth, 0));
+  return { top: trigger.bottom + GAP, left };
+}
+
 export function Popover({
   id, label, triggerContent, triggerTone = 'chip', align = 'start', children,
 }: PopoverProps): ReactElement {
   const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState<PanelPosition | null>(null);
   const rootRef = useRef<HTMLSpanElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLSpanElement | null>(null);
 
   // K3/A9 territory: this is the kit's one hand-written disclosure, so it owns
   // the outside-pointerdown listener itself rather than pulling in a library.
+  // Both refs, now the panel is portaled: it is no longer a DOM descendant of
+  // `rootRef`, so a click inside it would otherwise read as "outside".
   useEffect(() => {
     if (!open) return undefined;
     function onPointerDown(event: PointerEvent) {
       const target = event.target;
-      if (target instanceof Node && rootRef.current?.contains(target) === true) return;
+      if (target instanceof Node
+        && (rootRef.current?.contains(target) === true || panelRef.current?.contains(target) === true)) return;
       setOpen(false);
     }
     document.addEventListener('pointerdown', onPointerDown);
     return () => { document.removeEventListener('pointerdown', onPointerDown); };
   }, [open]);
+
+  // jsdom has no layout — `getBoundingClientRect()` returns zeros there, so
+  // this measure-then-place step is inert in tests and only does real work
+  // in a browser. `useLayoutEffect`, not `useEffect`: it must run before the
+  // browser paints the panel at its first, unmeasured position.
+  useLayoutEffect(() => {
+    if (!open || triggerRef.current === null || panelRef.current === null) {
+      setPosition(null);
+      return;
+    }
+    setPosition(computePanelPosition(
+      triggerRef.current.getBoundingClientRect(), panelRef.current.getBoundingClientRect().width, align,
+    ));
+  }, [open, align]);
 
   function close() {
     setOpen(false);
@@ -99,17 +148,29 @@ export function Popover({
         {triggerContent ?? label}
       </button>
 
-      {open ? (
+      {open ? createPortal(
+        // Rendered through a portal, `position: fixed` from the measured
+        // trigger rect: `.root` may sit inside `table.module.css`'s
+        // `overflow: auto`, `drawer.module.css`'s `overflow: hidden`, or
+        // `saved-views.module.css`'s `overflow-x: auto` — any of which would
+        // clip an `absolute` panel sized to its own `.root`. Hidden until
+        // `position` is measured, so the unmeasured (0,0) frame never paints.
         <span
-          className={cx(styles.panel, align === 'end' && styles.alignEnd)}
+          className={styles.panel}
+          ref={panelRef}
           id={`${id}-panel`}
+          style={{
+            top: position?.top ?? 0, left: position?.left ?? 0,
+            visibility: position === null ? 'hidden' : 'visible',
+          }}
           onClick={(event) => {
             const target = event.target;
             if (target instanceof Element && target.closest('a, button') !== null) close();
           }}
         >
           {children}
-        </span>
+        </span>,
+        document.body,
       ) : null}
     </span>
   );
