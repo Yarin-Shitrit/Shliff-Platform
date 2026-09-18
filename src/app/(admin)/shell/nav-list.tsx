@@ -6,37 +6,21 @@
  * navigation, and which season `?season=` names (Ruling S2). Everything
  * else about the rail is static.
  */
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { Icon } from '@/components/ui/icon';
-import type { ShellCounts } from '@/lib/shell/counts';
 import { NAV_GROUPS, activeItemId, type NavItem } from './nav-data';
-import { loadShellCounts } from './actions';
+import { useShellCounts } from './shell-counts';
 import styles from './sidebar.module.css';
-
-const NOTHING: ShellCounts = { openDecisions: 0, rosterSize: 0, understaffedTasks: 0 };
 
 export function NavList() {
   const pathname = usePathname();
   const active = activeItemId(pathname);
-  const season = useSearchParams().get('season');
-  const [counts, setCounts] = useState<ShellCounts>(NOTHING);
-
   // counts.ts's own docblock: "a count in the chrome that disagrees with the
-  // page it links to is worse than no count." `pathname` is in these deps
-  // for exactly that reason — this component stays mounted across every soft
-  // navigation, so without it a write (add a person, cover a task, resolve a
-  // decision) followed by a navigation would still leave the badge showing
-  // whatever it loaded when the tab was first opened. Depends only on
-  // `season`/`pathname`, neither of which this effect sets, so it cannot loop.
-  useEffect(() => {
-    let live = true;
-    loadShellCounts(season).then((next) => {
-      if (live && next) setCounts(next);
-    });
-    return () => { live = false; };
-  }, [season, pathname]);
+  // page it links to is worse than no count." B7's tab bar now carries the
+  // same figures, so the fetch and its `season`/`pathname` dependencies moved
+  // into `shell-counts.tsx` and both surfaces read one value.
+  const counts = useShellCounts();
 
   function badge(item: NavItem) {
     const value = item.count ? counts[item.count] : 0;

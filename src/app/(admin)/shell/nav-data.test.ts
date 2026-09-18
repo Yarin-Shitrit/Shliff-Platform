@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { existsSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { NAV_GROUPS, NAV_ITEMS, activeItemId } from '@/app/(admin)/shell/nav-data';
 
 describe('nav data', () => {
@@ -72,5 +74,33 @@ describe('nav data', () => {
       files: '/imports',
       upload: '/upload',
     });
+  });
+
+  /**
+   * The rail rendered "בקרוב" beside לטיפול, תנועות, חובות and קבצים וייבוא
+   * for the whole of waves 3 and 4, because each screen plan built its route
+   * and left the flag on. The old test asserted only that *some* item read
+   * בקרוב, which stayed green the entire time the label was a lie.
+   *
+   * This asserts the correctness instead: an item is `planned` exactly when
+   * its route has no `page.tsx`. It reads the filesystem rather than a second
+   * hand-kept list, so the next route to ship clears its own flag or goes red.
+   */
+  it('promises בקרוב only for a route that really has not shipped', () => {
+    const admin = resolve(process.cwd(), 'src/app/(admin)');
+    const wrong: string[] = [];
+
+    for (const item of NAV_ITEMS) {
+      const path = item.href.split('#')[0];
+      // `/` is the (home) route group, which is a directory name the URL
+      // does not contain; every other item maps onto its own path.
+      const dir = path === '/' ? join(admin, '(home)') : join(admin, path);
+      const exists = existsSync(join(dir, 'page.tsx'));
+      const planned = item.planned === true;
+      if (exists && planned) wrong.push(`${item.id}: ${path} has shipped but still reads בקרוב`);
+      if (!exists && !planned) wrong.push(`${item.id}: ${path} has no page.tsx and is offered as a link`);
+    }
+
+    expect(wrong).toEqual([]);
   });
 });

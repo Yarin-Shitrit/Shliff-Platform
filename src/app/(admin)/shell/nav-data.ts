@@ -14,6 +14,11 @@ export interface NavItem {
    * The route does not exist yet, so the item is text with a בקרוב pill and
    * never a link (Ruling S3). The screen plan that creates the route drops
    * this flag in the same commit.
+   *
+   * No item carries it today: לטיפול, תנועות, חובות and קבצים וייבוא all
+   * shipped during waves 3–4 and each left the flag behind, so the rail went
+   * on offering "בקרוב" for four screens a lead could already open. The field
+   * stays for the next route that is announced before it exists.
    */
   planned?: boolean;
   /** A screen the redesign retires, kept only while its replacement is planned. */
@@ -40,7 +45,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: 'home', label: 'בית', href: '/', icon: 'home' },
       {
         id: 'inbox', label: 'לטיפול', href: '/inbox', icon: 'inbox',
-        count: 'openDecisions', hot: true, planned: true,
+        count: 'openDecisions', hot: true,
       },
     ],
   },
@@ -56,15 +61,15 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'כספים',
     items: [
       { id: 'money', label: 'סקירה כספית', href: '/money', icon: 'wallet' },
-      { id: 'ledger', label: 'תנועות', href: '/money/ledger', icon: 'ledger', planned: true },
+      { id: 'ledger', label: 'תנועות', href: '/money/ledger', icon: 'ledger' },
       { id: 'budget', label: 'תקציב', href: '/money#budget', icon: 'pie' },
-      { id: 'debts', label: 'חובות', href: '/money/debts', icon: 'scale', planned: true },
+      { id: 'debts', label: 'חובות', href: '/money/debts', icon: 'scale' },
     ],
   },
   {
     label: 'נתונים',
     items: [
-      { id: 'files', label: 'קבצים וייבוא', href: '/imports', icon: 'sheet', planned: true },
+      { id: 'files', label: 'קבצים וייבוא', href: '/imports', icon: 'sheet' },
       {
         id: 'upload', label: 'העלאת קובץ', href: '/upload', icon: 'upload',
         transitional: true,

@@ -1,6 +1,7 @@
 import { ToastProvider } from '@/components/ui/toaster';
 import { Sidebar } from './shell/sidebar';
 import { SidebarFrame } from './shell/sidebar-frame';
+import { ShellCountsProvider } from './shell/shell-counts';
 import { TabBar } from './shell/tab-bar';
 import styles from './layout.module.css';
 
@@ -19,19 +20,25 @@ import styles from './layout.module.css';
  * `useToast()` call throws, because no `ToastProvider` sat above it; it wraps
  * `children` alone so the sidebar's own controls stay outside the live
  * regions that announce a page's writes.
+ *
+ * `ShellCountsProvider` wraps both nav surfaces and nothing else: B2's counts
+ * appear on the rail's badges and on B7's tab bar, and a rail saying 12 beside
+ * a tab saying 9 is worse than either saying nothing.
  */
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className={styles.ground}>
-      <SidebarFrame>
-        <Sidebar />
-      </SidebarFrame>
-      <div className={styles.column}>
-        <div className={styles.main}>
-          <ToastProvider>{children}</ToastProvider>
+    <ShellCountsProvider>
+      <div className={styles.ground}>
+        <SidebarFrame>
+          <Sidebar />
+        </SidebarFrame>
+        <div className={styles.column}>
+          <div className={styles.main}>
+            <ToastProvider>{children}</ToastProvider>
+          </div>
+          <TabBar />
         </div>
-        <TabBar />
       </div>
-    </div>
+    </ShellCountsProvider>
   );
 }

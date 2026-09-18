@@ -44,11 +44,23 @@ describe('NavList', () => {
     expect(screen.getByRole('link', { name: /דמי קאמפ/ }).getAttribute('aria-current')).toBeNull();
   });
 
-  it('shows a route that does not exist yet as בקרוב, never as a link', () => {
+  /**
+   * Was: "shows a route that does not exist yet as בקרוב, never as a link",
+   * pinned on לטיפול. Every route the rail names has now shipped, so nothing
+   * is `planned` and there is no item left to render that way — the test was
+   * asserting a lie about /inbox rather than the rule it was written for.
+   *
+   * The rule itself moved to `nav-data.test.ts`, where it is checked against
+   * the filesystem: an item is `planned` exactly when its route has no
+   * `page.tsx`. That version would have gone red the day /inbox shipped.
+   */
+  it('offers every section the rail names as a real link', () => {
     render(<NavList />);
-    expect(screen.queryByRole('link', { name: /לטיפול/ })).toBeNull();
-    expect(screen.getByText('לטיפול')).toBeTruthy();
-    expect(screen.getAllByText('בקרוב').length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: /לטיפול/ }).getAttribute('href')).toBe('/inbox');
+    expect(screen.getByRole('link', { name: /תנועות/ }).getAttribute('href')).toBe('/money/ledger');
+    expect(screen.getByRole('link', { name: /חובות/ }).getAttribute('href')).toBe('/money/debts');
+    expect(screen.getByRole('link', { name: /קבצים וייבוא/ }).getAttribute('href')).toBe('/imports');
+    expect(screen.queryByText('בקרוב')).toBeNull();
   });
 
   /**

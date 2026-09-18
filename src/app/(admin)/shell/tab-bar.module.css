@@ -18,7 +18,13 @@
   inset-block-end: 0;
   border-block-start: 1px solid var(--line);
   background: var(--panel);
-  padding-block: var(--space-2);
+  padding-block-start: var(--space-2);
+  /*
+   * The home indicator on a notched phone sits over the bottom edge, so the
+   * bar's own padding has to clear it. `max()` keeps the design's 8px on every
+   * device that reports no inset; it never shrinks the bar.
+   */
+  padding-block-end: max(var(--space-2), env(safe-area-inset-bottom));
   padding-inline: var(--space-1);
 }
 
@@ -37,6 +43,33 @@
   background: transparent;
 }
 .tab[aria-current='page'] { color: var(--brand-text); font-weight: 600; }
+
+/*
+ * B2's badge. `aria-hidden` in the markup, because the count is already in the
+ * tab's accessible name as a phrase — this is the visual half only. It hangs
+ * off the glyph, so it must not push the label around: hence the positioned
+ * box rather than a flex sibling.
+ */
+.glyph { position: relative; display: inline-flex; }
+.badge {
+  position: absolute;
+  inset-block-start: -5px;
+  inset-inline-start: -9px;
+  min-inline-size: 17px;
+  block-size: 17px;
+  padding-inline: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--sunken);
+  color: var(--ink-3);
+  font-size: 10.5px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+/* The rail's own rule (sidebar.module.css `.hot`): an open decision is the one
+   count that is a to-do, so it is the one count that is brand-coloured. */
+.hot { background: var(--brand); color: var(--brand-ink); }
 .tab[aria-disabled='true'] { color: var(--ink-4); }
 .tab:focus-visible {
   outline: 2px solid var(--focus);
@@ -73,6 +106,22 @@
   outline-offset: -2px;
 }
 .sheetPlanned { color: var(--ink-4); }
+/*
+ * A named way out, not just a tap outside. The sheet is `aria-modal`, so the
+ * page behind it is `inert` and there is nothing else left to click.
+ */
+.sheetClose {
+  min-block-size: var(--tap-min);
+  border: 0;
+  border-block-start: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.sheetClose:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
 .soon {
   margin-inline-start: auto;
   font-size: 10.5px;
