@@ -6,7 +6,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 /**
  * `@testing-library/user-event` is not an installed dependency in this repo;
  * `fireEvent` from the already-installed `@testing-library/react` exercises
- * the same click path (see `assign-control.test.tsx`).
+ * the same click path (see `assign-popover.test.tsx`).
  */
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => {} }) }));
