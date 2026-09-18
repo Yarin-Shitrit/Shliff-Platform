@@ -19,11 +19,12 @@ const { replace, refresh } = vi.hoisted(() => ({
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace, refresh }) }));
 
 /** `vi.mock` factories are hoisted above every other statement. */
-const { recordPaymentAction } = vi.hoisted(() => ({
+const { recordPaymentAction, deletePaymentAction } = vi.hoisted(() => ({
   recordPaymentAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
+  deletePaymentAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
 }));
 /** `./actions` is a `'use server'` module whose graph reaches `@/db`. */
-vi.mock('./actions', () => ({ recordPaymentAction }));
+vi.mock('./actions', () => ({ recordPaymentAction, deletePaymentAction }));
 
 import { PaymentDrawer, type AccountOption } from './payment-drawer';
 
@@ -248,5 +249,76 @@ describe('PaymentDrawer', () => {
   it('names the lead the payment will be recorded under', () => {
     renderDrawer();
     expect(screen.getByText('יירשם על שמך · noa@shliff.camp')).toBeDefined();
+  });
+});
+
+/**
+ * The kit's `ConfirmDialog` is `role="alertdialog"`, and the `Drawer` it opens
+ * over is `role="dialog"`. Querying `getByRole('dialog')` here would match the
+ * drawer — whose own text already carries the amount, the channel, the date,
+ * the name and every account option — and every assertion below would pass
+ * without the confirmation existing at all. The role is the discriminator.
+ */
+describe('deleting a payment', () => {
+  const PAID = row({
+    paidAgorot: 50000, outstandingAgorot: 70000,
+    payments: [payment({ amountAgorot: 50000, channel: 'פייבוקס', accountId: 'acc-cash' })],
+  });
+
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('does not delete on the first click (R8)', () => {
+    renderDrawer({ row: PAID });
+    fireEvent.click(screen.getByRole('button', { name: /הסרה/ }));
+    expect(deletePaymentAction).not.toHaveBeenCalled();
+  });
+
+  it('names the payment and what removing it will do', () => {
+    renderDrawer({ row: PAID });
+    fireEvent.click(screen.getByRole('button', { name: /הסרה/ }));
+
+    const dialog = screen.getByRole('alertdialog');
+    expect(dialog.textContent).toContain('500 ₪');
+    expect(dialog.textContent).toContain('פייבוקס');
+    expect(dialog.textContent).toContain('21/06/26');
+    expect(dialog.textContent).toContain('איתי כהן');
+    expect(dialog.textContent).toContain('קופת מזומן');
+  });
+
+  it('puts the destructive verb on the confirm button', () => {
+    renderDrawer({ row: PAID });
+    fireEvent.click(screen.getByRole('button', { name: /הסרה/ }));
+    expect(screen.getByRole('button', { name: 'מחיקת התשלום' })).toBeDefined();
+  });
+
+  it('deletes once the lead confirms', () => {
+    renderDrawer({ row: PAID });
+    fireEvent.click(screen.getByRole('button', { name: /הסרה/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'מחיקת התשלום' }));
+    expect(deletePaymentAction).toHaveBeenCalledWith('pay-1');
+  });
+
+  it('deletes nothing when the lead backs out', () => {
+    renderDrawer({ row: PAID });
+    fireEvent.click(screen.getByRole('button', { name: /הסרה/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'ביטול' }));
+    expect(deletePaymentAction).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('shows a refusal rather than pretending the payment is gone', async () => {
+    deletePaymentAction.mockResolvedValueOnce({ ok: false, error: 'אין הרשאה' });
+    renderDrawer({ row: PAID });
+    fireEvent.click(screen.getByRole('button', { name: /הסרה/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'מחיקת התשלום' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('אין הרשאה');
+  });
+
+  it('says only the collection when the payment named no קופה', () => {
+    renderDrawer({ row: row({
+      paidAgorot: 50000, outstandingAgorot: 70000, payments: [payment()],
+    }) });
+    fireEvent.click(screen.getByRole('button', { name: /הסרה/ }));
+    expect(screen.getByRole('alertdialog').textContent).not.toContain('ומהיתרה של');
   });
 });

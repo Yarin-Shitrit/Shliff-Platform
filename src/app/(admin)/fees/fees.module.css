@@ -237,3 +237,5 @@
 }
 
 .previousList li:last-child { border-block-end: none; }
+
+.rowEnd { margin-inline-start: auto; }

@@ -16,18 +16,21 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Drawer } from '@/components/ui/drawer';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Field, MoneyInput, Select, Segmented, Textarea } from '@/components/ui/field';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { Money, DateText } from '@/components/format';
 import { formatShekels } from '@/lib/money';
+import { formatDateShort } from '@/lib/dates';
 import { isBlank } from '@/lib/text/normalize';
 import { PAYMENT_CHANNELS } from '@/db/schema/camp';
 import type { PaymentChannel } from '@/db/schema/camp';
 import type { AccountKind } from '@/db/schema/money';
 import type { MemberFeeRow } from '@/lib/fees/season-fees';
+import type { PaymentRow } from '@/lib/fees/payments';
 import type { FeeView } from '@/lib/fees/views';
-import { recordPaymentAction } from './actions';
+import { recordPaymentAction, deletePaymentAction } from './actions';
 import { feesHref } from './href';
 import styles from './fees.module.css';
 
@@ -74,6 +77,7 @@ export function PaymentDrawer({
   const [pending, setPending] = useState(false);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
   const [saved, setSaved] = useState<Saved | null>(null);
+  const [removing, setRemoving] = useState<PaymentRow | null>(null);
 
   const closeHref = feesHref({ season: seasonId, view });
   const isOffset = channel === 'קיזוז';
@@ -134,6 +138,24 @@ export function PaymentDrawer({
         router.replace(feesHref({ season: seasonId, view, pay: nextPersonId }));
       }
       // The action revalidated `/fees`; this repaints the table underneath.
+      router.refresh();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function confirmRemove() {
+    const target = removing;
+    setRemoving(null);
+    if (!target) return;
+    setRefusal(null);
+    setPending(true);
+    try {
+      const result = await deletePaymentAction(target.id);
+      if (!result.ok) {
+        setRefusal({ where: 'form', message: result.error });
+        return;
+      }
       router.refresh();
     } finally {
       setPending(false);
@@ -270,11 +292,52 @@ export function PaymentDrawer({
                 {entry.accountId === null && entry.channel !== 'קיזוז' && (
                   <span className={styles.muted}>בלי קופה</span>
                 )}
+                <span className={styles.rowEnd}>
+                  {/*
+                    The visible word comes first and the rest of the accessible
+                    name is only visually hidden, so the name a screen reader
+                    announces starts with the label a sighted lead reads — and
+                    four `הסרה` buttons in one list are still told apart.
+                  */}
+                  <Button
+                    tone="ghost" size="sm" disabled={pending}
+                    onClick={() => setRemoving(entry)}
+                  >
+                    <>
+                      הסרה
+                      <span className="sr-only">
+                        {` — תשלום של ${formatShekels(entry.amountAgorot)}`}
+                        {` מ־${formatDateShort(entry.paidOn)}`}
+                      </span>
+                    </>
+                  </Button>
+                </span>
               </li>
             ))}
           </ul>
         )}
       </section>
+
+      {/* R8: removing a payment moves money out of two places at once, and the
+          lead must read both before it happens. */}
+      {removing && (
+        <ConfirmDialog
+          title="מחיקת תשלום"
+          confirmLabel="מחיקת התשלום"
+          onCancel={() => setRemoving(null)}
+          onConfirm={confirmRemove}
+          consequence={(
+            <>
+              {'תשלום של '}<Money agorot={removing.amountAgorot} />
+              {` ב${removing.channel} מ־`}<DateText at={removing.paidOn} />
+              {` עבור ${row.displayName} יימחק. הסכום ירד מהגבייה`}
+              {removing.accountId
+                ? `, ומהיתרה של ${accounts.find((one) => one.id === removing.accountId)?.name ?? 'הקופה'}.`
+                : '.'}
+            </>
+          )}
+        />
+      )}
 
       <Banner
         tone="neutral"
