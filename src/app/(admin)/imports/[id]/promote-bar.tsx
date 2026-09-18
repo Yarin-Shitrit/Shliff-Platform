@@ -24,7 +24,10 @@ import { confirmAndPromoteAction } from './actions';
 import styles from './import-review.module.css';
 
 export function PromoteBar(
-  { uploadId, blockId, archetype, preflight, draft, budgetCategory, dirty, nextBlockId }: {
+  {
+    uploadId, blockId, archetype, preflight, draft, budgetCategory,
+    dirty, countable, nextBlockId,
+  }: {
     uploadId: string;
     blockId: string;
     archetype: BlockArchetype;
@@ -35,6 +38,14 @@ export function PromoteBar(
     budgetCategory: BudgetCategory | null;
     /** True while the draft differs from what those counts describe. */
     dirty: boolean;
+    /**
+     * False when the dry run could not say what this press would write.
+     * `promoteBlock` refuses an unconfirmed block WHOLE, before it looks at a
+     * single row, and this button confirms before it promotes — so on exactly
+     * the blocks this screen exists to review the counts describe a world the
+     * press ends. An unknowable count is as bad as a stale one.
+     */
+    countable: boolean;
     /** The next block still wanting a human, or null when this is the last. */
     nextBlockId: string | null;
   },
@@ -72,7 +83,8 @@ export function PromoteBar(
     <footer className={styles.promoteBar}>
       {/* A17: one isolate per clause, each a phrase of its own. */}
       <span className={styles.preflight}>
-        {dirty ? 'הספירה תתעדכן אחרי השמירה' : (
+        {!countable ? 'הספירה תופיע אחרי האישור' : dirty
+          ? 'הספירה תתעדכן אחרי השמירה' : (
           <>
             <bdi>ייכתבו {preflight.written} שורות</bdi>
             {' · '}
@@ -104,7 +116,7 @@ export function PromoteBar(
         onClick={onPromote}
         disabled={pending}
       >
-        {pending ? 'מקדם…' : dirty
+        {pending ? 'מקדם…' : (dirty || !countable)
           ? 'אישור וקידום'
           : <bdi>אישור וקידום {preflight.written} שורות</bdi>}
       </button>

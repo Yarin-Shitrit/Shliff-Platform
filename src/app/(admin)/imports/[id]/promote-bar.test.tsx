@@ -22,7 +22,7 @@ function renderBar(over: Partial<React.ComponentProps<typeof PromoteBar>> = {}) 
     <PromoteBar
       uploadId="u1" blockId="b1" archetype="ledger"
       preflight={preflight} draft={[{ column: 1, field: 'date', confidence: 1 }]}
-      budgetCategory={null} dirty={false} nextBlockId="b3" {...over}
+      budgetCategory={null} dirty={false} countable nextBlockId="b3" {...over}
     />,
   );
 }
@@ -136,5 +136,29 @@ describe('PromoteBar', () => {
   it('offers no skip when this is the last table still waiting', () => {
     renderBar({ nextBlockId: null });
     expect(screen.queryByRole('link', { name: 'דילוג' })).toBeNull();
+  });
+
+  /**
+   * Found against the real database, not by a unit test. `promoteBlock`
+   * refuses an unconfirmed block WHOLE, before it looks at a single row, so
+   * the dry run behind this bar reports nothing written — on exactly the
+   * blocks this screen exists to review. The button would have read
+   * "אישור וקידום 0 שורות" and then written twenty-four rows. An unknowable
+   * count is as bad as a stale one, and for the same reason.
+   */
+  it('says the count is not known yet rather than promising zero', () => {
+    renderBar({
+      countable: false,
+      preflight: { blocks: 1, written: 0, noted: 0, refused: 1, deleted: 0, retained: 0 },
+    });
+    expect(screen.getByRole('button', { name: 'אישור וקידום' })).toBeTruthy();
+    expect(screen.getByText('הספירה תופיע אחרי האישור')).toBeTruthy();
+    expect(screen.queryByText(/ייכתבו/)).toBeNull();
+  });
+
+  it('still says the count is stale rather than unknown when the draft moved', () => {
+    renderBar({ dirty: true });
+    expect(screen.getByText('הספירה תתעדכן אחרי השמירה')).toBeTruthy();
+    expect(screen.queryByText('הספירה תופיע אחרי האישור')).toBeNull();
   });
 });

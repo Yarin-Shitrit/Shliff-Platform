@@ -171,4 +171,33 @@ describe('BlockDetail', () => {
       'b1', 'budget_lines', [{ column: 1, field: 'date', confidence: 1 }], 'dancefloor',
     ));
   });
+
+  /**
+   * The button confirms before it promotes, so a refusal that says "not
+   * approved yet" is one this very press clears — and the zeros beside it
+   * describe a world the press ends. Every other whole-block refusal survives
+   * the press, so its zeros are true and stay.
+   */
+  it('promises no count for a table this button is about to approve', () => {
+    renderDetail({
+      preflight: { blocks: 1, written: 0, noted: 0, refused: 1, deleted: 0, retained: 0 },
+      refusal: {
+        sheetRow: 3, reason: 'unconfirmed', cells: [],
+        message: 'הבלוק עדיין לא אושר',
+      },
+    });
+    expect(screen.getByRole('button', { name: 'אישור וקידום' })).toBeTruthy();
+    expect(screen.getByText('הספירה תופיע אחרי האישור')).toBeTruthy();
+  });
+
+  it('keeps the count for a refusal the button cannot clear', () => {
+    renderDetail({
+      preflight: { blocks: 1, written: 0, noted: 0, refused: 1, deleted: 0, retained: 0 },
+      refusal: {
+        sheetRow: 3, reason: 'no-promoter', cells: [],
+        message: 'המערכת עדיין לא יודעת להכניס טבלה מסוג זה — היא נשמרת לעיון בלבד',
+      },
+    });
+    expect(screen.getByText('ייכתבו 0 שורות')).toBeTruthy();
+  });
 });

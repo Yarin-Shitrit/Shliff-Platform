@@ -27,7 +27,7 @@ import Link from 'next/link';
 import type { BlockStateRow } from '@/lib/import/register';
 import type { ColumnRow, PromotionSummary } from '@/lib/import/review';
 import { mappingKey } from '@/lib/import/review';
-import type { Refusal } from '@/lib/import/promote/types';
+import type { Refusal, RefusalReason } from '@/lib/import/promote/types';
 import type { ColumnMapping } from '@/lib/classify/map-columns';
 import type { BudgetCategory } from '@/db/schema/money';
 import { Banner } from '@/components/ui/banner';
@@ -38,6 +38,10 @@ import { BudgetCategoryPicker } from './budget-category-picker';
 import { ColumnMapTable } from './column-map-table';
 import { PromoteBar } from './promote-bar';
 import styles from './import-review.module.css';
+
+/** Whole-block refusals that pressing אישור וקידום resolves: it confirms the
+ *  block and replaces its column map, in that order. */
+const CLEARED_BY_CONFIRMING: readonly RefusalReason[] = ['unconfirmed', 'unmapped-column'];
 
 export function BlockDetail(
   {
@@ -80,6 +84,17 @@ export function BlockDetail(
    */
   const dirty = mappingKey(block.archetype, draft)
     !== mappingKey(block.archetype, block.columnMap);
+
+  /**
+   * The button confirms before it promotes, so a whole-block refusal that this
+   * very press clears makes the dry run's counts describe a world the press
+   * ends — `promoteBlock` refuses an unconfirmed block before it looks at a
+   * single row, so those counts are all zero on exactly the blocks a lead
+   * comes here to review. Every other whole-block refusal survives the press,
+   * and its zeros are true.
+   */
+  const countable = refusal === null
+    || !CLEARED_BY_CONFIRMING.includes(refusal.reason);
 
   return (
     <div className={styles.detail}>
@@ -147,6 +162,7 @@ export function BlockDetail(
         draft={draft}
         budgetCategory={category}
         dirty={dirty}
+        countable={countable}
         nextBlockId={skipBlockId}
       />
     </div>
