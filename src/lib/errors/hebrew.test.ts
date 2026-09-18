@@ -45,6 +45,7 @@ describe('toHebrewError', () => {
   });
 
   it('passes through a message that is already Hebrew', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     const hebrew = 'קיזוז אינו מזיז מזומן, ולכן אינו נכנס לחשבון';
     expect(toHebrewError(new Error(hebrew), MAP)).toBe(hebrew);
   });
@@ -207,5 +208,40 @@ describe('HebrewRefusal — a refusal that says it is one', () => {
   it('keeps a cause, so the underlying failure is still there to log', () => {
     const cause = new Error('connection terminated unexpectedly');
     expect(new HebrewRefusal('נכשל.', { cause }).cause).toBe(cause);
+  });
+});
+
+/**
+ * A20's second half. The alphabet passthrough stays as a fallback, because
+ * bare-Hebrew throws still exist across the app — but it stops being silent.
+ * Each line it logs is one call site still resting on an inference, so the
+ * log is the list, and the passthrough can be deleted when the list empties.
+ */
+describe('the alphabet passthrough is now visible', () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('logs the message it let through', () => {
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const hebrew = 'קיזוז אינו מזיז מזומן, ולכן אינו נכנס לחשבון';
+
+    expect(toHebrewError(new Error(hebrew), MAP)).toBe(hebrew);
+    expect(warned).toHaveBeenCalledWith(
+      'unmarked hebrew refusal — throw HebrewRefusal instead', hebrew,
+    );
+  });
+
+  /** A marked refusal is not resting on the inference, so it must not appear
+   *  in the list — otherwise the list never empties and stops meaning
+   *  anything. */
+  it('stays quiet for a marked refusal', () => {
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    toHebrewError(new HebrewRefusal('הקופה שנבחרה לא קיימת או נסגרה.'), MAP);
+    expect(warned).not.toHaveBeenCalled();
+  });
+
+  it('stays quiet when the map answered', () => {
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    toHebrewError(new Error('an exception must carry a reason'), MAP);
+    expect(warned).not.toHaveBeenCalled();
   });
 });

@@ -118,8 +118,15 @@ export function toHebrewError(error: unknown, map: HebrewErrors): string {
     if (hit) return hit[1];
   }
 
+  // The inference `HebrewRefusal` replaces, kept as a fallback because bare
+  // Hebrew throws still exist across the app — but no longer silent. Each
+  // line logged here is one call site still resting on it, so the log is the
+  // list, and the passthrough can be deleted when the list empties.
   for (const message of messages) {
-    if (HEBREW_LETTER.test(message) && !LATIN_LETTER.test(message)) return message;
+    if (HEBREW_LETTER.test(message) && !LATIN_LETTER.test(message)) {
+      console.warn('unmarked hebrew refusal — throw HebrewRefusal instead', message);
+      return message;
+    }
   }
 
   console.error('unmapped server error', messages.join(' <- wrapped by <- '));
