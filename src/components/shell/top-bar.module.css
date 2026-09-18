@@ -15,6 +15,21 @@
   border-block-end: 1px solid var(--line);
 }
 
+/*
+ * Below 1024px `sidebar.module.css`'s `.menubutton` leaves the flow and
+ * floats at `inset-inline-start: 14px`, `--tap-min` (44px) square — so it
+ * occupies 14px→58px from the inline-start edge, right where the
+ * breadcrumbs start. Nothing in this file knew that until now: reserving
+ * exactly the button's footprint plus a gap as start padding keeps every
+ * page's crumbs clear of it without this file or `sidebar.module.css`
+ * needing to know the other's pixels beyond the shared tokens.
+ */
+@media (max-width: 1023.98px) {
+  .topbar {
+    padding-inline-start: calc(var(--tap-min) + var(--space-4));
+  }
+}
+
 .crumbs {
   display: flex;
   align-items: center;
