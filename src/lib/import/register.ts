@@ -280,3 +280,20 @@ export async function promoteUpload(
   }
   return results;
 }
+
+/**
+ * One block's cells, for the one block a lead has open.
+ *
+ * Deliberately not part of `BlockStateRow`: the file list calls `blockStates`
+ * for every upload, and carrying every block's whole grid through it to render
+ * one would be the same waste as the eleven dry runs the review page already
+ * refuses to make. Answers null for a block that is not there, because that is
+ * a 404 the page renders rather than a failure.
+ */
+export async function blockGrid(
+  db: AnyDb, blockId: string,
+): Promise<string[][] | null> {
+  const [row] = await db.select({ rawGrid: blocks.rawGrid })
+    .from(blocks).where(eq(blocks.id, blockId));
+  return row?.rawGrid ?? null;
+}

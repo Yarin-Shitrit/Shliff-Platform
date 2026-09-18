@@ -528,3 +528,93 @@
   font: var(--text-body);
   color: var(--ink-2);
 }
+
+/* ----------------------------------------------- the block's own footer */
+
+.promoteBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--raised);
+  position: sticky;
+  inset-block-end: 0;
+  z-index: var(--z-bulk);
+}
+
+.preflight {
+  font: var(--text-meta);
+  color: var(--ink-2);
+}
+
+.grow {
+  flex: 1 1 auto;
+}
+
+.doneNote {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font: var(--text-meta);
+  color: var(--ok);
+}
+
+.finished {
+  color: var(--ink-2);
+}
+
+.primary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: var(--control-h);
+  padding-inline: var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: var(--brand);
+  color: var(--brand-ink);
+  font: var(--text-label);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.primary:hover {
+  background: var(--brand-hover);
+}
+
+.primary:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.primary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.bulkPromote {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.detailNav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-inline-start: auto;
+  font: var(--text-meta);
+}
+
+.headActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}

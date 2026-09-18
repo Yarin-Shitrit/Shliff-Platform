@@ -8,7 +8,7 @@ import { BLOCK_ARCHETYPES } from '@/lib/classify/types';
 import { promoteBlock } from '@/lib/import/promote/promote';
 import {
   needsReview, blockState, PROMOTABLE_ARCHETYPES,
-  blockStates, sheetLabels, promotedRowCounts, promoteUpload,
+  blockStates, sheetLabels, promotedRowCounts, promoteUpload, blockGrid,
 } from './register';
 import { summarise } from './review';
 
@@ -296,5 +296,33 @@ describe('promoteUpload', () => {
     const mineBlocks = await blockStates(db, mine.id);
     expect(results).toHaveLength(1);
     expect(results[0].blockId).toBe(mineBlocks[0].blockId);
+  });
+});
+
+/**
+ * The review screen needs one block's cells, and only the open one's. Keeping
+ * `rawGrid` out of `BlockStateRow` is deliberate: the file list calls
+ * `blockStates` for every upload, and carrying every block's whole grid
+ * through it to render one would be the same waste as the eleven dry runs the
+ * page already refuses to make.
+ */
+describe('blockGrid', () => {
+  let db: TestDb;
+  beforeEach(async () => { db = await createTestDb(); });
+
+  it('answers with the block’s own cells', async () => {
+    const upload = await makeUpload(db, 'x.xlsx', 'a');
+    const sheet = await makeSheet(db, upload.id, 'סיכום כללי');
+    const block = await makeBlock(db, sheet.id, {
+      rawGrid: [['תאריך', 'פירוט'], ['05/07/26', 'גנרטור']],
+    });
+
+    expect(await blockGrid(db, block.id)).toEqual([
+      ['תאריך', 'פירוט'], ['05/07/26', 'גנרטור'],
+    ]);
+  });
+
+  it('answers null for a block that is not there, rather than throwing', async () => {
+    expect(await blockGrid(db, '00000000-0000-4000-8000-000000000000')).toBeNull();
   });
 });

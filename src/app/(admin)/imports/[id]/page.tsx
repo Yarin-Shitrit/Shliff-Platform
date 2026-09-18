@@ -4,15 +4,27 @@ import { notFound } from 'next/navigation';
 import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import { findUpload } from '@/lib/import/uploads';
-import { blockStates, sheetLabels } from '@/lib/import/register';
+import { blockStates, sheetLabels, blockGrid } from '@/lib/import/register';
 import { listSeasons } from '@/lib/members/roster';
+import { formatDateShort } from '@/lib/dates';
 import { promoteBlock } from '@/lib/import/promote/promote';
-import { reviewStep } from '@/lib/import/review';
+import {
+  reviewStep, gridRows, columnRows, blockRefusal, summarise, mappingKey,
+  nextUnreviewed,
+} from '@/lib/import/review';
 import { Banner } from '@/components/ui/banner';
 import { Stepper } from './stepper';
 import { BlockRail } from './block-rail';
 import { BlockDetail } from './block-detail';
+import { PromoteUploadButton } from './promote-upload-button';
+import { RawGrid, type RowFilter } from './raw-grid';
 import styles from './import-review.module.css';
+
+const ROW_FILTERS: readonly RowFilter[] = ['all', 'written', 'refused'];
+
+function rowFilter(value: string | undefined): RowFilter {
+  return ROW_FILTERS.includes(value as RowFilter) ? (value as RowFilter) : 'all';
+}
 
 /** Next 16: both `params` and `searchParams` arrive as Promises, and a search
  *  param may repeat, so every value is `string | string[] | undefined`. */
@@ -73,13 +85,34 @@ export default async function ImportReviewPage(
    * to be asked, and asking it for eleven blocks to render one would be
    * eleven transactions to show one answer.
    */
-  const preview = openBlock
-    ? await promoteBlock(db, openBlock.blockId, {
-      dryRun: true, recordedBy: admin.email,
-    })
-    : null;
+  const [preview, rawGrid] = openBlock
+    ? await Promise.all([
+      promoteBlock(db, openBlock.blockId, { dryRun: true, recordedBy: admin.email }),
+      blockGrid(db, openBlock.blockId),
+    ])
+    : [null, null];
 
   const confirmed = blocks.filter((b) => b.confirmedAt !== null).length;
+  /** A23: a control scoped to this file's confirmed blocks, never the database. */
+  const readyToPromote = blocks.filter((b) => b.state === 'confirmed').length;
+
+  /**
+   * Everything the detail pane needs that does not depend on a draft is built
+   * here, on the server. `columnRows` runs against the STORED map and the
+   * draft overlays it in the browser — the headers and the samples do not move
+   * when a lead retargets a column, so recomputing them client-side would mean
+   * shipping the whole grid to do it.
+   */
+  const at = openBlock ? blocks.findIndex((b) => b.blockId === openBlock.blockId) : -1;
+  const shape = openBlock && rawGrid
+    ? {
+      top: openBlock.top,
+      left: openBlock.left,
+      right: openBlock.right,
+      headerRow: openBlock.headerRow,
+      rawGrid,
+    }
+    : null;
 
   return (
     <main className={styles.page}>
@@ -97,7 +130,12 @@ export default async function ImportReviewPage(
             <bdi>{confirmed} אושרו</bdi>
           </p>
         </div>
-        <Link className={styles.secondary} href="/imports">כל הקבצים</Link>
+        <div className={styles.headActions}>
+          {readyToPromote > 0
+            ? <PromoteUploadButton uploadId={id} confirmedCount={readyToPromote} />
+            : null}
+          <Link className={styles.secondary} href="/imports">כל הקבצים</Link>
+        </div>
       </div>
 
       {one(search.duplicate) === '1'
@@ -133,9 +171,45 @@ export default async function ImportReviewPage(
             openBlockId={openBlock?.blockId ?? null}
             seasons={seasonRows}
           />
-          {openBlock && preview
-            ? <BlockDetail block={openBlock} preview={preview} />
-            : null}
+          {/*
+            * `key` is the mapping the server holds. When `applyConfirmation`
+            * recomputes a map for a new archetype, this key changes, the pane
+            * remounts and any draft goes with it — so the UI re-reads rather
+            * than re-sending a map that no longer describes anything. A local
+            * edit does not change props, so it does not remount.
+            *
+            * The grid is handed down as a rendered node, not imported by the
+            * pane: a client module that imports `RawGrid` drags it across the
+            * boundary and a 59-row table becomes client JavaScript.
+            */}
+          {openBlock && preview && shape ? (
+            <BlockDetail
+              key={mappingKey(openBlock.archetype, openBlock.columnMap)}
+              uploadId={id}
+              block={openBlock}
+              columns={columnRows(shape, openBlock.columnMap)}
+              preflight={summarise([preview])}
+              refusal={blockRefusal(preview)}
+              grid={(
+                <RawGrid
+                  uploadId={id}
+                  blockId={openBlock.blockId}
+                  left={openBlock.left}
+                  rows={gridRows(shape, preview)}
+                  filter={rowFilter(one(search.rows))}
+                />
+              )}
+              position={at + 1}
+              total={blocks.length}
+              prevId={blocks[at - 1]?.blockId ?? null}
+              nextId={blocks[at + 1]?.blockId ?? null}
+              skipBlockId={nextUnreviewed(blocks, openBlock.blockId)}
+              confirmedBy={openBlock.confirmedBy}
+              confirmedOn={openBlock.confirmedAt === null
+                ? null
+                : formatDateShort(openBlock.confirmedAt)}
+            />
+          ) : null}
         </div>
       )}
     </main>

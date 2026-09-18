@@ -2,12 +2,15 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 
-const { findUpload, blockStates, sheetLabels, listSeasons, promoteBlock } = vi.hoisted(() => ({
+const {
+  findUpload, blockStates, sheetLabels, blockGrid, listSeasons, promoteBlock,
+} = vi.hoisted(() => ({
   findUpload: vi.fn(),
   blockStates: vi.fn(),
   sheetLabels: vi.fn(),
+  blockGrid: vi.fn(),
   listSeasons: vi.fn(),
   promoteBlock: vi.fn(),
 }));
@@ -28,12 +31,17 @@ vi.mock('@/lib/import/uploads', async (original) => ({
  */
 vi.mock('@/lib/import/register', async (original) => ({
   ...(await original<typeof import('@/lib/import/register')>()),
-  blockStates, sheetLabels,
+  blockStates, sheetLabels, blockGrid,
 }));
 vi.mock('@/lib/members/roster', () => ({ listSeasons }));
 vi.mock('@/lib/import/promote/promote', () => ({ promoteBlock }));
 vi.mock('./actions', () => ({
   setSeasonAction: vi.fn(), setAuthorityAction: vi.fn(),
+  confirmBlock: vi.fn(), confirmAndPromoteAction: vi.fn(), promoteUploadAction: vi.fn(),
+}));
+vi.mock('next/navigation', async (original) => ({
+  ...(await original<typeof import('next/navigation')>()),
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
 import ImportReviewPage from './page';
@@ -63,6 +71,16 @@ const emptyRun = {
   written: [], refused: [], deleted: 0, retained: [],
 };
 
+/** Three sheet rows: the workbook's header, one row that writes, one refused. */
+const GRID = [['תאריך', 'פירוט'], ['05/07/26', 'גנרטור'], ['', 'סה״כ']];
+
+const oneOfEach = {
+  ...emptyRun,
+  written: [{ table: 'ledger_entries', sheetRow: 4, id: null, summary: 'גנרטור', notes: [] }],
+  refused: [{ sheetRow: 5, reason: 'total-row', cells: [],
+    message: 'שורת סה״כ היא סכום מחושב, לא תנועה' }],
+};
+
 function open(search: Record<string, string> = {}) {
   return ImportReviewPage({
     params: Promise.resolve({ id: 'u1' }),
@@ -74,6 +92,7 @@ beforeEach(() => {
   findUpload.mockReset().mockResolvedValue(upload);
   blockStates.mockReset();
   sheetLabels.mockReset().mockResolvedValue([sheet]);
+  blockGrid.mockReset().mockResolvedValue(GRID);
   listSeasons.mockReset().mockResolvedValue([{ id: 'y26', name: 'ברן 26', year: 2026 }]);
   promoteBlock.mockReset().mockResolvedValue(emptyRun);
 });
@@ -169,5 +188,71 @@ describe('/imports/[id]', () => {
     expect(screen.getByRole('link', { name: /העלאת קובץ אחר/ }).getAttribute('href'))
       .toBe('/upload');
     expect(promoteBlock).not.toHaveBeenCalled();
+  });
+
+  it('numbers the open block’s place among the file’s tables', async () => {
+    blockStates.mockResolvedValue([
+      block({ blockId: 'b1', state: 'promoted' }),
+      block({ blockId: 'b2', state: 'needs-review' }),
+      block({ blockId: 'b3', state: 'needs-review' }),
+    ]);
+    render(await open({ block: 'b2' }));
+    expect(screen.getByText('2 מתוך 3')).toBeTruthy();
+  });
+
+  /**
+   * Scoped to the grid, because the same cell text is also a sample in the
+   * column table above it — an unscoped query matches both and throws, and an
+   * `getAllBy` would pass with no filtering at all.
+   */
+  const grid = () => within(screen.getByRole('table', { name: 'הטבלה כפי שהיא בגיליון' }));
+
+  /**
+   * The grid's filter is a URL, and the page is what reads it. Without this
+   * the segmented control would change the address and nothing else.
+   */
+  it('renders the grid through the filter the URL names', async () => {
+    blockStates.mockResolvedValue([block()]);
+    promoteBlock.mockResolvedValue(oneOfEach);
+    render(await open({ rows: 'refused' }));
+    expect(grid().getByText('סה״כ')).toBeTruthy();
+    expect(grid().queryByText('גנרטור')).toBeNull();
+    expect(screen.getByText('לא נכתב: שורת סה״כ היא סכום מחושב, לא תנועה')).toBeTruthy();
+  });
+
+  it('shows every row when the URL names no filter', async () => {
+    blockStates.mockResolvedValue([block()]);
+    promoteBlock.mockResolvedValue(oneOfEach);
+    render(await open());
+    expect(grid().getByText('גנרטור')).toBeTruthy();
+    expect(grid().getByText('סה״כ')).toBeTruthy();
+  });
+
+  it('ignores a filter the URL invents rather than emptying the grid', async () => {
+    blockStates.mockResolvedValue([block()]);
+    promoteBlock.mockResolvedValue(oneOfEach);
+    render(await open({ rows: 'nonsense' }));
+    expect(grid().getByText('גנרטור')).toBeTruthy();
+    expect(grid().getByText('סה״כ')).toBeTruthy();
+  });
+
+  /**
+   * A23: a control scoped to one file is permitted; one that reaches the whole
+   * database is not. The count names what it is about to write.
+   */
+  it('offers to promote the confirmed tables of this file, and names how many', async () => {
+    blockStates.mockResolvedValue([
+      block({ blockId: 'b1', state: 'confirmed', confirmedAt: new Date() }),
+      block({ blockId: 'b2', state: 'confirmed', confirmedAt: new Date() }),
+      block({ blockId: 'b3', state: 'needs-review' }),
+    ]);
+    render(await open());
+    expect(screen.getByRole('button', { name: 'קידום 2 טבלאות מאושרות' })).toBeTruthy();
+  });
+
+  it('offers no bulk promotion while nothing is confirmed', async () => {
+    blockStates.mockResolvedValue([block({ state: 'needs-review' })]);
+    render(await open());
+    expect(screen.queryByRole('button', { name: /טבלאות מאושרות/ })).toBeNull();
   });
 });
