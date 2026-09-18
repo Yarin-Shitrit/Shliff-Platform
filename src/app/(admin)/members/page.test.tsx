@@ -12,13 +12,15 @@ import type { PersonListRow, PersonDues } from '@/lib/members/people-list';
  * instead (see `src/app/(admin)/money/page.test.tsx`).
  */
 const {
-  requireAdmin, listSeasons, listPeopleForSeason, listUnlinkedNames, resolveName, notFound,
+  requireAdmin, listSeasons, listPeopleForSeason, listUnlinkedNames, resolveName,
+  previewMerge, notFound,
 } = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   listSeasons: vi.fn(),
   listPeopleForSeason: vi.fn(),
   listUnlinkedNames: vi.fn(),
   resolveName: vi.fn(),
+  previewMerge: vi.fn(),
   notFound: vi.fn(() => { throw new Error('NEXT_NOT_FOUND'); }),
 }));
 vi.mock('@/db', () => ({ db: {} }));
@@ -27,6 +29,7 @@ vi.mock('@/lib/members/roster', () => ({ listSeasons }));
 vi.mock('@/lib/members/people-list', () => ({ listPeopleForSeason }));
 vi.mock('@/lib/members/identity', () => ({ listUnlinkedNames, resolveName }));
 vi.mock('@/lib/work/coverage', () => ({ responsibilitiesOf: vi.fn(async () => []) }));
+vi.mock('@/lib/members/link', () => ({ previewMerge }));
 vi.mock('@/lib/members/change-log', () => ({ personChangeLog: vi.fn(async () => []) }));
 vi.mock('next/navigation', () => ({
   notFound,
@@ -86,7 +89,16 @@ beforeEach(() => {
   listPeopleForSeason.mockResolvedValue([]);
   listUnlinkedNames.mockResolvedValue([]);
   resolveName.mockResolvedValue({ personId: null, candidates: [] });
+  previewMerge.mockResolvedValue(null);
 });
+
+function side(overrides: Record<string, unknown> = {}) {
+  return {
+    personId: 'a', displayName: 'אופק', aliases: ['אופק'], seasons: [],
+    duesCount: 0, paymentsCount: 0, assignmentsCount: 0, outstandingAgorot: 0,
+    ...overrides,
+  };
+}
 
 describe('/members — the gate', () => {
   it('refuses before it reads anything at all', async () => {
@@ -277,6 +289,114 @@ describe('/members — the drawers', () => {
   it('renders no drawer at all when the peek names nobody', async () => {
     listPeopleForSeason.mockResolvedValue([row({ personId: 'p1' })]);
     const { container } = await renderPage({ peek: 'ghost' });
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+});
+
+
+describe('/members — merge, side by side', () => {
+  const MERGE_PARAMS = { peek: 'a', act: 'merge', with: 'b' };
+
+  beforeEach(() => {
+    listPeopleForSeason.mockResolvedValue([
+      row({ personId: 'a', displayName: 'אופק' }),
+      row({ personId: 'b', displayName: 'אופק כהן' }),
+    ]);
+  });
+
+  it('names which record is absorbed and which survives, in words', async () => {
+    previewMerge.mockResolvedValue({
+      source: side({ personId: 'a', displayName: 'אופק', aliases: ['אופק', 'Ofek'] }),
+      target: side({ personId: 'b', displayName: 'אופק כהן', aliases: ['אופק כהן'], seasons: ['ברן 26'], duesCount: 1 }),
+      movingAliases: ['Ofek', 'אופק'],
+      conflicts: [],
+      blockers: [],
+    });
+    await renderPage(MERGE_PARAMS);
+
+    const panel = screen.getByRole('dialog');
+    expect(within(panel).getByText('נמזג')).toBeTruthy();
+    expect(within(panel).getByText('נשאר')).toBeTruthy();
+    expect(within(panel).getByText('אופק כהן')).toBeTruthy();
+  });
+
+  it('says exactly how many spellings move, and lists the four things that do not', async () => {
+    previewMerge.mockResolvedValue({
+      source: side({ personId: 'a', displayName: 'אופק', aliases: ['אופק', 'Ofek'] }),
+      target: side({ personId: 'b', displayName: 'אופק כהן' }),
+      movingAliases: ['Ofek', 'אופק'],
+      conflicts: [],
+      blockers: [],
+    });
+    await renderPage(MERGE_PARAMS);
+
+    /* Scoped to the drawer: `דמי קאמפ` is also a table header on the list
+       behind it, and a global query would find both. */
+    const panel = screen.getByRole('dialog');
+    expect(within(panel).getByText('יעברו 2 כינויים')).toBeTruthy();
+    expect(within(panel).getByText('Ofek · אופק')).toBeTruthy();
+    for (const line of ['חברות במחנה', 'דמי קאמפ', 'תשלומים', 'שיבוצים למשימות']) {
+      expect(within(panel).getByText(new RegExp(`לא יעברו — ${line}`))).toBeTruthy();
+    }
+  });
+
+  it('keeps the irreversibility paragraph and the acknowledgement when a merge is possible', async () => {
+    previewMerge.mockResolvedValue({
+      source: side({ personId: 'a', displayName: 'אופק' }),
+      target: side({ personId: 'b', displayName: 'אופק כהן' }),
+      movingAliases: ['אופק'],
+      conflicts: [],
+      blockers: [],
+    });
+    await renderPage(MERGE_PARAMS);
+
+    expect(screen.getByText(/הפעולה אינה/)).toBeTruthy();
+    expect(screen.getByLabelText('אני מאשר/ת שמדובר באותו אדם, וזו פעולה בלתי הפיכה מהמסך הזה.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'מזג' })).toBeTruthy();
+  });
+
+  /*
+   * D4's change. Today the same information arrives only after a lead presses
+   * מזג, as a role="alert". Leading with it — and rendering no confirm control
+   * at all — is what turns a refusal from an error into the normal case.
+   */
+  it('leads with the refusals and offers nothing to confirm', async () => {
+    previewMerge.mockResolvedValue({
+      source: side({ personId: 'a', displayName: 'אופק', seasons: ['ברן 26'], duesCount: 1 }),
+      target: side({ personId: 'b', displayName: 'אופק כהן' }),
+      movingAliases: ['אופק'],
+      conflicts: ['חברות במחנה', 'דמי קאמפ'],
+      blockers: [
+        { conflict: 'חברות במחנה', count: 1, href: '/members/a' },
+        { conflict: 'דמי קאמפ', count: 1, href: '/members/a?tab=payments' },
+      ],
+    });
+    await renderPage(MERGE_PARAMS);
+
+    expect(screen.getByText('למה אי אפשר למזג עדיין')).toBeTruthy();
+    expect(screen.getByRole('link', { name: /חברות במחנה/ }).getAttribute('href')).toBe('/members/a');
+    expect(screen.getByRole('link', { name: /דמי קאמפ/ }).getAttribute('href')).toBe('/members/a?tab=payments');
+    expect(screen.queryByRole('button', { name: 'מזג' })).toBeNull();
+    expect(screen.queryByLabelText(/אני מאשר/)).toBeNull();
+  });
+
+  /*
+   * A3 lets an action drawer degrade to the preview rather than needing a
+   * second rule. A merge URL whose second id is stale therefore opens the
+   * record it can still resolve, instead of a blank screen or an error — and
+   * crucially offers nothing to confirm.
+   */
+  it('degrades to the peek when the merge names someone who does not exist', async () => {
+    previewMerge.mockResolvedValue(null);
+    await renderPage(MERGE_PARAMS);
+    expect(screen.getByRole('dialog', { name: 'אופק' })).toBeTruthy();
+    expect(screen.queryByText('למה אי אפשר למזג עדיין')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'מזג' })).toBeNull();
+  });
+
+  it('renders no drawer at all when neither id resolves', async () => {
+    previewMerge.mockResolvedValue(null);
+    const { container } = await renderPage({ peek: 'ghost', act: 'merge', with: 'other' });
     expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 });

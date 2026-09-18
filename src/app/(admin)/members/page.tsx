@@ -5,9 +5,11 @@ import { requireAdmin } from '@/lib/auth/guard';
 import { listUnlinkedNames, resolveName } from '@/lib/members/identity';
 import { listSeasons } from '@/lib/members/roster';
 import { listPeopleForSeason } from '@/lib/members/people-list';
+import { previewMerge } from '@/lib/members/link';
 import {
-  PEOPLE_PATH, PEOPLE_SORTS, applyPeopleQuery, closeDrawerHref, parsePeopleQuery,
-  viewCounts, type PeopleSort, type PeopleView, type RawParams,
+  PEOPLE_PATH, PEOPLE_SORTS, applyPeopleQuery, closeDrawerHref, mergeHref,
+  parsePeopleQuery, viewCounts,
+  type PeopleSort, type PeopleView, type RawParams,
 } from '@/lib/members/people-views';
 import { SavedViews, type SavedView } from '@/components/ui/saved-views';
 import { FilterBar, type FilterOption } from '@/components/ui/filter-bar';
@@ -15,6 +17,7 @@ import { EmptyState, type EmptyStateProps } from '@/components/ui/empty-state';
 import { AddMember } from './add-member';
 import { PeopleTable, DUES_STATE_LABELS } from './people-table';
 import { PeekDrawer } from './peek-drawer';
+import { MergePanel } from './merge-panel';
 import { UnlinkedQueue, type QueuedName } from './unlinked-queue';
 import styles from './people.module.css';
 
@@ -131,13 +134,30 @@ export default async function MembersPage(
     : rows.find((candidate) => candidate.personId === query.peek) ?? null;
 
   /*
+   * The merge panel takes precedence over the peek: both are the same drawer
+   * slot, and `?act=merge` says which one the URL means. A merge whose second
+   * id no longer resolves falls back to the peek rather than to nothing — A3's
+   * "an action drawer degrades to the preview", which is also why the two are
+   * resolved in this order rather than as separate slots.
+   */
+  const merge = query.merge === null
+    ? null
+    : await previewMerge(db, query.merge[0], query.merge[1]);
+
+  /*
    * Awaited here rather than rendered as `<PeekDrawer />`: it is a Server
    * Component that reads two more tables, and this page has no Suspense
    * boundary to hand a pending element to. Awaiting keeps the whole screen —
    * list and drawer — one server render, which is also what makes the drawer
    * survive a refresh with no client fetch.
    */
-  const drawer = peeked === null ? null : await PeekDrawer({
+  const drawer = merge !== null ? (
+    <MergePanel
+      preview={merge}
+      cancelHref={closeDrawerHref(params)}
+      swapHref={mergeHref(params, merge.target.personId, merge.source.personId)}
+    />
+  ) : peeked === null ? null : await PeekDrawer({
     row: peeked,
     seasonId: scope?.id ?? null,
     seasonName: scope?.name ?? null,
