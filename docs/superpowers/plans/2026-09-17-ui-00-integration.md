@@ -1103,3 +1103,51 @@ were "now the full-suite verification", and another lane's three files sat
 uncommitted while its last words were "13/13 green". Verify by content, not by
 report: `grep -c HebrewRefusal src/lib/errors/hebrew.ts` settled in one command
 what the report could only assert.
+
+### A20a — The sentinel has landed; three live call sites remain, and they were already broken
+
+A20 and A27 are implemented (eight commits, `08e9d4d`..`f2414f3`). The shape
+plans 09/11/05 write against:
+
+```ts
+export type HebrewErrors      = ReadonlyArray<readonly [prefix: string,     hebrew: string]>;
+export type HebrewConstraints = ReadonlyArray<readonly [constraint: string, hebrew: string]>;
+export class HebrewRefusal extends Error {}
+export function isHebrewRefusal(value: unknown): value is HebrewRefusal;
+export function toHebrewError(error, map: HebrewErrors, constraints: HebrewConstraints = []): string;
+```
+
+`constraints` is a **third optional argument**, so every two-arg call site is
+untouched. Resolution order: refusal (**outermost** first — a refusal is a
+decision, and the outermost was made with the most context) → constraints
+(**innermost** first) → prefix map (innermost, then outward) → alphabet
+passthrough, which now **logs** → fallback. Constraints match **exactly**, never
+by prefix: they are identifiers, and `seasons_name_unique` beginning with
+`seasons_name` is spelling, not kinship.
+
+**`causeChain` is deliberately not exported, and no screen may reimplement one.**
+`toHebrewError` walks the chain itself; a caller that unwraps first loses both a
+marked refusal on an outer link and the wrapper's own message. Plan 10 had
+exactly that defect and `3bdc02f` removed it.
+
+**Three library throws were already losing their message, today, before any of
+this.** They interpolate a uuid, and a uuid is hex:
+
+| site | message |
+|---|---|
+| `src/lib/money/summary.ts:57` | `עונה לא נמצאה: ${seasonId}` |
+| `src/lib/money/obligations.ts:180` | `חוב לא קיים: ${input.obligationId}` |
+| `src/lib/money/funding.ts:152` | `עונה לא נמצאה: ${seasonId}` |
+
+The passthrough requires a Hebrew letter **and no Latin letter** — the Latin test
+exists so that a driver message like
+`invalid input value for enum payment_channel: "מזומן"` is not echoed raw, since
+this schema's own enum labels are Hebrew. A uuid always contains `a`–`f`, so all
+three fail the predicate and a lead sees `משהו השתבש. הפעולה לא נשמרה.` instead
+of the reason. Confirmed by measuring the two predicates, not by reading them.
+
+**This is the clearest vindication of A20 available: the hazard was not
+hypothetical and not future — it was already shipping in three places, and
+nothing was red.** Assigned to plan 09's lane, which owns all three files. The
+~11 other bare-Hebrew library throws carry **static** strings, contain no Latin,
+and are safe; they are not to be changed opportunistically.
