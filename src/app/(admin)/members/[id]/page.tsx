@@ -118,7 +118,7 @@ export async function generateMetadata(
 ): Promise<Metadata> {
   const { id } = await params;
   const dossier = await personDossier(db, id);
-  return { title: `${dossier?.displayName ?? 'אדם'} · אנשים · פלטפורמת שליף` };
+  return { title: `${dossier?.displayName ?? 'אדם'} · אנשים` };
 }
 
 export default async function PersonPage(

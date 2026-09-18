@@ -42,4 +42,33 @@ describe('every page names itself', () => {
     const source = readFileSync(join(APP_DIR, 'layout.tsx'), 'utf8');
     expect(source).toContain('template:');
   });
+
+  /**
+   * The check above asks whether somebody wrote a title. It does not ask
+   * whether the title is right, and two pages spent the whole redesign
+   * answering it correctly while rendering
+   * "אנשים · פלטפורמת שליף · קופת שליף" — the retired brand plus the one the
+   * root template appends. A net that fires on presence cannot see a wrong
+   * value; it agreed with the code about the wrong question.
+   *
+   * So: a page's own title supplies ONLY the leaf name. "קופת שליף" is the
+   * template's to add, and "פלטפורמת שליף" is retired (see layout.tsx).
+   */
+  const TITLE = /title:\s*(?:'([^']*)'|`([^`]*)`|"([^"]*)")/g;
+
+  it.each(pages.map((file) => [relative(process.cwd(), file), file] as const))(
+    '%s supplies only the leaf name',
+    (_label, file) => {
+      const source = readFileSync(file, 'utf8');
+      const titles = [...source.matchAll(TITLE)]
+        .map((m) => m[1] ?? m[2] ?? m[3])
+        .filter((t): t is string => t !== undefined);
+      // A page with no literal title builds one dynamically; the loop below
+      // simply has nothing to check, which the presence test above covers.
+      for (const title of titles) {
+        expect(title).not.toContain('קופת שליף');
+        expect(title).not.toContain('פלטפורמת שליף');
+      }
+    },
+  );
 });

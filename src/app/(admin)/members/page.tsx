@@ -23,7 +23,7 @@ import styles from './people.module.css';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = { title: 'אנשים · פלטפורמת שליף' };
+export const metadata: Metadata = { title: 'אנשים' };
 
 const SORT_LABELS: Record<PeopleSort, string> = {
   name: 'שם',
