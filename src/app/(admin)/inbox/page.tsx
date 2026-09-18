@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { readSnoozes } from './snooze';
 import { ItemRail } from './item-rail';
 import { ItemDetail } from './item-detail';
+import { evidenceFor } from './evidence-grid';
 import styles from './inbox.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -93,6 +94,11 @@ export default async function InboxPage({
   const activeId = one(params.item) ?? filtered[0]?.id ?? null;
   const active = filtered.find((item) => item.id === activeId) ?? null;
   const activeIndex = filtered.findIndex((i) => i.id === activeId);
+  // The page is the one thing in this tree that may await, so the open item's
+  // workbook evidence is read here and handed down as data. A component that
+  // awaited its own read rendered as nothing outside a Server Component tree,
+  // and the panel was simply absent with no test able to see it.
+  const evidence = active === null ? null : await evidenceFor(db, active);
 
   const groups = GROUP_LABELS
     .map((g) => ({ ...g, count: inTab.filter((i) => groupOf(i) === g.group).length }))
@@ -204,6 +210,7 @@ export default async function InboxPage({
               />
               <ItemDetail
                 item={active}
+                evidence={evidence}
                 position={activeIndex + 1}
                 total={filtered.length}
                 nextId={filtered[activeIndex + 1]?.id ?? null}

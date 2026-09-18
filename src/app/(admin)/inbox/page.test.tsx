@@ -7,10 +7,11 @@ import { EMPTY_TITLES } from '@/components/ui/empty-state';
 import type { InboxItem } from '@/lib/inbox/items';
 
 const {
-  requireAdmin, inboxItems, resolvedItems, readSnoozes, notFound,
+  requireAdmin, inboxItems, resolvedItems, readSnoozes, notFound, push, blockEvidence,
 } = vi.hoisted(() => ({
   requireAdmin: vi.fn(), inboxItems: vi.fn(), resolvedItems: vi.fn(),
   readSnoozes: vi.fn(), notFound: vi.fn(() => { throw new Error('NEXT_NOT_FOUND'); }),
+  push: vi.fn(), blockEvidence: vi.fn(),
 }));
 
 vi.mock('@/db', () => ({ db: {} }));
@@ -23,8 +24,17 @@ vi.mock('@/lib/inbox/resolved', () => ({
   resolvedItems, clearedToday: () => 4,
 }));
 vi.mock('./snooze', () => ({ readSnoozes }));
-vi.mock('next/navigation', () => ({ notFound }));
+// `useRouter` as well as `notFound`: the open item renders the action bar and
+// the keyboard binder, and both are client components that take a router.
+vi.mock('next/navigation', () => ({
+  notFound, useRouter: () => ({ push, refresh: vi.fn(), replace: vi.fn() }),
+}));
+vi.mock('@/lib/data/evidence', async (original) => ({
+  ...(await original<typeof import('@/lib/data/evidence')>()),
+  blockEvidence,
+}));
 
+import { ToastProvider } from '@/components/ui/toaster';
 import InboxPage from './page';
 
 function nameItem(over: Partial<InboxItem> = {}): InboxItem {
@@ -47,7 +57,7 @@ function refusalItem(): InboxItem {
 }
 
 async function renderPage(params: Record<string, string> = {}) {
-  render(await InboxPage({ searchParams: Promise.resolve(params) }));
+  render(<ToastProvider>{await InboxPage({ searchParams: Promise.resolve(params) })}</ToastProvider>);
 }
 
 beforeEach(() => {
@@ -57,6 +67,7 @@ beforeEach(() => {
   readSnoozes.mockResolvedValue(new Map());
   inboxItems.mockResolvedValue([]);
   resolvedItems.mockResolvedValue([]);
+  blockEvidence.mockResolvedValue(null);
 });
 
 describe('InboxPage', () => {
@@ -84,13 +95,19 @@ describe('InboxPage', () => {
   it('shows a refused total row under לידיעה, never under ממתין להחלטה', async () => {
     inboxItems.mockResolvedValue([nameItem(), refusalItem()]);
 
-    const decide = render(await InboxPage({ searchParams: Promise.resolve({ tab: 'decide' }) }));
+    const decide = render(
+      <ToastProvider>{await InboxPage({ searchParams: Promise.resolve({ tab: 'decide' }) })}</ToastProvider>,
+    );
     expect(within(decide.container).queryByText('סיכום כללי!18')).toBeNull();
-    expect(within(decide.container).getByText('״נועה ל.״')).toBeTruthy();
+    // The name now appears twice — once in the rail and once as the open
+    // item's heading — so this asks for both rather than for the only one.
+    expect(within(decide.container).getAllByText('״נועה ל.״').length).toBeGreaterThan(0);
     decide.unmount();
 
-    const notice = render(await InboxPage({ searchParams: Promise.resolve({ tab: 'notice' }) }));
-    expect(within(notice.container).getByText('סיכום כללי!18')).toBeTruthy();
+    const notice = render(
+      <ToastProvider>{await InboxPage({ searchParams: Promise.resolve({ tab: 'notice' }) })}</ToastProvider>,
+    );
+    expect(within(notice.container).getAllByText('סיכום כללי!18').length).toBeGreaterThan(0);
     expect(within(notice.container).queryByText('״נועה ל.״')).toBeNull();
   });
 
@@ -212,5 +229,97 @@ describe('the register page', () => {
     expect(css.length).toBeGreaterThan(0);
     expect(css).not.toMatch(/(^|[\s;{])(left|right)\s*:/);
     expect(css).not.toMatch(/(margin|padding|border)-(left|right)\s*:/);
+  });
+});
+
+/**
+ * The panels of the open item, rendered through the page so the assertions are
+ * against what a lead actually sees rather than against a component in
+ * isolation — which is the difference A25's twelfth unfailable test turned on.
+ */
+describe('the open item', () => {
+  const suggestion = {
+    personId: 'p1', displayName: 'נועה לוי', alias: 'נועה לוי',
+    confidence: 'חזקה' as const,
+    reasons: [
+      { key: 'exact-normalized' as const, label: 'איות זהה' },
+      { key: 'in-season-roster' as const, label: 'ברשימת ברן 26' },
+    ],
+  };
+
+  function openName() {
+    inboxItems.mockResolvedValue([nameItem({
+      suggestions: [suggestion],
+      actions: [
+        {
+          kind: 'link-name', label: 'קישור לנועה לוי', control: 'button',
+          digit: 1, href: null, arg: 'p1', writes: true, undoable: true,
+        },
+        {
+          kind: 'skip', label: 'דילוג', control: 'button',
+          digit: null, href: null, arg: null, writes: false, undoable: false,
+        },
+      ],
+    })]);
+  }
+
+  it('shows the evidence grid with the marked cell and its A1 reference', async () => {
+    blockEvidence.mockResolvedValue({
+      blockId: 'b1', sheetName: 'דמי קאמפ', filename: 'קופת קאמפ 2026.xlsx',
+      reference: 'דמי קאמפ!C14', columns: ['B', 'C', 'D'],
+      hiddenBefore: 0, hiddenAfter: 0,
+      rows: [{
+        sheetRow: 14, blockRow: 4, marked: true,
+        cells: [
+          { column: 'B', text: '18/06/26', marked: false },
+          { column: 'C', text: 'נועה ל.', marked: true },
+          { column: 'D', text: '1200', marked: false },
+        ],
+      }],
+    });
+    inboxItems.mockResolvedValue([{
+      id: 'refusal:b1:14:no-description', kind: 'refused-row',
+      title: 'דמי קאמפ!14', detail: 'אין תיאור בשורה',
+      source: null, blocking: false, snoozedUntil: null, blockId: 'b1',
+      refusal: { sheetRow: 14, reason: 'no-description', message: 'אין תיאור בשורה', cells: [] },
+      actions: [],
+    } as InboxItem]);
+
+    await renderPage({ tab: 'notice' });
+    expect(screen.getByText(/דמי קאמפ!C14/)).toBeTruthy();
+    const marked = document.querySelector('td[data-marked="true"]');
+    expect(marked?.textContent).toBe('נועה ל.');
+  });
+
+  it('renders the confidence word and no percentage anywhere (Ruling 5)', async () => {
+    openName();
+    await renderPage();
+    const detail = screen.getByRole('region', { name: 'הפריט הפתוח' });
+    expect(within(detail).getByText('חזקה')).toBeTruthy();
+    expect(detail.textContent).not.toMatch(/%/);
+    expect(detail.textContent).not.toMatch(/\d\s*אחוז/);
+  });
+
+  it('says that linking is not merging', async () => {
+    openName();
+    await renderPage();
+    expect(screen.getByText('קישור אינו מיזוג')).toBeTruthy();
+    expect(screen.getByText(/מיזוג של שני אנשים נעשה מדף האדם, ואינו הפיך/)).toBeTruthy();
+  });
+
+  it('names the keys it binds, and names no letter (R10)', async () => {
+    openName();
+    await renderPage();
+    const footer = screen.getByText(/אחרי כל החלטה הפריט הבא נפתח מעצמו/);
+    expect(footer.textContent).toContain('1–5');
+    expect(footer.textContent).toContain('↑↓');
+    expect(footer.textContent).not.toMatch(/\bZ\b|ז לביטול/);
+  });
+
+  it('gives the numbered button the id the keyboard looks for', async () => {
+    openName();
+    await renderPage();
+    const button = document.getElementById('inbox-action-1');
+    expect(button?.textContent).toContain('קישור לנועה לוי');
   });
 });
