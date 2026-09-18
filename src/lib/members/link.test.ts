@@ -7,7 +7,7 @@ import {
 import { recordUnlinkedName, resolveName, listUnlinkedNames } from '@/lib/members/identity';
 import {
   createPerson, createPersonFromAlias, linkAlias, unlinkAlias,
-  mergePersons, unmergePerson, mergeConflicts, previewMerge,
+  mergePersons, unmergePerson, mergeConflicts, previewMerge, aliasUnlinkTarget,
 } from '@/lib/members/link';
 
 const LEAD = 'lead@shliff.camp';
@@ -372,5 +372,35 @@ describe('previewMerge', () => {
     const person = await createPerson(db, 'אופק', LEAD);
     const preview = (await previewMerge(db, person, person))!;
     expect(preview.blockers).toEqual([{ conflict: 'אותו אדם', count: 1, href: null }]);
+  });
+});
+
+describe('aliasUnlinkTarget', () => {
+  let db: TestDb;
+  beforeEach(async () => { db = await createTestDb(); });
+
+  /* A person created from nothing has exactly one spelling — their own name —
+     so `remaining` is zero and the action refuses. */
+  it('reports nothing left when a person has only their own name', async () => {
+    const person = await createPerson(db, 'אופק', LEAD);
+    const [alias] = await db.select().from(personAliases)
+      .where(eq(personAliases.personId, person));
+    expect(await aliasUnlinkTarget(db, alias.id))
+      .toEqual({ personId: person, remaining: 0 });
+  });
+
+  it('counts the other spellings, not this one', async () => {
+    const person = await createPerson(db, 'רוני אדלר', LEAD);
+    await linkAlias(db, await recordUnlinkedName(db, 'Roni A.', 'import'), person, LEAD);
+    await linkAlias(db, await recordUnlinkedName(db, 'רוני', 'import'), person, LEAD);
+    const [alias] = await db.select().from(personAliases)
+      .where(eq(personAliases.alias, 'רוני'));
+    expect(await aliasUnlinkTarget(db, alias.id))
+      .toEqual({ personId: person, remaining: 2 });
+  });
+
+  it('answers null for an alias that names nothing, malformed id included', async () => {
+    expect(await aliasUnlinkTarget(db, 'not-a-uuid')).toBeNull();
+    expect(await aliasUnlinkTarget(db, '00000000-0000-4000-8000-000000000000')).toBeNull();
   });
 });

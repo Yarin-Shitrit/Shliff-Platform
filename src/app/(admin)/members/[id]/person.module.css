@@ -1,0 +1,191 @@
+/*
+ * D4's דף אדם. Plan 01's tokens throughout, logical properties throughout
+ * (A10) — the record page has no physical-direction rule at all.
+ */
+
+.page { display: block; }
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-block-end: var(--space-5);
+}
+
+.headText { flex: 1 1 16rem; min-inline-size: 0; }
+
+.headText h1 {
+  margin: 0;
+  font-size: var(--text-title);
+  line-height: var(--leading-title);
+}
+
+.subline {
+  margin: var(--space-1) 0 0;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.headActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.menuItem {
+  display: block;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.menuItem:hover { background: var(--hover); }
+
+/*
+ * `auto-fit` over whatever renders, so three tiles fill the row as evenly as
+ * five — the debt and קופה tiles are withheld when there is nothing to
+ * report, and a grid of fixed columns would leave a hole where they were.
+ */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-block-end: var(--space-5);
+}
+
+.warnLine {
+  display: block;
+  color: var(--warn);
+  font-size: var(--text-meta);
+}
+
+/* ── Tabs ────────────────────────────────────────────────────── */
+
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+  border-block-end: 1px solid var(--line);
+  margin-block-end: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.tab,
+.tabCurrent {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  min-block-size: var(--tap-min);
+  color: var(--ink-3);
+  text-decoration: none;
+  border-block-end: 2px solid transparent;
+  font-size: var(--text-label);
+}
+
+.tab:hover { color: var(--ink); }
+
+.tabCurrent {
+  color: var(--ink);
+  border-block-end-color: var(--brand);
+  font-weight: 600;
+}
+
+.tabCount {
+  color: var(--ink-4);
+  font-size: var(--text-dense);
+}
+
+/* ── Body ────────────────────────────────────────────────────── */
+
+.body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .body { grid-template-columns: minmax(0, 1fr); }
+}
+
+.main h2,
+.side h2 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-label);
+  color: var(--ink-2);
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  padding: var(--space-4);
+  background: var(--panel);
+}
+
+.plainList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  font-size: var(--text-meta);
+}
+
+.facts dt { color: var(--ink-3); }
+.facts dd { margin: 0; }
+
+.aliasList,
+.logList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--text-meta);
+}
+
+.aliasRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.aliasName { font-weight: 500; }
+
+/* An import spelling nothing in the workbooks corroborates. Deliberately not
+   a SourceChip: there is no source to name, and a chip shaped like one would
+   imply there was. */
+.noCell {
+  color: var(--ink-4);
+  font-size: var(--text-dense);
+}
+
+.mergedNote {
+  flex-basis: 100%;
+  color: var(--ink-3);
+  font-size: var(--text-dense);
+}
+
+.undatedHead {
+  margin: var(--space-3) 0 var(--space-2);
+  font-size: var(--text-dense);
+  color: var(--ink-3);
+  font-weight: 500;
+}

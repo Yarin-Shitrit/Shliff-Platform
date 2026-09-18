@@ -4,7 +4,10 @@ import { revalidatePath } from 'next/cache';
 import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import type { ActionResult } from '@/lib/action-result';
-import { createPerson, createPersonFromAlias, linkAlias, mergePersons } from '@/lib/members/link';
+import {
+  aliasUnlinkTarget, createPerson, createPersonFromAlias, linkAlias, mergePersons,
+  unlinkAlias,
+} from '@/lib/members/link';
 import { resolveName } from '@/lib/members/identity';
 import { addMember } from '@/lib/members/roster';
 import { issueFlatDueFor } from '@/lib/fees/dues';
@@ -167,4 +170,39 @@ export async function issueDuesBulkAction(
 
   revalidatePath('/members');
   return { ok: true, issued, already, offRoster };
+}
+
+
+/**
+ * Detaches one spelling, putting it back in the queue of names waiting to be
+ * attributed.
+ *
+ * Refuses a person's last alias. `createPerson` writes the display name as the
+ * first alias and `resolveName` matches against aliases and nothing else, so a
+ * person with none is invisible to every future import — and would turn up in
+ * the unlinked queue as a name looking for a person, sitting next to their own
+ * record. The check is here and not only in the dialog, because a refusal that
+ * lives in a component is a refusal a second caller will not have.
+ *
+ * Unlinking does not clear `merged_from_person_id`, so a spelling that arrived
+ * in a merge keeps saying so after it is detached. The merge happened; undoing
+ * one of its consequences does not unmake the record of it.
+ */
+export async function unlinkAliasAction(aliasId: string): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+
+  const target = await aliasUnlinkTarget(db, aliasId);
+  if (target === null) return { ok: false, error: 'הכינוי לא נמצא.' };
+  if (target.personId !== null && target.remaining === 0) {
+    return {
+      ok: false,
+      error: 'לא ניתן לבטל את הכינוי האחרון של אדם — בלעדיו אי אפשר יהיה לזהות אותו בקבצים.',
+    };
+  }
+
+  await unlinkAlias(db, aliasId);
+  if (target.personId !== null) revalidatePath(`/members/${target.personId}`);
+  revalidatePath('/members');
+  return { ok: true };
 }

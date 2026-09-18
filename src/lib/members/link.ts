@@ -6,6 +6,15 @@ import {
 import { normalizeHebrew } from '@/lib/text/normalize';
 import { toAgorot } from '@/lib/money';
 
+/**
+ * Every id in this schema is a uuid column, so a malformed one does not come
+ * back as "no rows" — Postgres refuses the comparison and throws
+ * `invalid input syntax for type uuid`. These ids arrive from URLs that are
+ * meant to be pasted, so a truncated one out of a chat would otherwise crash
+ * a screen with a raw database error instead of rendering nothing.
+ */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export type MergeResult =
   | { ok: true; movedAliases: number }
   | { ok: false; conflicts: string[] };
@@ -63,6 +72,35 @@ export async function linkAlias(
   await db.update(personAliases)
     .set({ personId, confirmedBy: email, confirmedAt: new Date() })
     .where(eq(personAliases.id, aliasId));
+}
+
+/**
+ * What unlinking this spelling would leave behind, so a caller can refuse to
+ * take the last one.
+ *
+ * Null when the alias names nothing. `remaining` counts the person's *other*
+ * spellings — `createPerson` writes the display name as the first alias and
+ * `resolveName` matches against aliases and nothing else, so a person with
+ * none is invisible to every future import and would turn up in the unlinked
+ * queue as a name looking for a person, sitting next to their own record.
+ *
+ * The count lives here rather than in the action, so a second caller inherits
+ * the fact it needs to make that refusal.
+ */
+export async function aliasUnlinkTarget(
+  db: AnyDb, aliasId: string,
+): Promise<{ personId: string | null; remaining: number } | null> {
+  if (!UUID.test(aliasId)) return null;
+
+  const [alias] = await db.select({ personId: personAliases.personId })
+    .from(personAliases).where(eq(personAliases.id, aliasId));
+  if (!alias) return null;
+  if (alias.personId === null) return { personId: null, remaining: 0 };
+
+  const siblings = await db.select({ id: personAliases.id })
+    .from(personAliases).where(eq(personAliases.personId, alias.personId));
+
+  return { personId: alias.personId, remaining: siblings.length - 1 };
 }
 
 /** Detaches an alias, putting it back in the leads' queue and clearing the
@@ -212,16 +250,6 @@ export interface MergePreview {
   conflicts: string[];
   blockers: MergeBlocker[];
 }
-
-/**
- * `persons.id` is a uuid column, so a malformed id does not come back as "no
- * rows" — Postgres refuses the comparison and throws
- * `invalid input syntax for type uuid`. A merge URL is meant to be pasted, and
- * a truncated one out of a chat would otherwise crash the screen with a raw
- * database error instead of rendering nothing. Checked here rather than at the
- * page, because a second caller would not have the check.
- */
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function sideOf(db: AnyDb, personId: string): Promise<MergeSide | null> {
   if (!UUID.test(personId)) return null;
