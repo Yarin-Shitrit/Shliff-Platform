@@ -68,6 +68,14 @@ export type TableProps<Row> = {
   selection?: TableSelection;
   /** Appends a `w0` cell revealed on row hover, focus-within and selection. */
   rowActions?: (row: Row) => ReactNode;
+  /**
+   * `srHeader` for the column `Table` generates itself. An ordinary column
+   * whose `header` renders empty can already name itself that way; the action
+   * column had no such escape, so it read as a blank column header. Always
+   * visually hidden — the slot is revealed on hover and a drawn heading over
+   * it would be noise. Omitted, the header stays blank as before.
+   */
+  rowActionsHeader?: string;
   /** A `<tfoot>` of cells in visual order; they may span. */
   totals?: ReadonlyArray<TableTotalsCell>;
   /**
@@ -105,6 +113,7 @@ export function Table<Row>({
   rows,
   selection,
   rowActions,
+  rowActionsHeader,
   totals,
   totalsLabel,
   empty,
@@ -146,7 +155,13 @@ export function Table<Row>({
                 )}
               </th>
             ))}
-            {rowActions ? <th scope="col" className={styles.w0} /> : null}
+            {rowActions ? (
+              <th scope="col" className={styles.w0}>
+                {rowActionsHeader === undefined
+                  ? null
+                  : <span className="sr-only">{rowActionsHeader}</span>}
+              </th>
+            ) : null}
           </tr>
         </thead>
 

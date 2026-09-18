@@ -185,3 +185,35 @@ describe('Table — a totals row that can be found (A26)', () => {
     expect(screen.getAllByRole('rowgroup')).toHaveLength(3);
   });
 });
+
+describe('Table — the action column has a name too', () => {
+  const rowActions = (p: Person) => <button type="button">{`אפשרויות ל${p.name}`}</button>;
+
+  /**
+   * A `srHeader` for the column `Table` generates itself. An ordinary column
+   * whose header renders empty already has one; the action column had no way
+   * to be named at all, so it read as a blank column header.
+   */
+  it('names the action column for assistive technology without drawing a heading', () => {
+    render(
+      <Table
+        caption="רשימת אנשים"
+        columns={columns}
+        rows={rows}
+        rowActions={rowActions}
+        rowActionsHeader="פעולות"
+      />,
+    );
+    const header = screen.getByRole('columnheader', { name: 'פעולות' });
+    expect(header.textContent).toBe('פעולות');
+    expect(header.querySelector('.sr-only')).not.toBeNull();
+  });
+
+  it('leaves that header blank when no name is given', () => {
+    render(<Table caption="רשימת אנשים" columns={columns} rows={rows} rowActions={rowActions} />);
+    expect(screen.queryByRole('columnheader', { name: 'פעולות' })).toBeNull();
+    const headers = screen.getAllByRole('columnheader');
+    expect(headers).toHaveLength(4);
+    expect(headers[3].textContent).toBe('');
+  });
+});
