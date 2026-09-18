@@ -1,0 +1,105 @@
+name: CI
+
+# Pushes to main, and every pull request. A feature branch without a PR is not
+# tested -- open the PR early if you want the signal.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push to the same branch cancels the run it superseded. This repository
+# is private, so Actions minutes are billed.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: typecheck · lint · test
+    runs-on: ubuntu-latest
+    # Measured 2026-09-18: 903 tests in 77 files took 11m20s at --maxWorkers=2.
+    # main does not carry Phase 4 yet; feat/ui-01-foundation has 182 test files,
+    # so expect roughly 22 minutes once that merges. Headroom is deliberate --
+    # a timeout kills the run without a report, which reads like a hang rather
+    # than a slow suite.
+    timeout-minutes: 45
+
+    env:
+      # src/db/index.ts reads DATABASE_URL at import time. The suite never talks
+      # to this address -- tests use an in-process PGlite from src/test/db.ts --
+      # but a bare runner would throw on import without it.
+      DATABASE_URL: postgres://ci:ci@127.0.0.1:5432/ci
+      AUTH_SECRET: ci-not-a-real-secret
+      STORAGE_DRIVER: local
+      LOCAL_STORAGE_DIR: ./.uploads
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # package.json declares no engines field, so the version is pinned here.
+      # Keep it matching what the team runs locally.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # package-lock.json declares rolldown's 15 platform bindings but records a
+      # resolved entry for NONE of them (npm/cli#4828), so `npm ci` installs no
+      # native binding at all and vitest dies at startup with "Cannot find
+      # native binding" before it can write a report.
+      #
+      # This is invisible on the team's machines: an earlier `npm install` put
+      # the darwin binding into node_modules without writing it to the lock.
+      # Anyone not on an Apple-silicon Mac hits it -- see
+      # docs/collab/onboarding.md.
+      #
+      # Install just the binding this runner needs, at the version the lock pins
+      # for rolldown, so the two cannot drift apart. --no-save leaves the
+      # lockfile untouched.
+      #
+      # The real fix is regenerating the lockfile, which also moves 40 other
+      # versions (vitest, vite, rolldown itself). That is its own change with
+      # its own full test run, not a side effect of adding CI.
+      - name: Install the native binding the lockfile omits
+        run: |
+          V=$(node -p "require('./package-lock.json').packages['node_modules/rolldown'].version")
+          echo "lockfile pins rolldown at $V"
+          npm install --no-save --no-audit --no-fund "@rolldown/binding-linux-x64-gnu@$V"
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      # Every flag is load-bearing; CLAUDE.md explains why. Two differences from
+      # the local command, both deliberate:
+      #   --maxWorkers=2, not 4 -- a standard runner is 2-core/7GB, and four
+      #     in-process Postgres instances on it is the contention that fabricates
+      #     ~110 beforeEach timeouts.
+      #   a fixed --outputFile -- the local command needs a unique path because
+      #     two people share a machine. A runner is nobody else's.
+      # Never drop --reporter=default: --reporter=json alone REPLACES it, and the
+      # run loses the Unhandled Errors block where a SIGKILLed worker shows up.
+      - name: Test
+        run: |
+          npx vitest run \
+            --maxWorkers=2 \
+            --hookTimeout 60000 \
+            --testTimeout 60000 \
+            --reporter=default \
+            --reporter=json \
+            --outputFile vitest-report.json || VITEST_EXIT=$?
+          echo "vitest exited ${VITEST_EXIT:-0}"
+          node scripts/verify-test-report.mjs vitest-report.json "${VITEST_EXIT:-0}"
+
+      - name: Keep the report when something went wrong
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-report
+          path: vitest-report.json
+          if-no-files-found: warn
+          retention-days: 14
