@@ -3,21 +3,41 @@
  *
  * The domain libraries throw in English — `an exception must carry a reason` —
  * and `failed()` used to hand that message straight to `role="alert"`. This is
- * the boundary where that stops (R9).
+ * the boundary where that stops (R9). A raw message is never echoed.
  *
- * Order matters. The map is consulted first, by prefix, because three of the
- * thrown messages interpolate an id and one of them, `unknown payment
- * channel: מזומן`, contains a Hebrew letter while being an English message.
- * Only a message that matches nothing is tested for Hebrew; if it carries
- * Hebrew it was written for a lead and passes through unchanged. Anything else
- * is logged once and replaced. A raw message is never echoed to the screen.
+ * `toHebrewError` first walks `.cause` to its innermost link, because what
+ * Drizzle throws carries the parameterised SQL as its own `.message` and
+ * hides the driver's message, `constraint` and `code` one link down. It then
+ * resolves in four steps, strongest evidence first:
  *
- * "Contains a Hebrew character" alone is too weak a test for "was written for
- * a lead": this schema's own enum labels are Hebrew, so a driver-level
- * message like `invalid input value for enum payment_channel: "מזומן"` would
- * otherwise be echoed raw. The passthrough therefore also requires that the
- * message carry no Latin letters — a driver/English message that merely
- * quotes a Hebrew value still fails that test and falls back.
+ * 1. A `HebrewRefusal` anywhere in the chain, outermost one winning — its
+ *    message is returned verbatim. A refusal is a decision somebody made, and
+ *    the outermost was made with the most context.
+ * 2. `constraints`, matched exactly against each link's `constraint`,
+ *    innermost first. This is the driver naming the refusal.
+ * 3. `map`, matched by prefix against each link's message, innermost first
+ *    and then outward. Prefixes, because several thrown messages interpolate
+ *    an id. Innermost first because an outer message is a generic symptom and
+ *    a specific cause claimed from a generic symptom is a guess; outward
+ *    afterwards because a hand-thrown wrapper may be what carries the meaning.
+ * 4. The alphabet passthrough — a message with a Hebrew letter and no Latin
+ *    one — which now logs whenever it fires. It is the pre-`HebrewRefusal`
+ *    inference, kept only until the call sites it names have migrated.
+ *
+ * Anything else is logged and replaced with `HEBREW_FALLBACK`.
+ *
+ * Steps 2 and 3 run before step 4 because `unknown payment channel: מזומן` is
+ * an English message that contains a Hebrew letter, and "contains a Hebrew
+ * character" is too weak a test for "was written for a lead" — this schema's
+ * own enum labels are Hebrew, so a driver message like `invalid input value
+ * for enum payment_channel: "מזומן"` would otherwise be echoed raw. Step 4
+ * therefore also requires that the message carry no Latin letter, which is
+ * exactly why it cannot recognise a refusal that names what it refuses, and
+ * why `HebrewRefusal` exists (integration §5 A20, A27).
+ *
+ * Both `map` and `constraints` are arguments, never registered: a registry is
+ * global mutable state whose behaviour depends on import order, which works
+ * in tests and fails once Next code-splits the bundle (§5 A7).
  */
 
 export const HEBREW_FALLBACK = 'משהו השתבש. הפעולה לא נשמרה.';
