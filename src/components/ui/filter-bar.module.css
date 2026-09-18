@@ -1,0 +1,55 @@
+.bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.search {
+  display: flex; align-items: center; gap: 8px;
+  block-size: 32px; inline-size: 240px; padding-inline: 10px;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--panel); color: var(--ink-3);
+}
+.search:focus-within { border-color: var(--focus); box-shadow: 0 0 0 3px var(--brand-soft); }
+.searchInput {
+  /* `font: inherit`/`color: inherit` are not repeated here — `globals.css`
+     already applies both to every `input`. `outline` is not touched at all:
+     the native `:focus-visible` ring (A9) stays exactly as `globals.css`
+     defines it, on top of the wrapper's own `:focus-within` glow above. */
+  flex: 1; min-inline-size: 0; border: 0; background: none; color: var(--ink);
+  font-size: 13.5px; padding: 0;
+}
+.searchInput::placeholder { color: var(--ink-3); }
+
+.chipGroup { display: inline-flex; align-items: center; gap: 2px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  block-size: 28px; padding-inline: 10px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--panel);
+  color: var(--ink-2); font-size: 12.5px;
+}
+.chipOn { background: var(--brand-soft); border-color: var(--brand-soft); color: var(--brand-text); }
+.chipValue { color: var(--ink); font-weight: 600; }
+
+.clear {
+  display: inline-flex; align-items: center; justify-content: center;
+  inline-size: 20px; block-size: 20px; border-radius: 999px; color: var(--ink-3);
+}
+.clear:hover { background: var(--sunken); color: var(--ink); }
+.clear:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.menuItem {
+  display: flex; align-items: center; gap: 10px;
+  block-size: 36px; padding-inline: 12px; color: var(--ink);
+  font-size: 13.5px; text-decoration: none; white-space: nowrap;
+}
+.menuItem:hover { background: var(--sunken); }
+.menuItem:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.checkGap { inline-size: 14px; }
+
+.count { margin-inline-start: auto; font-size: 13px; color: var(--ink-3); }
+
+/* A8: phone targets are at least 44px, and the input face is at least
+   `--input-font-phone` so iOS does not zoom on focus — the same rule
+   `field.module.css`'s `.box` follows. */
+@media (pointer: coarse) {
+  .search { inline-size: 100%; block-size: 44px; }
+  .searchInput { font-size: var(--input-font-phone); }
+  .count { margin-inline-start: 0; }
+}

@@ -1,0 +1,33 @@
+.root { position: relative; display: inline-flex; }
+
+.trigger {
+  display: inline-flex; align-items: center; gap: 6px;
+  block-size: 28px; padding-inline: 10px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--panel);
+  color: var(--ink-2); font-size: 12.5px; cursor: pointer;
+  /* `font: inherit` is not repeated here — `globals.css` already applies it
+     (and `color: inherit`) to every `button`. */
+}
+.trigger:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.chip:hover { border-color: var(--line-strong); }
+.chipDashed { border-style: dashed; color: var(--ink-3); }
+.ghost { border-color: transparent; background: transparent; }
+.ghost:hover { background: var(--sunken); color: var(--ink); }
+
+/* `bulk` is the tone Task 14's `BulkBar` asks for: a trigger that sits on the
+   bar's own inverted (dark) surface rather than `--panel`. `rgb(255 255 255 /
+   10%)` is scoped, non-theme data for that one inverted context — the same
+   exception `charts.module.css`'s `.viz` takes for its series colours — and
+   is transcribed verbatim from the mock's own bulk bar
+   (`docs/superpowers/mock/shared.css:330`: `.bulkbar .btn:hover { background:
+   rgba(255,255,255,.1); }`), not invented here. */
+.bulk { border-color: transparent; background: transparent; color: inherit; block-size: 28px; }
+.bulk:hover { background: rgb(255 255 255 / 10%); }
+
+.panel {
+  position: absolute; inset-block-start: calc(100% + 6px); inset-inline-start: 0;
+  z-index: var(--z-pop); min-inline-size: 200px; padding-block: 6px;
+  background: var(--panel); border-radius: 12px; box-shadow: var(--shadow-pop);
+  display: flex; flex-direction: column; text-align: start;
+}
+.alignEnd { inset-inline-start: auto; inset-inline-end: 0; }
