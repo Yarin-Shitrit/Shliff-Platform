@@ -161,9 +161,20 @@ describe('eligibility', () => {
     expect(map.get(b)?.contestedWith).toEqual([a]);
   });
 
-  it('two retired copies of the same sheet do not conflict with each other', async () => {
+  /**
+   * Both sheets share an explicit season here on purpose — without it,
+   * `conflicts()`'s both-retired guard is not the thing making this pass:
+   * the season-less case already falls through to the wildcard-suppression
+   * line below it and returns false regardless, so deleting the
+   * both-retired line would not fail this test. With an explicit shared
+   * season, line 3 (`a.seasonId === b.seasonId` → conflict) WOULD fire if
+   * the both-retired line above it were removed, so this pins it for real.
+   */
+  it('two retired copies of the same sheet, same season, do not conflict with each other', async () => {
     const a = await addSheet('23.xlsx', 'תקציב קאמפ ברן 23');
     const b = await addSheet('24.xlsx', 'תקציב קאמפ ברן 23');
+    await setSheetSeason(db, a, s25);
+    await setSheetSeason(db, b, s25);
     await retireSheet(db, a, 'lead@shliff.test');
     await retireSheet(db, b, 'lead@shliff.test');
     const map = await sheetEligibility(db);

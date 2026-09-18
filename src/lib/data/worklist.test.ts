@@ -572,6 +572,28 @@ describe('retirement (R44)', () => {
     const groups = await collisionGroups(db);
     expect(groups.find((g) => g.name === 'סיכום כללי')).toBeUndefined();
   });
+
+  /**
+   * The positive case the exclusion test above cannot cover: retiring ONE
+   * copy of a THREE-way collision must still leave the other two reported
+   * as a real, two-member group — retirement removes only the retired
+   * sheet, not the live contest between the two that remain.
+   */
+  it('collisionGroups still reports the live members when only one of three same-named copies is retired', async () => {
+    const live2 = await addSheet('2025b.xlsx', 'סיכום כללי');
+    await setSheetSeason(db, live2, s26);
+    const retired = await addSheet('23.xlsx', 'סיכום כללי');
+    await setSheetSeason(db, retired, s26);
+    await retireSheet(db, retired, LEAD);
+
+    const groups = await collisionGroups(db);
+    const group = groups.find((g) => g.name === 'סיכום כללי');
+
+    expect(group).toBeDefined();
+    expect(group?.sheets.map((s) => s.id).sort()).toEqual([sheetId, live2].sort());
+    expect(group?.sheets.map((s) => s.id)).not.toContain(retired);
+    expect(group?.state).toBe('undecided');
+  });
 });
 
 describe('flaggedArithmetic', () => {

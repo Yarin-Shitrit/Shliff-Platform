@@ -16,7 +16,7 @@ import { listObligations, createObligation, settleObligation } from '@/lib/money
 import { createTask } from '@/lib/work/tasks';
 import { listUnlinkedNames } from '@/lib/members/identity';
 import {
-  setSheetSeason, setSheetAuthority, retireSheet, sheetEligibility,
+  setSheetSeason, setSheetAuthority, retireSheet, unretireSheet, sheetEligibility, listSheets,
 } from '@/lib/import/sheets';
 import { applyConfirmation } from '@/lib/import/confirm';
 import type { ColumnMapping } from '@/lib/classify/map-columns';
@@ -1432,7 +1432,7 @@ describe('promoteBlock — a retired sheet is skipped, never refused', () => {
     expect(result.skip?.code).toBe('sheet-retired');
     expect(result.skip?.blockId).toBe(blockId);
     expect(result.skip?.rowCount).toBe(2);
-    expect(result.skip?.reason.length).toBeGreaterThan(0);
+    expect(result.skip?.reason).toMatch(/[֐-׿]/);
     expect(result.skip?.reason).not.toMatch(/[a-zA-Z]/);
 
     const after = await db.select().from(ledgerEntries).orderBy(asc(ledgerEntries.sourceRow));
@@ -1522,6 +1522,73 @@ describe('promoteBlock — retiring an authoritative copy does not transfer auth
 
     // The total is exactly a's one row — not doubled by b, not zeroed by a's
     // retirement.
+    expect(await budgetTotalAgorot(db, s26)).toBe(5852300);
+    expect(await db.select().from(budgetLines)).toHaveLength(1);
+  });
+});
+
+/**
+ * R53: the "obvious remedy" from the test above — a lead reads `b` as
+ * `'undecided'` and does the natural thing, `setSheetAuthority(b, true)` —
+ * must itself be refused while `a`'s promoted rows are still standing.
+ *
+ * Why: authority normally moves through one path only — the loser reads
+ * `sheet-superseded` and its whole-block `reject()` runs the W5 sweep,
+ * releasing whatever it no longer produces (W13/W14). A retired sheet never
+ * takes that path (R43: its block is a SKIP, precisely so retiring it can
+ * never run that sweep). So if `a` is BOTH the retired rival AND still owns
+ * promoted rows, nothing will ever release them on this path: choosing `b`
+ * does not touch `a` at all, and `a`'s own promote is a skip, not a sweep.
+ * Promoting `b` would then INSERT a second copy of the same money beside
+ * `a`'s — 117,046 where the workbook says 58,523 — with no refusal and no
+ * `coverage` signal (a retired block's rows are excluded there too, R44).
+ */
+describe('setSheetAuthority — refuses the transfer while a retired rival still owns rows (R53)', () => {
+  it('refuses in Hebrew until the retired rival is un-retired, then the season total stays single', async () => {
+    const a = await addSheet('25.xlsx', 'תקציב קאמפ ברן 26');
+    const b = await addSheet('2026.xlsx', 'תקציב קאמפ ברן 26');
+    await setSheetSeason(db, a, s26);
+    await setSheetSeason(db, b, s26);
+    const ba = await addBlock(a, 'budget_lines', BUDGET_GRID, BUDGET_MAP);
+    const bb = await addBlock(b, 'budget_lines', BUDGET_GRID, BUDGET_MAP);
+
+    await setSheetAuthority(db, a, true);
+    expect((await promoteBlock(db, ba, LEAD)).written).toHaveLength(1);
+    expect(await budgetTotalAgorot(db, s26)).toBe(5852300);
+
+    await retireSheet(db, a, 'lead@shliff.test');
+
+    // The refusal itself, in Hebrew, with an actionable next step.
+    let message = '';
+    try {
+      await setSheetAuthority(db, b, true);
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toMatch(/[֐-׿]/);
+    expect(message).not.toMatch(/[a-zA-Z]/);
+
+    // The refused call must not have partially applied.
+    const afterRefusal = await listSheets(db);
+    expect(afterRefusal.find((r) => r.id === b)?.authoritative).toBeNull();
+    expect(await budgetTotalAgorot(db, s26)).toBe(5852300);
+
+    // The remedy: un-retire a first, which restores the ordinary transfer
+    // path — then choosing b is allowed. a's own authority is cleared too,
+    // the same "move" a lead performs in the ordinary case (see
+    // `promoteBlock — a refused block releases its rows` above) — leaving
+    // both `true` would read as `'ambiguous'`, not a resolved transfer.
+    await unretireSheet(db, a);
+    await setSheetAuthority(db, a, false);
+    await setSheetAuthority(db, b, true);
+
+    const rb = await promoteBlock(db, bb, LEAD);
+    expect(rb.written).toHaveLength(1);
+    const ra = await promoteBlock(db, ba, LEAD);
+    expect(ra.refused[0]?.reason).toBe('sheet-superseded');
+    expect(ra.deleted).toBe(1);
+
+    // The assertion that matters: not 117,046.
     expect(await budgetTotalAgorot(db, s26)).toBe(5852300);
     expect(await db.select().from(budgetLines)).toHaveLength(1);
   });

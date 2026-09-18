@@ -10,6 +10,7 @@ import {
 } from '@/db/schema/money';
 import { resolveName, recordUnlinkedName } from '@/lib/members/identity';
 import { sheetEligibility } from '@/lib/import/sheets';
+import { promotedRowCounts } from '@/lib/import/owned-rows';
 import { toAgorot, fromAgorot } from '@/lib/money';
 import type { BlockArchetype } from '@/lib/classify/types';
 import type { BlockRow } from './rows';
@@ -308,55 +309,15 @@ async function sweep(
 // ---------------------------------------------------------------------------
 
 /**
- * Which of `blockIds` already own at least one row in any of the four target
- * tables, by non-null `source_block_id` — and how many.
- *
- * Lifted here from `src/lib/data/worklist.ts`, which used it first to make
- * the register's `promoted` state mean rows that actually exist rather than
- * rows a dry run would write. `promoteAllAction`'s skip gate needs exactly
- * the same fact — whether a block has already produced rows, not whether a
- * commit would write some — so `worklist.ts` now imports this rather than
- * keeping a second copy: two implementations of "does this block already
- * have rows" is the risk that gate exists to remove.
- *
- * Four queries for the whole set, not one per block: each is a single
- * grouped `count(*) … where source_block_id in (…)`, over `TABLES`. A block
- * appears in the result only if it has rows, so a count-reading caller uses
- * `?? 0` and a yes/no-reading caller uses `.has(blockId)`.
- *
- * Every archetype writes to exactly one of these four tables (W6), but all
- * four are counted for every block regardless of its *current* archetype: a
- * block whose archetype was re-decided after a promotion still reports the
- * rows it really owns rather than zero. That is not incidental here — it is
- * the property the skip gate depends on. A block promoted as `ledger` and
- * later re-confirmed as `budget_lines` still owns real `ledger_entries`
- * rows until something sweeps them; a query that only checked the table its
- * *current* archetype writes to would report it as never-promoted and let
- * `promoteAllGated` promote it again, silently re-opening the hazard this
- * gate exists to close.
+ * Moved to `@/lib/import/owned-rows` (R53) so `sheets.ts` can use the exact
+ * same query — its authority guard needs "does this block own promoted
+ * rows" too, and `sheets.ts` importing it from here would be circular,
+ * since this file already imports `sheetEligibility` from `sheets.ts`.
+ * Re-exported under its original name so every existing caller (this file's
+ * own `promoteAllGated`/`promoteWithin`, `src/lib/data/worklist.ts`,
+ * `promote.test.ts`) keeps importing it from `'./promote'` unchanged.
  */
-export async function promotedRowCounts(
-  db: AnyDb, blockIds: string[],
-): Promise<Map<string, number>> {
-  const totals = new Map<string, number>();
-  if (blockIds.length === 0) return totals;
-
-  const groups = await Promise.all(
-    Object.values(TABLES).map((t) => db
-      .select({ blockId: t.sourceBlockId, n: count() })
-      .from(t)
-      .where(inArray(t.sourceBlockId, blockIds))
-      .groupBy(t.sourceBlockId)),
-  );
-
-  for (const rows of groups) {
-    for (const row of rows) {
-      if (row.blockId === null) continue;
-      totals.set(row.blockId, (totals.get(row.blockId) ?? 0) + Number(row.n));
-    }
-  }
-  return totals;
-}
+export { promotedRowCounts };
 
 // ---------------------------------------------------------------------------
 // promoteBlock

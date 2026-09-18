@@ -1,7 +1,8 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import type { AnyDb } from '@/lib/db-types';
-import { sheets, uploads } from '@/db/schema/source';
+import { sheets, uploads, blocks } from '@/db/schema/source';
 import { seasons } from '@/db/schema/camp';
+import { promotedRowCounts } from '@/lib/import/owned-rows';
 
 export interface SheetRow {
   id: string;
@@ -50,11 +51,68 @@ export async function setSheetSeason(
 }
 
 /**
+ * R53's guard, called from `setSheetAuthority` only on the `true` path.
+ *
+ * The ordinary way authority moves from one copy to another is:
+ * `promoteBlock` reads the loser as `sheet-superseded`, its whole-block
+ * `reject()` runs, and the W5 sweep (`sweep` in promote.ts) releases
+ * whatever the loser no longer produces (W13/W14). A retired sheet never
+ * takes that path — R43 makes a retired sheet's block a SKIP specifically
+ * so retiring it can never run that sweep and delete rows nobody asked to
+ * delete. Put those two facts together and there is a gap: if a sheet's
+ * explicit same-season rival (`conflicts()` below) is retired AND was the
+ * chosen copy AND still owns promoted rows, nothing will ever release
+ * them — moving authority to `sheetId` does not touch the retired rival at
+ * all, and the retired rival's own promote path is a skip, not a sweep.
+ * Promoting `sheetId` then INSERTs a second copy of the same money beside
+ * the first: no error, and `coverage` will not even show it, since a
+ * retired block's rows are excluded there too (R44).
+ *
+ * The fix is not to let a retired block release its rows on this path —
+ * that would make retiring a sheet destroy data as a side effect of an
+ * unrelated action, exactly what R43 forbids. Instead this refuses the
+ * transfer outright and tells the lead to `unretireSheet` the rival first:
+ * with both copies live again, the ordinary transfer path (loser refuses,
+ * `reject()` sweeps) is intact, and the lead can re-retire afterwards if
+ * they still want to.
+ *
+ * Not reachable for a season-less retired sheet (the eight ברן 23/24
+ * sheets this feature exists for): `conflicts()` only lets a retired sheet
+ * stay a rival through an EXPLICIT same-season match, and a season-less
+ * sheet can never have been the chosen copy of anything in the first place
+ * (`setSheetAuthority`'s own season check above forbids it). This only
+ * fires for a sheet that was labelled, chosen, promoted, and only later
+ * retired.
+ */
+async function refuseIfRetiredRivalOwnsRows(db: AnyDb, sheetId: string): Promise<void> {
+  const all = await listSheets(db);
+  const sheet = all.find((s) => s.id === sheetId);
+  if (!sheet) return; // existence already checked by the caller
+
+  const retiredRivals = all.filter((other) => other.retiredAt !== null && conflicts(sheet, other));
+  if (retiredRivals.length === 0) return;
+
+  const rivalBlocks = await db.select({ id: blocks.id }).from(blocks)
+    .where(inArray(blocks.sheetId, retiredRivals.map((rival) => rival.id)));
+  if (rivalBlocks.length === 0) return;
+
+  const owned = await promotedRowCounts(db, rivalBlocks.map((b) => b.id));
+  if (owned.size === 0) return;
+
+  throw new Error(
+    'אי אפשר לסמן את הגיליון הזה כסמכותי — לעותק שסומן כהיסטוריה של אותו גיליון (אותו שם, אותה עונה) יש '
+    + 'עדיין שורות מקודמות, והעברת הסמכות לא תשחרר אותן — קודם צריך לבטל את סימון ההיסטוריה של העותק הישן',
+  );
+}
+
+/**
  * `true` is refused on an unlabelled sheet. The season label is what tells
  * a repeated copy of one year's budget apart from a different year's, so
  * "which copy is real" has no defined answer before a season is set — see
- * conflicts() below. Clearing (`false` or `null`) is always allowed,
- * including on an unlabelled sheet.
+ * conflicts() below. `true` is also refused when a retired, same-season
+ * rival still owns promoted rows (R53; see `refuseIfRetiredRivalOwnsRows`).
+ * Clearing (`false` or `null`) is always allowed, including on an
+ * unlabelled sheet.
  *
  * The not-found case is a different failure from the unlabelled case and
  * gets a different message: a bad `sheetId` is a programmer error (an
@@ -78,6 +136,9 @@ export async function setSheetAuthority(
     throw new Error(
       'אי אפשר לסמן גיליון כסמכותי בלי עונה — בלי עונה אי אפשר להבחין בין גרסה כפולה של אותה שנה לגיליון של שנה אחרת',
     );
+  }
+  if (authoritative === true) {
+    await refuseIfRetiredRivalOwnsRows(db, sheetId);
   }
   await db.update(sheets).set({ authoritative }).where(eq(sheets.id, sheetId));
 }

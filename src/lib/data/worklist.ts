@@ -359,8 +359,13 @@ export async function collisionGroups(db: AnyDb): Promise<CollisionGroup[]> {
 
   for (const sheet of sheetRows) {
     if (visited.has(sheet.id)) continue;
-    // Never a seed: a retired sheet is history, not a decision waiting, so
-    // a group is never built starting from it (R44).
+    // Belt-and-braces, not load-bearing: BFS reaches the identical
+    // component from any member of it, so seeding from a retired sheet
+    // instead of a live one in the same group would build the exact same
+    // `component` and the exact same filtered `members`/`state` below —
+    // this skip changes nothing about what gets emitted. Kept anyway so a
+    // retired sheet is never even considered a seed, which is the more
+    // obviously-correct reading of R44 for anyone skimming this loop.
     if (sheet.retiredAt !== null) continue;
     visited.add(sheet.id);
     const info = eligibility.get(sheet.id);
