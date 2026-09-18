@@ -1,12 +1,25 @@
 /** @vitest-environment jsdom */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { BulkBar, selectionLabel } from './bulk-bar';
+import { BulkBar, selectionLabel, type DestructiveBulkAction } from './bulk-bar';
 
 const actions = [
   { id: 'season', label: 'שיוך לשנה', onSelect: vi.fn() },
   { id: 'export', label: 'ייצוא', onSelect: vi.fn() },
 ];
+
+function destructiveAction(onConfirmed: () => void = vi.fn()): DestructiveBulkAction {
+  return {
+    id: 'remove',
+    label: 'הסרה מהשנה',
+    confirm: {
+      title: 'הסרת שיוך מהשנה',
+      consequence: (count) => `${count} תשלומים יוסרו מהשנה הנוכחית.`,
+      confirmLabel: 'הסרת השיוך',
+    },
+    onConfirmed,
+  };
+}
 
 describe('selectionLabel', () => {
   it('agrees with the number', () => {
@@ -18,10 +31,6 @@ describe('selectionLabel', () => {
 
 describe('BulkBar', () => {
   it('keeps no toolbar in view or in the tree when nothing is selected', () => {
-    // Not literally nothing any more (see the next test): a silent,
-    // permanently-mounted live region has to persist even at zero so its
-    // *first* content change is announced. What must still be absent is the
-    // bar itself — its region role, its accessible name, every button.
     render(
       <BulkBar count={0} label="פעולות על הנבחרים" actions={actions} onClear={vi.fn()} />,
     );
@@ -30,11 +39,6 @@ describe('BulkBar', () => {
   });
 
   it('keeps the live region mounted before the first selection, so it is announced', () => {
-    // A screen reader only announces a *change* to a live region that was
-    // already present in the DOM — a region created at the same moment as
-    // its content is not reliably announced. So the count's aria-live
-    // element must exist even at count={0}, before there is a selection to
-    // announce, not just once the bar has something to say.
     const { container, rerender } = render(
       <BulkBar count={0} label="פעולות על הנבחרים" actions={actions} onClear={vi.fn()} />,
     );
@@ -47,27 +51,94 @@ describe('BulkBar', () => {
     expect(live.getAttribute('aria-live')).toBe('polite');
   });
 
-  it('offers each action', () => {
+  it('fires a non-destructive action immediately, with no dialog', () => {
     render(<BulkBar count={2} label="פעולות על הנבחרים" actions={actions} onClear={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'שיוך לשנה' }));
     expect(actions[0].onSelect).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 
-  it('keeps the destructive ones behind עוד', () => {
-    const remove = vi.fn();
+  it('keeps a destructive action behind עוד, hidden until opened', () => {
     render(
       <BulkBar
         count={2}
         label="פעולות על הנבחרים"
         actions={actions}
-        moreActions={[{ id: 'remove', label: 'הסרה מהשנה', onSelect: remove }]}
+        moreActions={[destructiveAction()]}
         onClear={vi.fn()}
       />,
     );
     expect(screen.queryByRole('button', { name: 'הסרה מהשנה' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'עוד' }));
+    expect(screen.getByRole('button', { name: 'הסרה מהשנה' })).toBeTruthy();
+  });
+
+  it('opens a confirmation instead of running the destructive action immediately', () => {
+    const onConfirmed = vi.fn();
+    render(
+      <BulkBar
+        count={2}
+        label="פעולות על הנבחרים"
+        actions={actions}
+        moreActions={[destructiveAction(onConfirmed)]}
+        onClear={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'עוד' }));
     fireEvent.click(screen.getByRole('button', { name: 'הסרה מהשנה' }));
-    expect(remove).toHaveBeenCalledTimes(1);
+    expect(onConfirmed).not.toHaveBeenCalled();
+    expect(screen.getByRole('alertdialog', { name: 'הסרת שיוך מהשנה' })).toBeTruthy();
+  });
+
+  it('names the selection count in the confirmation sentence', () => {
+    render(
+      <BulkBar
+        count={7}
+        label="פעולות על הנבחרים"
+        actions={actions}
+        moreActions={[destructiveAction()]}
+        onClear={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'עוד' }));
+    fireEvent.click(screen.getByRole('button', { name: 'הסרה מהשנה' }));
+    expect(screen.getByText('7 תשלומים יוסרו מהשנה הנוכחית.')).toBeTruthy();
+  });
+
+  it('runs onConfirmed exactly once when the reader confirms', () => {
+    const onConfirmed = vi.fn();
+    render(
+      <BulkBar
+        count={2}
+        label="פעולות על הנבחרים"
+        actions={actions}
+        moreActions={[destructiveAction(onConfirmed)]}
+        onClear={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'עוד' }));
+    fireEvent.click(screen.getByRole('button', { name: 'הסרה מהשנה' }));
+    fireEvent.click(screen.getByRole('button', { name: 'הסרת השיוך' }));
+    expect(onConfirmed).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('runs onConfirmed zero times when the reader cancels', () => {
+    const onConfirmed = vi.fn();
+    render(
+      <BulkBar
+        count={2}
+        label="פעולות על הנבחרים"
+        actions={actions}
+        moreActions={[destructiveAction(onConfirmed)]}
+        onClear={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'עוד' }));
+    fireEvent.click(screen.getByRole('button', { name: 'הסרה מהשנה' }));
+    fireEvent.click(screen.getByRole('button', { name: 'ביטול' }));
+    expect(onConfirmed).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 
   it('offers a way out of the selection', () => {
