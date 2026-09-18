@@ -218,12 +218,22 @@ describe('globals.css', () => {
     expect(block(css, 'button, input, select, textarea {')).toContain('color: inherit');
   });
 
-  it('keeps the four pre-redesign global classes, re-pointed at the new tokens', () => {
+  it('keeps the pre-redesign global classes still in use, re-pointed at the new tokens', () => {
     const css = globals();
     expect(block(css, '.card {')).toContain('var(--panel)');
     expect(block(css, '.muted {')).toContain('var(--ink-3)');
     expect(block(css, '.badge-warn {')).toContain('var(--bad)');
-    expect(block(css, '.scroll-x {')).toContain('overflow-x');
+  });
+
+  /**
+   * `.scroll-x` was the pre-redesign answer to a table too wide for its
+   * column: wrap it and let a lead swipe. Plan 12's Task 2 replaced that with
+   * the card reflow, which shows every column instead of hiding most of them
+   * off the edge. The class is gone, and Task 10's net keeps it gone
+   * repo-wide — this is the foundation's own half of that.
+   */
+  it('no longer offers a sideways scroller to wrap a table in', () => {
+    expect(globals()).not.toContain('scroll-x');
   });
 });
 

@@ -61,6 +61,7 @@ export function BudgetTable({ groups, totals, sources, seasonName }: {
   const columns: ReadonlyArray<TableColumn<BudgetLineActuals>> = [
     {
       key: 'label',
+      card: 'title',
       header: 'סעיף',
       cell: (line) => (
         <>
@@ -83,12 +84,14 @@ export function BudgetTable({ groups, totals, sources, seasonName }: {
     },
     {
       key: 'planned',
+      card: 'meta',
       header: 'בתקציב',
       numeric: true,
       cell: (line) => <Money agorot={line.totalAgorot} />,
     },
     {
       key: 'spent',
+      card: 'meta',
       header: 'הוצא עד כה',
       numeric: true,
       cell: (line) => (line.spentAgorot === 0
@@ -97,6 +100,7 @@ export function BudgetTable({ groups, totals, sources, seasonName }: {
     },
     {
       key: 'left',
+      card: 'figure',
       header: 'נותר',
       numeric: true,
       cell: (line) => {
@@ -109,11 +113,13 @@ export function BudgetTable({ groups, totals, sources, seasonName }: {
     },
     {
       key: 'why',
+      card: 'meta',
       header: 'למה',
       cell: (line) => <span className={styles.rationale}>{line.rationale ?? ''}</span>,
     },
     {
       key: 'source',
+      card: 'meta',
       header: 'מקור',
       cell: (line) => (
         <SourceChip source={chipSource(sources.get(sourceKey('budget_lines', line.id)))} />

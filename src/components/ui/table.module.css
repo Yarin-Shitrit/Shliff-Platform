@@ -149,3 +149,147 @@
   margin: 0;
   cursor: pointer;
 }
+
+/*
+ * 767.98px — a phone. The table stops being a grid and becomes a list of
+ * cards. The fractional value closes the gap a fractional viewport width
+ * opens; every module in the redesign that changes at this width repeats this
+ * comment block.
+ *
+ * Three things make it honest rather than a trick:
+ *   - No column is hidden. Every cell is still rendered and still reachable;
+ *     `data-card` only decides where in the card it lands.
+ *   - The header row is *clipped*, never `display: none`, so every cell keeps
+ *     its `columnheader` at every width — which is what E4 asks a reflowed
+ *     table for, and what a phone reader would otherwise lose entirely.
+ *   - `display: block` drops the implicit table roles in every engine, so
+ *     `table.tsx` writes them out; without that this rule would trade a
+ *     sideways scroll for a pile of anonymous blocks.
+ *
+ * `.wrap`'s `overflow: auto` is what would otherwise produce the sideways
+ * scroll this reflow exists to remove, so it is turned off here too.
+ */
+@media (max-width: 767.98px) {
+  .wrap { overflow: visible; }
+
+  .table,
+  .table tbody,
+  .table tfoot {
+    display: block;
+  }
+
+  .table thead {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .table tbody tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 2px var(--space-3);
+    padding-block: var(--space-3);
+    padding-inline: var(--space-3);
+    border-block-end: 1px solid var(--line);
+  }
+
+  .table tbody tr:last-child {
+    border-block-end: 0;
+  }
+
+  /* The group heading spans the card it introduces rather than sitting in a
+     grid column of its own. */
+  .table tbody tr.groupRow {
+    display: block;
+    padding-block: var(--space-2);
+  }
+  .table tbody tr.groupRow th {
+    position: static;
+    block-size: auto;
+  }
+
+  .table tbody td {
+    display: block;
+    block-size: auto;
+    padding: 0;
+    border: 0;
+    white-space: normal;
+  }
+
+  .table tbody td[data-card='title'] {
+    grid-column: 1;
+    font-weight: 600;
+    font-size: var(--text-body);
+  }
+
+  /*
+   * The first figure sits beside the title, on the card's first line, which is
+   * where a lead's eye goes. A table with two figure columns — the ledger's
+   * נכנס/יצא pair, where exactly one of them ever carries a number — would
+   * otherwise stack the second on top of the first, so every later figure
+   * flows down the end column instead of sharing that cell.
+   */
+  .table tbody td[data-card='figure'] {
+    grid-column: 2;
+    grid-row: 1;
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+  }
+  .table tbody td[data-card='figure'] ~ td[data-card='figure'] {
+    grid-row: auto;
+  }
+  /* A selectable row spends its first line on the checkbox and the title, so
+     the figure joins the flow rather than landing beside the checkbox. */
+  .table tbody tr:has(td[data-card='select']) td[data-card='figure'] {
+    grid-row: auto;
+  }
+
+  /* A meta cell names itself, because on a card there is no column above it
+     to do that job. `data-label` is absent for a column whose header has no
+     text, and then no prefix is drawn at all. */
+  .table tbody td[data-card='meta'] {
+    grid-column: 1 / -1;
+    color: var(--ink-3);
+    font-size: var(--text-meta);
+  }
+  .table tbody td[data-card='meta'][data-label]::before {
+    content: attr(data-label) ': ';
+  }
+
+  /* The action slot is always visible on a phone: there is no hover to reveal
+     it with, and a control a thumb cannot reach is a control that is not
+     there. */
+  .table tbody td[data-card='action'] {
+    grid-column: 2;
+    min-block-size: var(--tap-min);
+    min-inline-size: var(--tap-min);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+  .table tbody td[data-card='action'] > * {
+    opacity: 1;
+  }
+
+  .table tbody td[data-card='select'] {
+    grid-column: 1;
+    grid-row: 1;
+    inline-size: auto;
+    justify-self: start;
+  }
+
+  .table tfoot td {
+    display: block;
+    position: static;
+    padding-block: var(--space-2);
+    padding-inline: var(--space-3);
+  }
+
+  .emptyCell {
+    display: block;
+  }
+}

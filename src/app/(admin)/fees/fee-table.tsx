@@ -128,18 +128,20 @@ export function FeeTable({
   rows, seasonId, seasonName, view, flatRateAgorot, totals,
 }: FeeTableProps): ReactElement {
   const columns: ReadonlyArray<TableColumn<MemberFeeRow>> = [
-    { key: 'name', header: 'שם', cell: nameCell },
-    { key: 'kind', header: 'סוג החיוב', cell: kindCell },
+    { key: 'name', card: 'title', header: 'שם', cell: nameCell },
+    { key: 'kind', card: 'meta', header: 'סוג החיוב', cell: kindCell },
     {
-      key: 'due', header: 'לתשלום', numeric: true,
+      key: 'due',
+      card: 'meta', header: 'לתשלום', numeric: true,
       cell: (row) => (row.amountAgorot === null ? NONE : <Money agorot={row.amountAgorot} />),
     },
-    { key: 'state', header: 'שולם', cell: (row) => stateCell(row, seasonName) },
+    { key: 'state', card: 'meta', header: 'שולם', cell: (row) => stateCell(row, seasonName) },
     {
-      key: 'outstanding', header: 'יתרה', numeric: true,
+      key: 'outstanding',
+      card: 'figure', header: 'יתרה', numeric: true,
       cell: (row) => (row.dueId === null ? NONE : <Money agorot={row.outstandingAgorot} />),
     },
-    { key: 'last', header: 'תשלום אחרון', cell: lastPaymentCell },
+    { key: 'last', card: 'meta', header: 'תשלום אחרון', cell: lastPaymentCell },
   ];
 
   const viewLabel = FEE_VIEWS.find((one) => one.id === view)?.label ?? 'הכול';

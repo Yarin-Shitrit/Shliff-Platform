@@ -1,15 +1,17 @@
 /** @vitest-environment jsdom */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within, fireEvent } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { Table } from './table';
 import type { TableColumn, TableRowModel } from './table';
 
 type Person = { name: string; state: string; balance: string };
 
 const columns: ReadonlyArray<TableColumn<Person>> = [
-  { key: 'name', header: 'שם', cell: (p) => p.name },
-  { key: 'state', header: 'דמי קאמפ', cell: (p) => p.state },
-  { key: 'balance', header: 'יתרה', cell: (p) => <bdi>{p.balance}</bdi>, numeric: true },
+  { key: 'name', header: 'שם', card: 'title', cell: (p) => p.name },
+  { key: 'state', header: 'דמי קאמפ', card: 'meta', cell: (p) => p.state },
+  { key: 'balance', header: 'יתרה', card: 'figure', cell: (p) => <bdi>{p.balance}</bdi>, numeric: true },
 ];
 
 const rows: ReadonlyArray<TableRowModel<Person>> = [
@@ -141,6 +143,13 @@ describe('Table — the additive guarantee', () => {
    * implementation as it stood before `totalsLabel` existed, from every prop a
    * screen was able to pass at that point. If a later change alters what those
    * screens render, this fails and nothing else has to notice.
+   *
+   * It fired once, deliberately, for plan 12's card reflow, and the snapshot
+   * below was re-recorded only after the change was **proved** additive: with
+   * the new `role`, `data-label` and `data-card` attributes stripped back out,
+   * the markup equals the previous snapshot byte for byte. No element, class,
+   * attribute or text node was removed or altered — the reflow adds and
+   * nothing else.
    */
   it('renders the pre-totalsLabel prop set byte for byte', () => {
     const { container } = render(
@@ -163,7 +172,7 @@ describe('Table — the additive guarantee', () => {
         density="compact"
       />,
     );
-    expect(container.innerHTML).toMatchInlineSnapshot(`"<div class="_wrap_464089 _compact_464089"><table class="_table_464089"><caption class="sr-only">רשימת אנשים</caption><thead><tr><th scope="col" class="_w0_464089"><input class="_check_464089" aria-label="בחירת כל השורות" aria-checked="mixed" type="checkbox"></th><th scope="col" class="">שם</th><th scope="col" class="">דמי קאמפ</th><th scope="col" class="_numeric_464089 num">יתרה</th><th scope="col" class="_w0_464089"></th></tr></thead><tbody><tr class="_groupRow_464089"><th scope="rowgroup" colspan="5">ספטמבר 2026</th></tr><tr data-tone="default" class=""><td class="_w0_464089"><input class="_check_464089" aria-label="בחירת a" type="checkbox"></td><td class="">רוני אדלר</td><td class="">שולם</td><td class="_numeric_464089 num"><bdi>—</bdi></td><td class="_w0_464089 _actions_464089"><button type="button">אפשרויות לרוני אדלר</button></td></tr><tr data-tone="bad" class="_selected_464089"><td class="_w0_464089"><input class="_check_464089" aria-label="בחירת b" type="checkbox" checked=""></td><td class="">איתי כהן</td><td class="">טרם שילם</td><td class="_numeric_464089 num"><bdi>1,200 ₪</bdi></td><td class="_w0_464089 _actions_464089"><button type="button">אפשרויות לאיתי כהן</button></td></tr></tbody><tfoot><tr><td colspan="3" class=""><bdi>35</bdi> אנשים</td><td class="_numeric_464089 num"><bdi>12,200 ₪</bdi></td></tr></tfoot></table></div>"`);
+    expect(container.innerHTML).toMatchInlineSnapshot(`"<div class="_wrap_464089 _compact_464089"><table role="table" class="_table_464089"><caption class="sr-only">רשימת אנשים</caption><thead role="rowgroup"><tr role="row"><th role="columnheader" scope="col" class="_w0_464089"><input class="_check_464089" aria-label="בחירת כל השורות" aria-checked="mixed" type="checkbox"></th><th role="columnheader" scope="col" class="">שם</th><th role="columnheader" scope="col" class="">דמי קאמפ</th><th role="columnheader" scope="col" class="_numeric_464089 num">יתרה</th><th role="columnheader" scope="col" class="_w0_464089"></th></tr></thead><tbody role="rowgroup"><tr role="row" class="_groupRow_464089"><th role="rowheader" scope="rowgroup" colspan="5">ספטמבר 2026</th></tr><tr role="row" data-tone="default" class=""><td role="cell" data-card="select" class="_w0_464089"><input class="_check_464089" aria-label="בחירת a" type="checkbox"></td><td role="cell" data-label="שם" data-card="title" class="">רוני אדלר</td><td role="cell" data-label="דמי קאמפ" data-card="meta" class="">שולם</td><td role="cell" data-label="יתרה" data-card="figure" class="_numeric_464089 num"><bdi>—</bdi></td><td role="cell" data-card="action" class="_w0_464089 _actions_464089"><button type="button">אפשרויות לרוני אדלר</button></td></tr><tr role="row" data-tone="bad" class="_selected_464089"><td role="cell" data-card="select" class="_w0_464089"><input class="_check_464089" aria-label="בחירת b" type="checkbox" checked=""></td><td role="cell" data-label="שם" data-card="title" class="">איתי כהן</td><td role="cell" data-label="דמי קאמפ" data-card="meta" class="">טרם שילם</td><td role="cell" data-label="יתרה" data-card="figure" class="_numeric_464089 num"><bdi>1,200 ₪</bdi></td><td role="cell" data-card="action" class="_w0_464089 _actions_464089"><button type="button">אפשרויות לאיתי כהן</button></td></tr></tbody><tfoot><tr><td colspan="3" class=""><bdi>35</bdi> אנשים</td><td class="_numeric_464089 num"><bdi>12,200 ₪</bdi></td></tr></tfoot></table></div>"`);
   });
 });
 
@@ -215,5 +224,88 @@ describe('Table — the action column has a name too', () => {
     const headers = screen.getAllByRole('columnheader');
     expect(headers).toHaveLength(4);
     expect(headers[3].textContent).toBe('');
+  });
+});
+
+/**
+ * The card reflow (plan 12, Task 2). Below 767.98px the same `<table>` becomes
+ * a list of cards: every column keeps its cell and the card role only decides
+ * where in the card it lands. There is no `'hidden'` role, deliberately — the
+ * phone sees every column the laptop sees, rearranged.
+ *
+ * jsdom applies no CSS Module, so what these assert is the *contract that
+ * makes the reflow possible* — the labels, the roles and the clipped header —
+ * and not the reflow itself. That gap is closed by hand under the plan's
+ * Definition of done, and no assertion here claims more than it proves.
+ */
+describe('Table, once it has to fit a phone', () => {
+  it('gives every cell the name of its column, so a card can label it', () => {
+    const { container } = render(<Table caption="רשימת אנשים" columns={columns} rows={rows} />);
+    const labels = Array.from(container.querySelectorAll('tbody td'))
+      .slice(0, 3)
+      .map((td) => td.getAttribute('data-label'));
+    expect(labels).toEqual(['שם', 'דמי קאמפ', 'יתרה']);
+  });
+
+  it('records where each cell lands in the card', () => {
+    const { container } = render(<Table caption="רשימת אנשים" columns={columns} rows={rows} />);
+    const cards = Array.from(container.querySelectorAll('tbody td'))
+      .slice(0, 3)
+      .map((td) => td.getAttribute('data-card'));
+    expect(cards).toEqual(['title', 'meta', 'figure']);
+  });
+
+  it('labels the columns Table generates for itself, which have no descriptor', () => {
+    const { container } = render(
+      <Table
+        caption="רשימת אנשים"
+        columns={columns}
+        rows={rows}
+        selection={{
+          selectedIds: new Set<string>(),
+          onToggleRow: () => {},
+          onToggleAll: () => {},
+          rowCheckboxLabel: () => 'בחירת שורה',
+          allCheckboxLabel: 'בחירת כל השורות',
+        }}
+        rowActions={() => <button type="button">עריכה</button>}
+        rowActionsHeader="פעולות"
+      />,
+    );
+    const first = container.querySelectorAll('tbody tr')[0];
+    const cells = Array.from(first.querySelectorAll('td'));
+    expect(cells[0].getAttribute('data-card')).toBe('select');
+    expect(cells[cells.length - 1].getAttribute('data-card')).toBe('action');
+    expect(cells[cells.length - 1].getAttribute('data-label')).toBe('פעולות');
+  });
+
+  it('reasserts the table roles a block layout would otherwise drop', () => {
+    const { container } = render(<Table caption="רשימת אנשים" columns={columns} rows={rows} />);
+    expect(container.querySelector('table')?.getAttribute('role')).toBe('table');
+    expect(container.querySelector('thead')?.getAttribute('role')).toBe('rowgroup');
+    expect(container.querySelector('tbody')?.getAttribute('role')).toBe('rowgroup');
+    expect(container.querySelector('tbody tr')?.getAttribute('role')).toBe('row');
+    expect(container.querySelector('tbody td')?.getAttribute('role')).toBe('cell');
+    expect(container.querySelector('thead th')?.getAttribute('role')).toBe('columnheader');
+  });
+
+  it('keeps the header row in the accessibility tree at every width', () => {
+    render(<Table caption="רשימת אנשים" columns={columns} rows={rows} />);
+    const headers = screen.getAllByRole('columnheader');
+    expect(headers.map((h) => h.textContent)).toEqual(['שם', 'דמי קאמפ', 'יתרה']);
+    expect(headers[0].getAttribute('scope')).toBe('col');
+  });
+
+  /**
+   * The header row is *clipped*, never `display: none`: a phone that drops the
+   * header out of the accessibility tree leaves every cell in every card with
+   * no column name, which is the one thing E4 asks a reflowed table for. The
+   * clip is what the `data-label` above is the visible counterpart of.
+   */
+  it('clips the header on a phone rather than removing it', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/components/ui/table.module.css'), 'utf8');
+    const phone = css.slice(css.indexOf('@media (max-width: 767.98px)'));
+    expect(phone).toContain('clip-path: inset(50%)');
+    expect(phone).not.toMatch(/thead\s*\{[^}]*display:\s*none/);
   });
 });

@@ -197,11 +197,13 @@ export default async function LedgerPage(
   const columns: Array<TableColumn<LedgerRow>> = [
     {
       key: 'date',
+      card: 'meta',
       header: 'תאריך',
       cell: (one) => <DateText at={one.occurredOn} />,
     },
     {
       key: 'description',
+      card: 'title',
       header: 'תיאור',
       cell: (one) => (
         <span className={styles.description}>
@@ -212,6 +214,7 @@ export default async function LedgerPage(
     },
     {
       key: 'counterpart',
+      card: 'meta',
       header: 'מ/אל',
       cell: (one) => {
         if (one.counterpartPersonId !== null && one.counterpartName !== null) {
@@ -237,6 +240,7 @@ export default async function LedgerPage(
     },
     {
       key: 'account',
+      card: 'meta',
       header: 'חשבון',
       cell: (one) => (one.accountName !== null
         ? one.accountName
@@ -244,16 +248,19 @@ export default async function LedgerPage(
     },
     {
       key: 'budget',
+      card: 'meta',
       header: 'סעיף תקציב',
       cell: (one) => one.budgetLineLabel ?? <Nothing />,
     },
     {
       key: 'source',
+      card: 'meta',
       header: 'מקור',
       cell: (one) => <SourceChip source={chipSource(one.source ?? undefined)} />,
     },
     {
       key: 'in',
+      card: 'figure',
       header: 'נכנס',
       numeric: true,
       cell: (one) => (one.direction === 'in'
@@ -262,6 +269,7 @@ export default async function LedgerPage(
     },
     {
       key: 'out',
+      card: 'figure',
       header: 'יצא',
       numeric: true,
       cell: (one) => (one.direction === 'out'
@@ -273,6 +281,7 @@ export default async function LedgerPage(
   if (balance.shown) {
     columns.push({
       key: 'balance',
+      card: 'figure',
       header: 'יתרה',
       numeric: true,
       cell: (one) => {

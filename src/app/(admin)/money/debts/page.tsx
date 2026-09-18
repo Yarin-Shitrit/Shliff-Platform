@@ -141,6 +141,7 @@ export default async function DebtsPage(
   const columns: Array<TableColumn<DebtRow>> = [
     {
       key: 'party',
+      card: 'title',
       header: 'למי',
       cell: (row) => {
         if (row.unnamed) return <Pill tone="bad">חסר שם</Pill>;
@@ -155,9 +156,10 @@ export default async function DebtsPage(
         return row.displayParty;
       },
     },
-    { key: 'what', header: 'על מה', cell: (row) => row.description },
+    { key: 'what', card: 'meta', header: 'על מה', cell: (row) => row.description },
     {
       key: 'when',
+      card: 'meta',
       header: 'מתי',
       cell: (row) => (row.openedOn === null
         ? <span className={styles.dateless}>{DATELESS_NOTE}</span>
@@ -165,12 +167,14 @@ export default async function DebtsPage(
     },
     {
       key: 'amount',
+      card: 'meta',
       header: 'סכום',
       numeric: true,
       cell: (row) => <Money agorot={row.amountAgorot} />,
     },
     {
       key: 'settled',
+      card: 'meta',
       header: 'קוזז עד כה',
       cell: (row) => (row.settledAgorot === 0 ? <Nothing /> : (
         <span className={styles.progress}>
@@ -190,12 +194,14 @@ export default async function DebtsPage(
     },
     {
       key: 'outstanding',
+      card: 'figure',
       header: 'נותר',
       numeric: true,
       cell: (row) => <Money agorot={row.outstandingAgorot} />,
     },
     {
       key: 'source',
+      card: 'meta',
       header: 'מקור',
       cell: (row) => <SourceChip source={chipSource(row.source ?? undefined)} />,
     },

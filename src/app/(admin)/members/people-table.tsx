@@ -163,6 +163,7 @@ export function PeopleTable({
   const columns: ReadonlyArray<TableColumn<PersonListRow>> = [
     {
       key: 'name',
+      card: 'title',
       header: 'שם',
       cell: (row) => (
         <span className={styles.namecell}>
@@ -180,6 +181,7 @@ export function PeopleTable({
     },
     {
       key: 'role',
+      card: 'meta',
       header: 'תפקיד',
       cell: (row) => (row.role === null
         ? <span className="muted">—</span>
@@ -187,14 +189,16 @@ export function PeopleTable({
     },
     {
       key: 'seasons',
+      card: 'meta',
       header: 'שנים',
       cell: (row) => (
         <SeasonChips years={seasonYears} own={row.seasons.map((s) => s.year)} />
       ),
     },
-    { key: 'dues', header: 'דמי קאמפ', cell: (row) => <DuesCell row={row} /> },
+    { key: 'dues', card: 'meta', header: 'דמי קאמפ', cell: (row) => <DuesCell row={row} /> },
     {
       key: 'balance',
+      card: 'figure',
       header: 'יתרה',
       numeric: true,
       /* A zero balance is `—`, not `0 ₪`: a column of zeroes reads as a column
@@ -205,6 +209,7 @@ export function PeopleTable({
     },
     {
       key: 'tasks',
+      card: 'meta',
       header: 'משימות',
       numeric: true,
       cell: (row) => (row.taskCount === 0
@@ -213,6 +218,7 @@ export function PeopleTable({
     },
     {
       key: 'activity',
+      card: 'meta',
       header: 'פעילות אחרונה',
       cell: (row) => <DateText at={row.lastActivityAt} />,
     },

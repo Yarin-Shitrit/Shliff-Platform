@@ -2,11 +2,15 @@
  * Element defaults only. Every value here comes from tokens.css, and this
  * file declares no colour of its own — `src/app/tokens.test.ts` enforces it.
  *
- * The four classes at the bottom (`.card`, `.muted`, `.badge-warn`,
- * `.scroll-x`) are pre-redesign globals that seven screens' JSX still names.
- * They are re-pointed at the new tokens and kept on the same terms as the
- * token aliases: each screen plan removes its own uses, and the last of them
- * deletes the block.
+ * The three classes at the bottom (`.card`, `.muted`, `.badge-warn`) are
+ * pre-redesign globals that screens' JSX still names. They are re-pointed at
+ * the new tokens and kept on the same terms as the token aliases: each screen
+ * plan removes its own uses, and the last of them deletes the block.
+ *
+ * There was a fourth — the sideways scroller a wide table used to be wrapped
+ * in — and it is gone. The card reflow in `table.module.css` replaced it, it
+ * had no JSX consumers left, and a repo-wide net now keeps it from coming
+ * back (see `route-modules.test.ts`), so its name is not written here either.
  */
 @import './tokens.css';
 
@@ -169,10 +173,6 @@ th {
    /fees → plan 07, / → plan 04, /members → plan 06, /money → plan 08. */
 .badge-warn {
   color: var(--bad);
-}
-
-.scroll-x {
-  overflow-x: auto;
 }
 
 /**

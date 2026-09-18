@@ -29,6 +29,7 @@ const IMPORT_FAILED = 'לא הצלחנו לקרוא את הקובץ. ודאו ש
 const COLUMNS: ReadonlyArray<TableColumn<UploadRow>> = [
   {
     key: 'file',
+    card: 'title',
     header: 'קובץ',
     cell: (row) => (
       <>
@@ -51,14 +52,16 @@ const COLUMNS: ReadonlyArray<TableColumn<UploadRow>> = [
       </>
     ),
   },
-  { key: 'by', header: 'הועלה ע״י', cell: (row) => row.uploadedBy },
+  { key: 'by', card: 'meta', header: 'הועלה ע״י', cell: (row) => row.uploadedBy },
   {
     key: 'when',
+    card: 'meta',
     header: 'מתי',
     cell: (row) => <bdi>{formatDateShort(row.createdAt)}</bdi>,
   },
   {
     key: 'status',
+    card: 'meta',
     header: 'מצב',
     cell: (row) => {
       const status = uploadStatusLabel(row);
@@ -67,12 +70,14 @@ const COLUMNS: ReadonlyArray<TableColumn<UploadRow>> = [
   },
   {
     key: 'confirmed',
+    card: 'meta',
     header: 'טבלאות שאושרו',
     /* One isolate for the whole phrase, not one per number (A17). */
     cell: (row) => <bdi>{row.confirmedCount} מתוך {row.blockCount}</bdi>,
   },
   {
     key: 'written',
+    card: 'figure',
     header: 'מה נכתב',
     cell: (row) => (row.promotedRows > 0
       ? <bdi>{row.promotedRows} שורות</bdi>

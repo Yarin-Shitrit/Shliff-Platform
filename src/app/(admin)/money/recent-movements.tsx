@@ -28,10 +28,11 @@ export function RecentMovements({ rows, total, sources, scope, seasonName }: {
   seasonName: string;
 }) {
   const columns: ReadonlyArray<TableColumn<Movement>> = [
-    { key: 'when', header: 'תאריך', cell: (move) => <DateText at={move.occurredOn} /> },
-    { key: 'what', header: 'תיאור', cell: (move) => move.description },
+    { key: 'when', card: 'meta', header: 'תאריך', cell: (move) => <DateText at={move.occurredOn} /> },
+    { key: 'what', card: 'title', header: 'תיאור', cell: (move) => move.description },
     {
       key: 'account',
+      card: 'meta',
       header: 'חשבון',
       // A movement with no account is admitted in a word, never folded into
       // a guessed one and never left as an empty cell.
@@ -39,6 +40,7 @@ export function RecentMovements({ rows, total, sources, scope, seasonName }: {
     },
     {
       key: 'in',
+      card: 'figure',
       header: 'נכנס',
       numeric: true,
       cell: (move) => (move.direction === 'in'
@@ -47,6 +49,7 @@ export function RecentMovements({ rows, total, sources, scope, seasonName }: {
     },
     {
       key: 'out',
+      card: 'figure',
       header: 'יצא',
       numeric: true,
       cell: (move) => (move.direction === 'out'
@@ -55,6 +58,7 @@ export function RecentMovements({ rows, total, sources, scope, seasonName }: {
     },
     {
       key: 'source',
+      card: 'meta',
       header: 'מקור',
       cell: (move) => (
         // `payments` has no provenance columns, and a dues payment genuinely

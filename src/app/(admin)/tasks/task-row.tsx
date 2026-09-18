@@ -167,11 +167,11 @@ function BudgetCell({ row }: { row: TaskCoverage }) {
 
 export function taskColumns(ctx: TaskRowContext): Array<TableColumn<TaskCoverage>> {
   return [
-    { key: 'task', header: 'משימה', cell: (row) => <TitleCell row={row} /> },
-    { key: 'when', header: 'מתי', w0: true, cell: (row) => <WhenCell row={row} gate={ctx.gate} /> },
-    { key: 'team', header: 'צוות', w0: true, cell: (row) => <TeamCell row={row} ctx={ctx} /> },
-    { key: 'coverage', header: 'איוש', w0: true, cell: (row) => <CoverageCell row={row} /> },
-    { key: 'budget', header: 'תקציב', w0: true, cell: (row) => <BudgetCell row={row} /> },
+    { key: 'task', card: 'title', header: 'משימה', cell: (row) => <TitleCell row={row} /> },
+    { key: 'when', card: 'meta', header: 'מתי', w0: true, cell: (row) => <WhenCell row={row} gate={ctx.gate} /> },
+    { key: 'team', card: 'meta', header: 'צוות', w0: true, cell: (row) => <TeamCell row={row} ctx={ctx} /> },
+    { key: 'coverage', card: 'figure', header: 'איוש', w0: true, cell: (row) => <CoverageCell row={row} /> },
+    { key: 'budget', card: 'meta', header: 'תקציב', w0: true, cell: (row) => <BudgetCell row={row} /> },
   ];
 }
 

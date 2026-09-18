@@ -45,6 +45,7 @@ export function ObligationsTable({ direction, rows, sources, scope }: {
   const columns: ReadonlyArray<TableColumn<ObligationRow>> = [
     {
       key: 'party',
+      card: 'title',
       header: PARTY_HEADER[direction],
       cell: (row) => {
         // An unnamed debt has no party to show and no settle affordance to
@@ -63,6 +64,7 @@ export function ObligationsTable({ direction, rows, sources, scope }: {
     },
     {
       key: 'what',
+      card: 'meta',
       header: 'על מה',
       cell: (row) => (
         <>
@@ -76,6 +78,7 @@ export function ObligationsTable({ direction, rows, sources, scope }: {
     },
     {
       key: 'left',
+      card: 'figure',
       header: 'נותר',
       numeric: true,
       cell: (row) => <Money agorot={row.outstandingAgorot} />,
