@@ -63,4 +63,21 @@ describe('NavList', () => {
     expect(screen.getByText('38')).toBeTruthy();
     expect(screen.getByText('6')).toBeTruthy();
   });
+
+  it('refreshes counts after a soft navigation, even within the same season', async () => {
+    counts.value = { openDecisions: 0, rosterSize: 3, understaffedTasks: 0 };
+    const { rerender } = render(<NavList />);
+    await waitFor(() => expect(screen.getByText('3')).toBeTruthy());
+
+    // A write on another page (add a person) changes what the next fetch
+    // would return; a soft navigation is the cheapest observable sign of it,
+    // with `season` unchanged. counts.ts: "a count in the chrome that
+    // disagrees with the page it links to is worse than no count."
+    counts.value = { openDecisions: 0, rosterSize: 9, understaffedTasks: 0 };
+    route.pathname = '/fees';
+    rerender(<NavList />);
+
+    await waitFor(() => expect(screen.getByText('9')).toBeTruthy());
+    expect(screen.queryByText('3')).toBeNull();
+  });
 });
