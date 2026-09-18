@@ -1,0 +1,46 @@
+/*
+ * The six tints are the --av-1..6 tokens from tokens.css (transcribed from
+ * the mock for this component). No hex literals here: unlike the brief's
+ * draft, tokens.css already owns these twelve values, so this module only
+ * references them.
+ */
+.avatar {
+  inline-size: 26px;
+  block-size: 26px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  user-select: none;
+}
+.sm { inline-size: 22px; block-size: 22px; font-size: 10px; }
+.md { inline-size: 26px; block-size: 26px; font-size: 11px; }
+.lg { inline-size: 56px; block-size: 56px; font-size: 20px; }
+
+.tint0 { background: var(--av-1-bg); color: var(--av-1-ink); }
+.tint1 { background: var(--av-2-bg); color: var(--av-2-ink); }
+.tint2 { background: var(--av-3-bg); color: var(--av-3-ink); }
+.tint3 { background: var(--av-4-bg); color: var(--av-4-ink); }
+.tint4 { background: var(--av-5-bg); color: var(--av-5-ink); }
+.tint5 { background: var(--av-6-bg); color: var(--av-6-ink); }
+
+.empty { background: transparent; border: 1.5px dashed var(--line-strong); color: var(--ink-4); }
+.overflow { background: var(--sunken); color: var(--ink-2); }
+
+/* The mock darkens tints with a filter rather than redefining them
+   (shared.css:239: `.app.dark .av { filter: saturate(.9) brightness(.9); }`).
+   Same approach here, under both the explicit theme attribute and the
+   OS-level media query, matching tokens.css's own dual-selector pattern. */
+:root[data-theme='dark'] .avatar { filter: saturate(0.9) brightness(0.9); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .avatar { filter: saturate(0.9) brightness(0.9); }
+}
+
+.stack { display: inline-flex; }
+.stack > * { box-shadow: 0 0 0 2px var(--panel); border-radius: 50%; }
+.stack > * + * { margin-inline-start: -6px; }
+.slotLink { display: inline-flex; }
+.slotLink:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 50%; }
