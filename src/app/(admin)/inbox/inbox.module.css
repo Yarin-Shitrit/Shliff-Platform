@@ -1,0 +1,230 @@
+/*
+ * לטיפול. Logical properties throughout — this screen is RTL and every
+ * `left`/`right` here would be a bug the moment the page is read.
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.lead {
+  margin-block: 6px 0;
+  color: var(--ink-2);
+  max-inline-size: 60ch;
+}
+
+.scope {
+  margin-block: 4px 0;
+  color: var(--ink-3);
+  font-size: 13px;
+  max-inline-size: 60ch;
+}
+
+.headActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cleared {
+  color: var(--ink-3);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* --- tabs ---------------------------------------------------------------- */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-block-end: 1px solid var(--line);
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-block: 9px;
+  padding-inline: 14px;
+  color: var(--ink-2);
+  text-decoration: none;
+  border-block-end: 2px solid transparent;
+  margin-block-end: -1px;
+}
+
+.tab[aria-selected='true'] {
+  color: var(--ink);
+  border-block-end-color: var(--brand);
+  font-weight: 600;
+}
+
+.n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 20px;
+  padding-inline: 6px;
+  border-radius: 10px;
+  background: var(--brand-soft);
+  color: var(--brand-text);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- body ---------------------------------------------------------------- */
+
+.body {
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 767.98px) {
+  .body { grid-template-columns: minmax(0, 1fr); }
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-inline-size: 0;
+}
+
+.seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.segLink {
+  padding-block: 5px;
+  padding-inline: 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-2);
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.segLink[aria-current='page'] {
+  background: var(--selected);
+  border-color: var(--brand);
+  color: var(--ink);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.list > li + li {
+  border-block-start: 1px solid var(--line);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-block: 11px;
+  padding-inline: 14px;
+  text-decoration: none;
+  color: inherit;
+  border-inline-end: 3px solid transparent;
+}
+
+.row[aria-current='true'] {
+  background: var(--selected);
+  border-inline-end-color: var(--brand);
+}
+
+.rowText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.rowTitle {
+  color: var(--ink);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.rowDetail {
+  color: var(--ink-3);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+/* --- טופלו ---------------------------------------------------------------- */
+
+.doneList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.doneList > li + li {
+  border-block-start: 1px solid var(--line);
+}
+
+.doneRow {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-block: 11px;
+  padding-inline: 14px;
+}
+
+.doneWhen {
+  margin-inline-start: auto;
+  color: var(--ink-3);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- empty --------------------------------------------------------------- */
+
+.empty {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-block: 32px;
+}
+
+.onward {
+  margin: 0;
+}
+
+/* A9: a focus ring is never removed, only styled. */
+.tab:focus-visible,
+.row:focus-visible,
+.segLink:focus-visible,
+.onward a:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
