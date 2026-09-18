@@ -30,6 +30,21 @@ export async function linkNameAction(
   return { ok: true };
 }
 
+/**
+ * R9. `createPersonFromAlias` throws in English by design — those sentences
+ * are for whoever is reading a stack trace — so the mapping happens here, at
+ * the action boundary.
+ *
+ * This used to hand `error.message` straight back, and `/inbox`'s action bar
+ * shows an `ActionResult.error` in a toast, so `alias <uuid> is already linked`
+ * was already reaching a Hebrew screen. Both of `link.ts`'s throws are mapped
+ * by prefix, because both interpolate the id.
+ */
+const PROMOTE_ERRORS: HebrewErrors = [
+  ['unknown alias', 'השם הזה כבר לא ברשימה — אולי מישהו אחר טיפל בו.'],
+  ['alias', 'השם הזה כבר משויך לאדם.'],
+];
+
 export async function promoteNameAction(aliasId: string): Promise<ActionResult> {
   const admin = await requireAdmin();
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
@@ -37,7 +52,7 @@ export async function promoteNameAction(aliasId: string): Promise<ActionResult> 
   try {
     await createPersonFromAlias(db, aliasId, admin.email);
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'שגיאה' };
+    return { ok: false, error: toHebrewError(error, PROMOTE_ERRORS) };
   }
   revalidatePath('/members');
   revalidatePath('/inbox');
