@@ -3,7 +3,9 @@ import { eq } from 'drizzle-orm';
 import type { TestDb } from '@/test/db';
 import { createTestDb } from '@/test/db';
 import { obligations } from '@/db/schema/money';
-import { createObligation, listObligations, settleObligation, unnamedObligations } from './obligations';
+import {
+  createObligation, listObligations, settleObligation, unnamedObligations, checkSettlement,
+} from './obligations';
 
 let db: TestDb;
 beforeEach(async () => { db = await createTestDb(); });
@@ -210,5 +212,47 @@ describe('the date a debt opened', () => {
     // leaves the module at all, which before this it did not.
     expect(rows[0].openedOn?.toISOString()).toBe('2026-07-02T00:00:00.000Z');
     expect(rows[1].openedOn).toBeNull();
+  });
+});
+
+describe('checkSettlement', () => {
+  it('makes every refusal settleObligation makes, and writes nothing', async () => {
+    const nameless = await createObligation(db, {
+      direction: 'camp_owes', description: 'שולם 500', amount: 500, openedOn: null,
+    });
+    await expect(checkSettlement(db, {
+      obligationId: nameless, amount: 100, kind: 'cash', settledOn: WHEN, recordedBy: LEAD,
+    })).rejects.toThrow('אי אפשר לסגור חוב בלי שם — לא ידוע למי מגיע הכסף');
+
+    const named = await createObligation(db, {
+      direction: 'camp_owes', partyName: 'אורי', description: 'החזר',
+      amount: 300, openedOn: null,
+    });
+    await expect(checkSettlement(db, {
+      obligationId: named, amount: 400, kind: 'cash', settledOn: WHEN, recordedBy: LEAD,
+    })).rejects.toThrow('אי אפשר לקזז יותר ממה שחייבים');
+    await expect(checkSettlement(db, {
+      obligationId: named, amount: 100, kind: 'offset', settledOn: WHEN, recordedBy: LEAD,
+    })).rejects.toThrow('קיזוז חייב לשאת הערה שאומרת מול מה קוזז');
+    await expect(checkSettlement(db, {
+      obligationId: named, amount: 0, kind: 'cash', settledOn: WHEN, recordedBy: LEAD,
+    })).rejects.toThrow('סכום קיזוז חייב להיות חיובי');
+
+    // The point of the function: a settlement the library would accept, and
+    // still nothing written. The action calls this before it records a ledger
+    // entry, so that every refusal a lead can trigger fires before the first
+    // of the two writes rather than between them.
+    await checkSettlement(db, {
+      obligationId: named, amount: 100, kind: 'cash', settledOn: WHEN, recordedBy: LEAD,
+    });
+    const rows = await listObligations(db, { direction: 'camp_owes' });
+    expect(rows.flatMap((row) => row.settlements)).toHaveLength(0);
+  });
+
+  it('refuses a debt that does not exist, naming it', async () => {
+    const missing = '00000000-0000-0000-0000-00000000000f';
+    await expect(checkSettlement(db, {
+      obligationId: missing, amount: 100, kind: 'cash', settledOn: WHEN, recordedBy: LEAD,
+    })).rejects.toThrow(`חוב לא קיים: ${missing}`);
   });
 });

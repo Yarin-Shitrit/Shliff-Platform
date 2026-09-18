@@ -163,14 +163,21 @@ export async function listObligations(
 }
 
 /**
- * Discharges part or all of an obligation.
+ * Every refusal `settleObligation` makes, without writing anything.
+ *
+ * Extracted so a caller that has to perform *two* writes — a cash settlement
+ * records a ledger entry and then the settlement itself — can make every
+ * refusal a lead could trigger fire before the first write rather than
+ * between the two. The window does not close (these are sequential awaits,
+ * not a transaction) but it narrows to failures nobody can provoke on
+ * purpose.
  *
  * An obligation with no party can never be settled. `שולם 500 — מקפיא
  * באיחסון נוסף` records money a member fronted and no name at all; marking it
  * settled would close the only record that anyone is owed anything, which is
  * exactly how the link was lost the first time.
  */
-export async function settleObligation(db: AnyDb, input: NewSettlement): Promise<string> {
+export async function checkSettlement(db: AnyDb, input: NewSettlement): Promise<void> {
   if (input.amount <= 0) throw new Error('סכום קיזוז חייב להיות חיובי');
   // Same rule `recordOffset` already enforces in src/lib/fees/payments.ts:
   // an offset with no note is a debt discharged against nothing anyone can
@@ -200,6 +207,17 @@ export async function settleObligation(db: AnyDb, input: NewSettlement): Promise
   if (already + toAgorot(input.amount) > toAgorot(obligation.amount)) {
     throw new Error('אי אפשר לקזז יותר ממה שחייבים');
   }
+}
+
+/**
+ * Discharges part or all of an obligation.
+ *
+ * Every refusal lives in `checkSettlement` above, which this calls first, so
+ * there is exactly one list of them and a caller can consult it in advance
+ * without writing anything.
+ */
+export async function settleObligation(db: AnyDb, input: NewSettlement): Promise<string> {
+  await checkSettlement(db, input);
 
   const [row] = await db.insert(obligationSettlements).values({
     obligationId: input.obligationId,

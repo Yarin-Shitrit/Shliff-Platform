@@ -9,6 +9,16 @@ import type { SourceCell } from '@/lib/money/trace';
 const { requireAdmin, listSeasons, listAccounts, listDebts } = vi.hoisted(() => ({
   requireAdmin: vi.fn(), listSeasons: vi.fn(), listAccounts: vi.fn(), listDebts: vi.fn(),
 }));
+/**
+ * The kit's `Drawer` is a client component: it traps focus, closes on `esc`
+ * and restores the opener. `notFound` stays real, because the guard test
+ * asserts that it throws.
+ */
+const { replace } = vi.hoisted(() => ({ replace: vi.fn() }));
+vi.mock('next/navigation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/navigation')>()),
+  useRouter: () => ({ replace, push: vi.fn(), refresh: vi.fn() }),
+}));
 vi.mock('@/db', () => ({ db: {} }));
 vi.mock('@/lib/auth/guard', () => ({ requireAdmin }));
 vi.mock('@/lib/members/roster', () => ({ listSeasons }));
@@ -179,5 +189,73 @@ describe('the debts screen', () => {
   it('is not found for a signed-in non-admin', async () => {
     requireAdmin.mockResolvedValue({ ok: false });
     await expect(renderPage()).rejects.toThrow();
+  });
+});
+
+/**
+ * A3 (binding, and it overrides this plan's `?settle=<id>`): an action drawer
+ * is `?peek=<id>&act=<verb>`, built through the kit's `drawer-url.ts` so that
+ * `esc`, the close control and the back button cannot disagree about which
+ * params survive. `settle` is one of A3's own six verbs.
+ */
+describe('the settlement drawer', () => {
+  const OPEN = { peek: 'o1', act: 'settle' };
+
+  beforeEach(() => {
+    listAccounts.mockResolvedValue([{ id: 'a1', name: 'קופה מזומן', kind: 'cash' }]);
+  });
+
+  it('opens from the URL, carrying the debt it is about', async () => {
+    listDebts.mockResolvedValue([debt({
+      id: 'o1', description: 'מקדמה לגנרטור', amountAgorot: 1524000,
+      settledAgorot: 1433000, outstandingAgorot: 91000, source: cell(),
+    })]);
+    await renderPage(OPEN);
+    // The kit's `Drawer` is the page's only `dialog`. There is no
+    // `ConfirmDialog` here, so this cannot match an `alertdialog` standing in
+    // front of it — the A25 trap.
+    const drawer = screen.getByRole('dialog');
+    expect(within(drawer).getByText('מקדמה לגנרטור')).toBeTruthy();
+    expect(within(drawer).getByText('סיכום כללי!D44')).toBeTruthy();
+    expect(within(drawer).getByText('14,330 מתוך 15,240')).toBeTruthy();
+    expect(within(drawer).getByRole('button', { name: 'סגירת החוב' })).toBeTruthy();
+  });
+
+  it('says a dateless debt has no date inside the drawer too', async () => {
+    listDebts.mockResolvedValue([debt({ id: 'o1', dateless: true, openedOn: null })]);
+    await renderPage(OPEN);
+    expect(within(screen.getByRole('dialog')).getByText('בגיליון אין תאריך לחוב הזה'))
+      .toBeTruthy();
+  });
+
+  it('offers the refusal instead of the form for a nameless debt', async () => {
+    listDebts.mockResolvedValue([debt({
+      id: 'o1', unnamed: true, displayParty: null, partyName: null,
+      description: 'שולם 500 — מקפיא באיחסון נוסף',
+    })]);
+    await renderPage(OPEN);
+    const drawer = screen.getByRole('dialog');
+    expect(within(drawer).queryByRole('button', { name: 'סגירת החוב' })).toBeNull();
+    expect(within(drawer).getByText('אי אפשר לסגור חוב בלי שם — לא ידוע למי מגיע הכסף'))
+      .toBeTruthy();
+  });
+
+  it('renders the page without a drawer, and without throwing, for an id that is not there', async () => {
+    listDebts.mockResolvedValue([debt({ id: 'o1' })]);
+    await renderPage({ peek: 'nope', act: 'settle' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('shows no drawer when the URL asks for none', async () => {
+    listDebts.mockResolvedValue([debt({ id: 'o1' })]);
+    await renderPage();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('links to the drawer from a settleable row, through the kit shape', async () => {
+    listDebts.mockResolvedValue([debt({ id: 'o1' })]);
+    await renderPage();
+    expect(screen.getByRole('link', { name: 'סגירה' }).getAttribute('href'))
+      .toBe('/money/debts?season=s1&peek=o1&act=settle');
   });
 });

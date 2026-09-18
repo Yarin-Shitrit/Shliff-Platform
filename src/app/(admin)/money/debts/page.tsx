@@ -17,15 +17,30 @@ import { SourceChip } from '@/components/ui/source-chip';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StatTile } from '@/components/ui/stat-tile';
 import { Banner } from '@/components/ui/banner';
+import { Drawer } from '@/components/ui/drawer';
+import { openPeekHref, closePeekHref } from '@/components/ui/drawer-url';
 import { Meter } from '@/components/charts/meter';
+import { listAccounts } from '@/lib/money/accounts';
 import { chipSource } from '../chip-source';
+import { SettleForm } from './settle-form';
 import styles from './debts.module.css';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = { title: 'חובות' };
 
-export type DebtsSearchParams = { season?: string; view?: string; settle?: string };
+/**
+ * A3, which overrides this plan's `?settle=<id>`: an action drawer is
+ * `?peek=<id>&act=<verb>`, and `settle` is one of its six verbs. Both params
+ * are read and written only through the kit's `drawer-url.ts`, so `esc`, the
+ * close control and the browser's back button cannot disagree about which
+ * params survive — `season` above all (R5).
+ */
+export type DebtsSearchParams = {
+  season?: string; view?: string; peek?: string; act?: string;
+};
+
+const PATH = '/money/debts';
 
 const VIEW_LABELS: Readonly<Record<DebtView, string>> = {
   camp_owes: 'אנחנו חייבים',
@@ -51,16 +66,27 @@ function parseView(value: string | undefined): DebtView {
   return VIEWS.includes(value as DebtView) ? (value as DebtView) : 'camp_owes';
 }
 
-function debtsHref(
-  current: DebtsSearchParams, over: Partial<DebtsSearchParams> = {},
-): string {
-  const next = { ...current, ...over };
+/** Every param this screen owns, as the kit's builders want them. */
+function asParams(current: DebtsSearchParams): URLSearchParams {
   const search = new URLSearchParams();
-  if (next.season) search.set('season', next.season);
-  if (next.view && next.view !== 'camp_owes') search.set('view', next.view);
-  if (next.settle) search.set('settle', next.settle);
-  const query = search.toString();
-  return query === '' ? '/money/debts' : `/money/debts?${query}`;
+  if (current.season) search.set('season', current.season);
+  if (current.view && current.view !== 'camp_owes') search.set('view', current.view);
+  if (current.peek) search.set('peek', current.peek);
+  if (current.act) search.set('act', current.act);
+  return search;
+}
+
+/**
+ * A view link closes any open drawer, and it does so through
+ * `closePeekHref` rather than by leaving `peek` and `act` out by hand: A19's
+ * point is that one function decides which params a drawer owns, and a
+ * second correct copy is how that erodes.
+ */
+function viewHref(current: DebtsSearchParams, view: DebtView): string {
+  const next = asParams(current);
+  if (view === 'camp_owes') next.delete('view');
+  else next.set('view', view);
+  return closePeekHref(PATH, next);
 }
 
 function Nothing(): ReactNode {
@@ -97,10 +123,20 @@ export default async function DebtsPage(
   const season = seasons.find((one) => one.id === params.season) ?? seasons[0];
   const view = parseView(params.view);
 
-  const rows = await listDebts(db, { seasonId: season.id });
+  const [rows, accounts] = await Promise.all([
+    listDebts(db, { seasonId: season.id }),
+    listAccounts(db),
+  ]);
   const totals = debtTotals(rows);
   const shown = applyDebtView(rows, view);
   const nameless = rows.filter((row) => row.unnamed && !row.settled);
+
+  /* An id that names no row on this page opens no drawer and throws nothing:
+   * a stale link, or a debt that has since been settled in another tab, is
+   * not an error a lead should be shown a crash for. */
+  const settling = params.act === 'settle' && params.peek !== undefined
+    ? rows.find((row) => row.id === params.peek)
+    : undefined;
 
   const columns: Array<TableColumn<DebtRow>> = [
     {
@@ -262,7 +298,7 @@ export default async function DebtsPage(
           <Link
             key={one}
             className={styles.viewLink}
-            href={debtsHref(params, { view: one })}
+            href={viewHref(params, one)}
             aria-pressed={one === view}
           >
             {VIEW_LABELS[one]}
@@ -276,6 +312,57 @@ export default async function DebtsPage(
           </Link>
         ))}
       </nav>
+
+      {settling === undefined ? null : (
+        <Drawer
+          title={settling.unnamed ? 'חוב בלי שם' : `סגירת חוב — ${settling.displayParty}`}
+          subtitle={settling.description}
+          closeHref={closePeekHref(PATH, asParams(params))}
+        >
+          {/* The description is the drawer's subtitle and is not repeated
+            * here: a fact printed twice in one panel reads as two facts. */}
+          <dl className={styles.drawerFacts}>
+            <dt>מתי נפתח</dt>
+            <dd>
+              {settling.openedOn === null
+                ? <span className={styles.dateless}>{DATELESS_NOTE}</span>
+                : <DateText at={settling.openedOn} />}
+            </dd>
+            <dt>נותר</dt>
+            <dd><Money agorot={settling.outstandingAgorot} /></dd>
+            <dt>מקור</dt>
+            <dd><SourceChip source={chipSource(settling.source ?? undefined)} /></dd>
+          </dl>
+
+          {settling.settledAgorot === 0 ? null : (
+            <p className={styles.progress}>
+              <Meter
+                label={`נסגר מתוך ${settling.description}`}
+                valueAgorot={settling.settledAgorot}
+                totalAgorot={settling.amountAgorot}
+              />
+              <bdi className={styles.progressText}>
+                {`${formatILS(settling.settledAgorot)} מתוך ${formatILS(settling.amountAgorot)}`}
+              </bdi>
+            </p>
+          )}
+
+          {settling.unnamed || settling.displayParty === null ? (
+            /* No form at all, not a disabled one. `settleObligation` would
+             * refuse this and the drawer says so in its own words. */
+            <p className={styles.refusal}>{NAMELESS_REFUSAL}</p>
+          ) : (
+            <SettleForm
+              obligationId={settling.id}
+              direction={settling.direction}
+              displayParty={settling.displayParty}
+              outstandingAgorot={settling.outstandingAgorot}
+              accounts={accounts.map((one) => ({ id: one.id, name: one.name }))}
+              closeHref={closePeekHref(PATH, asParams(params))}
+            />
+          )}
+        </Drawer>
+      )}
 
       {view === 'settled' ? (
         <section className={styles.direction} role="group" aria-label={VIEW_LABELS.settled}>
@@ -323,7 +410,7 @@ function SettleControl({ row, params }: { row: DebtRow; params: DebtsSearchParam
     );
   }
   return (
-    <Link className={styles.settleButton} href={debtsHref(params, { settle: row.id })}>
+    <Link className={styles.settleButton} href={openPeekHref(PATH, asParams(params), row.id, 'settle')}>
       סגירה
     </Link>
   );
