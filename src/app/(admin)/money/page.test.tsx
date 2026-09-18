@@ -268,12 +268,12 @@ describe('MoneyPage', () => {
     const off: BudgetLineRow = {
       id: 'b1', label: 'קבוצה א', quantityText: '10', quantityNumAgorot: 1000,
       unitCostAgorot: 5000, totalAgorot: 40000, rationale: null, category: 'camp',
-      arithmeticOff: true,
+      arithmeticOff: true, sourceBlockId: null, sourceRow: null,
     };
     const ok: BudgetLineRow = {
       id: 'b2', label: 'קבוצה ב', quantityText: '2', quantityNumAgorot: 200,
       unitCostAgorot: 3000, totalAgorot: 6000, rationale: null, category: 'camp',
-      arithmeticOff: false,
+      arithmeticOff: false, sourceBlockId: null, sourceRow: null,
     };
     listBudgetLines.mockResolvedValue([off, ok]);
     render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
