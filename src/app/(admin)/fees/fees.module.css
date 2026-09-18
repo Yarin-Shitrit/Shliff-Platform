@@ -239,3 +239,24 @@
 .previousList li:last-child { border-block-end: none; }
 
 .rowEnd { margin-inline-start: auto; }
+
+/* ——— the table (Task 8) ——— */
+
+.nameCell { display: inline-flex; align-items: center; gap: 0.5rem; }
+.kindCell { display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.stateCell { display: inline-flex; align-items: center; gap: 0.5rem; }
+.lastCell { display: inline-flex; align-items: baseline; gap: 0.5rem; }
+
+.meter {
+  inline-size: 3.5rem;
+  block-size: 0.25rem;
+  border-radius: 999px;
+  background: var(--viz-track);
+  overflow: hidden;
+}
+
+.meterFill {
+  display: block;
+  block-size: 100%;
+  background: var(--viz-dues);
+}
