@@ -218,7 +218,7 @@ Shared files, their owner, and the wave they settle in:
 | File | Owner | Wave | Consumers |
 |---|---|---|---|
 | `src/app/tokens.css`, `globals.css` | 01 | 0 | all |
-| `src/components/icon.tsx` | 01 | 0 | all |
+| `src/components/ui/icon.tsx` | 01 | 0 | all | *(corrected — see A1; this table said `src/components/icon.tsx` and the spec's §C wins)* |
 | `src/lib/money.ts`, `src/lib/dates.ts` | 01 | 0 | all |
 | `src/components/ui/*` (incl. `toaster.tsx`, I4) | 03 | 1 | all screens |
 | `src/app/(admin)/layout.tsx`, `shell/*` (incl. `tab-bar.tsx`, I5) | 02 | 1 | all screens, then 12 |
