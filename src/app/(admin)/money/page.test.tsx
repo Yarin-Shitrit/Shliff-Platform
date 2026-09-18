@@ -95,6 +95,26 @@ function obligation(overrides: Partial<ObligationRow> = {}): ObligationRow {
   };
 }
 
+function budgetLine(overrides: Partial<BudgetLineActuals> = {}): BudgetLineActuals {
+  return {
+    id: 'b1', label: 'מים וקרח', quantityText: null, quantityNumAgorot: null,
+    unitCostAgorot: null, totalAgorot: 620000, rationale: null, category: 'camp',
+    arithmeticOff: false, sourceBlockId: null, sourceRow: null,
+    spentAgorot: 174000, remainingAgorot: 446000, overAgorot: 0,
+    ...overrides,
+  };
+}
+
+function movement(overrides: Partial<Movement> = {}): Movement {
+  return {
+    id: 'm1', source: 'ledger', occurredOn: new Date('2026-09-12T00:00:00Z'),
+    direction: 'in', amountAgorot: 1850000, description: 'מסיבת גיוס — אוקטובר',
+    accountId: 'a1', accountName: 'קופת מסיבות', seasonId: 's1', eventId: null,
+    transferGroupId: null, sourceBlockId: null, sourceRow: null,
+    ...overrides,
+  };
+}
+
 function overview(overrides: Partial<MoneyOverview> = {}): MoneyOverview {
   return {
     summary: summary(),
@@ -431,20 +451,10 @@ describe('MoneyPage', () => {
     // The sentence is the kit's (C10), not this screen's: `EmptyState` owns
     // the wording so eleven lists do not grow eleven dialects of "nothing
     // here". What this page supplies is the noun, the season and the action.
-    for (const heading of ['מה חייבים ומה חייבים לנו', 'התקציב']) {
+    for (const heading of ['מה חייבים ומה חייבים לנו', 'התקציב', 'התנועות האחרונות']) {
       const section = sectionFor(heading);
       expect(section.textContent).toContain(SEASON.name);
       const link = within(section).getByRole('link', { name: 'לדף הייבוא' });
-      expect(link.getAttribute('href')).toBe('/upload');
-    }
-
-    // Still Wave 1's hand-written sentence until Task 10 moves this band onto
-    // the kit's EmptyState, when it joins the loop above. Asserted here so
-    // the interim never goes uncovered.
-    for (const heading of ['התנועות']) {
-      const section = sectionFor(heading);
-      expect(section.textContent).toContain(SEASON.name);
-      const link = within(section).getByRole('link', { name: 'דף הייבוא' });
       expect(link.getAttribute('href')).toBe('/upload');
     }
 
@@ -578,7 +588,7 @@ describe('MoneyPage', () => {
     }));
     render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
 
-    const section = sectionFor('התנועות');
+    const section = sectionFor('התנועות האחרונות');
     const rows = within(section).getAllByRole('row');
     const [, inRow, outRow] = rows;
     // Columns are תאריך(0) תיאור(1) חשבון(2) נכנס(3) יצא(4). Checking the
@@ -715,6 +725,78 @@ describe('MoneyPage', () => {
       render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
       expect(screen.getByRole('link', { name: /לכל החובות/ }).getAttribute('href'))
         .toBe('/money/debts?season=s1');
+    });
+  });
+  describe('the screen as a whole', () => {
+    it('renders the six bands in the order of the argument', async () => {
+      moneyOverview.mockResolvedValue(overview({
+        summary: summary({ accounts: [account()], campOwes: [obligation()], campOwesAgorot: 30000 }),
+        budget: [{
+          category: 'camp', label: 'קאמפ', count: 1, lines: [budgetLine()],
+          plannedAgorot: 620000, spentAgorot: 174000, remainingAgorot: 446000,
+        }],
+        budgetTotals: {
+          plannedAgorot: 620000, spentAgorot: 174000, remainingAgorot: 446000, count: 1,
+        },
+        recent: [movement()],
+        movementCount: 1,
+      }));
+      const { container } = render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+      const headings = Array.from(container.querySelectorAll('h2')).map((node) => node.textContent?.trim());
+      expect(headings).toEqual([
+        'איפה הכסף', 'מה חייבים ומה חייבים לנו', 'התקציב', 'התנועות האחרונות',
+      ]);
+      // The lead and the tiles sit above the first h2, in that order.
+      expect(container.querySelector(`.${styles.lead}`)!
+        .compareDocumentPosition(container.querySelector(`.${styles.tiles}`)!))
+        .toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+
+    it('makes one library call for the whole screen', async () => {
+      render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+      expect(moneyOverview).toHaveBeenCalledTimes(1);
+      expect(moneyOverview).toHaveBeenCalledWith({}, 's1');
+    });
+
+    it('carries the season on every internal link, so the shell switcher stays in step', async () => {
+      moneyOverview.mockResolvedValue(overview({
+        summary: summary({ accounts: [account()], campOwes: [obligation()] }),
+        recent: [movement()], movementCount: 1,
+      }));
+      const { container } = render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+      const internal = Array.from(container.querySelectorAll('a[href^="/"]'))
+        .map((node) => node.getAttribute('href')!)
+        // /members/<id> and /upload are not season-scoped: a person and the
+        // import screen belong to the camp, not to one year (R5).
+        .filter((href) => !href.startsWith('/members/') && !href.startsWith('/upload'));
+      expect(internal.length).toBeGreaterThan(0);
+      for (const href of internal) expect(href).toContain('season=s1');
+    });
+
+    it('falls back to the newest season when the URL names none', async () => {
+      render(await MoneyPage({ searchParams: Promise.resolve({}) }));
+      expect(moneyOverview).toHaveBeenCalledWith({}, 's1');
+    });
+
+    // R11, across every row type this screen renders: a figure either names
+    // the cell it came from or says it was entered by hand. Nothing is blank.
+    it('gives every row on the screen a source, or says it was typed', async () => {
+      moneyOverview.mockResolvedValue(overview({
+        summary: summary({ accounts: [account()], campOwes: [obligation()], campOwesAgorot: 30000 }),
+        budget: [{
+          category: 'camp', label: 'קאמפ', count: 1, lines: [budgetLine()],
+          plannedAgorot: 620000, spentAgorot: 174000, remainingAgorot: 446000,
+        }],
+        budgetTotals: {
+          plannedAgorot: 620000, spentAgorot: 174000, remainingAgorot: 446000, count: 1,
+        },
+        recent: [movement()],
+        movementCount: 1,
+      }));
+      render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+      // One debt, one budget line, one movement — none of the three fixtures
+      // carries a source block, so all three must read `נרשם ידנית`.
+      expect(screen.getAllByText('נרשם ידנית')).toHaveLength(3);
     });
   });
 });

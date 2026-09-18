@@ -5,7 +5,7 @@ import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import { listSeasons } from '@/lib/members/roster';
 import { moneyOverview } from '@/lib/money/overview';
-import { formatILS, formatShekels } from '@/lib/money';
+import { formatShekels } from '@/lib/money';
 import { Money } from '@/components/format';
 import { Banner } from '@/components/ui/banner';
 import { StatTile } from '@/components/ui/stat-tile';
@@ -14,6 +14,7 @@ import { StackedBar } from '@/components/charts/stacked-bar';
 import { AccountCard } from './account-card';
 import { ObligationsTable } from './obligations-table';
 import { BudgetTable } from './budget-table';
+import { RecentMovements } from './recent-movements';
 import styles from './money.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -49,7 +50,6 @@ export default async function MoneyPage(
   const { summary } = view;
   const { identity } = summary;
   const scope = `?season=${season.id}`;
-  const movements = view.recent;
 
   // `duesFundingIdentity` (src/lib/money/funding.ts) sets both of these to
   // `null` in exactly the same branch — no planned camp size — so bundling
@@ -299,40 +299,6 @@ export default async function MoneyPage(
         ) : null}
       </section>
 
-      <section className="card">
-        <h2>התנועות</h2>
-        {movements.length === 0 ? (
-          <p className="muted">
-            עדיין אין תנועות ל<bdi>{season.name}</bdi>. אפשר לייבא נתונים מ
-            <Link href="/upload">דף הייבוא</Link>, או אם חיפשתם שנה אחרת — לבחור
-            אותה למעלה.
-          </p>
-        ) : (
-          <div className="scroll-x">
-            <table>
-              <thead>
-                <tr>
-                  <th>תאריך</th><th>תיאור</th><th>חשבון</th><th>נכנס</th><th>יצא</th>
-                </tr>
-              </thead>
-              <tbody>
-                {movements.map((move) => (
-                  <tr key={`${move.source}-${move.id}`}>
-                    <td><bdi>{move.occurredOn.toLocaleDateString('he-IL')}</bdi></td>
-                    <td>{move.description}</td>
-                    <td>{move.accountName ?? <span className="muted">לא צוין</span>}</td>
-                    <td>{move.direction === 'in'
-                      ? <bdi>{formatILS(move.amountAgorot)} ₪</bdi> : null}</td>
-                    <td>{move.direction === 'out'
-                      ? <bdi>{formatILS(move.amountAgorot)} ₪</bdi> : null}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
       <section>
         <div className={styles.sectionTitle}>
           <h2 className={styles.sectionHeading}>התקציב</h2>
@@ -343,6 +309,9 @@ export default async function MoneyPage(
         <BudgetTable groups={view.budget} totals={view.budgetTotals}
                      sources={view.sources} seasonName={season.name} />
       </section>
+
+      <RecentMovements rows={view.recent} total={view.movementCount}
+                       sources={view.sources} scope={scope} seasonName={season.name} />
     </main>
   );
 }
