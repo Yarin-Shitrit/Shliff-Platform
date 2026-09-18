@@ -20,11 +20,13 @@ import { Pill } from '@/components/ui/pill';
 import { Avatar } from '@/components/ui/avatar';
 import { SourceChip } from '@/components/ui/source-chip';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Banner } from '@/components/ui/banner';
 import { SavedViews } from '@/components/ui/saved-views';
 import { FilterBar } from '@/components/ui/filter-bar';
 import type { FilterChip, FilterOption } from '@/components/ui/filter-bar';
 import { StatTile } from '@/components/ui/stat-tile';
 import { chipSource } from '../chip-source';
+import { AttributeAccount } from './attribute-account';
 import styles from './ledger.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -274,6 +276,23 @@ export default async function LedgerPage(
   ];
   if (balance.shown) totals.push({ key: 'balance', content: <Nothing />, numeric: true });
 
+  /**
+   * Two figures, never their sum.
+   *
+   * `unattributedAgorot` in `accounts.ts` already carries the finding that
+   * adding money-in-from-nowhere to money-out-to-nowhere "produced a number
+   * that was not a quantity of anything": one is cash that arrived somewhere
+   * unrecorded, the other is cash that left somewhere unrecorded, and a
+   * shekel of each does not make two shekels of anything. The count is one
+   * number because movements really are countable; the money is two.
+   *
+   * Computed from the rows already in hand, over the page's whole scope
+   * rather than the active view — a lead who has filtered to נכנס still needs
+   * to know the יצא side is unplaced.
+   */
+  const unplaced = applyLedgerView(all, { view: 'no-account', sort: query.sort });
+  const unplacedStrip = ledgerStrip(unplaced);
+
   const counts = viewCounts(all);
   const clearHref = ledgerHref(params, {
     view: undefined, q: undefined, budget: undefined,
@@ -368,6 +387,26 @@ export default async function LedgerPage(
         <p className={styles.stripNote}>המספרים מתעדכנים לפי הסינון הפעיל</p>
       </div>
 
+      {unplacedStrip.count === 0 ? null : (
+        <Banner
+          tone="warn"
+          live
+          action={{ href: ledgerHref(params, { view: 'no-account' }), label: 'שיוך לחשבון' }}
+          headline={<bdi>{unplacedStrip.count} תנועות נרשמו בלי לציין חשבון.</bdi>}
+          detail={(
+            <>
+              עד שישויכו הן לא נספרות ביתרה של אף קופה.
+              {unplacedStrip.inAgorot === 0 ? null : (
+                <> <Money agorot={unplacedStrip.inAgorot} /> נרשמו בלי לציין לאיזה חשבון נכנסו.</>
+              )}
+              {unplacedStrip.outAgorot === 0 ? null : (
+                <> <Money agorot={unplacedStrip.outAgorot} /> נרשמו בלי לציין מאיזה חשבון יצאו.</>
+              )}
+            </>
+          )}
+        />
+      )}
+
       {balance.shown ? null : (
         <p className={styles.balanceNote}>{balance.reason}</p>
       )}
@@ -377,6 +416,14 @@ export default async function LedgerPage(
         columns={columns}
         rows={tableRows}
         totals={tableRows.length === 0 ? undefined : totals}
+        rowActions={(one) => (one.accountId === null ? (
+          <AttributeAccount
+            origin={one.origin}
+            movementId={one.id}
+            description={one.description}
+            accounts={accounts.map((account) => ({ id: account.id, name: account.name }))}
+          />
+        ) : null)}
         empty={filterSummary !== undefined ? (
           <EmptyState
             kind="no-matches"

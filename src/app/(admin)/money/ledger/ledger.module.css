@@ -85,3 +85,42 @@
   color: var(--ink-3);
   font-size: var(--text-meta);
 }
+
+/* The repair control on an unattributed row. */
+.attribute {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* Mirrors `field.module.css`'s `.box`: there is no kit select (§5 A28) and no
+ * way to hide a `Field` label, so the native control is dressed here against
+ * the same tokens rather than inventing a second look. */
+.select {
+  min-block-size: var(--control-h);
+  padding-inline: var(--space-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-dense);
+}
+
+.select:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.formError {
+  margin-block: 0;
+  color: var(--bad);
+  font-size: var(--text-meta);
+  flex-basis: 100%;
+}
+
+.noAccounts {
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}

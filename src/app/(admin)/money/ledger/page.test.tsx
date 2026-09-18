@@ -346,3 +346,59 @@ describe('the saved views and the strip', () => {
       .toBe('/money/ledger?season=s1');
   });
 });
+
+describe('money with no account', () => {
+  const unplaced = [
+    row({ id: '1', direction: 'in', amountAgorot: 120000, description: 'תרומה',
+          accountId: null, accountName: null }),
+    row({ id: '2', direction: 'out', amountAgorot: 120000, description: 'מים וקרח',
+          accountId: null, accountName: null }),
+  ];
+
+  /**
+   * `getByRole('status')` carries no name filter because the kit's `Banner`
+   * takes no accessible name — reported, not patched, since the kit is
+   * read-only here. The page renders exactly one live region, and the
+   * assertion below says so, so the query cannot drift onto another.
+   */
+  it('names unattributed money in both directions, never as one sum', async () => {
+    listLedgerRows.mockResolvedValue(unplaced);
+    await renderPage();
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    const banner = screen.getByRole('status');
+    expect(within(banner).getByText(/2 תנועות נרשמו בלי לציין חשבון/)).toBeTruthy();
+    expect(within(banner).getByText(/עד שישויכו הן לא נספרות ביתרה של אף קופה/)).toBeTruthy();
+    expect(within(banner).getByText(/נרשמו בלי לציין לאיזה חשבון נכנסו/)).toBeTruthy();
+    expect(within(banner).getByText(/נרשמו בלי לציין מאיזה חשבון יצאו/)).toBeTruthy();
+    // 1,200 in and 1,200 out are not 2,400 of anything. Summing money that
+    // arrived somewhere unrecorded with money that left somewhere unrecorded
+    // produces a figure that is not a quantity — `unattributedAgorot` already
+    // carries that finding, and this is the screen honouring it.
+    expect(within(banner).queryByText('2,400 ₪')).toBeNull();
+    expect(within(banner).getAllByText('1,200 ₪')).toHaveLength(2);
+    expect(within(banner).getByRole('link', { name: 'שיוך לחשבון' }).getAttribute('href'))
+      .toBe('/money/ledger?season=s1&view=no-account');
+  });
+
+  it('offers the fix on the row itself', async () => {
+    listAccounts.mockResolvedValue([{ id: 'a1', name: 'קופה מזומן', kind: 'cash' }]);
+    listLedgerRows.mockResolvedValue([
+      row({ id: '1', description: 'מים וקרח', accountId: null, accountName: null }),
+    ]);
+    await renderPage({ view: 'no-account' });
+    expect(screen.getByRole('combobox', { name: 'שיוך מים וקרח לחשבון' })).toBeTruthy();
+  });
+
+  it('offers no such control on a row that already names its account', async () => {
+    listAccounts.mockResolvedValue([{ id: 'a1', name: 'קופה מזומן', kind: 'cash' }]);
+    listLedgerRows.mockResolvedValue([row({ id: '1', description: 'מים וקרח' })]);
+    await renderPage();
+    expect(screen.queryByRole('combobox', { name: /שיוך/ })).toBeNull();
+  });
+
+  it('says nothing at all when every movement names its account', async () => {
+    listLedgerRows.mockResolvedValue([row({ id: '1' })]);
+    await renderPage();
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+});
