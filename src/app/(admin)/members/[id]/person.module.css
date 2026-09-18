@@ -211,3 +211,18 @@
   color: var(--ink-3);
   font-weight: 500;
 }
+
+/*
+ * A38. A refusal handed back from the unlink dialog through the URL. It sits
+ * above the header rather than inside the aliases panel: the redirect has
+ * already closed the dialog, so there is no longer a place in the panel that
+ * a lead is looking at.
+ */
+.unlinkError {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--bad);
+  border-radius: var(--radius-card);
+  background: var(--bad-soft);
+  color: var(--ink);
+}

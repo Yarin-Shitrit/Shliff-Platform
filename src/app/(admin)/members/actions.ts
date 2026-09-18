@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import type { ActionResult } from '@/lib/action-result';
@@ -210,4 +211,39 @@ export async function unlinkAliasAction(aliasId: string): Promise<ActionResult> 
   if (target.personId !== null) revalidatePath(`/members/${target.personId}`);
   revalidatePath('/members');
   return { ok: true };
+}
+
+/** The param a refused unlink comes back in, so the page and the action agree. */
+export const UNLINK_ERROR_PARAM = 'unlinkError';
+
+/**
+ * A38 (BINDING): **a server-rendered dialog may not swallow a refusal.**
+ *
+ * `ConfirmDialog` submits through a plain `<form action>`, which has nowhere
+ * to put an `ActionResult` — so `unlinkAliasAction` bound straight onto it
+ * returns its refusal into the void and the lead sees *nothing at all*. Not an
+ * English message on a Hebrew screen: no message. That is the platform's first
+ * rule broken in the quietest possible way, and nothing goes red.
+ *
+ * A38 allows two answers and prefers this one: redirect back with the refusal
+ * in the URL, the mechanism `/signin` already uses. The alternative — proving
+ * every reachable path returns `ok` and naming the guard in a comment — is a
+ * claim about the screen's guards that expires the moment a new entry point is
+ * added, and `?unlink=` is a URL anyone can type.
+ *
+ * It redirects on success too, which drops the now-stale `?unlink=` from the
+ * address bar rather than leaving a dialog request pointing at an alias that
+ * no longer exists.
+ *
+ * Returns `void`, so `.bind(null, aliasId, backHref)` satisfies
+ * `ConfirmDialog.action`'s `(formData: FormData) => void | Promise<void>` —
+ * the type A38 records as unwidenable while a lane was building against it.
+ */
+export async function unlinkAliasAndReturn(
+  aliasId: string, backHref: string,
+): Promise<void> {
+  const result = await unlinkAliasAction(aliasId);
+  if (result.ok) redirect(backHref);
+  const separator = backHref.includes('?') ? '&' : '?';
+  redirect(`${backHref}${separator}${UNLINK_ERROR_PARAM}=${encodeURIComponent(result.error)}`);
 }

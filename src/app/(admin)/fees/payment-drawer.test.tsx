@@ -2,7 +2,8 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, act } from '@testing-library/react';
+import { ToastProvider } from '@/components/ui/toaster';
 import type { ActionResult } from '@/lib/action-result';
 import type { MemberFeeRow } from '@/lib/fees/season-fees';
 import type { PaymentRow } from '@/lib/fees/payments';
@@ -20,7 +21,9 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ replace, refresh }) }));
 
 /** `vi.mock` factories are hoisted above every other statement. */
 const { recordPaymentAction, deletePaymentAction } = vi.hoisted(() => ({
-  recordPaymentAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
+  /* `ActionResult<string>`: E2 needs the new payment id back so the toast can
+     offer `deletePaymentAction(id)` as the undo. */
+  recordPaymentAction: vi.fn(async (): Promise<ActionResult<string>> => ({ ok: true })),
   deletePaymentAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
 }));
 /** `./actions` is a `'use server'` module whose graph reaches `@/db`. */
@@ -52,20 +55,40 @@ function row(over: Partial<MemberFeeRow> = {}): MemberFeeRow {
   };
 }
 
+/**
+ * Wrapped in `ToastProvider` because the drawer reports its writes through it
+ * (E2), and `useToast` throws without one on purpose — the kit refuses to
+ * silently swallow a message nobody would ever see. `layout.tsx` mounts the
+ * real provider above every screen.
+ */
 function renderDrawer(over: Partial<Parameters<typeof PaymentDrawer>[0]> = {}) {
   return render(
-    <PaymentDrawer
-      row={row()}
-      seasonId={SEASON}
-      view="unpaid"
-      accounts={ACCOUNTS}
-      recordedBy="noa@shliff.camp"
-      nextPersonId="p2"
-      prevPersonId={null}
-      position={{ index: 1, total: 9 }}
-      {...over}
-    />,
+    <ToastProvider>
+      <PaymentDrawer
+        row={row()}
+        seasonId={SEASON}
+        view="unpaid"
+        accounts={ACCOUNTS}
+        recordedBy="noa@shliff.camp"
+        nextPersonId="p2"
+        prevPersonId={null}
+        position={{ index: 1, total: 9 }}
+        {...over}
+      />
+    </ToastProvider>,
   );
+}
+
+/**
+ * The drawer only. The toaster mounts its own always-present `role="status"`
+ * and `role="alert"` regions as siblings of the dialog (E2 requires they
+ * exist from first paint), so an unscoped query for either now matches the
+ * live region as well as the sentence beside the form. Scoping is the fix;
+ * weakening the query to the first match would make these tests pass against
+ * a drawer that had stopped saying anything at all.
+ */
+function inDrawer() {
+  return within(screen.getByRole('dialog'));
 }
 
 describe('PaymentDrawer', () => {
@@ -136,7 +159,7 @@ describe('PaymentDrawer', () => {
   it('says on screen that money with no קופה entered no balance', async () => {
     renderDrawer();
     fireEvent.click(screen.getByRole('button', { name: 'רישום התשלום' }));
-    expect((await screen.findByRole('status')).textContent)
+    expect((await inDrawer().findByRole('status')).textContent)
       .toContain('הסכום נספר בגבייה אבל לא נכנס ליתרה של אף קופה.');
   });
 
@@ -168,7 +191,7 @@ describe('PaymentDrawer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'רישום התשלום' }));
 
     expect(recordPaymentAction).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert').textContent).toBe(
+    expect(inDrawer().getByRole('alert').textContent).toBe(
       'קיזוז חייב לכלול הערה שמסבירה מול מה הוא קוזז — אחרת אי אפשר לדעת בעתיד.',
     );
   });
@@ -179,20 +202,20 @@ describe('PaymentDrawer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'רישום התשלום' }));
 
     expect(recordPaymentAction).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert').textContent).toBe('סכום התשלום חייב להיות מספר חיובי.');
+    expect(inDrawer().getByRole('alert').textContent).toBe('סכום התשלום חייב להיות מספר חיובי.');
   });
 
   it('shows a server refusal rather than pretending it saved', async () => {
     recordPaymentAction.mockResolvedValueOnce({ ok: false, error: 'החיוב הזה לא נמצא.' });
     renderDrawer();
     fireEvent.click(screen.getByRole('button', { name: 'רישום התשלום' }));
-    expect((await screen.findByRole('alert')).textContent).toBe('החיוב הזה לא נמצא.');
+    expect((await inDrawer().findByRole('alert')).textContent).toBe('החיוב הזה לא נמצא.');
   });
 
   it('steps to the next member of the run, carrying the season and the view', async () => {
     renderDrawer();
     fireEvent.click(screen.getByRole('button', { name: 'שמירה ומעבר לבא' }));
-    await screen.findByRole('status');
+    await inDrawer().findByRole('status');
     expect(replace).toHaveBeenCalledWith(
       `/fees?season=${SEASON}&view=unpaid&peek=p2&act=pay`,
     );
@@ -201,7 +224,7 @@ describe('PaymentDrawer', () => {
   it('says the run is over rather than closing on the last member', async () => {
     renderDrawer({ nextPersonId: null });
     fireEvent.click(screen.getByRole('button', { name: 'שמירה ומעבר לבא' }));
-    expect((await screen.findByRole('status')).textContent).toContain('זה היה האחרון ברשימה.');
+    expect((await inDrawer().findByRole('status')).textContent).toContain('זה היה האחרון ברשימה.');
     expect(replace).not.toHaveBeenCalled();
   });
 
@@ -209,7 +232,7 @@ describe('PaymentDrawer', () => {
     recordPaymentAction.mockResolvedValueOnce({ ok: false, error: 'החיוב הזה לא נמצא.' });
     renderDrawer();
     fireEvent.click(screen.getByRole('button', { name: 'שמירה ומעבר לבא' }));
-    await screen.findByRole('alert');
+    await inDrawer().findByRole('alert');
     expect(replace).not.toHaveBeenCalled();
   });
 
@@ -311,7 +334,7 @@ describe('deleting a payment', () => {
     renderDrawer({ row: PAID });
     fireEvent.click(screen.getByRole('button', { name: /הסרה/ }));
     fireEvent.click(screen.getByRole('button', { name: 'מחיקת התשלום' }));
-    expect((await screen.findByRole('alert')).textContent).toBe('אין הרשאה');
+    expect((await inDrawer().findByRole('alert')).textContent).toBe('אין הרשאה');
   });
 
   it('says only the collection when the payment named no קופה', () => {
@@ -391,5 +414,69 @@ describe('PaymentDrawer on a phone', () => {
     expect(
       screen.getByText('בלי קופה הסכום ייספר בגבייה אבל לא ביתרה של אף חשבון.'),
     ).toBeTruthy();
+  });
+});
+
+/**
+ * E2. Every write says what it did, and takes it back where the domain can.
+ *
+ * `recordPayment` already returns the new row's id, so the inverse is exact:
+ * `deletePaymentAction(id)` restores the state before the write. That is the
+ * whole test for whether an undo may be offered — a UI-level stack that
+ * re-created the payment would mint a new id and a new source_row, which is a
+ * lie about provenance under R11.
+ */
+describe('PaymentDrawer — reporting the write, and taking it back', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('says what it recorded, in Hebrew and in the past tense', async () => {
+    recordPaymentAction.mockResolvedValue({ ok: true, value: 'pay-9' });
+    renderDrawer();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'רישום התשלום' }));
+    });
+    const region = document.querySelector('[role="status"][aria-live="polite"]');
+    expect(region?.textContent).toContain('נרשם תשלום של 1,200 ₪ לאיתי כהן');
+  });
+
+  it('offers to take a payment back, by deleting the row it just wrote', async () => {
+    recordPaymentAction.mockResolvedValue({ ok: true, value: 'pay-9' });
+    renderDrawer();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'רישום התשלום' }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'ביטול הרישום' }));
+    });
+    expect(deletePaymentAction).toHaveBeenCalledWith('pay-9');
+  });
+
+  /**
+   * An action that reports success without naming the row it wrote leaves
+   * nothing to undo, and an undo button that cannot name its target would
+   * either do nothing or delete the wrong row. The toast is still raised —
+   * the write happened and the lead must be told — but it carries no undo.
+   */
+  it('reports the write but offers no undo when the id did not come back', async () => {
+    recordPaymentAction.mockResolvedValue({ ok: true });
+    renderDrawer();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'רישום התשלום' }));
+    });
+    const region = document.querySelector('[role="status"][aria-live="polite"]');
+    expect(region?.textContent).toContain('נרשם תשלום');
+    expect(screen.queryByRole('button', { name: 'ביטול הרישום' })).toBeNull();
+  });
+
+  it('raises no toast at all when the write was refused', async () => {
+    recordPaymentAction.mockResolvedValue({ ok: false, error: 'הקופה שנבחרה לא קיימת או נסגרה.' });
+    renderDrawer();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'רישום התשלום' }));
+    });
+    const region = document.querySelector('[role="status"][aria-live="polite"]');
+    expect(region?.textContent).toBe('');
+    // The refusal still reaches the lead, beside the form where it belongs.
+    expect(screen.getByText('הקופה שנבחרה לא קיימת או נסגרה.')).toBeTruthy();
   });
 });

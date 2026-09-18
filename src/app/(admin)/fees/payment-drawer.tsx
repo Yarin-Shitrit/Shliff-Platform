@@ -20,6 +20,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Field, MoneyInput, Select, Segmented, Textarea } from '@/components/ui/field';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toaster';
 import { Money, DateText } from '@/components/format';
 import { formatShekels } from '@/lib/money';
 import { formatDateShort } from '@/lib/dates';
@@ -69,6 +70,7 @@ export function PaymentDrawer({
   position: { index: number; total: number };
 }) {
   const router = useRouter();
+  const { show } = useToast();
   const [amount, setAmount] = useState(String((row.outstandingAgorot || 0) / 100));
   const [channel, setChannel] = useState<PaymentChannel>(PAYMENT_CHANNELS[0]);
   const [paidOn, setPaidOn] = useState(todayInputValue());
@@ -126,13 +128,38 @@ export function PaymentDrawer({
         return;
       }
 
+      const amountAgorot = Math.round(parsed * 100);
       setSaved({
-        amountAgorot: Math.round(parsed * 100),
+        amountAgorot,
         name: row.displayName,
         unplaced: !isOffset && accountId === '',
         ended: step && nextPersonId === null,
       });
       setNote('');
+
+      /*
+       * E2. The write says what it did, and takes itself back where the domain
+       * can. `recordPayment` returns the row's own id, so the undo is
+       * `deletePayment` on that exact row — the state before the write,
+       * restored. When the id does not come back the toast still goes up (the
+       * write happened and the lead must be told) but carries no undo: a
+       * button that cannot name its target would either do nothing or delete
+       * somebody else's payment.
+       *
+       * The toast is as well as the in-form `role="status"` line, not instead
+       * of it. `שמירה ומעבר לבא` navigates away from this drawer, so the
+       * in-form sentence goes with it and the toast is the only thing that
+       * survives the step — which is exactly the case where a lead in a
+       * collection run needs to be told what the last save did.
+       */
+      const paymentId = result.value;
+      show({
+        message: `נרשם תשלום של ${formatShekels(amountAgorot)} ל${row.displayName}`,
+        undo: paymentId === undefined ? undefined : {
+          label: 'ביטול הרישום',
+          run: () => deletePaymentAction(paymentId),
+        },
+      });
 
       if (step && nextPersonId) {
         router.replace(feesHref({ season: seasonId, view, pay: nextPersonId }));

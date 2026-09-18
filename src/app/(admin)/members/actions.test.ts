@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  */
 const {
   requireAdmin, addMember, issueFlatDueFor, revalidatePath,
-  unlinkAlias, aliasUnlinkTarget,
+  unlinkAlias, aliasUnlinkTarget, redirect,
 } = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   addMember: vi.fn(),
@@ -16,10 +16,15 @@ const {
   revalidatePath: vi.fn(),
   unlinkAlias: vi.fn(),
   aliasUnlinkTarget: vi.fn(),
+  redirect: vi.fn((to: string) => { throw new Error(`NEXT_REDIRECT:${to}`); }),
 }));
 vi.mock('@/db', () => ({ db: {} }));
 vi.mock('@/lib/auth/guard', () => ({ requireAdmin }));
 vi.mock('next/cache', () => ({ revalidatePath }));
+/* `redirect` throws in Next, and the wrapper below relies on that to stop. The
+   fake throws too, so a test that asserted only "redirect was called" could
+   not pass against a wrapper that carried on afterwards. */
+vi.mock('next/navigation', () => ({ redirect }));
 vi.mock('@/lib/members/roster', () => ({ addMember }));
 vi.mock('@/lib/fees/dues', () => ({ issueFlatDueFor }));
 vi.mock('@/lib/members/link', () => ({
@@ -28,7 +33,10 @@ vi.mock('@/lib/members/link', () => ({
   linkAlias: vi.fn(), mergePersons: vi.fn(),
 }));
 
-import { addToSeasonBulkAction, issueDuesBulkAction, unlinkAliasAction } from './actions';
+import {
+  addToSeasonBulkAction, issueDuesBulkAction, unlinkAliasAction,
+  unlinkAliasAndReturn, UNLINK_ERROR_PARAM,
+} from './actions';
 
 const LAST_ALIAS_REFUSAL =
   'לא ניתן לבטל את הכינוי האחרון של אדם — בלעדיו אי אפשר יהיה לזהות אותו בקבצים.';
@@ -152,5 +160,60 @@ describe('unlinkAliasAction', () => {
     expect(await unlinkAliasAction('ghost'))
       .toEqual({ ok: false, error: 'הכינוי לא נמצא.' });
     expect(unlinkAlias).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A38 (BINDING): a server-rendered dialog may not swallow a refusal.
+ *
+ * `ConfirmDialog` submits through a plain `<form action>`, which has nowhere
+ * to put an `ActionResult`. Before this wrapper existed, a hand-typed
+ * `?unlink=` naming somebody else's alias — or a person's last spelling —
+ * failed with **no message at all**. Not English on a Hebrew screen: nothing.
+ * Which is the platform's first rule broken in the quietest way there is,
+ * because nothing goes red.
+ */
+describe('unlinkAliasAndReturn — A38', () => {
+  const BACK = '/members/p1?season=s26&tab=aliases';
+
+  function redirectedTo(): string {
+    const call = redirect.mock.calls.at(-1);
+    return (call?.[0] ?? '') as string;
+  }
+
+  it('hands a refusal back in the URL rather than dropping it', async () => {
+    aliasUnlinkTarget.mockResolvedValue({ personId: 'p1', remaining: 0 });
+    await expect(unlinkAliasAndReturn('al1', BACK)).rejects.toThrow(/NEXT_REDIRECT/);
+
+    const target = redirectedTo();
+    expect(target.startsWith(`${BACK}&${UNLINK_ERROR_PARAM}=`)).toBe(true);
+    // The Hebrew the server actually wrote, not a second copy kept elsewhere.
+    expect(decodeURIComponent(target.split(`${UNLINK_ERROR_PARAM}=`)[1]))
+      .toBe(LAST_ALIAS_REFUSAL);
+    expect(unlinkAlias).not.toHaveBeenCalled();
+  });
+
+  it('carries the refusal for an alias that names nothing — the hand-typed case', async () => {
+    aliasUnlinkTarget.mockResolvedValue(null);
+    await expect(unlinkAliasAndReturn('ghost', BACK)).rejects.toThrow(/NEXT_REDIRECT/);
+    expect(decodeURIComponent(redirectedTo().split(`${UNLINK_ERROR_PARAM}=`)[1]))
+      .toBe('הכינוי לא נמצא.');
+  });
+
+  it('opens the query string when the href has none', async () => {
+    aliasUnlinkTarget.mockResolvedValue(null);
+    await expect(unlinkAliasAndReturn('ghost', '/members/p1')).rejects.toThrow(/NEXT_REDIRECT/);
+    expect(redirectedTo().startsWith(`/members/p1?${UNLINK_ERROR_PARAM}=`)).toBe(true);
+  });
+
+  /**
+   * On success it goes back clean, so the address bar stops asking for a
+   * dialog about an alias that no longer exists.
+   */
+  it('returns to a clean href when the unlink went through', async () => {
+    aliasUnlinkTarget.mockResolvedValue({ personId: 'p1', remaining: 2 });
+    await expect(unlinkAliasAndReturn('al1', BACK)).rejects.toThrow(/NEXT_REDIRECT/);
+    expect(redirectedTo()).toBe(BACK);
+    expect(unlinkAlias).toHaveBeenCalledWith({}, 'al1');
   });
 });

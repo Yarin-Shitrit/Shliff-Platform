@@ -119,9 +119,16 @@ export async function recordPaymentAction(input: {
   note?: string;
   /** Omitted or empty means no קופה: counted in collection, in no balance. */
   accountId?: string;
-}): Promise<ActionResult> {
+  /**
+   * E2: the new payment's id, so the toast can offer `deletePaymentAction(id)`
+   * as the undo. `recordPayment` already returns it; nothing else was needed
+   * for the inverse to be exact rather than a re-creation that would mint a
+   * new id and a new `source_row` (a lie about provenance under R11).
+   */
+}): Promise<ActionResult<string>> {
   const admin = await requireAdmin();
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+  let paymentId: string;
   try {
     if (input.accountId) {
       const open = await listOpenAccounts(db);
@@ -132,7 +139,7 @@ export async function recordPaymentAction(input: {
         throw new HebrewRefusal('הקופה שנבחרה לא קיימת או נסגרה.');
       }
     }
-    await recordPayment(db, {
+    paymentId = await recordPayment(db, {
       dueId: input.dueId,
       amount: input.amount,
       channel: input.channel,
@@ -145,5 +152,5 @@ export async function recordPaymentAction(input: {
     return failed(error);
   }
   revalidatePath('/fees');
-  return { ok: true };
+  return { ok: true, value: paymentId };
 }

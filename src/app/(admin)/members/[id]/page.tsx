@@ -25,7 +25,7 @@ import { Icon } from '@/components/ui/icon';
 import { Money, DateText } from '@/components/format';
 import { formatShekels } from '@/lib/money';
 import { AddToSeason } from '../add-member';
-import { unlinkAliasAction } from '../actions';
+import { unlinkAliasAndReturn, UNLINK_ERROR_PARAM } from '../actions';
 import styles from './person.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -223,21 +223,22 @@ export default async function PersonPage(
     : null;
 
   /*
-   * Wrapped in an inline Server Action rather than bound straight onto
-   * `action`: `unlinkAliasAction` answers with an `ActionResult`, and a plain
-   * `<form action>` — which is what `ConfirmDialog` submits through — has
-   * nowhere to put a returned refusal. The only refusal it can return here is
-   * the last-alias one, and `canUnlink` has already withheld the control for
-   * that case, so the wrapper drops a value that is `{ ok: true }` in every
-   * path this screen can reach. A refusal reached by a hand-typed `?unlink=`
-   * on somebody else's alias id is silent: that is a known gap, recorded
-   * rather than papered over, and the spelling simply stays where it was.
+   * A38 (BINDING): a server-rendered dialog may not swallow a refusal.
+   *
+   * `ConfirmDialog` submits through a plain `<form action>`, which has nowhere
+   * to put an `ActionResult`. This used to drop the value on the floor, and
+   * argued it was safe because `canUnlink` withholds the control for the only
+   * refusal the screen itself can reach. That argument is true and it is not
+   * enough: `?unlink=` is a URL anyone can type, and a hand-typed alias id
+   * belonging to somebody else failed with **no message at all** — not English
+   * on a Hebrew screen, no message. A38 calls that the platform's first rule
+   * broken in the quietest way there is, since nothing goes red.
+   *
+   * `unlinkAliasAndReturn` redirects back with the refusal in the URL instead,
+   * the mechanism `/signin` already uses, and the banner below renders it.
    */
   const unlinkingId = unlinking?.aliasId ?? '';
-  async function confirmUnlink() {
-    'use server';
-    await unlinkAliasAction(unlinkingId);
-  }
+  const unlinkError = one(search[UNLINK_ERROR_PARAM]);
 
   const counts: Record<PersonTab, number | undefined> = {
     overview: undefined,
@@ -250,6 +251,16 @@ export default async function PersonPage(
 
   return (
     <main className={styles.page}>
+      {/*
+        A38. Where a refusal from the unlink dialog lands. `unlinkAliasAndReturn`
+        redirects here carrying its own Hebrew sentence, so a refusal reached
+        by a hand-typed `?unlink=` is read rather than lost — and the refusal
+        the server wrote is the one on screen, never a second copy of it
+        maintained here.
+      */}
+      {unlinkError === '' ? null : (
+        <p className={styles.unlinkError} role="alert">{unlinkError}</p>
+      )}
       <header className={styles.head}>
         <Avatar name={dossier.displayName} size="lg" />
         <div className={styles.headText}>
@@ -632,7 +643,7 @@ export default async function PersonPage(
           }
           confirmLabel="ביטול הקישור"
           cancelHref={tabHref(tab)}
-          action={confirmUnlink}
+          action={unlinkAliasAndReturn.bind(null, unlinkingId, tabHref(tab))}
         />
       )}
     </main>

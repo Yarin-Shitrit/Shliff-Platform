@@ -39,6 +39,10 @@ vi.mock('next/navigation', () => ({
 }));
 vi.mock('../actions', () => ({
   addMemberAction: vi.fn(), createPersonAction: vi.fn(), unlinkAliasAction: vi.fn(),
+  /* A38: the page binds the wrapper, not the raw action, and reads the param
+     name from the same module the action writes it with. */
+  unlinkAliasAndReturn: vi.fn(),
+  UNLINK_ERROR_PARAM: 'unlinkError',
 }));
 
 import PersonPage from './page';
@@ -345,5 +349,26 @@ describe('/members/[id] — unlinking a spelling', () => {
     aliasSourcesFor.mockResolvedValue([TWO[0]]);
     await renderPage({ tab: 'aliases', unlink: 'al1' });
     expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+});
+
+/**
+ * A38's other half: the refusal handed back through the URL has to be read.
+ * A redirect carrying a message nobody renders is the same silence as before,
+ * moved one file along.
+ */
+describe('/members/[id] — a refused unlink says so', () => {
+  it('renders the refusal the action handed back in the URL', async () => {
+    await renderPage({
+      tab: 'aliases',
+      unlinkError: 'לא ניתן לבטל את הכינוי האחרון של אדם — בלעדיו אי אפשר יהיה לזהות אותו בקבצים.',
+    });
+    expect(screen.getByRole('alert').textContent)
+      .toBe('לא ניתן לבטל את הכינוי האחרון של אדם — בלעדיו אי אפשר יהיה לזהות אותו בקבצים.');
+  });
+
+  it('says nothing when nothing was refused', async () => {
+    await renderPage({ tab: 'aliases' });
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });
