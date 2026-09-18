@@ -38,6 +38,7 @@ const upload = {
   confirmedCount: 3,
   promotedRows: 52,
   openDecisions: 4,
+  seasonBlockedCount: 0,
   firstOpenBlockId: 'b7',
 };
 
@@ -91,6 +92,22 @@ describe('/imports', () => {
     expect(screen.getByText('כאן יופיעו קבצים שהעליתם. עדיין לא נוספו.')).toBeTruthy();
     expect(screen.getAllByRole('link', { name: /העלאת קובץ/ })[0].getAttribute('href'))
       .toBe('/upload');
+  });
+
+  /**
+   * A36 was found here, in a browser: this screen called קופת קאמפ 23'-24'
+   * מוכן לקידום with all ten of its tables approved and not one of its sheets
+   * carrying a season. The assertion is on the screen rather than on the
+   * function because the screen is where the claim was read.
+   */
+  it('names the open season decision instead of calling the file ready', async () => {
+    listUploads.mockResolvedValue([{
+      ...upload, blockCount: 10, confirmedCount: 10, promotedRows: 0,
+      seasonBlockedCount: 8,
+    }]);
+    render(await ImportsPage());
+    expect(screen.getByText('ממתין לקביעת עונה')).toBeTruthy();
+    expect(screen.queryByText('מוכן לקידום')).toBeNull();
   });
 
   it('shows that an import failed without echoing the parser’s English', async () => {

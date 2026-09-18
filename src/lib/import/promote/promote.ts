@@ -34,6 +34,25 @@ const TARGETS = {
 
 type PromotableArchetype = keyof typeof TARGETS;
 
+/**
+ * The archetypes whose promoter refuses every row of a season-less sheet.
+ *
+ * Read off the promoters rather than assumed from the four targets:
+ * `budgetRow` and `ticketRow` each return `no-season` before looking at a
+ * single cell, because `budget_lines.season_id` and `ticket_rounds.season_id`
+ * are NOT NULL and a season is not a thing the system may invent. `ledgerRow`
+ * and `obligationRow` carry a season only when the sheet has one
+ * (`...(ctx.seasonId ? { seasonId } : {})`), and both columns are nullable —
+ * so a season-less ledger or debt table promotes in full.
+ *
+ * Exported because a screen that wants to say "this cannot write anything yet"
+ * must derive it from here; a second list kept elsewhere would be a copy that
+ * drifts the first time an archetype gains or loses a promoter.
+ */
+export const SEASON_REQUIRED_ARCHETYPES: readonly BlockArchetype[] = [
+  'budget_lines', 'ticket_rounds',
+];
+
 const TABLES = {
   ledger_entries: ledgerEntries,
   budget_lines: budgetLines,
