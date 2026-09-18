@@ -47,5 +47,19 @@ export function SourceChip({ source }: SourceChipProps): ReactElement {
     );
   }
 
-  return <span className={className} aria-label={label}>{body}</span>;
+  // `role="img"`, not a bare `<span>`: a `<span>` with no role is
+  // `role="generic"`, and ARIA prohibits naming a generic element — browsers
+  // simply drop `aria-label` there, so this chip's accessible name was never
+  // announced. `role="img"` is the ARIA pattern for exactly this shape (an
+  // element whose accessible name is meant to differ from, or add to, its
+  // visible text, the way `<span role="img" aria-label="4 out of 5 stars">`
+  // does for a row of glyphs): it is the right fit here specifically because
+  // `label` is *not* the same string as the rendered text — the chip never
+  // renders the `מקור:` (source) word itself, only the sheet!cell/`נרשם ידנית`
+  // that follows it; that word only reaches a sighted reader through the
+  // chip's own visual/positional context. Dropping `aria-label` and letting
+  // the visible text stand alone — the usual fix for this shape — would lose
+  // that word for a screen-reader user, which is the one thing R11 asks this
+  // component to keep saying.
+  return <span className={className} role="img" aria-label={label}>{body}</span>;
 }
