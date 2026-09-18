@@ -164,11 +164,58 @@ export function PaymentDrawer({
 
   function onSubmit(event: FormEvent) { event.preventDefault(); save(false); }
 
+  /**
+   * D11's phone shortcuts, from the `mobile-pay` artboard. A lead collecting
+   * at the gate is holding a phone in one hand and cash in the other, and the
+   * amount is almost always the whole balance or half of it — typing either on
+   * a phone keypad is the slowest part of the interaction.
+   *
+   * Each chip names the number it will set, so it is never a mystery button:
+   * `מלא 1,200 ₪`, not `מלא`. Half is rounded to a whole shekel, because an
+   * odd balance halves to an agora and nobody hands over an agora — and the
+   * chip says which number it rounded to rather than rounding under the lead.
+   *
+   * `סכום אחר` empties the field and puts the caret in it. It is not a
+   * shortcut to a number; it is the way out of the other two, and it has to
+   * leave the lead somewhere they can type.
+   *
+   * The focus goes through `getElementById` rather than a ref because the
+   * kit's `MoneyInput` forwards none, and `Field` takes `Children.only`, so a
+   * wrapper element cannot be slipped in beside the control either. Reported
+   * as a kit gap rather than patched. The id is the one `Field` already binds
+   * its `<label for>` to, so there is exactly one of them in the document.
+   */
+  function setAmountFromChip(agorot: number) {
+    setAmount(String(agorot / 100));
+    setRefusal(null);
+  }
+
+  function askForAnotherAmount() {
+    setAmount('');
+    setRefusal(null);
+    const field = document.getElementById('pay-amount');
+    if (field instanceof HTMLInputElement) field.focus();
+  }
+
+  const outstanding = row.outstandingAgorot;
+  const halfAgorot = Math.round(outstanding / 2 / 100) * 100;
+  const shortcuts = outstanding > 0 ? (
+    <div className={styles.amountChips} role="group" aria-label="סכומים מהירים">
+      <Button size="sm" onClick={() => setAmountFromChip(outstanding)}>
+        {`מלא ${formatShekels(outstanding)}`}
+      </Button>
+      <Button size="sm" onClick={() => setAmountFromChip(halfAgorot)}>
+        {`חצי ${formatShekels(halfAgorot)}`}
+      </Button>
+      <Button size="sm" onClick={askForAnotherAmount}>סכום אחר</Button>
+    </div>
+  ) : null;
+
   const title = `רישום תשלום — ${row.displayName}`;
 
   if (row.dueId === null) {
     return (
-      <Drawer title={title} closeHref={closeHref}>
+      <Drawer title={title} phone="full" closeHref={closeHref}>
         <p className={styles.muted}>
           אין עדיין חיוב ל{row.displayName}. צריך להנפיק חיוב לפני שאפשר לרשום תשלום.
         </p>
@@ -179,6 +226,10 @@ export function PaymentDrawer({
   return (
     <Drawer
       title={title}
+      /* D11: a form a lead fills standing at the gate takes the whole screen,
+         and its footer sticks to the bottom edge so רישום התשלום is under the
+         thumb rather than below the fold. */
+      phone="full"
       subtitle={(
         <>
           {row.kind === 'exception' ? 'חריג' : 'תעריף רגיל'}
@@ -210,6 +261,7 @@ export function PaymentDrawer({
       )}
     >
       <form id="payment-form" onSubmit={onSubmit} className={styles.drawerForm}>
+        {shortcuts}
         <div className={styles.twoUp}>
           <Field
             id="pay-amount" label="סכום" hint="מלא את היתרה. אפשר גם סכום חלקי."

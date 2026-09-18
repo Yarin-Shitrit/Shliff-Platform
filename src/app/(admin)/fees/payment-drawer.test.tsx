@@ -322,3 +322,74 @@ describe('deleting a payment', () => {
     expect(screen.getByRole('alertdialog').textContent).not.toContain('ומהיתרה של');
   });
 });
+
+/**
+ * D11's fourth standing-up job: recording a payment at the gate, one-handed.
+ * The drawer is a side panel on a laptop and a whole screen on a phone, and
+ * the amount a lead reaches for is almost always one of two numbers.
+ */
+describe('PaymentDrawer on a phone', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('opens full-screen, because a form a lead fills standing up is not a side panel', () => {
+    const { container } = renderDrawer();
+    expect(container.querySelector('[role="dialog"]')?.getAttribute('data-phone')).toBe('full');
+  });
+
+  it('opens full-screen even with no due to pay, so the two states are one layout', () => {
+    const { container } = renderDrawer({ row: row({ dueId: null }) });
+    expect(container.querySelector('[role="dialog"]')?.getAttribute('data-phone')).toBe('full');
+  });
+
+  it('offers the whole outstanding amount as one tap', () => {
+    renderDrawer();
+    const field = screen.getByLabelText('סכום') as HTMLInputElement;
+    fireEvent.change(field, { target: { value: '5' } });
+    expect(field.value).toBe('5');
+    fireEvent.click(screen.getByRole('button', { name: 'מלא 1,200 ₪' }));
+    expect(field.value).toBe('1200');
+  });
+
+  it('offers half, because a lead collecting in a run takes what is offered', () => {
+    renderDrawer();
+    fireEvent.click(screen.getByRole('button', { name: 'חצי 600 ₪' }));
+    expect((screen.getByLabelText('סכום') as HTMLInputElement).value).toBe('600');
+  });
+
+  /**
+   * An odd outstanding amount halves to an agora, and a lead cannot hand over
+   * an agora. The chip is a shortcut, so it offers a number that can actually
+   * be paid and says which one it is rather than rounding silently.
+   */
+  it('rounds half to a whole shekel rather than offering agorot nobody can pay', () => {
+    renderDrawer({ row: row({ outstandingAgorot: 120050 }) });
+    fireEvent.click(screen.getByRole('button', { name: 'חצי 600 ₪' }));
+    expect((screen.getByLabelText('סכום') as HTMLInputElement).value).toBe('600');
+  });
+
+  it('clears the field for a sum that is neither, and leaves the lead in it', () => {
+    renderDrawer();
+    fireEvent.click(screen.getByRole('button', { name: 'סכום אחר' }));
+    const field = screen.getByLabelText('סכום') as HTMLInputElement;
+    expect(field.value).toBe('');
+    expect(document.activeElement).toBe(field);
+  });
+
+  /**
+   * A row with nothing outstanding has no half and no whole to offer, and a
+   * chip reading `מלא 0 ₪` would be a control that does nothing. B2's rule
+   * about a count that reads zero applies to an affordance too.
+   */
+  it('offers no shortcut when there is nothing left to pay', () => {
+    renderDrawer({ row: row({ outstandingAgorot: 0, paidAgorot: 120000, settled: true }) });
+    expect(screen.queryByRole('button', { name: /^מלא/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^חצי/ })).toBeNull();
+  });
+
+  it('says what a payment with no account will and will not do', () => {
+    renderDrawer();
+    expect(
+      screen.getByText('בלי קופה הסכום ייספר בגבייה אבל לא ביתרה של אף חשבון.'),
+    ).toBeTruthy();
+  });
+});

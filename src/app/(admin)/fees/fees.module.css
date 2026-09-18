@@ -199,3 +199,15 @@
 
   .rollup { grid-template-columns: 1fr; }
 }
+
+/*
+ * D11: the three amount shortcuts above the payment field. They sit on one
+ * line at every width — three short chips, and wrapping them would push the
+ * field itself below the fold on a phone, which is where they matter.
+ */
+.amountChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block-end: var(--space-1);
+}
