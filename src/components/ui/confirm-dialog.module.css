@@ -41,6 +41,6 @@
 .actions { display: flex; gap: 8px; justify-content: flex-end; margin-block-start: 4px; }
 .actions form { display: contents; }
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
   .dialog { inline-size: calc(100% - 32px); }
 }

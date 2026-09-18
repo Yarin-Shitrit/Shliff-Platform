@@ -1,6 +1,8 @@
 /** @vitest-environment jsdom */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const { replace } = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock('next/navigation', () => ({
@@ -139,5 +141,69 @@ describe('Drawer', () => {
     }
     render(<HarnessWithToaster open />);
     expect(screen.getByRole('status').hasAttribute('inert')).toBe(false);
+  });
+});
+
+/**
+ * How the drawer lands on a phone (plan 12, Task 3). A panel anchored to the
+ * inline-end edge is right on a laptop and wrong on a phone, where it leaves a
+ * strip of dead page beside something nobody can reach past.
+ *
+ * jsdom applies no CSS Module, so the render assertions here check the
+ * *contract* the stylesheet keys on, and the two guards below check the
+ * declarations themselves. Neither claims to have seen the sheet rendered.
+ */
+describe('Drawer, once it has to fit a phone', () => {
+  it('records how it lands on a phone, so CSS can anchor it', () => {
+    const { container } = render(
+      <Drawer title="רישום תשלום" phone="full" closeHref={CLOSE} footer={<button type="button">רישום</button>}>
+        <p>איתי כהן</p>
+      </Drawer>,
+    );
+    expect(container.querySelector('[role="dialog"]')?.getAttribute('data-phone')).toBe('full');
+  });
+
+  it('defaults to a sheet, because most drawers are a record and not a form', () => {
+    const { container } = render(
+      <Drawer title="פרטי אדם" closeHref={CLOSE}><p>איתי כהן</p></Drawer>,
+    );
+    expect(container.querySelector('[role="dialog"]')?.getAttribute('data-phone')).toBe('sheet');
+  });
+
+  it('keeps a named way out, so a sheet is never dismissed only by a swipe', () => {
+    render(<Drawer title="פרטי אדם" closeHref={CLOSE}><p>איתי כהן</p></Drawer>);
+    expect(screen.getByRole('link', { name: 'סגירה' }).getAttribute('href')).toBe(CLOSE);
+  });
+
+  /**
+   * svh, not vh. On iOS `100vh` is the viewport with the URL bar pretended
+   * away, so a sheet sized in `vh` puts its footer — which is where the
+   * confirm button is — underneath the browser chrome, and a lead taps the
+   * address bar instead of רישום.
+   */
+  it('sizes the sheet against the small viewport, not the pretend one', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/components/ui/drawer.module.css'), 'utf8');
+    const phone = css.slice(css.indexOf('@media (max-width: 767.98px)'));
+    expect(phone).toContain('92svh');
+    expect(phone).not.toMatch(/\d+vh\b/);
+  });
+
+  it('sizes the drawer with the tap token, never a literal 44', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/components/ui/drawer.module.css'), 'utf8');
+    expect(css).not.toMatch(/min-(block|inline)-size:\s*44px/);
+  });
+
+  /**
+   * The phone floor lives in one place, on tokens rather than literals, and
+   * 16px on a text input is not a style choice: below 16px iOS Safari zooms
+   * the page on focus and never zooms back. The fix is the font size — never
+   * a viewport that forbids zooming, which would take away the one gesture a
+   * lead in bright sun actually needs. Task 10 nets the repo for that.
+   */
+  it('keeps the phone floor in globals.css, on the tokens the kit already uses', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/app/globals.css'), 'utf8');
+    const phone = css.slice(css.indexOf('@media (max-width: 767.98px)'));
+    expect(phone).toContain('min-block-size: var(--tap-min)');
+    expect(phone).toContain('font-size: var(--input-font-phone)');
   });
 });

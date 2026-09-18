@@ -84,7 +84,7 @@
   cursor: not-allowed;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
   .bar {
     inset-inline: 8px;
     transform: none;

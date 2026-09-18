@@ -189,7 +189,7 @@
  * 768px; what belongs here is this screen's own two-up row and its one raw
  * input, whose 16px floor is what stops iOS zooming the page on focus.
  */
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
   .twoUp { grid-template-columns: 1fr; }
 
   .dateInput {

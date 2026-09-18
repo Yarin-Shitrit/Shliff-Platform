@@ -176,6 +176,45 @@ th {
 }
 
 /**
+ * The phone floor (A8). 767.98px — a phone; the fractional value closes the
+ * gap a fractional viewport width opens.
+ *
+ * This is the backstop, not the design. Every module that draws an interactive
+ * box already sizes it with `--tap-min`, and the kit's `Field` and
+ * `FilterBar` already set `--input-font-phone` — this catches the plain
+ * `<button>` and the native `<input type="date">` that three screens dropped
+ * inside `Field` because the kit has no date control (A28), neither of which
+ * any module is sizing.
+ *
+ * 16px on a text input is not a style choice: below 16px iOS Safari zooms the
+ * page on focus and never zooms back. The fix is the font size, never a
+ * `viewport` export with `maximum-scale=1` or `user-scalable=no` — suppressing
+ * zoom would take away the one gesture a lead in bright sun actually needs.
+ * Task 10 nets the repo for that.
+ *
+ * `:where()` keeps the whole block at zero specificity, so a module that has
+ * its own opinion about a control still wins without needing `!important`.
+ */
+@media (max-width: 767.98px) {
+  :where(button, a[role='button'], [role='tab'], summary) {
+    min-block-size: var(--tap-min);
+    min-inline-size: var(--tap-min);
+  }
+
+  :where(input, select, textarea) {
+    font-size: var(--input-font-phone);
+    min-block-size: var(--tap-min);
+  }
+
+  /* A checkbox and a radio are sized by their own box, not by a tap floor —
+     stretching them to 44px draws a giant control rather than a large target,
+     and the row around them is what a thumb actually hits. */
+  :where(input[type='checkbox'], input[type='radio']) {
+    min-block-size: auto;
+  }
+}
+
+/**
  * An accessibility default, not a screen's choice, which is why it sits at
  * the bottom of the stack rather than in any one plan's module. C6's drawer,
  * C8's floating bar and E3's skeletons all animate, three different plans own

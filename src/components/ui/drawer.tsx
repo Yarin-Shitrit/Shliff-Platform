@@ -42,12 +42,22 @@ export type DrawerProps = {
   closeHref: string;
   /** 460 by default; 500 for a drawer that holds a grid. */
   width?: 460 | 500;
+  /**
+   * How it lands below 767.98px. `'sheet'` rises from the block-end edge and
+   * stops at 92svh, leaving the page it came from visible above it — right for
+   * a record a lead is glancing at. `'full'` takes the whole screen, for a
+   * form with its own header and a sticky footer (D11's payment flow), where
+   * the page behind is a distraction and the confirm button must be pinned.
+   * Default `'sheet'`.
+   */
+  phone?: 'sheet' | 'full';
   footer?: ReactNode;
   children: ReactNode;
 };
 
 export function Drawer({
-  title, subtitle, lead, stepper, expandHref, closeHref, width = 460, footer, children,
+  title, subtitle, lead, stepper, expandHref, closeHref, width = 460,
+  phone = 'sheet', footer, children,
 }: DrawerProps): ReactElement {
   const router = useRouter();
   const titleId = useId();
@@ -72,6 +82,7 @@ export function Drawer({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        data-phone={phone}
         onKeyDown={onKeyDown}
       >
         <header className={styles.head}>

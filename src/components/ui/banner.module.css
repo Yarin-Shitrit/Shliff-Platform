@@ -19,7 +19,7 @@
 .danger { background: var(--bad-soft); }
 .danger .icon { color: var(--bad); }
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
   .banner { flex-wrap: wrap; }
   .text { flex-basis: 100%; }
 }

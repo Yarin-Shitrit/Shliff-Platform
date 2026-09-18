@@ -52,7 +52,7 @@
 .actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 
 /* B7/D11: on a phone a toast is the width of the screen, less the gutters. */
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
   .toaster {
     inset-inline: 8px; inset-block-end: 12px; max-inline-size: none;
   }

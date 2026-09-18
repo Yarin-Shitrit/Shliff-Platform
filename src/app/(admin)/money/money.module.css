@@ -34,7 +34,7 @@
   margin-block-end: 0;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
   .lead { flex-direction: column; align-items: start; gap: var(--space-4); }
 }
 
@@ -47,8 +47,8 @@
   padding: 0;
 }
 
-@media (max-width: 1023px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 767px)  { .tiles { grid-template-columns: 1fr; } }
+@media (max-width: 1023.98px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 767.98px)  { .tiles { grid-template-columns: 1fr; } }
 
 .sectionTitle {
   display: flex;
@@ -93,7 +93,7 @@
 .rowLink:hover { text-decoration: underline; }
 
 .debtGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
-@media (max-width: 1023px) { .debtGrid { grid-template-columns: 1fr; } }
+@media (max-width: 1023.98px) { .debtGrid { grid-template-columns: 1fr; } }
 
 .debtHeading { font-size: var(--text-body); margin-block: 0 var(--space-2); }
 
