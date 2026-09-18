@@ -4,8 +4,10 @@ import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import { resolveSeason } from '@/lib/seasons/current';
 import { seasonOverview } from '@/lib/overview/summary';
+import type { DecisionKind } from '@/lib/overview/summary';
 import { Money } from '@/components/format';
 import { Icon } from '@/components/ui/icon';
+import type { IconName } from '@/components/ui/icon';
 import { ButtonLink } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Figures } from './figures';
@@ -16,6 +18,26 @@ import type { PreviewItem } from './inbox-preview';
 import styles from './home.module.css';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * A glyph per kind of decision, and the one mapping this screen makes from
+ * the register's vocabulary onto its own.
+ *
+ * It lives here because it is presentation, and it is exhaustive because it
+ * is a `Record`: a new kind of decision in the register stops this file
+ * compiling rather than rendering a row with no icon.
+ */
+const ICON_FOR: Record<DecisionKind, IconName> = {
+  'unlinked-name': 'link',
+  'sheet-season': 'calendar',
+  'sheet-collision': 'copy',
+  'block-undecided': 'layers',
+  'unnamed-debt': 'scale',
+  // Neither of these is a decision, so neither reaches the preview — the map
+  // is total because the type is, not because the panel draws them.
+  'refused-row': 'alert',
+  'arithmetic-flag': 'calc',
+};
 
 /** B8: every page sets its own title; the suffix comes from the root
  *  layout's own template. */
@@ -66,21 +88,27 @@ export default async function HomePage(
     && !overview.debts && !overview.coverage;
 
   /*
-   * Until the לטיפול register lands, the page holds exactly one
-   * register-shaped fact: the names the importer could not attribute. It is
-   * shown as the one decision waiting, with the copy the screen this replaces
-   * already used, and it counts as one decision rather than as seven — linking
-   * them is one sitting on /members, and a badge reading seven would promise
-   * seven separate places to go. When the register arrives, the same row comes
-   * back as its own unlinked-names kind and this block is deleted.
+   * The register's own rows, turned into the panel's shape here and nowhere
+   * else. The verb on a row is the register's, and so is where it goes: this
+   * screen names a decision and hands it on. Nothing here writes, and A23
+   * forbids a control that would — the register renders what promotion would
+   * do, and even it does not offer to run it.
+   *
+   * A17: one isolate per readable phrase. A title like "4 טבלאות ממתינות"
+   * is one sentence with a number in it, not a number beside a sentence.
    */
-  const pendingItems: PreviewItem[] = overview.unlinkedCount > 0 ? [{
-    id: 'unlinked-names',
-    icon: 'link',
-    title: <bdi>{`${overview.unlinkedCount} שמות שממתינים לשיוך`}</bdi>,
-    detail: 'שמות שהמערכת מצאה בקבצים ולא שייכה — היא לא מנחשת מי הם.',
-    action: { label: 'לדף חברי המחנה', href: '/members' },
-  }] : [];
+  const previewItems: PreviewItem[] = overview.decisions.items.map((item) => ({
+    id: item.id,
+    icon: ICON_FOR[item.kind],
+    title: <bdi>{item.title}</bdi>,
+    detail: <bdi>{item.detail}</bdi>,
+    pill: item.blocksImport ? { text: 'חוסם ייבוא', tone: 'warn' } : undefined,
+    source: item.source ?? undefined,
+    action: { label: item.actionLabel, href: item.href },
+  }));
+  // Read off the register's own total rather than counted here: the panel
+  // never learns how many are waiting by counting the rows it drew.
+  const hidden = overview.decisions.total - previewItems.length;
 
   return (
     <main className={styles.page}>
@@ -120,11 +148,17 @@ export default async function HomePage(
       <div className={styles.columns}>
         <div className={styles.wide}>
           <InboxPreview
-            items={pendingItems}
-            total={pendingItems.length}
-            remainder={null}
+            items={previewItems}
+            total={overview.decisions.total}
+            remainder={hidden > 0 ? (
+              <bdi>
+                {hidden === 1
+                  ? 'ועוד החלטה אחת ברשימה'
+                  : `ועוד ${hidden} החלטות ברשימה`}
+              </bdi>
+            ) : null}
             seasonName={season.name}
-            href={null}
+            href={`/inbox?season=${season.id}`}
           />
         </div>
         <div className={styles.narrow}>

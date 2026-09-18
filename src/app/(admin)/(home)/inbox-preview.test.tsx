@@ -8,12 +8,15 @@ import { InboxPreview } from './inbox-preview';
 /**
  * The panel's own tests, separate from the page's.
  *
- * The page currently passes `total === items.length`, because the one
- * register-shaped fact it holds is a single row. So the half of the all-clear
- * rule that reads `total === 0` cannot be exercised through the page at all —
- * a mutation that dropped it would leave every page test green. It is the rule
- * that matters most (celebrating over a queue nobody has looked at), and the
- * component is where it lives, so it is tested here against the component.
+ * The page now passes the register's own `total` beside the first six of its
+ * rows, and those two come from one filtered list in one pass — so the page
+ * cannot produce `total > 0` with no rows, and a mutation that dropped the
+ * all-clear rule's `total === 0` half would leave every page test green. It is
+ * the rule that matters most (celebrating over a queue nobody has looked at),
+ * and the component is where it lives, so it is tested here against the
+ * component. The same goes for the null `href`: the page always has a register
+ * to open, and the contract that a panel without one says nothing rather than
+ * inventing a URL is only checkable here.
  */
 describe('InboxPreview', () => {
   it('celebrates when there is genuinely nothing waiting', () => {

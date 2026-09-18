@@ -12,10 +12,11 @@ import styles from './home.module.css';
  * One row of the preview, already composed into Hebrew by the caller.
  *
  * These are the panel's own props, not the register's. The register belongs to
- * the לטיפול plan, and the mapping from its items onto this shape will live in
+ * the לטיפול plan, and the mapping from its items onto this shape lives in
  * `page.tsx`, in one place. A presentational component owning its props is
  * ordinary React; a second copy of the register's logic here would not be —
- * which is why this file imports nothing from `@/lib/inbox`.
+ * which is why this file imports nothing from `@/lib/inbox`, now that the
+ * register exists just as before it did.
  */
 export interface PreviewItem {
   id: string;
@@ -36,9 +37,19 @@ export interface PreviewItem {
  * and celebrating over a queue nobody has looked at is how a screen starts
  * lying to the person reading it.
  *
- * `href` is null until the register's own page exists. A "לכל הרשימה" link to
- * a route nobody has built is a 404 dressed as a next step, which is the one
- * thing this screen may never do.
+ * **The other half of that rule — `total > 0` with no rows — is unreachable
+ * from the page, deliberately, and it is kept anyway.** The summary counts the
+ * decisions with `openDecisionCount` and draws the rows from the same filtered
+ * list in the same pass, so a badge can never announce a decision the panel
+ * has no row for. The guard stays because the invariant lives in another
+ * module: the day that count arrives from a second query, an empty list under
+ * a "12 החלטות" badge is what a lead would be shown. It is exercised here,
+ * against the component, since the page cannot produce it.
+ *
+ * `href` is the register, and the prop stays nullable because a caller with
+ * nowhere to send the reader must say so rather than invent a URL: a
+ * "לכל הרשימה" link to a route nobody has built is a 404 dressed as a next
+ * step, which is the one thing this screen may never do.
  */
 export function InboxPreview({ items, total, remainder, seasonName, href }: {
   items: PreviewItem[];

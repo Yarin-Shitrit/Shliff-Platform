@@ -6,7 +6,8 @@ import { accountBalances, unattributedAgorot } from '@/lib/money/accounts';
 import { listObligations, unnamedObligations } from '@/lib/money/obligations';
 import { coverageFor, summarize } from '@/lib/work/coverage';
 import type { SeasonCoverage, TaskCoverage } from '@/lib/work/coverage';
-import { listUnlinkedNames } from '@/lib/members/identity';
+import { loadInboxItems, openDecisionCount, blocksPromotion } from '@/lib/inbox/items';
+import type { InboxItem, InboxKind } from '@/lib/inbox/items';
 
 export interface DuesFigure {
   expectedAgorot: number;
@@ -43,6 +44,50 @@ export interface DebtsFigure {
 }
 
 /**
+ * Re-exported rather than re-declared, so the home page can key its glyph map
+ * on the register's own kinds without importing the register: the page reads
+ * exactly one library aggregate, and its own test holds that line.
+ */
+export type DecisionKind = InboxKind;
+
+/**
+ * One waiting decision, already flattened for a screen that only names it.
+ *
+ * Deliberately not `InboxItem`: the register's item carries its actions, its
+ * evidence and its suggestions, and a preview that took all of it could grow
+ * a control that settles a decision from the home screen. What crosses this
+ * boundary is a sentence, a cell and a way back to the register.
+ */
+export interface DecisionRow {
+  id: string;
+  kind: DecisionKind;
+  title: string;
+  detail: string;
+  /** The workbook cell, printable (R11). Null when it has no single cell. */
+  source: string | null;
+  /** The register's own verb for this decision, reused as stored (E5). */
+  actionLabel: string;
+  /** Always the register. A23: the home hands a decision on, never settles it. */
+  href: string;
+  /**
+   * Narrower than "open": promotion itself is waiting on this one. Not a
+   * safety control — `blocksPromotion`'s own comment says why — but it is the
+   * difference between a queue and a stoppage, and the panel shows it.
+   */
+  blocksImport: boolean;
+}
+
+export interface OpenDecisions {
+  /** Every open decision camp-wide, not just the ones shown. */
+  total: number;
+  /** The first few, in the register's own order: stoppages first. */
+  items: DecisionRow[];
+}
+
+/** What the panel shows. The rest is stated as a remainder, never dropped. */
+const PREVIEW_ROWS = 6;
+
+/**
  * Everything the home screen needs, in one call.
  *
  * Each figure is nullable, and `null` means "there is nothing here to report".
@@ -69,12 +114,52 @@ export interface SeasonOverview {
   coverage: SeasonCoverage | null;
   /** Every open task still short of people, biggest gap first. */
   understaffed: TaskCoverage[];
-  /** Camp-wide. The one register-shaped fact that exists before plan 05 (I2). */
-  unlinkedCount: number;
+  /** Camp-wide, from the register itself (I2): a decision is open whatever
+   *  season you are looking at. */
+  decisions: OpenDecisions;
 }
 
 /**
- * One call, seven reads, no query per card.
+ * I2: the count and the rows are two readings of one list, taken in one pass.
+ *
+ * That is what keeps the panel honest. `openDecisionCount` counts exactly the
+ * items the rows are drawn from, so the badge can never report a decision the
+ * panel has no row for — the state where a lead is told twelve things are
+ * waiting above an empty list. A second query for the count would make that
+ * state reachable the first time the two disagreed.
+ */
+function previewOf(items: readonly InboxItem[]): OpenDecisions {
+  return {
+    total: openDecisionCount(items),
+    items: items
+      .filter((item) => item.blocking)
+      .slice(0, PREVIEW_ROWS)
+      .map((item) => ({
+        id: item.id,
+        kind: item.kind,
+        title: item.title,
+        detail: item.detail,
+        source: item.source?.reference ?? null,
+        // The register's first action is the verb the mock puts on the row.
+        // A decision always offers one; the fallback is there so a future kind
+        // that offers none renders a way in rather than an empty control.
+        actionLabel: item.actions[0]?.label ?? 'פתיחה ברשימה',
+        // Built the way the register builds its own item links: an id can
+        // carry a sheet's Hebrew name (`collision:תקציב 26:none`), and a
+        // hand-spelled query string would hand back an item nothing matches.
+        href: `/inbox?${new URLSearchParams({ item: item.id }).toString()}`,
+        blocksImport: blocksPromotion(item),
+      })),
+  };
+}
+
+/**
+ * One call, seven aggregates, no query per card.
+ *
+ * The seventh is the register, and it is the heaviest of them: `loadInboxItems`
+ * reads every sheet, block and unlinked name the camp has. It is called here
+ * rather than from the page so that the screen keeps its one-call rule — and
+ * once, so that the badge and the rows cannot disagree (I2).
  *
  * This follows `moneyOverview`'s pattern rather than reusing it: that summary
  * also computes the dues/fundraising identity and the ledger totals, neither of
@@ -99,7 +184,11 @@ export async function seasonOverview(
   // rows, and `seasonCoverageTotals(db, …)` beside `coverageFor(db, …)` would
   // run the same two queries twice for one screen.
   const coverageRows = await coverageFor(db, seasonId);
-  const unlinked = await listUnlinkedNames(db);
+  // I2's one entry point, called once per request. The default runs no dry
+  // run of the promoter, so opening the home screen never exercises a write
+  // path — and the badge is identical either way, because a refused row is
+  // never a decision.
+  const inbox = await loadInboxItems(db, seasonId);
 
   const outstandingIn = (direction: ObligationDirection): number => obligations
     .filter((row) => row.direction === direction)
@@ -141,6 +230,6 @@ export async function seasonOverview(
       : { campOwesAgorot, owedToCampAgorot, unnamedCount: unnamed.length },
     coverage: coverage.placesNeeded === 0 ? null : coverage,
     understaffed,
-    unlinkedCount: unlinked.length,
+    decisions: previewOf(inbox),
   };
 }

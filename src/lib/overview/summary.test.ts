@@ -6,6 +6,7 @@ import { recordUnlinkedName } from '@/lib/members/identity';
 import { issueFlatDues, listDues } from '@/lib/fees/dues';
 import { recordPayment } from '@/lib/fees/payments';
 import { createAccount } from '@/lib/money/accounts';
+import { createBudgetLine } from '@/lib/money/budget';
 import { createObligation } from '@/lib/money/obligations';
 import { createTask } from '@/lib/work/tasks';
 import { assignPerson } from '@/lib/work/coverage';
@@ -39,7 +40,7 @@ describe('seasonOverview', () => {
     expect(overview.memberCount).toBe(0);
     expect(overview.flatRateAgorot).toBe(120000);
     expect(overview.understaffed).toEqual([]);
-    expect(overview.unlinkedCount).toBe(0);
+    expect(overview.decisions).toEqual({ total: 0, items: [] });
   });
 
   it('answers the four figures in one call', async () => {
@@ -167,11 +168,60 @@ describe('seasonOverview', () => {
       .toEqual(['פירוק ו־MOOP', 'הקמת הצל', 'מסיבת גיוס — דלת']);
   });
 
-  it('carries the count of names still waiting to be linked', async () => {
+  it('carries the register\'s open decisions, and sends each one to the register', async () => {
     await recordUnlinkedName(db, 'נועה ל.', 'import');
     await recordUnlinkedName(db, 'Itay', 'import');
 
     const overview = await seasonOverview(db, seasonId);
-    expect(overview.unlinkedCount).toBe(2);
+
+    expect(overview.decisions.total).toBe(2);
+    expect(overview.decisions.items.map((item) => item.title).sort())
+      .toEqual(['״Itay״', '״נועה ל.״'].sort());
+    for (const item of overview.decisions.items) {
+      expect(item.kind).toBe('unlinked-name');
+      // I2: the home names a decision and hands it on. Every row goes to the
+      // register — never to the action that would settle it, and never to the
+      // domain page the register's own action links to.
+      // Parsed rather than re-spelled: asserting the same template the code
+      // writes would pass over an id the URL cannot carry.
+      const url = new URL(item.href, 'https://shliff.invalid');
+      expect(url.pathname).toBe('/inbox');
+      expect(url.searchParams.get('item')).toBe(item.id);
+      expect(item.actionLabel.length).toBeGreaterThan(0);
+      // A name is a decision, but promotion is not waiting on it: gating
+      // promotion on the queue promotion itself fills is a deadlock.
+      expect(item.blocksImport).toBe(false);
+    }
+    // `unlinkedCount` is gone: the register owns that number now, and two
+    // sources for one count is how they start disagreeing.
+    expect('unlinkedCount' in overview).toBe(false);
+  });
+
+  it('counts decisions, not everything the register lists', async () => {
+    await recordUnlinkedName(db, 'נועה ל.', 'import');
+    // 2 × 1 ₪ is not 5 ₪. The register carries it, and it is not a decision:
+    // nobody is being asked to choose anything, so a badge that counted it
+    // would send a lead to the register to find nothing waiting there.
+    await createBudgetLine(db, {
+      seasonId, label: 'גנרטור', quantityNum: 2, unitCost: 1, total: 5,
+      category: 'camp',
+    });
+
+    const overview = await seasonOverview(db, seasonId);
+
+    expect(overview.decisions.total).toBe(1);
+    expect(overview.decisions.items.map((item) => item.kind)).toEqual(['unlinked-name']);
+  });
+
+  it('shows six decisions at most, and still says how many there are', async () => {
+    for (const name of ['אבי', 'בני', 'גלי', 'דנה', 'הדר', 'ורד', 'זיו', 'חן']) {
+      await recordUnlinkedName(db, name, 'import');
+    }
+
+    const overview = await seasonOverview(db, seasonId);
+    // Eight waiting, six shown. The panel never counts its own rows to learn
+    // how many there are — that is what hid the other two.
+    expect(overview.decisions.total).toBe(8);
+    expect(overview.decisions.items).toHaveLength(6);
   });
 });

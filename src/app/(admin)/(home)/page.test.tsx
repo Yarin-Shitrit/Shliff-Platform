@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { render, screen, within } from '@testing-library/react';
-import type { SeasonOverview } from '@/lib/overview/summary';
+import type { DecisionRow, SeasonOverview } from '@/lib/overview/summary';
 import type { TaskCoverage } from '@/lib/work/coverage';
 import type { UnpaidMember } from '@/lib/fees/summary';
 
@@ -43,7 +43,26 @@ function overview(overrides: Partial<SeasonOverview> = {}): SeasonOverview {
     debts: null,
     coverage: null,
     understaffed: [],
-    unlinkedCount: 0,
+    decisions: { total: 0, items: [] },
+    ...overrides,
+  };
+}
+
+/**
+ * Typed against the library's own row rather than spelled inline, for the
+ * reason `FULL` is: when the register widens what a decision carries, this
+ * file stops compiling instead of quietly testing a shape nothing produces.
+ */
+function decision(overrides: Partial<DecisionRow> = {}): DecisionRow {
+  return {
+    id: 'name:a1',
+    kind: 'unlinked-name',
+    title: '״נועה ל.״',
+    detail: 'שם מקובץ · הצעה: נועה לוי (strong)',
+    source: 'קופת קאמפ 2026!B14',
+    actionLabel: 'קישור לנועה לוי',
+    href: '/inbox?item=name:a1',
+    blocksImport: false,
     ...overrides,
   };
 }
@@ -189,8 +208,10 @@ describe('routeExists', () => {
     expect(routeExists('/')).toBe(true);
     expect(routeExists('/fees?season=s26')).toBe(true);
     expect(routeExists('/members/p9')).toBe(true);
-    // Deliberately not `/inbox`: plan 05 is building that route right now, so
-    // a control keyed on its absence would start failing the hour it lands.
+    // `/inbox` is asserted positively now that plan 05 has landed it: the
+    // preview's every link goes there, and a net that could not tell a real
+    // register from a missing one would pass over six 404s.
+    expect(routeExists('/inbox?season=s26')).toBe(true);
     expect(routeExists('/nowhere-at-all')).toBe(false);
     expect(routeExists('/money/nowhere')).toBe(false);
   });
@@ -311,8 +332,22 @@ describe('HomePage — the לטיפול preview', () => {
       .closest('section') as HTMLElement;
   }
 
+  const WAITING: DecisionRow[] = [
+    decision(),
+    decision({
+      id: 'sheet-season:s1',
+      kind: 'sheet-season',
+      title: 'לגיליון ״סיכום כללי״ אין שנה',
+      detail: 'לגיליון לא נקבעה עונה, ותקציב חייב עונה',
+      source: null,
+      actionLabel: 'בחירת עונה',
+      href: '/inbox?item=sheet-season:s1',
+      blocksImport: true,
+    }),
+  ];
+
   it('celebrates only when it knows there is nothing to decide', async () => {
-    seasonOverview.mockResolvedValue(overview({ ...FULL, unlinkedCount: 0 }));
+    seasonOverview.mockResolvedValue(overview({ ...FULL }));
     render(await HomePage({ searchParams: Promise.resolve({ season: 's26' }) }));
 
     const panel = inboxPanel();
@@ -321,41 +356,104 @@ describe('HomePage — the לטיפול preview', () => {
     expect(within(panel).getByText('ברן 26')).toBeTruthy();
   });
 
-  it('shows the names still waiting, rather than celebrating over them', async () => {
-    seasonOverview.mockResolvedValue(overview({ ...FULL, unlinkedCount: 7 }));
+  it('shows what is waiting, with its evidence and the register\'s own verb', async () => {
+    seasonOverview.mockResolvedValue(overview({
+      ...FULL,
+      decisions: { total: 2, items: WAITING },
+    }));
     render(await HomePage({ searchParams: Promise.resolve({ season: 's26' }) }));
 
     const panel = inboxPanel();
     expect(within(panel).queryByText('הכול מטופל')).toBeNull();
-    expect(within(panel).getByText('7 שמות שממתינים לשיוך')).toBeTruthy();
-    // Copy carried over character for character from the screen this replaces.
-    expect(within(panel).getByText(
-      'שמות שהמערכת מצאה בקבצים ולא שייכה — היא לא מנחשת מי הם.',
-    )).toBeTruthy();
-    const link = within(panel).getByRole('link', { name: 'לדף חברי המחנה' });
-    expect(link.getAttribute('href')).toBe('/members');
+    expect(within(panel).getByText('״נועה ל.״')).toBeTruthy();
+    expect(within(panel).getByText('לגיליון ״סיכום כללי״ אין שנה')).toBeTruthy();
+    // R11: the figure keeps the workbook cell it came from, in mono.
+    expect(within(panel).getByText('קופת קאמפ 2026!B14')).toBeTruthy();
+    expect(within(panel).getByText('2 החלטות')).toBeTruthy();
   });
 
-  it('offers no link to a register that has not been built yet', async () => {
-    seasonOverview.mockResolvedValue(overview({ ...FULL, unlinkedCount: 7 }));
+  it('marks the decision promotion is actually waiting on, and only that one', async () => {
+    seasonOverview.mockResolvedValue(overview({
+      ...FULL,
+      decisions: { total: 2, items: WAITING },
+    }));
     render(await HomePage({ searchParams: Promise.resolve({ season: 's26' }) }));
 
-    // /inbox is plan 05's route. Until it exists, "לכל הרשימה" would be a 404
-    // dressed as a next step.
-    expect(within(inboxPanel()).queryByRole('link', { name: /לכל הרשימה/ })).toBeNull();
+    const rows = within(inboxPanel()).getAllByRole('listitem');
+    // A name is open and does not hold the importer up; a season-less sheet
+    // does. A pill on every row says nothing, and this one has to mean it.
+    expect(within(rows[0]).queryByText('חוסם ייבוא')).toBeNull();
+    expect(within(rows[1]).getByText('חוסם ייבוא')).toBeTruthy();
+  });
+
+  it('sends every row to the register, and settles nothing itself', async () => {
+    seasonOverview.mockResolvedValue(overview({
+      ...FULL,
+      decisions: { total: 2, items: WAITING },
+    }));
+    render(await HomePage({ searchParams: Promise.resolve({ season: 's26' }) }));
+
+    const panel = inboxPanel();
+    const action = within(panel).getByRole('link', { name: 'קישור לנועה לוי' });
+    expect(action.getAttribute('href')).toBe('/inbox?item=name:a1');
+    expect(within(panel).getByRole('link', { name: 'בחירת עונה' }).getAttribute('href'))
+      .toBe('/inbox?item=sheet-season:s1');
+    // A23: the home offers no control that writes — not a promotion, not a
+    // link, not a name. Every verb here is a way into the register.
+    expect(within(panel).queryByRole('button')).toBeNull();
+    for (const link of within(panel).getAllByRole('link')) {
+      const href = link.getAttribute('href') ?? '';
+      expect({ href, register: href.startsWith('/inbox') })
+        .toEqual({ href, register: true });
+    }
+  });
+
+  it('opens the register on the season the screen is showing', async () => {
+    seasonOverview.mockResolvedValue(overview({
+      ...FULL,
+      decisions: { total: 2, items: WAITING },
+    }));
+    render(await HomePage({ searchParams: Promise.resolve({ season: 's26' }) }));
+
+    expect(within(inboxPanel()).getByRole('link', { name: /לכל הרשימה/ })
+      .getAttribute('href')).toBe('/inbox?season=s26');
+  });
+
+  it('says what did not fit, rather than quietly dropping it', async () => {
+    seasonOverview.mockResolvedValue(overview({
+      ...FULL,
+      decisions: {
+        total: 12,
+        items: [0, 1, 2, 3, 4, 5].map((i) => decision({
+          id: `name:a${i}`, title: `שם ${i}`, href: `/inbox?item=name:a${i}`,
+        })),
+      },
+    }));
+    render(await HomePage({ searchParams: Promise.resolve({ season: 's26' }) }));
+
+    const panel = inboxPanel();
+    expect(within(panel).getAllByRole('listitem')).toHaveLength(6);
+    // Twelve are open and six are shown. The other six are stated, not cut.
+    expect(within(panel).getByText('ועוד 6 החלטות ברשימה')).toBeTruthy();
+    expect(within(panel).getByRole('link', { name: 'פתיחת הרשימה' })
+      .getAttribute('href')).toBe('/inbox?season=s26');
   });
 
   it('states the panel is the screen\'s own, not a guess', async () => {
-    seasonOverview.mockResolvedValue(overview({ ...FULL, unlinkedCount: 7 }));
+    seasonOverview.mockResolvedValue(overview({
+      ...FULL,
+      decisions: { total: 2, items: WAITING },
+    }));
     render(await HomePage({ searchParams: Promise.resolve({ season: 's26' }) }));
     expect(screen.getByText('המערכת לא מנחשת. אלה ההכרעות שממתינות.')).toBeTruthy();
   });
 
-  it('counts the waiting names as one decision, not as seven', async () => {
-    seasonOverview.mockResolvedValue(overview({ ...FULL, unlinkedCount: 7 }));
+  it('says one decision rather than one decisions', async () => {
+    seasonOverview.mockResolvedValue(overview({
+      ...FULL,
+      decisions: { total: 1, items: [decision()] },
+    }));
     render(await HomePage({ searchParams: Promise.resolve({ season: 's26' }) }));
-    // Seven names are one row and one decision — linking them is one sitting
-    // on /members. A badge reading 7 would promise seven separate places to go.
     expect(within(inboxPanel()).getByText('החלטה אחת')).toBeTruthy();
   });
 });
@@ -531,7 +629,7 @@ describe('HomePage — reachability', () => {
       ...FULL,
       dues: { ...FULL.dues, unpaid: [unpaidRow()] },
       understaffed: [task()],
-      unlinkedCount: 3,
+      decisions: { total: 1, items: [decision()] },
     }));
     const { container } = render(await HomePage({
       searchParams: Promise.resolve({ season: 's26' }),
