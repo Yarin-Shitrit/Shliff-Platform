@@ -8,6 +8,7 @@ import { Table } from '@/components/ui/table';
 import type { TableColumn } from '@/components/ui/table';
 import { Pill } from '@/components/ui/pill';
 import { SourceChip } from '@/components/ui/source-chip';
+import { EmptyState } from '@/components/ui/empty-state';
 import { chipSource } from './chip-source';
 import styles from './money.module.css';
 
@@ -95,7 +96,15 @@ export function ObligationsTable({ direction, rows, sources, scope }: {
         data: row,
         tone: row.unnamed ? ('bad' as const) : undefined,
       }))}
-      totals={[
+      /*
+       * E1. With no rows this drew an empty grid under a totals row reading
+       * `0 חובות` and `0 ₪` — silence plus two zeroes, which the platform's
+       * own rules forbid twice over: a figure that would always read zero is
+       * not drawn, and an empty list says which kind of empty it is. Owing
+       * nobody is the good outcome, so `all-clear` is the kind that is true.
+       */
+      empty={<EmptyState kind="all-clear" />}
+      totals={rows.length === 0 ? undefined : [
         { key: 'count', content: <bdi>{rows.length} חובות</bdi>, colSpan: 2 },
         { key: 'sum', content: <Money agorot={openTotal} />, numeric: true },
       ]}

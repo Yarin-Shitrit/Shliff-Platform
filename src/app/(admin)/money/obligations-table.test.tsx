@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect } from 'vitest';
+import { EMPTY_TITLES, emptyStateBody } from '@/components/ui/empty-state';
 import { render, screen, within } from '@testing-library/react';
 import type { ObligationRow } from '@/lib/money/obligations';
 import type { SourceCell } from '@/lib/money/trace';
@@ -104,5 +105,51 @@ describe('ObligationsTable', () => {
                                           outstandingAgorot: 91000 })]} />);
     expect(screen.queryByRole('columnheader', { name: 'סכום' })).toBeNull();
     expect(screen.queryByRole('columnheader', { name: 'קוזז' })).toBeNull();
+  });
+});
+
+/**
+ * E1: an empty state is an invitation, not an apology — and never silence.
+ *
+ * With no rows this drew an empty table body under a totals row reading
+ * `0 חובות` and `0 ₪`. Two zeroes and a blank space is the one shape the
+ * platform's own rules forbid twice over: a figure that would always read
+ * zero is not drawn, and an empty list says what kind of empty it is. Owing
+ * nobody is the good outcome, so it says so.
+ */
+describe('ObligationsTable when there is nothing owed', () => {
+  it('says the direction is clear rather than drawing an empty grid', () => {
+    render(
+      <ObligationsTable
+        direction="camp_owes"
+        rows={[]}
+        sources={new Map()}
+        scope="?season=s26"
+      />,
+    );
+    /*
+     * The kit owns the copy (C10), so this asserts the kind rather than a
+     * sentence this file would otherwise be a second copy of.
+     *
+     * Not asserted: that the empty state is announced. The kit renders a
+     * heading in a plain div, with no `role="status"`, so an empty state
+     * arriving after a filter change is silent to a screen reader. That is a
+     * real kit gap and it is reported rather than patched here — asserting it
+     * from a screen test would be pinning a behaviour this file cannot give.
+     */
+    expect(screen.getByRole('heading', { name: EMPTY_TITLES['all-clear'] })).toBeTruthy();
+    expect(screen.getByText(emptyStateBody({ kind: 'all-clear' }))).toBeTruthy();
+  });
+
+  it('draws no totals row of zeroes under it', () => {
+    render(
+      <ObligationsTable
+        direction="owed_to_camp"
+        rows={[]}
+        sources={new Map()}
+        scope="?season=s26"
+      />,
+    );
+    expect(screen.queryByText('0 חובות')).toBeNull();
   });
 });
