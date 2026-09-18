@@ -67,3 +67,21 @@
 .none {
   color: var(--ink-4);
 }
+
+.stripBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-3);
+}
+
+.stripNote {
+  margin-block: 0;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}

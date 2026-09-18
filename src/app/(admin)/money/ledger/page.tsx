@@ -5,8 +5,10 @@ import Link from 'next/link';
 import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import { listSeasons } from '@/lib/members/roster';
+import { listAccounts } from '@/lib/money/accounts';
 import {
-  listLedgerRows, applyLedgerView, ledgerStrip, groupByMonth, runningBalanceFor,
+  listLedgerRows, applyLedgerView, viewCounts, ledgerStrip, groupByMonth,
+  runningBalanceFor,
 } from '@/lib/money/ledger-view';
 import type {
   LedgerQuery, LedgerRow, LedgerScope, LedgerSort, LedgerView,
@@ -18,6 +20,10 @@ import { Pill } from '@/components/ui/pill';
 import { Avatar } from '@/components/ui/avatar';
 import { SourceChip } from '@/components/ui/source-chip';
 import { EmptyState } from '@/components/ui/empty-state';
+import { SavedViews } from '@/components/ui/saved-views';
+import { FilterBar } from '@/components/ui/filter-bar';
+import type { FilterChip, FilterOption } from '@/components/ui/filter-bar';
+import { StatTile } from '@/components/ui/stat-tile';
 import { chipSource } from '../chip-source';
 import styles from './ledger.module.css';
 
@@ -51,6 +57,33 @@ export const VIEW_LABELS: Readonly<Record<LedgerView, string>> = {
 };
 
 const VIEWS = Object.keys(VIEW_LABELS) as LedgerView[];
+
+const SORT_LABELS: Readonly<Record<LedgerSort, string>> = {
+  'date-desc': 'החדש קודם',
+  'date-asc': 'הוותיק קודם',
+};
+
+/**
+ * Every link on this screen is built here, from the params the request
+ * arrived with. That is the whole point: a link that spells its own query
+ * string is a link that will one day drop `?season=` (R5), and the saved
+ * view, the search and the sort with it. A default value is left out rather
+ * than written, so the URL a lead copies says only what they chose.
+ */
+function ledgerHref(
+  current: LedgerSearchParams, over: Partial<LedgerSearchParams> = {},
+): string {
+  const next = { ...current, ...over };
+  const search = new URLSearchParams();
+  if (next.season) search.set('season', next.season);
+  if (next.account) search.set('account', next.account);
+  if (next.view && next.view !== 'all') search.set('view', next.view);
+  if (next.q && next.q.trim() !== '') search.set('q', next.q);
+  if (next.budget) search.set('budget', next.budget);
+  if (next.sort && next.sort !== 'date-desc') search.set('sort', next.sort);
+  const query = search.toString();
+  return query === '' ? '/money/ledger' : `/money/ledger?${query}`;
+}
 
 function parseView(value: string | undefined): LedgerView {
   return VIEWS.includes(value as LedgerView) ? (value as LedgerView) : 'all';
@@ -111,7 +144,10 @@ export default async function LedgerPage(
     sort: parseSort(params.sort),
   };
 
-  const all = await listLedgerRows(db, scope);
+  const [all, accounts] = await Promise.all([
+    listLedgerRows(db, scope),
+    listAccounts(db),
+  ]);
   const rows = applyLedgerView(all, query);
   const strip = ledgerStrip(rows);
   const balance = await runningBalanceFor(db, rows, scope, query);
@@ -238,7 +274,48 @@ export default async function LedgerPage(
   ];
   if (balance.shown) totals.push({ key: 'balance', content: <Nothing />, numeric: true });
 
-  const clearHref = `/money/ledger?season=${params.season ?? seasons[0].id}`;
+  const counts = viewCounts(all);
+  const clearHref = ledgerHref(params, {
+    view: undefined, q: undefined, budget: undefined,
+  });
+
+  const savedViews = VIEWS.map((view) => ({
+    id: view,
+    label: VIEW_LABELS[view],
+    count: counts[view],
+    href: ledgerHref(params, { view }),
+  }));
+
+  const accountOptions: FilterOption[] = accounts.map((one) => ({
+    id: one.id,
+    label: one.name,
+    href: ledgerHref(params, { account: one.id }),
+    current: one.id === params.account,
+  }));
+  const chosenAccount = accounts.find((one) => one.id === params.account);
+
+  const chips: FilterChip[] = [
+    /**
+     * Label-only, with no `options`: R5 keeps the season in one global
+     * control and says neither new route renders a picker of its own. The
+     * clear link is not a picker — it is the way off the filter, and the
+     * running balance cannot be true with a season across it, so without this
+     * the column in Task 3 would be unreachable from this screen.
+     */
+    {
+      id: 'season',
+      label: 'שנה',
+      value: campWide ? 'כל השנים' : season!.name,
+      clearHref: campWide ? undefined : ledgerHref(params, { season: ALL_SEASONS }),
+    },
+    {
+      id: 'account',
+      label: 'חשבון',
+      value: chosenAccount ? chosenAccount.name : 'כל החשבונות',
+      options: accountOptions,
+      clearHref: params.account ? ledgerHref(params, { account: undefined }) : undefined,
+    },
+  ];
 
   return (
     <main className={styles.page}>
@@ -248,6 +325,47 @@ export default async function LedgerPage(
           כל שקל שנכנס ויצא, משורות הגיליון ומדמי הקאמפ גם יחד.
           {campWide ? ' כרגע מוצגות כל השנים.' : null}
         </p>
+        {campWide ? (
+          <Link className="link" href={ledgerHref(params, { season: seasons[0].id })}>
+            חזרה ל<bdi>{seasons[0].name}</bdi>
+          </Link>
+        ) : null}
+      </div>
+
+      <SavedViews
+        label="תצוגות התנועות"
+        views={savedViews}
+        currentId={query.view}
+      />
+
+      <FilterBar
+        searchValue={params.q ?? ''}
+        searchLabel="חיפוש בתיאור או במ/אל"
+        searchPlaceholder="תיאור או צד שני"
+        chips={chips}
+        sort={{
+          value: SORT_LABELS[query.sort],
+          options: (Object.keys(SORT_LABELS) as LedgerSort[]).map((sort) => ({
+            id: sort,
+            label: SORT_LABELS[sort],
+            href: ledgerHref(params, { sort }),
+            current: sort === query.sort,
+          })),
+        }}
+        rowCount={strip.count}
+      />
+
+      <div className={styles.stripBlock}>
+        <div className={styles.strip} role="group" aria-label="סיכום התנועות המוצגות">
+          <StatTile label="נכנס" valueAgorot={strip.inAgorot} />
+          <StatTile label="יצא" valueAgorot={strip.outAgorot} />
+          {/* A signed figure on purpose. A11 keeps נכנס and יצא positive
+            * because the column carries their direction; a net change has no
+            * column to carry it, and `formatShekels` welds the minus to the
+            * digits for exactly this case. */}
+          <StatTile label="שינוי נטו" valueAgorot={strip.netAgorot} />
+        </div>
+        <p className={styles.stripNote}>המספרים מתעדכנים לפי הסינון הפעיל</p>
       </div>
 
       {balance.shown ? null : (

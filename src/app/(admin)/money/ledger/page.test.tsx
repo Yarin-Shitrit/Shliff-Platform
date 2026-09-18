@@ -16,6 +16,19 @@ const { requireAdmin, listSeasons, listAccounts, listLedgerRows, runningBalanceF
     requireAdmin: vi.fn(), listSeasons: vi.fn(), listAccounts: vi.fn(),
     listLedgerRows: vi.fn(), runningBalanceFor: vi.fn(),
   }));
+/**
+ * `FilterBar` (C3) is the kit's own client component: its chips and its sort
+ * are links, but the search box holds what is being typed and debounces it
+ * into the URL. Those three hooks are all it needs. `notFound` is left as the
+ * real implementation, because the guard test below asserts that it throws.
+ */
+const { replace } = vi.hoisted(() => ({ replace: vi.fn() }));
+vi.mock('next/navigation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/navigation')>()),
+  usePathname: () => '/money/ledger',
+  useSearchParams: () => new URLSearchParams('season=s1'),
+  useRouter: () => ({ replace, push: vi.fn(), refresh: vi.fn() }),
+}));
 vi.mock('@/db', () => ({ db: {} }));
 vi.mock('@/lib/auth/guard', () => ({ requireAdmin }));
 vi.mock('@/lib/members/roster', () => ({ listSeasons }));
@@ -211,5 +224,125 @@ describe('the empty states', () => {
   it('never congratulates a lead on an empty register', async () => {
     await renderPage();
     expect(screen.queryByText('הכול מטופל')).toBeNull();
+  });
+});
+
+describe('the saved views and the strip', () => {
+  const rows = [
+    row({ id: '1', direction: 'in', amountAgorot: 6200000 }),
+    row({ id: '2', direction: 'out', amountAgorot: 4527100 }),
+    row({ id: '3', direction: 'out', amountAgorot: 120000, accountId: null, accountName: null }),
+  ];
+
+  /**
+   * Names, not `textContent`. The kit renders the count in its own `<span>`
+   * with no separating whitespace, so an exact `textContent` assertion would
+   * be pinning the kit's markup rather than this screen's counts. `\s*`
+   * tolerates that seam while still failing on a wrong label or a wrong
+   * count — which is the claim worth making.
+   */
+  const TABS: ReadonlyArray<readonly [RegExp, string]> = [
+    [/^הכול\s*3$/, 'all'],
+    [/^נכנס\s*1$/, 'in'],
+    [/^יצא\s*2$/, 'out'],
+    [/^בלי חשבון\s*1$/, 'no-account'],
+    [/^מהקבצים\s*0$/, 'imported'],
+    [/^נרשמו ידנית\s*3$/, 'manual'],
+  ];
+
+  it('offers the six views with their counts, and marks the current one', async () => {
+    listLedgerRows.mockResolvedValue(rows);
+    await renderPage({ view: 'out' });
+    expect(screen.getAllByRole('tab')).toHaveLength(6);
+    for (const [name] of TABS) {
+      expect(screen.getByRole('tab', { name })).toBeTruthy();
+    }
+    expect(screen.getByRole('tab', { name: /^יצא\s*2$/ }).getAttribute('aria-selected'))
+      .toBe('true');
+    const selected = screen.getAllByRole('tab')
+      .filter((tab) => tab.getAttribute('aria-selected') === 'true');
+    expect(selected).toHaveLength(1);
+  });
+
+  it('offers no way to save a view, because nothing here could store one', async () => {
+    listLedgerRows.mockResolvedValue(rows);
+    await renderPage();
+    expect(screen.queryByRole('link', { name: 'תצוגה שמורה חדשה' })).toBeNull();
+  });
+
+  it('keeps the season on every view link', async () => {
+    listLedgerRows.mockResolvedValue(rows);
+    await renderPage({ view: 'all' });
+    expect(screen.getByRole('tab', { name: /בלי חשבון/ }).getAttribute('href'))
+      .toBe('/money/ledger?season=s1&view=no-account');
+    for (const tab of screen.getAllByRole('tab')) {
+      expect(tab.getAttribute('href')).toMatch(/^\/money\/ledger\?season=s1/);
+    }
+  });
+
+  it('recomputes the strip with the active view', async () => {
+    listLedgerRows.mockResolvedValue(rows);
+    await renderPage({ view: 'all' });
+    const strip = screen.getByRole('group', { name: 'סיכום התנועות המוצגות' });
+    expect(within(strip).getByText('נכנס')).toBeTruthy();
+    expect(within(strip).getByText('יצא')).toBeTruthy();
+    expect(within(strip).getByText('שינוי נטו')).toBeTruthy();
+    expect(within(strip).getByText('62,000 ₪')).toBeTruthy();
+    expect(within(strip).getByText('46,471 ₪')).toBeTruthy();
+    expect(within(strip).getByText('15,529 ₪')).toBeTruthy();
+    expect(screen.getByText('המספרים מתעדכנים לפי הסינון הפעיל')).toBeTruthy();
+  });
+
+  it('shows the strip for the filtered set, not for everything', async () => {
+    listLedgerRows.mockResolvedValue(rows);
+    await renderPage({ view: 'in' });
+    const strip = screen.getByRole('group', { name: 'סיכום התנועות המוצגות' });
+    expect(within(strip).getByText('0 ₪')).toBeTruthy();
+    // With nothing going out, the net *is* the inflow — so 62,000 stands in
+    // two of the three tiles. Asserted as two rather than queried as one,
+    // because `getByText` would throw on the duplicate and the honest fix is
+    // to say what the arithmetic does.
+    expect(within(strip).getAllByText('62,000 ₪')).toHaveLength(2);
+    expect(within(strip).queryByText('46,471 ₪')).toBeNull();
+  });
+
+  it('carries the search term back into the field so a reader can see what is filtering', async () => {
+    listLedgerRows.mockResolvedValue(rows);
+    await renderPage({ q: 'משאית' });
+    const box = screen.getByRole('searchbox', { name: 'חיפוש בתיאור או במ/אל' });
+    expect((box as HTMLInputElement).value).toBe('משאית');
+  });
+
+  it('counts the filtered rows in the bar, not the whole ledger', async () => {
+    listLedgerRows.mockResolvedValue(rows);
+    await renderPage({ view: 'out' });
+    expect(screen.getByText('2 שורות')).toBeTruthy();
+  });
+
+  /**
+   * The running balance is only ever true with no season across it (Task 3),
+   * so a screen that could not drop the season would carry a column no lead
+   * could ever reach. This is the affordance that keeps it reachable.
+   */
+  it('offers a way out of the season filter, so the running balance is reachable', async () => {
+    listLedgerRows.mockResolvedValue(rows);
+    await renderPage();
+    expect(screen.getByRole('link', { name: 'הסרת הסינון שנה' }).getAttribute('href'))
+      .toBe('/money/ledger?season=all');
+  });
+
+  /**
+   * R5: camp-wide data says so on screen. Two places say it — the lead
+   * sentence and the season chip's own value — so each is asserted by the
+   * words only it uses. A bare `/כל השנים/` matches both and would pass on
+   * either alone.
+   */
+  it('says so on screen when it is showing every year at once', async () => {
+    listLedgerRows.mockResolvedValue(rows);
+    await renderPage({ season: 'all' });
+    expect(screen.getByText(/כרגע מוצגות כל השנים/)).toBeTruthy();
+    expect(screen.getByText('כל השנים')).toBeTruthy();
+    expect(screen.getByRole('link', { name: /חזרה ל/ }).getAttribute('href'))
+      .toBe('/money/ledger?season=s1');
   });
 });
