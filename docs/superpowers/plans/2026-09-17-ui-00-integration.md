@@ -1073,3 +1073,33 @@ isolating the JSON with `--reporter=json` silently dropped the unhandled-error
 block. Every one of the four looked like the fix for the last. **The lesson is
 not the flags; it is that a measurement instrument needs its own oracle, and the
 cheapest one here is a second reporter that fails differently.**
+
+### A30 — A lane verifies its own scope; only the controller runs the full suite
+
+Wave 3's three lanes all died at the 600s stream watchdog within minutes of each
+other. None had a code problem: each was running a **full-suite** verification,
+concurrently, on a box with under 1 GB of free swap. Three suites of ~1,760 tests
+spinning up their own PGlite instances is roughly three times the memory the
+machine had left, so the kernel started killing workers and every lane stalled
+waiting on output that would never come.
+
+**Dispatch rule for every remaining wave: a lane runs only the suites in its own
+scope. The full suite is the controller's, run once at the wave gate.** Put this
+in the dispatch prompt — an agent cannot discover it, because from inside one
+lane a full-suite run looks like diligence rather than like a third of the box.
+
+Two honest notes on cause. The controller had just restarted `shliff-pg` on the
+lead's approval, which added pressure to an already-thrashing box; the restart
+was correct and approved, but it was a contributing factor and not an innocent
+bystander. And the watchdog message itself — *"no progress for 600s"* — points at
+the agent, which is the wrong place to look: the agent was fine and the machine
+was out of memory. That is the same misdirection as a stopped container reading
+as your own diff.
+
+**Recovery that worked, and should be reused:** re-establish ground truth from
+`git log`, `git status` and a real `tsc` run, **never from the agent's last
+message**. Here all seven of one lane's commits had landed while its final words
+were "now the full-suite verification", and another lane's three files sat
+uncommitted while its last words were "13/13 green". Verify by content, not by
+report: `grep -c HebrewRefusal src/lib/errors/hebrew.ts` settled in one command
+what the report could only assert.
