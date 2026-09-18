@@ -1,5 +1,6 @@
 import { and, asc, eq, sql } from 'drizzle-orm';
 import type { AnyDb } from '@/lib/db-types';
+import { HebrewRefusal } from '@/lib/errors/hebrew';
 import { fundingTargets, ticketRounds } from '@/db/schema/money';
 import { seasons } from '@/db/schema/camp';
 import { budgetTotalAgorot } from './budget';
@@ -149,7 +150,10 @@ export async function duesFundingIdentity(
   db: AnyDb, seasonId: string,
 ): Promise<DuesFundingIdentity> {
   const [season] = await db.select().from(seasons).where(eq(seasons.id, seasonId));
-  if (!season) throw new Error(`עונה לא נמצאה: ${seasonId}`);
+  // See the same throw in `summary.ts`: an interpolated uuid carries Latin
+  // letters, which the alphabet passthrough refuses, so this has to say it is
+  // a refusal rather than be guessed at (§5 A20).
+  if (!season) throw new HebrewRefusal(`עונה לא נמצאה: ${seasonId}`);
 
   // 'camp' only: a season's dancefloor budget (הגברה, מייצג, ...) is not part
   // of what a member's dues buy, and summing it in here divided ברן 25's

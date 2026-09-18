@@ -6,6 +6,7 @@ import { obligations, obligationSettlements } from '@/db/schema/money';
 import type { ObligationDirection, SettlementKind } from '@/db/schema/money';
 import { persons } from '@/db/schema/camp';
 import { toAgorot, fromAgorot } from '@/lib/money';
+import { HebrewRefusal } from '@/lib/errors/hebrew';
 import { isBlank } from '@/lib/text/normalize';
 
 export interface NewObligation {
@@ -177,7 +178,11 @@ export async function settleObligation(db: AnyDb, input: NewSettlement): Promise
 
   const [obligation] = await db.select().from(obligations)
     .where(eq(obligations.id, input.obligationId));
-  if (!obligation) throw new Error(`חוב לא קיים: ${input.obligationId}`);
+  // `HebrewRefusal`, not `Error`: this message interpolates a uuid, and a
+  // uuid is hex, so it carries Latin letters and `toHebrewError`'s alphabet
+  // passthrough could never return it — the lead got the generic fallback and
+  // the reason was lost silently (§5 A20).
+  if (!obligation) throw new HebrewRefusal(`חוב לא קיים: ${input.obligationId}`);
 
   // Same `isBlank` reasoning as `unnamed` above in `listObligations`: this
   // guard runs against whatever is in the row, not just rows `createObligation`

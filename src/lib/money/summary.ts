@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 import type { AnyDb } from '@/lib/db-types';
+import { HebrewRefusal } from '@/lib/errors/hebrew';
 import { seasons } from '@/db/schema/camp';
 import { accountBalances, unattributedAgorot } from './accounts';
 import type { AccountBalance, Unattributed } from './accounts';
@@ -54,7 +55,11 @@ export async function seasonMoneySummary(
   db: AnyDb, seasonId: string,
 ): Promise<SeasonMoneySummary> {
   const [season] = await db.select().from(seasons).where(eq(seasons.id, seasonId));
-  if (!season) throw new Error(`עונה לא נמצאה: ${seasonId}`);
+  // `HebrewRefusal`, not `Error`: the message interpolates a uuid, a uuid is
+  // hex, and `toHebrewError`'s alphabet passthrough rejects any message
+  // carrying a Latin letter — so as a plain `Error` this reached the lead as
+  // the generic fallback and the reason was lost (§5 A20).
+  if (!season) throw new HebrewRefusal(`עונה לא נמצאה: ${seasonId}`);
 
   const accounts = await accountBalances(db);
   const campOwes = await listObligations(db, { direction: 'camp_owes', seasonId });
