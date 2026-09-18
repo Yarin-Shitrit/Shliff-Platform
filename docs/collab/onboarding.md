@@ -26,6 +26,25 @@ cd Shliff-Platform
 npm install
 ```
 
+**If `npm install` leaves vitest unable to start**, with `Cannot find native
+binding` and `Cannot find module '@rolldown/binding-...'`, the lockfile is at
+fault, not your machine. `package-lock.json` declares rolldown's fifteen
+platform bindings but records a resolved entry for none of them
+([npm/cli#4828](https://github.com/npm/cli/issues/4828)), so a clean `npm ci`
+installs no native binding. It is invisible on an Apple-silicon Mac, where an
+earlier `npm install` left the darwin binding in `node_modules` without writing
+it to the lock. Until the lockfile is regenerated, install the one your platform
+needs at the version the lock pins:
+
+```sh
+V=$(node -p "require('./package-lock.json').packages['node_modules/rolldown'].version")
+npm install --no-save "@rolldown/binding-<your-platform>@$V"   # e.g. linux-x64-gnu
+```
+
+CI does exactly this, in `.github/workflows/ci.yml`. The proper fix — regenerating
+the lockfile — also moves about forty other versions, so it needs its own change
+and its own full test run.
+
 **The repository is private and contains the camp's real financial records** —
 `docs/reference-data/` holds three workbooks with real names and real amounts.
 Do not fork it, mirror it, or paste rows from it into an issue.
