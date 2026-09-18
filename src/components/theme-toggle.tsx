@@ -37,22 +37,20 @@ export function ThemeToggle() {
   }
 
   return (
-    <div className={styles.row}>
-      <button
-        type="button"
-        className={styles.button}
-        onClick={flip}
-        aria-label="החלפת ערכת צבעים"
-      >
-        {/*
-          Both glyphs ship and the stylesheet shows exactly one. The server
-          cannot know the reader's OS preference, so choosing the glyph in JSX
-          would mean guessing it — and a moon on a dark page is the guess
-          being wrong in the first paint.
-        */}
-        <span className={styles.whenLight}><Icon name="moon" size={16} /></span>
-        <span className={styles.whenDark}><Icon name="sun" size={16} /></span>
-      </button>
-    </div>
+    <button
+      type="button"
+      className={styles.button}
+      onClick={flip}
+      aria-label="החלפת ערכת צבעים"
+    >
+      {/*
+        Both glyphs ship and the stylesheet shows exactly one. The server
+        cannot know the reader's OS preference, so choosing the glyph in JSX
+        would mean guessing it — and a moon on a dark page is the guess
+        being wrong in the first paint.
+      */}
+      <span className={styles.whenLight}><Icon name="moon" size={16} /></span>
+      <span className={styles.whenDark}><Icon name="sun" size={16} /></span>
+    </button>
   );
 }

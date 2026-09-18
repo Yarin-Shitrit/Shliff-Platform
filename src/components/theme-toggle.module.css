@@ -1,15 +1,3 @@
-/**
- * `.row` is temporary: it gives the button somewhere to sit while the old nav
- * is still the shell. Plan 02 puts the button in the sidebar footer beside the
- * signed-in user (B1) and deletes this rule.
- */
-.row {
-  display: flex;
-  justify-content: flex-end;
-  padding-inline: var(--space-4);
-  padding-block-start: var(--space-2);
-}
-
 .button {
   display: inline-flex;
   align-items: center;
