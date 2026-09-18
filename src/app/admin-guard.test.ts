@@ -75,37 +75,80 @@ describe('every admin entry point calls requireAdmin', () => {
  * runtime behaviour into a production bundle no matter which module it names.
  * What's forbidden is a *value* import — anything not spelled `import type`.
  *
- * Three shapes carry a value import, and all three are checked:
- * - `import { X } from '@/test/y'` — a static declaration with a `from`
- *   clause. `import type { X } from '@/test/y'` is the one exempt case.
- * - `import '@/test/y'` — a bare, side-effect-only import. There is no
- *   `import type '@/test/y'` form, so this is always a value import.
- * - `import('@/test/y')` — a dynamic import expression. Also always a value
+ * Four shapes carry a value import, and all four are checked:
+ * - `import { X } from '<test>'` — a static declaration with a `from`
+ *   clause. `import type { X } from '<test>'` is the one exempt case.
+ * - `import '<test>'` — a bare, side-effect-only import. There is no
+ *   `import type '<test>'` form, so this is always a value import.
+ * - `import('<test>')` — a dynamic import expression. Also always a value
  *   import at runtime (it returns a `Promise`); this codebase's own
  *   `src/lib/storage/index.ts` reaches `@vercel/blob` exactly this way, so a
- *   file reaching `@/test/` through the same idiom is not a hypothetical.
+ *   file reaching `src/test/` through the same idiom is not a hypothetical.
+ * - `export { X } from '<test>'` — a re-export. It names no `import` keyword
+ *   at all, so the three regexes above all missed it, and it pulls the module
+ *   into the graph exactly as an import does. `export type { X } from …` gets
+ *   the same carve-out as `import type`.
+ *
+ * ## The specifier, not the alias
+ *
+ * All four used to require the literal substring `@/test/`, so a production
+ * file writing `import { fixtureBuffer } from '../../test/fixtures'` — or
+ * `await import('../test/fixtures')` — walked straight through the net. That
+ * is not hypothetical shorthand: production files here already use relative
+ * imports (`src/app/(admin)/members/[id]/page.tsx` imports `'../add-member'`),
+ * and `eslint.config.mjs` has no `no-restricted-imports` rule that would catch
+ * a relative path into `src/test/` independently. Nothing trips it today —
+ * this net is the permanent backstop for "the camp's real workbooks never
+ * reach a deployed function", and a backstop with a known hole is not one.
+ *
+ * So the match is on a `/test/` PATH SEGMENT in the specifier, aliased or
+ * relative, rather than on the `@/` prefix. It deliberately does not resolve
+ * the path against the file's own directory: a `/test/` segment under `src/`
+ * that is not `src/test/` would be a false positive, which fails the build
+ * loudly rather than passing a real import through silently. An npm package
+ * (`'postgres'`, `'@scope/test/x'`) never matches, because the specifier must
+ * begin with `@/`, `./` or `../`.
  */
 const SRC_DIR = join(process.cwd(), 'src');
 const TEST_DIR = join(SRC_DIR, 'test');
 
-// Matches one whole static import statement that names `@/test/...`. Bounded
+/**
+ * A module specifier that resolves under a `test/` directory: `@/test/db`,
+ * `./test/db`, `../test/db`, `../../test/db`. The leading `@` or `.`/`..` is
+ * what keeps package names out.
+ */
+const TEST_SPECIFIER = String.raw`(?:@|\.\.?)(?:/[^'"]*)?/test/[^'"]*`;
+
+// Matches one whole static import statement naming such a specifier. Bounded
 // by the next `;`, which is safe because import clauses never contain a
 // semicolon of their own — so this can't run on past a multi-line brace list
 // into an unrelated later statement.
-const STATIC_FROM_IMPORT_RE = /import\s+[^;]*from\s+['"]@\/test\/[^'"]*['"]/g;
+const STATIC_FROM_IMPORT_RE = new RegExp(
+  String.raw`import\s+[^;]*from\s+['"]${TEST_SPECIFIER}['"]`, 'g',
+);
 
-// `import '@/test/y'` — bare side-effect import, no `from` clause at all.
-const BARE_IMPORT_RE = /import\s*['"]@\/test\/[^'"]*['"]/g;
+// `import '<test>'` — bare side-effect import, no `from` clause at all.
+const BARE_IMPORT_RE = new RegExp(String.raw`import\s*['"]${TEST_SPECIFIER}['"]`, 'g');
 
-// `import('@/test/y')` — a dynamic import call, however it's awaited/used.
-const DYNAMIC_IMPORT_RE = /import\s*\(\s*['"]@\/test\/[^'"]*['"]\s*\)/g;
+// `import('<test>')` — a dynamic import call, however it's awaited/used.
+const DYNAMIC_IMPORT_RE = new RegExp(
+  String.raw`import\s*\(\s*['"]${TEST_SPECIFIER}['"]\s*\)`, 'g',
+);
+
+// `export { X } from '<test>'` / `export * from '<test>'` — a re-export, which
+// names no `import` keyword and so matched none of the three above.
+const REEXPORT_RE = new RegExp(
+  String.raw`export\s+[^;]*from\s+['"]${TEST_SPECIFIER}['"]`, 'g',
+);
 
 function valueImportsFromTest(source: string): string[] {
   const staticImports = (source.match(STATIC_FROM_IMPORT_RE) ?? [])
     .filter((statement) => !/^import\s+type\s/.test(statement));
   const bareImports = source.match(BARE_IMPORT_RE) ?? [];
   const dynamicImports = source.match(DYNAMIC_IMPORT_RE) ?? [];
-  return [...staticImports, ...bareImports, ...dynamicImports];
+  const reExports = (source.match(REEXPORT_RE) ?? [])
+    .filter((statement) => !/^export\s+type\s/.test(statement));
+  return [...staticImports, ...bareImports, ...dynamicImports, ...reExports];
 }
 
 function isTestOnlyFile(file: string): boolean {
@@ -141,6 +184,64 @@ describe('valueImportsFromTest', () => {
 
   it('does not flag an import that has nothing to do with @/test/', () => {
     expect(valueImportsFromTest("import { db } from '@/db';")).toEqual([]);
+  });
+
+  // The blind spot. Every one of these walked through the old net, which
+  // required the literal substring `@/test/`.
+  it('flags a relative static value import', () => {
+    expect(valueImportsFromTest("import { fixtureBuffer } from '../../test/fixtures';"))
+      .toHaveLength(1);
+  });
+
+  it('flags a relative static import one directory up', () => {
+    expect(valueImportsFromTest("import { createTestDb } from '../test/db';")).toHaveLength(1);
+  });
+
+  it('flags a relative static import from the same directory', () => {
+    expect(valueImportsFromTest("import { x } from './test/fixtures';")).toHaveLength(1);
+  });
+
+  it('flags a relative dynamic import', () => {
+    expect(valueImportsFromTest("const m = await import('../test/fixtures');")).toHaveLength(1);
+  });
+
+  it('flags a relative bare side-effect import', () => {
+    expect(valueImportsFromTest("import '../../test/fixtures';")).toHaveLength(1);
+  });
+
+  it('keeps the type-only carve-out for a relative specifier too', () => {
+    expect(valueImportsFromTest("import type { TestDb } from '../../test/db';")).toEqual([]);
+  });
+
+  // The second gap: a re-export names no `import` keyword.
+  it('flags a re-export from a test module', () => {
+    expect(valueImportsFromTest("export { FIXTURES } from '@/test/fixtures';")).toHaveLength(1);
+  });
+
+  it('flags a star re-export from a relative test module', () => {
+    expect(valueImportsFromTest("export * from '../test/fixtures';")).toHaveLength(1);
+  });
+
+  it('does not flag a type-only re-export', () => {
+    expect(valueImportsFromTest("export type { TestDb } from '@/test/db';")).toEqual([]);
+  });
+
+  // A package name is not a path into src/test/, however it is spelled.
+  it('does not flag a scoped package whose name contains test', () => {
+    expect(valueImportsFromTest("import { x } from '@scope/test/thing';")).toEqual([]);
+  });
+
+  it('does not flag a bare package name', () => {
+    expect(valueImportsFromTest("import postgres from 'postgres';")).toEqual([]);
+  });
+
+  // `test` has to be a whole path segment, not a prefix of one.
+  it('does not flag a sibling module whose name merely starts with test', () => {
+    expect(valueImportsFromTest("import { x } from './test-helpers';")).toEqual([]);
+  });
+
+  it('does not flag a directory called tests rather than test', () => {
+    expect(valueImportsFromTest("import { x } from '../../tests/fixtures';")).toEqual([]);
   });
 });
 

@@ -188,6 +188,15 @@ async function dependents(
       addReason(held, id, `התנועה הזו רשומה כסילוק של חוב (${n}), ומחיקתה הייתה מנתקת אותו`);
     }
 
+    // Known asymmetry with the `budget_lines` check below, recorded rather
+    // than fixed: the peer query has no `leavingLedger` exclusion, so two legs
+    // of one transfer that are BOTH owned by this block retain each other
+    // permanently — each is the other's surviving peer, and neither can ever
+    // leave. Reaching that state takes a lead hand-setting `transferGroupId`
+    // on two rows of a single block; nothing in the promoter or the workbooks
+    // creates it, and no such pair exists in the camp's data. The fix is the
+    // same shape as `booked` below (exclude ids this sweep is removing), and
+    // it belongs with a test that can construct the pair.
     const grouped = await db
       .select({ id: ledgerEntries.id, group: ledgerEntries.transferGroupId })
       .from(ledgerEntries)
