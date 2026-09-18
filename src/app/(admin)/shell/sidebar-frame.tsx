@@ -19,7 +19,19 @@ export function SidebarFrame({ children }: { children: React.ReactNode }) {
 
   // Going somewhere closes it: on a phone or a tablet the panel covers the
   // page you just asked for.
-  useEffect(() => { setOpen(false); }, [pathname]);
+  //
+  // Adjusted during render rather than in an effect. An effect paints the panel
+  // open over the new page and only then closes it — a cascading render, which
+  // is what the lint rule objects to. Setting state during render instead makes
+  // React discard this render and re-run before committing anything, so the new
+  // page never appears with the panel over it. The effects below still see
+  // `open` change, so Escape, the scrim and focus-return behave exactly as
+  // they did.
+  const [seenPathname, setSeenPathname] = useState(pathname);
+  if (pathname !== seenPathname) {
+    setSeenPathname(pathname);
+    setOpen(false);
+  }
 
   useEffect(() => {
     if (!open) return;
