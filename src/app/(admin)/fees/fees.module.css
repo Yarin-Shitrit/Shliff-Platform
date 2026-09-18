@@ -260,3 +260,25 @@
   block-size: 100%;
   background: var(--viz-dues);
 }
+
+/* ——— the rollup band (Task 9) ——— */
+
+.rollup {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem;
+  margin-block-end: 1rem;
+}
+
+.page { display: flex; flex-direction: column; gap: 1rem; }
+.pagehead { display: flex; flex-direction: column; gap: 0.25rem; }
+.sub { margin: 0; color: var(--ink-3); font-size: 0.875rem; }
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.notice > :first-child { flex: 1 1 20rem; }
