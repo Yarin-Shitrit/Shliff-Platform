@@ -724,3 +724,34 @@ The deeper reason this keeps happening: twelve plans were drafted in parallel
 against a spec, then wave 0 built the foundation they all assume. Everything
 written before that foundation landed is, in effect, a prediction of it — and
 predictions drift. **Trust the plan's argument; verify its code.**
+
+### A19 — A create drawer has no record, and the kit had no URL for one
+
+A3 put every drawer URL behind `src/components/ui/drawer-url.ts`, so that `esc`,
+the close button and the browser's back button can never disagree about which
+params survive. R5 is what that protects: `season`, the saved view, the filters,
+the search and the sort all outlive a drawer.
+
+The kit shipped two builders, `openPeekHref` and `closePeekHref`. Both assume a
+drawer is **about a record**. A *create* drawer is not — there is no id to carry,
+so it wants `?act=<verb>` with no `peek`, and `openPeekHref` always sets `peek`.
+
+Two screens hit this independently: the season screen's `?act=season` and plan
+10's `?act=task`. The first hand-built a local `newSeasonHref`. **That copy was
+correct** — it imported `PEEK_PARAM`/`ACT_PARAM` rather than spelling them, and
+it preserved every other param — so nothing was broken. It is recorded here
+anyway, because *a correct duplicate is how this kind of rule erodes*: the third
+copy is the one that forgets `params.delete(PEEK_PARAM)` and leaves a record
+drawer and a create drawer both open, and nothing about that copy looks wrong at
+review time. A3's guarantee is not "the params are spelled right"; it is "one
+function decides", and two functions deciding the same thing is already the
+failure, not a near miss.
+
+**Ruling: the kit gains `openActHref(pathname, current, act)` — an `act` with no
+`peek`, everything else preserved — and `season-switch.tsx` migrates to it. No
+screen builds an act-only href by hand.** Plan 10's Task 9 imports it rather than
+writing the third copy.
+
+Its test has to cover a repeated param (two `tag` values, say), because the
+module's private `build()` uses `append`, not `set`: a test with only
+single-valued params passes just as happily against the regression.
