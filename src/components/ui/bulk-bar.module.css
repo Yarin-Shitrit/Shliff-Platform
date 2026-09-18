@@ -7,7 +7,12 @@
  * at 10% opacity". No CSS Module declares a colour of its own beyond that.
  */
 .bar {
-  position: absolute;
+  /* Fixed, not absolute: see toaster.module.css's rationale — plan 02 owns
+     the mount point, so this must not depend on which element becomes its
+     offset parent. Under `absolute` this centred against the window
+     (including the 244px sidebar), floating over the list's edge rather
+     than its centre. */
+  position: fixed;
   z-index: var(--z-bulk);
   inset-block-end: 20px;
   inset-inline-start: 50%;

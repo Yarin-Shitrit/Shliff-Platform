@@ -17,7 +17,12 @@
  */
 
 .scrim {
-  position: absolute; inset: 0; z-index: var(--z-scrim);
+  /* Fixed, not absolute: see toaster.module.css's rationale — plan 02 owns
+     the mount point, so this must not depend on which element becomes its
+     offset parent. Also: `.ground`/`.column`/`.main` are all unpositioned,
+     so `absolute` here resolved against the window (including the sidebar)
+     rather than the panel. */
+  position: fixed; inset: 0; z-index: var(--z-scrim);
   background: rgb(28 25 23 / 18%);
   animation: drawer-scrim-in 180ms ease-out;
 }
@@ -27,7 +32,11 @@
 }
 
 .drawer {
-  position: absolute; inset-block: 8px; inset-inline-end: 8px; z-index: var(--z-drawer);
+  /* Fixed, not absolute: see toaster.module.css's rationale — plan 02 owns
+     the mount point, so this must not depend on which element becomes its
+     offset parent. This one happened to land correctly under `absolute`
+     only because these insets coincidentally equal `.main`'s own margins. */
+  position: fixed; inset-block: 8px; inset-inline-end: 8px; z-index: var(--z-drawer);
   inline-size: 460px; max-inline-size: calc(100% - 16px);
   background: var(--panel); border-radius: 14px; box-shadow: var(--shadow-drawer);
   display: flex; flex-direction: column; overflow: hidden;

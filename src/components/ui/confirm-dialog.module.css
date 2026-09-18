@@ -5,14 +5,23 @@
  * not add one). z-index reads the ladder in tokens.css (`--z-dialog-scrim`,
  * `--z-dialog`) rather than repeating its numbers here.
  */
-.scrim { position: absolute; inset: 0; z-index: var(--z-dialog-scrim); background: rgb(28 25 23 / 24%); }
+/* Fixed, not absolute: see toaster.module.css's rationale — plan 02 owns
+   the mount point, so this must not depend on which element becomes its
+   offset parent. `.ground`/`.column`/`.main` are all unpositioned, so
+   `absolute` resolved against the window (including the sidebar) and only
+   covered the first viewport-height of the document, not the viewport. */
+.scrim { position: fixed; inset: 0; z-index: var(--z-dialog-scrim); background: rgb(28 25 23 / 24%); }
 :root[data-theme='dark'] .scrim { background: rgb(0 0 0 / 60%); }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) .scrim { background: rgb(0 0 0 / 60%); }
 }
 
 .dialog {
-  position: absolute; z-index: var(--z-dialog);
+  /* Fixed, not absolute: see toaster.module.css's rationale — plan 02 owns
+     the mount point, so this must not depend on which element becomes its
+     offset parent. Under `absolute` this centred against the window
+     (including the 244px sidebar), ~122px off-centre from the panel. */
+  position: fixed; z-index: var(--z-dialog);
   inset-block-start: 50%; inset-inline-start: 50%; transform: translate(50%, -50%);
   inline-size: 400px; max-inline-size: calc(100% - 32px);
   padding: 20px; border-radius: 14px;
