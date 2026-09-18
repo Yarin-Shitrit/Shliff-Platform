@@ -1471,3 +1471,65 @@ request says which it will get.** Released → a refusal deletes. Retained → a
 re-promotion duplicates. A caller asking "promote this block" is unknowingly also
 asking "and do you happen to be referenced?" — a question it has no way to ask
 and no reason to know it is asking.
+
+### A39 — Plan 04's outcomes, and three things it surfaced
+
+Tasks 3-8 complete (`2e7f8df`, `d1eb34b`, `72e9151`, `d357867`, `1fb38c6`,
+`1717639`). **Tasks 1 and 2 were confirmed already done and were not rebuilt** —
+`coverage.ts` carries I1's capping rule and `summary.ts` carries I6's
+`UnpaidMember` with all seven fields. Both rulings held in practice, which is the
+first time they have been tested by a lane that could have duplicated them.
+
+**Task 9 needs rewriting before anyone runs it.** Its plan text predicts
+`openDecisions(db, seasonId, limit)`; **I2 rules the register exports
+`loadInboxItems(db, seasonId)` and `openDecisionCount(items)`**, and I2 wins. The
+task is one file of wiring, so the rewrite is small — but a faithful implementer
+would write against the plan and find nothing to import.
+
+**Three findings worth carrying:**
+
+1. **`StatTile` has no `warning` slot.** The plan's sample composes one; the
+   shipped kit does not have it, so the lane composed the warning into
+   `derivation` instead. R3 is still satisfied (a sentence plus a glyph), but it
+   is a real kit gap, recorded not patched.
+2. **`EmptyState` owns its own copy, so a screen cannot supply a bespoke
+   all-clear sentence.** `אין מה להכריע`, `כל המשימות מאוישות` and `כולם שילמו`
+   do not appear anywhere — all three render the kit's `הכול מטופל`. Since
+   `all-clear` carries no season, each panel head now carries the season as a
+   scope chip instead. This is C10 working as designed, and three plans have now
+   written copy the kit will not use.
+3. **`src/lib/work/labels.ts` is a fourth task-kind label map** (two in
+   `tasks/rows.ts`, one local in `members/[id]`). The plan asked for it as the
+   library home and the file says so. **Ruling: it is the library home and the
+   other three collapse into it — but not now.** Consolidating touches three
+   lanes' files; plan 12's sweep is where it belongs.
+
+**Also: the page-title net caught a fresh regression within the hour.**
+`src/app/(admin)/inbox/page.tsx` shipped `title: 'לטיפול · קופת שליף'`,
+duplicating the suffix the root template appends — the same bug two members pages
+carried for the whole redesign. The original net asked whether a page *exports* a
+title and could not see it; the widened net names the offending file. That is the
+difference between asserting presence and asserting correctness, and it is now
+load-bearing rather than theoretical.
+
+### A40 — `npm ci` cannot install a working test runner
+
+`package-lock.json` contains **two** rolldown entries, `rolldown` and
+`@rolldown/pluginutils`, both resolved. It contains **none of the fifteen
+platform bindings** — no `@rolldown/binding-darwin-arm64` and no sibling. So a
+clean `npm ci` installs no native binding and **vitest cannot start at all**.
+It is invisible on this box because an older `npm install` left
+`node_modules/@rolldown/binding-darwin-arm64` behind. `lightningcss` reportedly
+has the same gap.
+
+Confirmed by reading the lockfile, **not by running `npm ci`** — doing that would
+wipe `node_modules` out from under running lanes.
+
+**Not fixed here, deliberately.** Regenerating the lockfile moves roughly 40
+versions, including vitest 5.0.0→5.0.1, vite 8.2.2→8.3.0 and rolldown→1.2.9. That
+is a dependency change under R1 and it is the camp lead's call, not a side effect
+of a UI wave. **Schedule it after Phase 4**, and note it gets more pressing the
+moment CI runs a build rather than only a test.
+
+The failure mode to recognise: on a fresh clone it will not look like a
+dependency problem. It will look like vitest being broken.
