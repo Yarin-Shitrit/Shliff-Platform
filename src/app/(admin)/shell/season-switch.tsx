@@ -7,19 +7,31 @@
  * `pickSeason` every page's `resolveSeason` uses, so the button can never
  * name a season the page below it is not showing.
  *
- * "שנה חדשה" (B4) is deferred by the plan's own Ruling S4: the mock's affordance
- * points at a settings screen no plan in this wave builds, and this wave's spec
- * explicitly forbids writing a new `seasons` row. Rather than ship a control
- * that opens onto nothing, the menu ends where the mock's camp-wide note ends —
- * no dead link is rendered in its place.
+ * "שנה חדשה" (B4) was deferred by the plan's own Ruling S4: the mock's
+ * affordance pointed at a settings screen no plan in that wave built, and
+ * that wave's spec forbade writing a new `seasons` row. Both are now false —
+ * it opens `NewSeasonDrawer` (rendered alongside this component in
+ * `sidebar.tsx`) via `?act=season`. There is no record id to carry, so this
+ * is an `act` with no `peek` (R6), built by hand below rather than through
+ * `openPeekHref` (which always sets `peek`) — the same shape plan 10's
+ * create drawer uses for `?act=task`.
  */
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Icon } from '@/components/ui/icon';
+import { ACT_PARAM, PEEK_PARAM } from '@/components/ui/drawer-url';
 import { pickSeason } from '@/lib/seasons/pick';
 import { seasonHref } from './season-href';
 import styles from './sidebar.module.css';
+
+function newSeasonHref(pathname: string, search: string): string {
+  const params = new URLSearchParams(search);
+  params.delete(PEEK_PARAM);
+  params.set(ACT_PARAM, 'season');
+  const query = params.toString();
+  return query ? `${pathname}?${query}` : pathname;
+}
 
 export interface SwitchSeason {
   id: string;
@@ -109,6 +121,15 @@ export function SeasonSwitch({ seasons }: { seasons: SwitchSeason[] }) {
                 <span className={styles.menumeta}>{season.state}</span>
               </Link>
             ))}
+            <div className={styles.divider} />
+            <Link
+              className={styles.menuitem}
+              href={newSeasonHref(pathname, search)}
+              onClick={() => setOpen(false)}
+            >
+              <Icon name="plus" size={16} />
+              <span>שנה חדשה</span>
+            </Link>
             <div className={styles.divider} />
             <p className={styles.menunote}>
               חשבונות, אנשים וחובות בלי שנה נשארים גלויים בכל שנה.

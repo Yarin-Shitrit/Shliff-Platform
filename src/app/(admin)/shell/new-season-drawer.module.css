@@ -1,0 +1,25 @@
+.form { display: flex; flex-direction: column; gap: 16px; }
+
+/*
+ * The kit has no date control (`field.tsx`'s six exports stop at
+ * `Textarea`/`Segmented`/`Checkbox`), so `startsOn` is a native
+ * `<input type="date">`. This mirrors `field.module.css`'s own `.box`
+ * sizing/tokens so it reads as part of the same kit rather than an
+ * unstyled foreign control — every value here is a token, same as that file.
+ */
+.date {
+  block-size: 36px;
+  inline-size: 100%;
+  padding-inline: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+}
+
+/* Same declaration as `field.module.css`'s `.error`: this alert is not tied
+   to one field (a refusal can be about any of them, or about the action
+   itself), so it is not routed through `Field`'s own error slot. */
+.error { font-size: 12px; color: var(--bad); margin: 0; }
+
+.actions { display: flex; justify-content: flex-end; margin-block-start: 4px; }

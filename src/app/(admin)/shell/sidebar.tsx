@@ -6,6 +6,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { signOutAction } from './actions';
 import { CommandPalette } from './command-palette';
 import { NavList } from './nav-list';
+import { NewSeasonDrawer } from './new-season-drawer';
 import { SeasonSwitch, type SwitchSeason } from './season-switch';
 import { UserBlock } from './user-block';
 import styles from './sidebar.module.css';
@@ -40,6 +41,10 @@ function stateOf(index: number, flatRate: string): string {
  * The responsive collapse below 1024px (Task 9) wraps this component from
  * the outside — `SidebarFrame` in `layout.tsx`, and `.rail`/`.railScrim` in
  * the stylesheet — so this file itself needed no change for it.
+ *
+ * `NewSeasonDrawer` is rendered here, beside `SeasonSwitch`, rather than by
+ * a page: `?act=season` (the switcher's `שנה חדשה`) must open from any admin
+ * screen, and only the rail is common to all of them.
  */
 export async function Sidebar() {
   const { seasons } = await resolveSeason(db);
@@ -58,6 +63,7 @@ export async function Sidebar() {
         <span className={styles.wordmark}>קופת שליף</span>
       </div>
       <SeasonSwitch seasons={options} />
+      <NewSeasonDrawer />
       <CommandPalette />
       <NavList />
       <div className={styles.sidefoot}>

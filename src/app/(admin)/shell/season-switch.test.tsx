@@ -70,4 +70,22 @@ describe('SeasonSwitch', () => {
     render(<SeasonSwitch seasons={[]} />);
     expect(screen.getByText('עדיין אין שנים')).toBeTruthy();
   });
+
+  it('offers "שנה חדשה", opening the create drawer with no record id (R6)', () => {
+    route.pathname = '/fees';
+    route.search = '';
+    render(<SeasonSwitch seasons={SEASONS} />);
+    fireEvent.click(screen.getByRole('button', { name: /ברן 26/ }));
+    expect(screen.getByRole('link', { name: 'שנה חדשה' }).getAttribute('href'))
+      .toBe('/fees?act=season');
+  });
+
+  it('keeps the rest of the URL when opening the create drawer', () => {
+    route.pathname = '/tasks';
+    route.search = 'season=b25&view=gaps';
+    render(<SeasonSwitch seasons={SEASONS} />);
+    fireEvent.click(screen.getByRole('button', { name: /ברן 25/ }));
+    expect(screen.getByRole('link', { name: 'שנה חדשה' }).getAttribute('href'))
+      .toBe('/tasks?season=b25&view=gaps&act=season');
+  });
 });
