@@ -32,7 +32,20 @@ export type ButtonProps = ButtonShared & {
   onClick?: () => void;
 };
 
-export type ButtonLinkProps = ButtonShared & { href: string; replace?: boolean };
+export type ButtonLinkProps = ButtonShared & {
+  href: string;
+  replace?: boolean;
+  /**
+   * The destination is a file, not a page. Next's `Link` declines to intercept
+   * a click on an anchor carrying `download` (`next/dist/client/app-dir/link.js`
+   * checks `hasAttribute('download')` alongside the modified-event test), so
+   * the browser performs a real navigation and the file lands in the reader's
+   * downloads folder. Without it, the client router fetches a Route Handler's
+   * CSV as an RSC payload and nothing is saved — which is why the export
+   * action reached for `window.location.assign` and an eslint disable.
+   */
+  download?: boolean;
+};
 
 function classes(tone: ButtonTone, size: ButtonSize, iconLabel: string | undefined): string {
   return cx(
@@ -65,7 +78,7 @@ export function Button({
 }
 
 export function ButtonLink({
-  tone = 'default', size = 'md', iconLabel, children, href, replace,
+  tone = 'default', size = 'md', iconLabel, children, href, replace, download,
   'aria-describedby': describedBy,
 }: ButtonLinkProps): ReactElement {
   return (
@@ -73,6 +86,7 @@ export function ButtonLink({
       className={classes(tone, size, iconLabel)}
       href={href}
       replace={replace}
+      download={download}
       aria-label={iconLabel}
       aria-describedby={describedBy}
     >
