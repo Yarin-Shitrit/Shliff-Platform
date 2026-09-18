@@ -7,7 +7,9 @@ import { createPerson } from '@/lib/members/link';
 import { issueFlatDues } from '@/lib/fees/dues';
 import { recordOffset } from '@/lib/fees/payments';
 import { listSeasonFees } from '@/lib/fees/season-fees';
-import { createAccount, listAccounts, accountBalances, unattributedAgorot } from './accounts';
+import {
+  createAccount, listAccounts, listOpenAccounts, accountBalances, unattributedAgorot,
+} from './accounts';
 
 let db: TestDb;
 beforeEach(async () => { db = await createTestDb(); });
@@ -108,5 +110,22 @@ describe('accounts', () => {
 
     const { paymentsAgorot } = await unattributedAgorot(db);
     expect(paymentsAgorot).toBe(0);
+  });
+});
+
+describe('listOpenAccounts', () => {
+  it('offers every account that has not been closed, in name order', async () => {
+    await createAccount(db, { name: 'קופת מזומן', kind: 'cash' });
+    await createAccount(db, { name: 'בנק הפועלים', kind: 'bank' });
+    await createAccount(db, {
+      name: 'עו״ש אופק', kind: 'personal', closedAt: new Date('2025-10-01T00:00:00Z'),
+    });
+
+    const open = await listOpenAccounts(db);
+    expect(open.map((account) => account.name)).toEqual(['בנק הפועלים', 'קופת מזומן']);
+  });
+
+  it('returns nothing when the camp has no accounts yet', async () => {
+    expect(await listOpenAccounts(db)).toEqual([]);
   });
 });

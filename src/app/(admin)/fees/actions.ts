@@ -10,6 +10,7 @@ import {
 import { recordPayment, deletePayment } from '@/lib/fees/payments';
 import type { PaymentChannel } from '@/db/schema/camp';
 import { toHebrewError } from '@/lib/errors/hebrew';
+import { listOpenAccounts } from '@/lib/money/accounts';
 import { FEE_ERRORS } from './error-messages';
 
 /**
@@ -97,22 +98,44 @@ export async function deletePaymentAction(paymentId: string): Promise<ActionResu
   return { ok: true };
 }
 
+/**
+ * Records money received against one due.
+ *
+ * `accountId` is the field this screen never offered. `payment.account_id` has
+ * existed since Wave 1 and `accountBalances` reads it, so every payment typed
+ * here before now counted toward collection and toward no קופה. It stays
+ * optional: leaving it empty is a legitimate "we do not know yet", and the
+ * page reports the total of such money rather than guessing an account.
+ *
+ * `payment.account_id` carries no foreign key (`camp.ts:120` is a bare
+ * `uuid`), so a bad id would be stored in silence. It is checked against the
+ * open accounts here, before `recordPayment` is ever called.
+ */
 export async function recordPaymentAction(input: {
   dueId: string;
   amount: number;
   channel: PaymentChannel;
   paidOn: string;
   note?: string;
+  /** Omitted or empty means no קופה: counted in collection, in no balance. */
+  accountId?: string;
 }): Promise<ActionResult> {
   const admin = await requireAdmin();
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
+    if (input.accountId) {
+      const open = await listOpenAccounts(db);
+      if (!open.some((account) => account.id === input.accountId)) {
+        throw new Error('הקופה שנבחרה לא קיימת או נסגרה.');
+      }
+    }
     await recordPayment(db, {
       dueId: input.dueId,
       amount: input.amount,
       channel: input.channel,
       paidOn: new Date(input.paidOn),
       note: input.note,
+      accountId: input.accountId,
       recordedBy: admin.email,
     });
   } catch (error) {

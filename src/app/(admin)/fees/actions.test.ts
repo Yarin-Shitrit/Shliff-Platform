@@ -77,6 +77,11 @@ describe('FEE_ERRORS', () => {
     expect(toHebrewError(new Error(hebrew), FEE_ERRORS)).toBe(hebrew);
   });
 
+  it('lets recordPaymentAction\'s own "not an open account" refusal through unchanged', () => {
+    const hebrew = 'הקופה שנבחרה לא קיימת או נסגרה.';
+    expect(toHebrewError(new Error(hebrew), FEE_ERRORS)).toBe(hebrew);
+  });
+
   it('renders the generic Hebrew fallback for a message nobody mapped', () => {
     expect(toHebrewError(new Error('relation "dues" does not exist'), FEE_ERRORS))
       .toBe(HEBREW_FALLBACK);

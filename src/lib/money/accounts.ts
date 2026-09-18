@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { AnyDb } from '@/lib/db-types';
 import { accounts, ledgerEntries } from '@/db/schema/money';
 import type { AccountKind, LedgerDirection } from '@/db/schema/money';
@@ -42,6 +42,15 @@ export async function createAccount(db: AnyDb, input: NewAccount): Promise<Accou
 
 export async function listAccounts(db: AnyDb): Promise<Account[]> {
   return db.select().from(accounts).orderBy(accounts.name);
+}
+
+/**
+ * The accounts a payment may be attributed to: everything not closed, in name
+ * order. A closed קופה cannot receive money today, so offering it in a picker
+ * would be offering a mistake.
+ */
+export async function listOpenAccounts(db: AnyDb): Promise<Account[]> {
+  return db.select().from(accounts).where(isNull(accounts.closedAt)).orderBy(accounts.name);
 }
 
 /**
