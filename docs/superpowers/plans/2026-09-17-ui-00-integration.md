@@ -613,3 +613,30 @@ behind it", which is R11's `נרשם ידנית` case rather than anything refus
 `no-date` is now 0, down from 24 before the date-parser fix. `retained` is 0
 today and will only appear once leads start re-confirming blocks — design for it,
 but do not calibrate it as a common case.
+
+### A15 — Two register states that lie, and what plans 05 and 11 must not build on yet
+
+A peer session's final review of the register found two defects in how block
+state is reported. **Do not write rail copy, coverage-matrix copy or empty-state
+copy against either state until that fix has merged.**
+
+1. **The register reports what a promotion *would* write as though it had been
+   written.** A block that is confirmed but never promoted reads `promoted` with
+   a row count, and `coverage().promoted` sums would-be rows. So `/inbox`'s
+   coverage matrix would tell a lead a season is covered **before the promote
+   button was ever pressed.**
+
+   This is worse than a guess, which is what the platform's core rule forbids —
+   it is a false claim about what is in the database. A lead who trusts it stops
+   chasing rows that were never written.
+
+2. **A season-less budget block reads `promoted, 0 rows` where the spec says
+   `refused`.** That is the `no-season` case, which is **96 of 234 refusals in
+   the real data — 41%, the largest single category.** Rendering the largest
+   refusal class as a successful promotion of nothing would hide the single
+   biggest thing a lead needs to act on.
+
+Both are being fixed in the wave-2 lane. The instruction for plans 05 and 11 is
+narrow: **derive block state from the corrected projection when it lands, and do
+not calibrate any copy — counts, empty states, "most common refusal" — against
+numbers measured before it.**
