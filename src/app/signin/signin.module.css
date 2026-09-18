@@ -1,0 +1,101 @@
+/**
+ * The front door. A5: Frank Ruhl Libre is scoped to this page and the
+ * sidebar wordmark and nowhere else, so the serif's cost is paid twice, not
+ * on every screen. Every colour here is a token from tokens.css; nothing is
+ * declared locally.
+ */
+.page {
+  min-block-size: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--canvas);
+  padding-inline: var(--space-4);
+}
+
+.card {
+  inline-size: 360px;
+  max-inline-size: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  margin-block-end: var(--space-2);
+}
+
+/* Two logos, exactly as the sidebar does it: the wordmark's lockup differs
+   between the light and dark files, and CSS cannot recolour a PNG. */
+.markLight, .markDark { border-radius: 50%; }
+.markDark { display: none; }
+:global(:root[data-theme='dark']) .markLight { display: none; }
+:global(:root[data-theme='dark']) .markDark { display: block; }
+@media (prefers-color-scheme: dark) {
+  :global(:root:not([data-theme='light'])) .markLight { display: none; }
+  :global(:root:not([data-theme='light'])) .markDark { display: block; }
+}
+
+.wordmark {
+  font-family: var(--font-display), serif;
+  font-weight: 500;
+  font-size: var(--text-display);
+  color: var(--ink);
+}
+
+.error {
+  background: var(--bad-soft);
+  color: var(--bad);
+  border-radius: var(--radius-control);
+  padding-block: var(--space-2);
+  padding-inline: var(--space-3);
+  font-size: var(--text-meta);
+  margin: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-meta);
+  color: var(--ink-2);
+}
+
+.input {
+  block-size: var(--control-h-lg);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+}
+
+@media (pointer: coarse) {
+  .input {
+    block-size: var(--tap-min);
+    font-size: var(--input-font-phone);
+  }
+}
+
+.submit {
+  block-size: var(--control-h-lg);
+  border: 1px solid var(--brand);
+  border-radius: var(--radius-control);
+  background: var(--brand);
+  color: var(--brand-ink);
+  font-weight: 600;
+  font-size: var(--text-body);
+  cursor: pointer;
+}
+.submit:hover { background: var(--brand-hover); }
+
+@media (pointer: coarse) {
+  .submit { block-size: var(--tap-min); }
+}
