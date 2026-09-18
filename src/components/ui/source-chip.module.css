@@ -1,0 +1,25 @@
+/*
+ * A5: IBM Plex Mono exists for one thing — a spreadsheet cell reference, so
+ * the Latin run lines up the way the workbook shows it. `--font-mono` is the
+ * variable `layout.tsx` puts on `<html>`; a Hebrew sheet name has no glyphs
+ * in it and correctly falls through to the system mono in the fallback list.
+ */
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  block-size: 22px; padding-inline: 7px; border-radius: 6px;
+  font-size: 11.5px; color: var(--ink-3); background: var(--sunken);
+  white-space: nowrap; text-decoration: none;
+  direction: ltr;
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+/*
+ * `נרשם ידנית` is not a failure state — a hand-entered figure is a complete
+ * answer to "where did this come from" — so this only switches direction and
+ * face back to the interface defaults. It must not read as muted or missing,
+ * so colour and background stay identical to `.chip`.
+ */
+.manual { direction: rtl; font-family: inherit; }
+
+.linked:hover { color: var(--brand-text); background: var(--brand-soft); }
+.linked:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
