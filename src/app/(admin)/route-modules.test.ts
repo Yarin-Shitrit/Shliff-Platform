@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 
 const ROOT = resolve(process.cwd(), 'src');
@@ -108,6 +108,31 @@ describe('E6: nothing reads the disk while someone waits', () => {
     expect(modules).toContain('src/app/(admin)/inbox/page.tsx');
     // A sibling component, not a route file — the half that is easy to omit.
     expect(modules).toContain('src/app/(admin)/inbox/item-rail.tsx');
+  });
+});
+
+/**
+ * E3. A screen with no `loading.tsx` shows the previous page, frozen, for
+ * however long its queries take — so a lead who has just pressed something
+ * sees the thing they pressed still sitting there and presses it again.
+ */
+describe('E3: loading looks like what is coming', () => {
+  function segmentsWithPages(dir: string, found: string[] = []): string[] {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) segmentsWithPages(path, found);
+      else if (entry.name === 'page.tsx') found.push(dir);
+    }
+    return found;
+  }
+
+  it('gives every screen a skeleton of its own shape', () => {
+    const segments = segmentsWithPages(join(APP, '(admin)'));
+    expect(segments.length).toBeGreaterThan(10);
+    const missing = segments
+      .filter((dir) => !existsSync(join(dir, 'loading.tsx')))
+      .map(rel);
+    expect(missing).toEqual([]);
   });
 });
 

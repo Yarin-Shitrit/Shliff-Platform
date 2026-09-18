@@ -1,0 +1,125 @@
+/*
+ * E3's shapes. Every colour is a token; this file declares none of its own.
+ *
+ * The sweep runs on the background position rather than on `opacity` or a
+ * `transform`, so a long list of shapes is one compositable paint per element
+ * instead of a layout pass — a skeleton that makes the page it is standing in
+ * for feel slower has defeated itself.
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.shape {
+  display: block;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--sunken) 0%, var(--hover) 50%, var(--sunken) 100%);
+  background-size: 200% 100%;
+  animation: skeleton-sweep 1.4s ease-in-out infinite;
+}
+
+/*
+ * globals.css already clamps every animation's duration for a reader who asked
+ * for less motion, which would run this sweep a hundred times a second rather
+ * than stopping it. The shape is the information; the movement is not.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .shape {
+    animation: none;
+    background: var(--sunken);
+  }
+}
+
+@keyframes skeleton-sweep {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+/* ── Tiles ─────────────────────────────────────────────────────────── */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-3);
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+}
+
+.label { inline-size: 45%; block-size: 11px; }
+.value { inline-size: 70%; block-size: 22px; }
+.sub   { inline-size: 60%; block-size: 11px; }
+
+/* ── Table ─────────────────────────────────────────────────────────── */
+
+.table {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  block-size: var(--row);
+  padding-inline: var(--space-3);
+  border-block-end: 1px solid var(--line);
+}
+
+.row:last-child { border-block-end: 0; }
+
+.cell {
+  flex: 1;
+  block-size: 11px;
+}
+
+/* The first column is a name and the rest are shorter values, so the row reads
+   as a row of a real table rather than a bar chart of identical stripes. */
+.row .cell:first-child { flex: 2; }
+
+/*
+ * 767.98px — a phone. The real table has reflowed into cards by now, so its
+ * skeleton is a stack of two-line cards rather than six stripes across.
+ */
+@media (max-width: 767.98px) {
+  .row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--space-2) var(--space-3);
+    block-size: auto;
+    padding-block: var(--space-3);
+  }
+  .row .cell { block-size: 11px; }
+  .row .cell:first-child { grid-column: 1; block-size: 14px; }
+  .row .cell:nth-child(2) { grid-column: 2; inline-size: 64px; flex: none; }
+  .row .cell:nth-child(n + 3) { grid-column: 1 / -1; }
+}
+
+/* ── Text ──────────────────────────────────────────────────────────── */
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.line { block-size: 12px; }
+.line:last-child { inline-size: 55%; }
