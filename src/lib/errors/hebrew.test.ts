@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest';
-import { toHebrewError, HEBREW_FALLBACK, type HebrewErrors } from './hebrew';
+import {
+  toHebrewError, HebrewRefusal, isHebrewRefusal, HEBREW_FALLBACK, type HebrewErrors,
+} from './hebrew';
 import { createTestDb } from '@/test/db';
 import { createSeason } from '@/lib/members/roster';
 
@@ -141,5 +143,69 @@ describe('toHebrewError — the cause chain', () => {
     const inner = new Error('inner', { cause: outer });
     outer.cause = inner;
     expect(toHebrewError(outer, MAP)).toBe(HEBREW_FALLBACK);
+  });
+});
+
+/**
+ * A20. A refusal used to be recognised by its alphabet: Hebrew letters and no
+ * Latin ones. That answers "is this Hebrew?" when the question is "did
+ * someone mean this?" — and the two differ the moment a refusal names the
+ * thing it is refusing. An account called `Petty Cash`, an email, a row id:
+ * one Latin character and the sentence a lead needed is replaced by the
+ * generic fallback, with nothing going red.
+ */
+describe('HebrewRefusal — a refusal that says it is one', () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('returns the message verbatim', () => {
+    const refusal = new HebrewRefusal('הקופה שנבחרה לא קיימת או נסגרה.');
+    expect(toHebrewError(refusal, MAP)).toBe('הקופה שנבחרה לא קיימת או נסגרה.');
+  });
+
+  /** The regression the marker exists for. Identical to the case above except
+   *  that it names the קופה, which is the whole reason a lead reads it. */
+  it('survives naming a Latin thing, which the alphabet test could not', () => {
+    const named = 'הקופה "Petty Cash" לא קיימת או נסגרה.';
+    expect(toHebrewError(new HebrewRefusal(named), MAP)).toBe(named);
+  });
+
+  /** Before the map, not after it: the refusal's own cause may well be a
+   *  mapped failure, and the map's sentence is the general one while the
+   *  refusal is the one written for this moment. */
+  it('is checked before the map, so the refusal wins over its own mapped cause', () => {
+    const named = 'הקופה "Petty Cash" נסגרה, ולכן אי אפשר לרשום אליה תשלום.';
+    const refusal = new HebrewRefusal(named, {
+      cause: new Error('unknown payment channel: מזומן'),
+    });
+    expect(toHebrewError(refusal, MAP)).toBe(named);
+  });
+
+  it('is found through a wrapper, because a marked refusal stays one when wrapped', () => {
+    const refusal = new HebrewRefusal('החיוב הזה כבר שולם.');
+    expect(toHebrewError(new Error('Failed query: update "dues"', { cause: refusal }), MAP))
+      .toBe('החיוב הזה כבר שולם.');
+  });
+
+  it('does not treat a plain Error as a refusal', () => {
+    expect(isHebrewRefusal(new Error('הקופה שנבחרה לא קיימת או נסגרה.'))).toBe(false);
+    expect(isHebrewRefusal(new HebrewRefusal('כן'))).toBe(true);
+  });
+
+  /** `instanceof` is one bundle away from lying: Next may put two copies of
+   *  this module in different chunks, and then the class the thrower used is
+   *  not the class the boundary imported. The marker is looked up in the
+   *  global symbol registry, which is shared across copies. */
+  it('recognises a refusal from a second copy of this module', () => {
+    const foreign = new Error('הפעולה נדחתה.');
+    Object.defineProperty(foreign, Symbol.for('shliff.errors.hebrew-refusal'), {
+      value: true,
+    });
+    expect(isHebrewRefusal(foreign)).toBe(true);
+    expect(toHebrewError(foreign, MAP)).toBe('הפעולה נדחתה.');
+  });
+
+  it('keeps a cause, so the underlying failure is still there to log', () => {
+    const cause = new Error('connection terminated unexpectedly');
+    expect(new HebrewRefusal('נכשל.', { cause }).cause).toBe(cause);
   });
 });

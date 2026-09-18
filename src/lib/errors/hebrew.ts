@@ -30,6 +30,39 @@ const LATIN_LETTER = /[A-Za-z]/;
 
 export type HebrewErrors = ReadonlyArray<readonly [prefix: string, hebrew: string]>;
 
+/**
+ * Looked up in the global symbol registry rather than held as a module-local
+ * value, because `instanceof` is one bundle away from lying: Next may place
+ * two copies of this module in different chunks, and then the class a server
+ * action threw is not the class this boundary imported. A registry symbol is
+ * shared across copies; `Symbol()` would not be.
+ */
+const REFUSAL_MARK = Symbol.for('shliff.errors.hebrew-refusal');
+
+/**
+ * A refusal that says it is one (integration §5 A20).
+ *
+ * The alphabet passthrough below answers "is this Hebrew?" when the question
+ * is "did someone mean this?". The two agree only while no refusal names the
+ * thing it refuses — and the moment one interpolates an account called
+ * `Petty Cash`, an email or a row id, it carries a Latin letter, fails the
+ * predicate and is replaced by the generic fallback with nothing going red.
+ *
+ * Throwing this instead states the intent, so the message is returned
+ * whatever alphabet it happens to be written in.
+ */
+export class HebrewRefusal extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'HebrewRefusal';
+    Object.defineProperty(this, REFUSAL_MARK, { value: true });
+  }
+}
+
+export function isHebrewRefusal(value: unknown): value is HebrewRefusal {
+  return value instanceof Error && REFUSAL_MARK in value;
+}
+
 /** How far down `.cause` this walks. Eight is deeper than any wrapper in this
  *  tree and it is also the cycle guard: `a.cause = b; b.cause = a` terminates
  *  because the bound is on steps taken, not on links visited. */
@@ -63,6 +96,15 @@ function messageOf(error: unknown): string {
 
 export function toHebrewError(error: unknown, map: HebrewErrors): string {
   const chain = causeChain(error);
+
+  // Outermost first, and before the map. A refusal is a decision somebody
+  // made, so the outermost one was made with the most context — the opposite
+  // direction from the map below, which is asking about evidence rather than
+  // about intent. Before the map, because a refusal's own cause is often a
+  // mapped failure, and the map's sentence is the general one while the
+  // refusal is the sentence written for this moment.
+  const refusal = chain.find(isHebrewRefusal);
+  if (refusal) return refusal.message;
 
   // Innermost first, then outward. The innermost link is where the specific
   // evidence lives; an outer message is a generic symptom, and a specific
