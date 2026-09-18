@@ -1,192 +1,134 @@
-.seasons {
+/**
+ * דמי קאמפ — the screen's own layout, and nothing else.
+ *
+ * Every colour is a plan-01 token. The old dark-only palette this file used to
+ * be written in (`--sand`, `--dust`, `--ground`, `--raised`, `--flare`) went
+ * with `member-fee-row.tsx` and `exception-form.tsx`; no class here survives
+ * unreferenced.
+ *
+ * There is deliberately no `.btn`, `.btnPrimary`, `.btnGhost`, `.rowact`,
+ * `.tiles` or `.num` here, which the plan predicted. The kit ships all six:
+ * `Button`/`ButtonLink` carry their own tone and focus ring; `Table`'s own
+ * `.actions` fades the row controls on `:hover` and `:focus-within` through
+ * `opacity` and never `display: none` (E4, ruling M); and A10's one documented
+ * physical `text-align` lives in the global `.num` utility in `globals.css`,
+ * which `table.tsx` composes by name. A second copy here would be a second
+ * exception to the rule that says there is exactly one.
+ *
+ * `.dateInput` is the one raw control on this screen — the kit has no date
+ * field — so it is the one rule here that has to declare a focus ring.
+ */
+
+.page {
   display: flex;
-  gap: 0.75rem;
-  margin-block-end: 1rem;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
-.seasons a[aria-current='page'] {
-  color: var(--sand);
-  border-block-end: 2px solid var(--flare);
+.pagehead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
 }
 
-.summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1.5rem;
+.sub {
   margin: 0;
+  color: var(--ink-3);
+  font-size: 0.875rem;
 }
 
-.summary div { display: flex; flex-direction: column; }
-.summary dt { color: var(--dust); font-size: 0.8125rem; }
-.summary dd { margin: 0; font-size: 1.125rem; font-weight: 600; }
-
-.exceptionForm {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.375rem;
-  align-items: end;
-}
-
-.exceptionForm label {
-  display: flex;
-  flex-direction: column;
-  font-size: 0.75rem;
-  color: var(--dust);
-}
-
-.exceptionForm input {
-  border: 1px solid var(--line);
-  border-radius: 0.25rem;
-  background: var(--ground);
-  color: var(--sand);
-  padding: 0.25rem 0.375rem;
-  font: inherit;
-  inline-size: 9rem;
-}
-
-.exceptionForm button {
-  border: 1px solid var(--line);
-  border-radius: 0.25rem;
-  background: var(--raised);
-  color: var(--sand);
-  padding: 0.3125rem 0.75rem;
-  font: inherit;
-  cursor: pointer;
-}
-
-.exceptionForm button:hover:not(:disabled) { border-color: var(--flare); }
-.exceptionForm button:disabled { opacity: 0.5; cursor: default; }
-
-.issueAll {
-  margin-block-end: 1rem;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.issueAll button {
-  border: 1px solid var(--line);
-  border-radius: 0.25rem;
-  background: var(--raised);
-  color: var(--sand);
-  padding: 0.375rem 0.875rem;
-  font: inherit;
-  cursor: pointer;
-}
-
-.issueAll button:hover:not(:disabled) { border-color: var(--flare); }
-.issueAll button:disabled { opacity: 0.5; cursor: default; }
-
-.rowControls {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  align-items: start;
-  min-inline-size: 16rem;
-  padding-block: 0.5rem;
-}
-
-.paymentForm {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.375rem;
-  align-items: end;
-}
-
-.paymentForm p { margin: 0; inline-size: 100%; }
-
-.paymentForm label {
-  display: flex;
-  flex-direction: column;
-  font-size: 0.75rem;
-  color: var(--dust);
-}
-
-.paymentForm input,
-.paymentForm select {
-  border: 1px solid var(--line);
-  border-radius: 0.25rem;
-  background: var(--ground);
-  color: var(--sand);
-  padding: 0.25rem 0.375rem;
-  font: inherit;
-  inline-size: 8rem;
-}
-
-.paymentForm button {
-  border: 1px solid var(--line);
-  border-radius: 0.25rem;
-  background: var(--raised);
-  color: var(--sand);
-  padding: 0.3125rem 0.75rem;
-  font: inherit;
-  cursor: pointer;
-}
-
-.paymentForm button:hover:not(:disabled) { border-color: var(--flare); }
-.paymentForm button:disabled { opacity: 0.5; cursor: default; }
-
-.paymentsList {
-  list-style: none;
+.muted {
   margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+  color: var(--ink-3);
   font-size: 0.8125rem;
 }
 
-.paymentsList li {
+/* ——— the rollup band ——— */
+
+.rollup {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--space-3);
+}
+
+/* A banner and the button that acts on it. C9 caps a Banner at one action and
+   that action is an href, so a button that writes sits beside it, not in it. */
+.notice {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 0.375rem;
-  padding-block: 0.25rem;
-  border-block-end: 1px solid var(--line);
+  gap: var(--space-3);
+  flex-wrap: wrap;
 }
 
-.paymentsList li:last-child { border-block-end: none; }
+.notice > :first-child { flex: 1 1 20rem; }
 
-.paymentsList button {
-  border: 1px solid var(--line);
-  border-radius: 0.25rem;
-  background: var(--raised);
-  color: var(--sand);
-  padding: 0.125rem 0.5rem;
-  font: inherit;
-  font-size: 0.75rem;
-  cursor: pointer;
-  margin-inline-start: auto;
+/* ——— table cells ——— */
+
+.nameCell,
+.kindCell,
+.stateCell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
-.paymentsList button:hover:not(:disabled) { border-color: var(--flare); }
-.paymentsList button:disabled { opacity: 0.5; cursor: default; }
+.kindCell { flex-wrap: wrap; }
 
-/* ——— the payment drawer (Task 5). Tokens only; Task 10 rewrites this file. ——— */
+.lastCell {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+/**
+ * R3: the bar never carries meaning on its own — the pill beside it already
+ * says the state in a word, which is why the markup marks this `aria-hidden`.
+ */
+.meter {
+  inline-size: 3.5rem;
+  block-size: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--viz-track);
+  overflow: hidden;
+}
+
+.meterFill {
+  display: block;
+  block-size: 100%;
+  background: var(--viz-dues);
+}
+
+/* ——— the drawers ——— */
 
 .drawerForm {
   display: flex;
   flex-direction: column;
-  gap: 0.875rem;
+  gap: var(--space-3);
 }
 
 .twoUp {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .dateInput {
   inline-size: 100%;
+  min-block-size: var(--control-h-lg);
   border: 1px solid var(--line-strong);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-control);
   background: var(--panel);
   color: var(--ink);
-  padding: 0.375rem 0.5rem;
+  padding-inline: var(--space-2);
+  padding-block: var(--space-1);
   font: inherit;
 }
 
-.muted { color: var(--ink-3); font-size: 0.8125rem; margin: 0; }
+/* A9: a focus ring is never removed, only replaced by a better one. */
+.dateInput:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
 
 .warnNote {
   margin: 0;
@@ -206,12 +148,13 @@
   font-size: 0.8125rem;
 }
 
+/* Pushes the "recorded under your name" line to the end of the drawer foot. */
 .grow { flex: 1; }
 
-.previous { margin-block-start: 1.25rem; }
+.previous { margin-block-start: var(--space-5); }
 
 .previousHead {
-  margin: 0 0 0.5rem;
+  margin-block: 0 var(--space-2);
   font-size: 0.8125rem;
   font-weight: 600;
   color: var(--ink-2);
@@ -219,11 +162,11 @@
 
 .previousList {
   list-style: none;
-  margin: 0 0 1.25rem;
+  margin-block: 0 var(--space-5);
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--space-1);
   font-size: 0.8125rem;
 }
 
@@ -231,54 +174,28 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
-  padding-block: 0.375rem;
+  gap: var(--space-2);
+  padding-block: var(--space-1);
   border-block-end: 1px solid var(--line);
 }
 
 .previousList li:last-child { border-block-end: none; }
 
+/* The remove control, at the far end of its line whichever way the line runs. */
 .rowEnd { margin-inline-start: auto; }
 
-/* ——— the table (Task 8) ——— */
+/**
+ * B7, A8, D11. The kit's Drawer already becomes a full-width sheet below
+ * 768px; what belongs here is this screen's own two-up row and its one raw
+ * input, whose 16px floor is what stops iOS zooming the page on focus.
+ */
+@media (max-width: 767px) {
+  .twoUp { grid-template-columns: 1fr; }
 
-.nameCell { display: inline-flex; align-items: center; gap: 0.5rem; }
-.kindCell { display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-.stateCell { display: inline-flex; align-items: center; gap: 0.5rem; }
-.lastCell { display: inline-flex; align-items: baseline; gap: 0.5rem; }
+  .dateInput {
+    font-size: var(--input-font-phone);
+    min-block-size: var(--tap-min);
+  }
 
-.meter {
-  inline-size: 3.5rem;
-  block-size: 0.25rem;
-  border-radius: 999px;
-  background: var(--viz-track);
-  overflow: hidden;
+  .rollup { grid-template-columns: 1fr; }
 }
-
-.meterFill {
-  display: block;
-  block-size: 100%;
-  background: var(--viz-dues);
-}
-
-/* ——— the rollup band (Task 9) ——— */
-
-.rollup {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
-  gap: 0.75rem;
-  margin-block-end: 1rem;
-}
-
-.page { display: flex; flex-direction: column; gap: 1rem; }
-.pagehead { display: flex; flex-direction: column; gap: 0.25rem; }
-.sub { margin: 0; color: var(--ink-3); font-size: 0.875rem; }
-
-.notice {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.notice > :first-child { flex: 1 1 20rem; }
