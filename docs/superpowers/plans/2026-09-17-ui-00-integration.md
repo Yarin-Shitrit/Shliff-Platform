@@ -980,3 +980,60 @@ against a build with no confirmation step at all.** Fixed in Tasks 6 and 7.
 `Table`'s `<tfoot>` has no accessible name, so a totals row cannot be queried or
 announced as `סיכום`. Reported by plan 07 rather than patched, since the kit is
 read-only to screen lanes. Decide it when a plan needs a named footer.
+
+### A27 — `toHebrewError` cannot see the error it is being asked about
+
+**Two lanes hit this independently, which is what makes it systemic rather than
+incidental.** Drizzle throws `DrizzleQueryError`, whose own `.message` is the
+parameterised SQL text (`Failed query: insert into "seasons" (...) ...`). The
+driver's real message — and `constraint`, and `code` — sit on `.cause`.
+**`src/lib/errors/hebrew.ts:34` reads `error.message` and never walks the
+chain.** So every map keyed on a Postgres constraint violation silently misses,
+and a lead gets the generic fallback for exactly the failures a screen most wants
+to explain.
+
+Three treatments now exist in the tree, which is two too many:
+
+1. `src/lib/errors/hebrew.ts` — reads `.message` only. The shared module, and the
+   one that is wrong.
+2. `src/app/(admin)/tasks/failure-messages.ts` — plan 10 wrote a bounded
+   innermost-cause unwrapper (cycle-guarded). **The correct fix, in the wrong
+   place**: it is local to one screen.
+3. `src/app/(admin)/shell/actions.ts:96` — the season screen matches the prefix
+   `Failed query: insert into "seasons"`, i.e. the *wrapper's SQL*.
+
+The third deserves care, because its author reasoned about the risk and wrote the
+reasoning down: `name` is argued to be the only constraint that insert can still
+violate after the preceding validation. That is true today. **But it is an
+invariant held by a comment.** Add a constrained column, or let a validation
+check drift, and the screen tells a lead `כבר קיימת שנה בשם "X".` for a failure
+that has nothing to do with the name — a wrong Hebrew message delivered
+confidently, which is worse than the fallback it replaced. The platform's rule
+against guessing applies here: a specific cause claimed from a generic symptom is
+a guess.
+
+**Ruling: one task, after wave 2 drains, consolidates all of it.** Move plan 10's
+unwrapper into `src/lib/errors/hebrew.ts`; add A20's `HebrewRefusal` sentinel in
+the same pass, since it is the same module and the same seam; migrate the season
+screen to match on `.cause.constraint === 'seasons_name_unique'` rather than SQL
+text. Plan 10's local unwrapper then collapses into the shared one.
+
+Sequenced, not immediate: plan 06 is still consuming this module.
+
+### A28 — Two kit gaps three screens have now worked around
+
+**No date, number or select control.** `src/components/ui/` has `field.tsx` and
+nothing else for input. The season drawer, the new-task drawer and the fees
+drawers have each dropped a native `<input type="date">`/`number` inside the
+kit's `Field`, styled from `field.module.css`'s tokens. Three independent
+workarounds to the same gap is the signal that the control is real; it was
+correct not to invent it mid-lane, and it should be built before wave 5's polish
+sweep rather than during it.
+
+**`Popover` cannot host a multi-select.** `popover.tsx:168` closes on any click
+whose target matches `a, button`, so a popover whose options are buttons closes
+on the first selection. Plan 10 hand-rolled the assign popover for this reason
+and asked for a second opinion: **affirmed** — a multi-select that closes on each
+pick is unusable, and the kit's rule is right for the menus it was written for.
+The kit should eventually take a dismissal policy rather than hard-coding one;
+until then, hand-rolling with the same keyboard and focus behaviour is correct.
