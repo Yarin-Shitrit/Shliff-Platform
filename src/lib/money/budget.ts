@@ -217,3 +217,54 @@ export async function listBudgetLinesWithActuals(
     };
   });
 }
+
+/** The workbook's own two words for the two halves of a season's spend. */
+export const BUDGET_CATEGORY_LABELS: Record<BudgetCategory, string> = {
+  camp: 'קאמפ',
+  dancefloor: 'רחבה',
+};
+
+/** Fixed order. Never sorted by size: a group that moves between seasons
+ *  makes two screens of the same page unreadable side by side. */
+const CATEGORY_ORDER: BudgetCategory[] = ['camp', 'dancefloor'];
+
+export interface BudgetGroup {
+  category: BudgetCategory;
+  label: string;
+  lines: BudgetLineActuals[];
+  plannedAgorot: number;
+  spentAgorot: number;
+  /** The sum of each line's own remainder, not `planned − spent`. A line that
+   *  overran must not quietly consume another line's headroom. */
+  remainingAgorot: number;
+  count: number;
+}
+
+export function groupBudgetByCategory(rows: BudgetLineActuals[]): BudgetGroup[] {
+  return CATEGORY_ORDER.flatMap((category) => {
+    const lines = rows.filter((row) => row.category === category);
+    // An empty category is omitted, not rendered with a zero subtotal: zero
+    // asserts a budget of nothing, and the truth is that nothing was recorded.
+    if (lines.length === 0) return [];
+    return [{
+      category,
+      label: BUDGET_CATEGORY_LABELS[category],
+      lines,
+      plannedAgorot: lines.reduce((n, line) => n + line.totalAgorot, 0),
+      spentAgorot: lines.reduce((n, line) => n + line.spentAgorot, 0),
+      remainingAgorot: lines.reduce((n, line) => n + line.remainingAgorot, 0),
+      count: lines.length,
+    }];
+  });
+}
+
+export function budgetTotals(rows: BudgetLineActuals[]): {
+  plannedAgorot: number; spentAgorot: number; remainingAgorot: number; count: number;
+} {
+  return {
+    plannedAgorot: rows.reduce((n, row) => n + row.totalAgorot, 0),
+    spentAgorot: rows.reduce((n, row) => n + row.spentAgorot, 0),
+    remainingAgorot: rows.reduce((n, row) => n + row.remainingAgorot, 0),
+    count: rows.length,
+  };
+}

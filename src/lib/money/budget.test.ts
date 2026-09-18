@@ -4,8 +4,9 @@ import { createTestDb } from '@/test/db';
 import { createSeason } from '@/lib/members/roster';
 import {
   createBudgetLine, listBudgetLines, budgetTotalAgorot, budgetDerivation,
-  listBudgetLinesWithActuals,
+  listBudgetLinesWithActuals, groupBudgetByCategory, budgetTotals,
 } from './budget';
+import type { BudgetLineActuals } from './budget';
 import { recordEntry } from './ledger';
 
 let db: TestDb;
@@ -216,5 +217,70 @@ describe('budget lines with actuals', () => {
     const [row] = await listBudgetLinesWithActuals(db, s26);
     expect(row.sourceBlockId).toBeNull();
     expect(row.sourceRow).toBeNull();
+  });
+});
+
+function actualLine(overrides: Partial<BudgetLineActuals> = {}): BudgetLineActuals {
+  return {
+    id: 'b1', label: 'סעיף', quantityText: null, quantityNumAgorot: null,
+    unitCostAgorot: null, totalAgorot: 100000, rationale: null, category: 'camp',
+    arithmeticOff: false, sourceBlockId: null, sourceRow: null,
+    spentAgorot: 0, remainingAgorot: 100000, overAgorot: 0,
+    ...overrides,
+  };
+}
+
+describe('grouping the budget', () => {
+  it('subtotals each category and keeps camp before dancefloor, never by size', () => {
+    const groups = groupBudgetByCategory([
+      actualLine({ id: 'a', category: 'dancefloor', totalAgorot: 1200000, spentAgorot: 600000 }),
+      actualLine({ id: 'b', category: 'camp', totalAgorot: 620000, spentAgorot: 174000 }),
+      actualLine({ id: 'c', category: 'camp', totalAgorot: 840000, spentAgorot: 872000 }),
+    ]);
+
+    expect(groups.map((group) => group.category)).toEqual(['camp', 'dancefloor']);
+    expect(groups[0].label).toBe('קאמפ');
+    expect(groups[0].count).toBe(2);
+    expect(groups[0].plannedAgorot).toBe(1460000);
+    expect(groups[0].spentAgorot).toBe(1046000);
+    expect(groups[1].label).toBe('רחבה');
+    expect(groups[1].plannedAgorot).toBe(1200000);
+  });
+
+  // A zero subtotal asserts a budget of nothing. The truth is that nothing was
+  // recorded, and an omitted group says that without asserting anything.
+  it('omits a category with no lines rather than showing a zero subtotal', () => {
+    const groups = groupBudgetByCategory([actualLine({ category: 'camp' })]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].category).toBe('camp');
+  });
+
+  it("keeps a group's remaining as the sum of its lines' remainders, not planned minus spent", () => {
+    // One line over by 320 and one under by 4,460. Netting planned against
+    // spent would report 4,140 left; the truth is 4,460 left on one line and
+    // an overrun on another.
+    const [group] = groupBudgetByCategory([
+      actualLine({ id: 'a', totalAgorot: 840000, spentAgorot: 872000, remainingAgorot: 0, overAgorot: 32000 }),
+      actualLine({ id: 'b', totalAgorot: 620000, spentAgorot: 174000, remainingAgorot: 446000 }),
+    ]);
+    expect(group.remainingAgorot).toBe(446000);
+  });
+
+  it('totals every line across categories for the table footer', () => {
+    const totals = budgetTotals([
+      actualLine({ id: 'a', totalAgorot: 840000, spentAgorot: 872000, remainingAgorot: 0, overAgorot: 32000 }),
+      actualLine({ id: 'b', category: 'dancefloor', totalAgorot: 1200000, spentAgorot: 600000, remainingAgorot: 600000 }),
+    ]);
+    expect(totals.count).toBe(2);
+    expect(totals.plannedAgorot).toBe(2040000);
+    expect(totals.spentAgorot).toBe(1472000);
+    expect(totals.remainingAgorot).toBe(600000);
+  });
+
+  it('returns no groups at all for a season with no budget', () => {
+    expect(groupBudgetByCategory([])).toEqual([]);
+    expect(budgetTotals([])).toEqual({
+      plannedAgorot: 0, spentAgorot: 0, remainingAgorot: 0, count: 0,
+    });
   });
 });
