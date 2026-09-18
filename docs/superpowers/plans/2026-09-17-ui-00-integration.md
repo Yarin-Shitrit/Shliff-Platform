@@ -851,3 +851,41 @@ branch that actually contains the `confirmBlock` lever; a lead sets
 `תקציב רחבה ברן 25` to `dancefloor`; and a dry run on a clone taken *after* that
 shows the promoted rows landing as `dancefloor` and staying out of
 `budgetTotalAgorot(camp)`. Report the screen; never report the deletion as safe.
+
+### A23 — Plan 05 must not ship its promote-everything button (BINDING, overrides the plan)
+
+Plan 05's file table creates `src/app/(admin)/inbox/bulk-promote.tsx`, "the
+promote-everything button". **It does not ship in that shape.**
+
+A peer session cut the live database over on 2026-09-18 and observed, on the
+clone rather than by reasoning: re-promoting block `66ad3b61` re-inserts two rows
+the promoter fabricates from a summary sub-table, `42,000` and `22,375.30`. Those
+sum to `64,375.30`, which is ברן 26's entire budget — **the re-promotion exactly
+doubles it, and the cutover script cannot repair it afterwards.**
+
+**Plan 05's own Ruling 2 does not catch this, and it is worth being precise about
+why, because the gate looks like it should.** `blocksPromotion(item)` is true for
+`sheet-collision`, `block-undecided`, and `sheet-season` with a live `no-season`
+refusal — the three states where a *decision is still open*. Block `66ad3b61` has
+no open decision. It is confirmed, eligible, and the predicate returns **false**,
+so the button is enabled and proceeds. Ruling 2 asks "is anyone still deciding?";
+this hazard asks "would doing it again duplicate rows". A gate that answers the
+first question cannot refuse the second, and passes it confidently.
+
+**Ruling: until the block's bounds are narrowed or a per-row veto exists (Wave
+3), the register may render what promotion *would* do and must not offer to do
+it in bulk.** A control scoped to a single un-promoted block is acceptable; a
+control that calls `promoteAll` is not. Plan 11's per-file promote is unaffected
+— it composes `promoteBlock` over one upload's blocks and never calls
+`promoteAll` (its own binding ruling says so).
+
+This is the hazard class the kickoff named — "a dry-run flag that writes to the
+live database on page load" — arriving as a button instead of a flag. The
+register's whole value is that it tells a lead the truth about what has landed;
+a control that silently doubles a budget from that same screen destroys exactly
+the trust the screen exists to build.
+
+**Provenance: observed by the peer session on a clone, not re-derived here, and
+deliberately not re-tested against live.** The arithmetic was checked
+(`42000 + 22375.30 === 64375.30`); the duplication behaviour was not, because
+confirming it costs a write to the camp's real money.
