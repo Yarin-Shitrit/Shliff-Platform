@@ -46,9 +46,31 @@ describe('nav data', () => {
     expect(activeItemId('/membership')).toBeNull();
   });
 
-  it('points every live item at a destination and never at a bare hash', () => {
-    for (const item of NAV_ITEMS) {
-      expect(item.href.startsWith('/')).toBe(true);
-    }
+  /**
+   * The old version asserted `item.href.startsWith('/')` over the very
+   * `NAV_ITEMS` constant this file imports — a check that a literal object
+   * satisfies a property of itself, so it stays green however an href is
+   * reworded (a swap to the wrong route still starts with `/`).
+   *
+   * This pins the full id→href map instead. It also restores an assertion
+   * that was genuinely lost when the old nav was deleted: the old
+   * `nav.test.tsx` asserted משימות → `/tasks`, and nothing currently in the
+   * suite covers that href — it is included here.
+   */
+  it('points every item at its real destination, and never at a bare hash', () => {
+    const hrefById = Object.fromEntries(NAV_ITEMS.map((item) => [item.id, item.href]));
+    expect(hrefById).toEqual({
+      home: '/',
+      inbox: '/inbox',
+      people: '/members',
+      dues: '/fees',
+      tasks: '/tasks',
+      money: '/money',
+      ledger: '/money/ledger',
+      budget: '/money#budget',
+      debts: '/money/debts',
+      files: '/imports',
+      upload: '/upload',
+    });
   });
 });

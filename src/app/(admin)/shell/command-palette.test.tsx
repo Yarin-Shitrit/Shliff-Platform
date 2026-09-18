@@ -53,12 +53,29 @@ describe('CommandPalette', () => {
     expect(screen.getByRole('dialog')).toBeTruthy();
   });
 
-  it('does not open on / while someone is typing in the box', () => {
-    render(<CommandPalette />);
-    fireEvent.click(screen.getByRole('button', { name: /חיפוש/ }));
-    const box = screen.getByRole('combobox');
-    fireEvent.keyDown(box, { code: 'Escape', key: 'Escape' });
+  /**
+   * Actually dispatches `/`, unlike the version this replaced (which never
+   * sent a `/` keydown at all and was really testing Escape). This is the
+   * only coverage `isOpenShortcut`'s INPUT/TEXTAREA/SELECT/contentEditable
+   * guard has: without it, `/` typed into an ordinary text field elsewhere
+   * on the page would both pop the palette open and have its default action
+   * (typing the character) swallowed by `event.preventDefault()`.
+   */
+  it('does not open on / while typing in a text field, but does open elsewhere', () => {
+    render(
+      <>
+        <input aria-label="שדה טקסט אחר" />
+        <CommandPalette />
+      </>,
+    );
+    const field = screen.getByRole('textbox', { name: 'שדה טקסט אחר' });
+    field.focus();
+    const notPrevented = fireEvent.keyDown(field, { code: 'Slash', key: '/' });
+    expect(notPrevented).toBe(true);
     expect(screen.queryByRole('dialog')).toBeNull();
+
+    fireEvent.keyDown(document.body, { code: 'Slash', key: '/' });
+    expect(screen.getByRole('dialog')).toBeTruthy();
   });
 
   it('offers the three actions before anything is typed', () => {

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { MemberFeeRow } from '@/lib/fees/season-fees';
 import type { PaymentRow } from '@/lib/fees/payments';
 import {
-  FEE_VIEWS, parseFeeView, paymentStateOf, matchesView, rowsForView, viewCounts,
+  parseFeeView, paymentStateOf, matchesView, rowsForView, viewCounts,
   isPayable, nextPayable, payablePosition, lastPaymentOf,
 } from './views';
 
@@ -107,9 +107,23 @@ describe('viewCounts', () => {
       all: 6, unpaid: 1, partial: 1, paid: 3, exception: 1, offset: 1, nodue: 1,
     });
   });
-  it('returns a zero for every view when there are no rows', () => {
-    const counts = viewCounts([]);
-    for (const view of FEE_VIEWS) expect(counts[view.id]).toBe(0);
+  /**
+   * The old version looped `FEE_VIEWS` — the very array `viewCounts` itself
+   * uses to seed its initial all-zero object — and read that initialiser
+   * back, with the summing loop body never executing (there are no rows to
+   * iterate). It cannot fail: renaming or dropping a view id in `FEE_VIEWS`
+   * changes the initialiser and the test's expectation in lockstep, since
+   * both are the same array reference.
+   *
+   * This pins the expected keys as a literal, independent of `FEE_VIEWS`,
+   * plus the one other thing "no rows" should mean: filtering an empty list
+   * for any view returns an empty list.
+   */
+  it('returns a present-and-zero count for every known view when there are no rows', () => {
+    expect(rowsForView([], 'unpaid')).toEqual([]);
+    expect(viewCounts([])).toEqual({
+      all: 0, unpaid: 0, partial: 0, paid: 0, exception: 0, offset: 0, nodue: 0,
+    });
   });
 });
 

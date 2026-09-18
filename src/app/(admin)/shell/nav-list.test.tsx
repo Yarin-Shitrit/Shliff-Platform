@@ -51,9 +51,30 @@ describe('NavList', () => {
     expect(screen.getAllByText('בקרוב').length).toBeGreaterThan(0);
   });
 
-  it('shows no count while every count reads zero (B2)', async () => {
-    render(<NavList />);
-    await waitFor(() => expect(screen.queryByText('0')).toBeNull());
+  /**
+   * The old version rendered once with the zero-count fixture already in
+   * place and asserted `queryByText('0')` is null under `waitFor` — which is
+   * satisfied on the very first tick, before the mocked `loadShellCounts`
+   * promise even settles. It measures the initial (pre-load) empty state,
+   * which looks identical no matter what the action returns, so it cannot
+   * fail no matter how `badge()` is wired.
+   *
+   * This instead loads a positive count first and waits for it to actually
+   * render, then drives a real second load (a pathname change, same as the
+   * "refreshes counts" test below) that resolves to all zeros, and asserts
+   * the count disappears only after that load lands.
+   */
+  it('shows no count only once a real load reads every count as zero (B2)', async () => {
+    counts.value = { openDecisions: 0, rosterSize: 38, understaffedTasks: 0 };
+    const { rerender } = render(<NavList />);
+    await waitFor(() => expect(screen.getByText('38')).toBeTruthy());
+
+    counts.value = { openDecisions: 0, rosterSize: 0, understaffedTasks: 0 };
+    route.pathname = '/fees';
+    rerender(<NavList />);
+
+    await waitFor(() => expect(screen.queryByText('38')).toBeNull());
+    expect(screen.queryByText('0')).toBeNull();
   });
 
   it('shows each count once it is actionable', async () => {
