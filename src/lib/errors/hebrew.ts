@@ -30,14 +30,56 @@ const LATIN_LETTER = /[A-Za-z]/;
 
 export type HebrewErrors = ReadonlyArray<readonly [prefix: string, hebrew: string]>;
 
+/** How far down `.cause` this walks. Eight is deeper than any wrapper in this
+ *  tree and it is also the cycle guard: `a.cause = b; b.cause = a` terminates
+ *  because the bound is on steps taken, not on links visited. */
+const MAX_CAUSE_DEPTH = 8;
+
+/**
+ * Every link of the `.cause` chain, outermost first.
+ *
+ * Drizzle wraps a driver failure: what it throws has
+ * `Failed query: insert into "seasons" …` as its `message`, and the driver's
+ * real message — plus `constraint` and `code` — lives on `.cause`. Reading
+ * only `.message` therefore missed every map entry keyed on a Postgres
+ * refusal (integration §5 A27). Moved here from
+ * `src/app/(admin)/tasks/failure-messages.ts`, where one screen had the right
+ * fix and the rest of the app did not.
+ */
+function causeChain(error: unknown): unknown[] {
+  const chain: unknown[] = [];
+  let current = error;
+  for (let depth = 0; depth < MAX_CAUSE_DEPTH; depth += 1) {
+    chain.push(current);
+    if (!(current instanceof Error) || !(current.cause instanceof Error)) break;
+    current = current.cause;
+  }
+  return chain;
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export function toHebrewError(error: unknown, map: HebrewErrors): string {
-  const message = error instanceof Error ? error.message : String(error);
+  const chain = causeChain(error);
 
-  const hit = map.find(([prefix]) => message.startsWith(prefix));
-  if (hit) return hit[1];
+  // Innermost first, then outward. The innermost link is where the specific
+  // evidence lives; an outer message is a generic symptom, and a specific
+  // cause claimed from a generic symptom is a guess. The outer links are
+  // still tried, because a hand-thrown wrapper may be what carries the
+  // meaning — but they are tried second, as the weaker evidence.
+  const messages = chain.map(messageOf).reverse();
 
-  if (HEBREW_LETTER.test(message) && !LATIN_LETTER.test(message)) return message;
+  for (const message of messages) {
+    const hit = map.find(([prefix]) => message.startsWith(prefix));
+    if (hit) return hit[1];
+  }
 
-  console.error('unmapped server error', message);
+  for (const message of messages) {
+    if (HEBREW_LETTER.test(message) && !LATIN_LETTER.test(message)) return message;
+  }
+
+  console.error('unmapped server error', messages.join(' <- wrapped by <- '));
   return HEBREW_FALLBACK;
 }
