@@ -22,6 +22,10 @@ export async function linkNameAction(
 
   await linkAlias(db, aliasId, personId, admin.email);
   revalidatePath('/members');
+  // The register lists the same queue (W24: surfaced by a link, not by a
+  // second implementation), so a name linked from either screen has to leave
+  // both.
+  revalidatePath('/inbox');
   return { ok: true };
 }
 
@@ -35,6 +39,7 @@ export async function promoteNameAction(aliasId: string): Promise<ActionResult> 
     return { ok: false, error: error instanceof Error ? error.message : 'שגיאה' };
   }
   revalidatePath('/members');
+  revalidatePath('/inbox');
   return { ok: true };
 }
 
