@@ -21,7 +21,7 @@ export interface MappingResult {
 }
 
 /** Header terms that identify a canonical field, per archetype. */
-const FIELD_TERMS: Partial<Record<BlockArchetype, Record<string, string[]>>> = {
+export const FIELD_TERMS: Partial<Record<BlockArchetype, Record<string, string[]>>> = {
   ledger: {
     date: ['תאריך'],
     outflow: ['הוצאות', 'הוצאה'],
