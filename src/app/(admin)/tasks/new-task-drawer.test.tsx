@@ -9,7 +9,11 @@ vi.mock('next/navigation', () => ({
 }));
 
 const { createTaskAction } = vi.hoisted(() => ({
-  createTaskAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
+  /** Typed with its argument so `mock.calls[0][0]` is readable: the point of
+   *  the budgetAmount test is what the call carried, not that it happened. */
+  createTaskAction: vi.fn(
+    async (_input: Record<string, unknown>): Promise<ActionResult> => ({ ok: true }),
+  ),
 }));
 vi.mock('./actions', () => ({ createTaskAction }));
 
@@ -72,7 +76,8 @@ describe('NewTaskForm', () => {
     fireEvent.change(screen.getByLabelText('כותרת'), { target: { value: 'גנרטור וחשמל' } });
     fireEvent.change(screen.getByLabelText('סעיף תקציב'), { target: { value: 'b1' } });
     fireEvent.click(screen.getByRole('button', { name: SUBMIT }));
-    const sent = createTaskAction.mock.calls[0][0];
+    expect(createTaskAction).toHaveBeenCalledTimes(1);
+    const sent = createTaskAction.mock.calls[0]?.[0] ?? {};
     expect(sent.budgetLineId).toBe('b1');
     expect('budgetAmount' in sent).toBe(false);
   });
