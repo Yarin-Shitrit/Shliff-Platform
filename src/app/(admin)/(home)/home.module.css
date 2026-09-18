@@ -52,6 +52,10 @@
 .panelLead { color: var(--ink-3); font-size: var(--text-meta); }
 .more { margin-inline-start: auto; color: var(--brand-text); font-weight: 500; }
 
+/* The season a panel speaks about. C10's all-clear says "הכול מטופל" and
+   nothing else, so the scope has to be stated by the panel around it. */
+.scope { color: var(--ink-3); font-size: var(--text-meta); }
+
 .rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .row {
   display: flex;

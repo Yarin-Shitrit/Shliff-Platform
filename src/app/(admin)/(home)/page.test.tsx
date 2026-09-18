@@ -302,3 +302,58 @@ describe('HomePage figures', () => {
       .getByRole('img', { name: 'נגבו 100 אחוזים מצפי הגבייה' })).toBeTruthy();
   });
 });
+
+describe('HomePage — the לטיפול preview', () => {
+  function inboxPanel(): HTMLElement {
+    return screen.getByRole('heading', { name: 'לטיפול' })
+      .closest('section') as HTMLElement;
+  }
+
+  it('celebrates only when it knows there is nothing to decide', async () => {
+    seasonOverview.mockResolvedValue(overview({ ...FULL, unlinkedCount: 0 }));
+    render(await HomePage({ searchParams: Promise.resolve({ season: 's26' }) }));
+
+    const panel = inboxPanel();
+    // C10 owns all-clear's words; the panel supplies the scope they apply to.
+    expect(within(panel).getByText('הכול מטופל')).toBeTruthy();
+    expect(within(panel).getByText('ברן 26')).toBeTruthy();
+  });
+
+  it('shows the names still waiting, rather than celebrating over them', async () => {
+    seasonOverview.mockResolvedValue(overview({ ...FULL, unlinkedCount: 7 }));
+    render(await HomePage({ searchParams: Promise.resolve({ season: 's26' }) }));
+
+    const panel = inboxPanel();
+    expect(within(panel).queryByText('הכול מטופל')).toBeNull();
+    expect(within(panel).getByText('7 שמות שממתינים לשיוך')).toBeTruthy();
+    // Copy carried over character for character from the screen this replaces.
+    expect(within(panel).getByText(
+      'שמות שהמערכת מצאה בקבצים ולא שייכה — היא לא מנחשת מי הם.',
+    )).toBeTruthy();
+    const link = within(panel).getByRole('link', { name: 'לדף חברי המחנה' });
+    expect(link.getAttribute('href')).toBe('/members');
+  });
+
+  it('offers no link to a register that has not been built yet', async () => {
+    seasonOverview.mockResolvedValue(overview({ ...FULL, unlinkedCount: 7 }));
+    render(await HomePage({ searchParams: Promise.resolve({ season: 's26' }) }));
+
+    // /inbox is plan 05's route. Until it exists, "לכל הרשימה" would be a 404
+    // dressed as a next step.
+    expect(within(inboxPanel()).queryByRole('link', { name: /לכל הרשימה/ })).toBeNull();
+  });
+
+  it('states the panel is the screen\'s own, not a guess', async () => {
+    seasonOverview.mockResolvedValue(overview({ ...FULL, unlinkedCount: 7 }));
+    render(await HomePage({ searchParams: Promise.resolve({ season: 's26' }) }));
+    expect(screen.getByText('המערכת לא מנחשת. אלה ההכרעות שממתינות.')).toBeTruthy();
+  });
+
+  it('counts the waiting names as one decision, not as seven', async () => {
+    seasonOverview.mockResolvedValue(overview({ ...FULL, unlinkedCount: 7 }));
+    render(await HomePage({ searchParams: Promise.resolve({ season: 's26' }) }));
+    // Seven names are one row and one decision — linking them is one sitting
+    // on /members. A badge reading 7 would promise seven separate places to go.
+    expect(within(inboxPanel()).getByText('החלטה אחת')).toBeTruthy();
+  });
+});

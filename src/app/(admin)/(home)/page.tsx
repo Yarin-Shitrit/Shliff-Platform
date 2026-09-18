@@ -9,6 +9,8 @@ import { Icon } from '@/components/ui/icon';
 import { ButtonLink } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Figures } from './figures';
+import { InboxPreview } from './inbox-preview';
+import type { PreviewItem } from './inbox-preview';
 import styles from './home.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -61,6 +63,23 @@ export default async function HomePage(
   const nothingYet = !overview.dues && !overview.cash
     && !overview.debts && !overview.coverage;
 
+  /*
+   * Until the לטיפול register lands, the page holds exactly one
+   * register-shaped fact: the names the importer could not attribute. It is
+   * shown as the one decision waiting, with the copy the screen this replaces
+   * already used, and it counts as one decision rather than as seven — linking
+   * them is one sitting on /members, and a badge reading seven would promise
+   * seven separate places to go. When the register arrives, the same row comes
+   * back as its own unlinked-names kind and this block is deleted.
+   */
+  const pendingItems: PreviewItem[] = overview.unlinkedCount > 0 ? [{
+    id: 'unlinked-names',
+    icon: 'link',
+    title: <bdi>{`${overview.unlinkedCount} שמות שממתינים לשיוך`}</bdi>,
+    detail: 'שמות שהמערכת מצאה בקבצים ולא שייכה — היא לא מנחשת מי הם.',
+    action: { label: 'לדף חברי המחנה', href: '/members' },
+  }] : [];
+
   return (
     <main className={styles.page}>
       <div className={styles.head}>
@@ -95,6 +114,19 @@ export default async function HomePage(
           action={{ label: 'מעבר לייבוא', href: '/upload' }}
         />
       ) : null}
+
+      <div className={styles.columns}>
+        <div className={styles.wide}>
+          <InboxPreview
+            items={pendingItems}
+            total={pendingItems.length}
+            remainder={null}
+            seasonName={season.name}
+            href={null}
+          />
+        </div>
+        <div className={styles.narrow} />
+      </div>
     </main>
   );
 }
