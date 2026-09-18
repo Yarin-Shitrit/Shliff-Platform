@@ -53,6 +53,10 @@ export interface Movement {
    *  movement (requirement 6). Always null on a plain `recordEntry` row and
    *  on a dues payment, since neither is one half of a transfer. */
   transferGroupId: string | null;
+  /** R11: every number keeps its provenance. Null on a dues payment, which
+   *  has no source columns and genuinely was typed by a lead. */
+  sourceBlockId: string | null;
+  sourceRow: number | null;
 }
 
 export interface MovementFilter {
@@ -151,6 +155,8 @@ export async function listMovements(
       seasonId: ledgerEntries.seasonId,
       eventId: ledgerEntries.eventId,
       transferGroupId: ledgerEntries.transferGroupId,
+      sourceBlockId: ledgerEntries.sourceBlockId,
+      sourceRow: ledgerEntries.sourceRow,
     })
     .from(ledgerEntries)
     .leftJoin(accounts, eq(accounts.id, ledgerEntries.accountId))
@@ -191,6 +197,8 @@ export async function listMovements(
       description: row.description, accountId: row.accountId,
       accountName: row.accountName ?? null, seasonId: row.seasonId, eventId: row.eventId,
       transferGroupId: row.transferGroupId,
+      sourceBlockId: row.sourceBlockId,
+      sourceRow: row.sourceRow,
     })),
     ...paid.map((row) => ({
       id: row.id, source: 'dues' as const, occurredOn: row.occurredOn,
@@ -199,6 +207,10 @@ export async function listMovements(
       accountName: row.accountName ?? null, seasonId: row.seasonId, eventId: null,
       // A dues payment is never one leg of a transfer.
       transferGroupId: null,
+      // `payments` carries no provenance columns — a dues payment genuinely
+      // was typed by a lead, not read off a workbook.
+      sourceBlockId: null,
+      sourceRow: null,
     })),
   ];
 

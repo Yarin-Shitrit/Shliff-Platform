@@ -6,6 +6,8 @@ import { createPerson } from '@/lib/members/link';
 import { issueFlatDues } from '@/lib/fees/dues';
 import { recordPayment, recordOffset } from '@/lib/fees/payments';
 import { listSeasonFees } from '@/lib/fees/season-fees';
+import { uploads, sheets, blocks } from '@/db/schema/source';
+import type { BlockArchetype } from '@/lib/classify/types';
 import { createAccount } from './accounts';
 import { recordEntry, recordTransfer, listMovements, ledgerTotals } from './ledger';
 
@@ -13,6 +15,34 @@ let db: TestDb;
 beforeEach(async () => { db = await createTestDb(); });
 
 const LEAD = 'lead@example.com';
+
+// Copied from trace.test.ts's shape (`addSheet`/`addBlock`), not the brief's
+// nonexistent `seedBlock` — this file has no such helper and none of trace's
+// test-only fixtures are exported for reuse.
+async function addSheet(db: TestDb, filename: string, name: string): Promise<string> {
+  const [up] = await db.insert(uploads).values({
+    filename, sha256: `${filename}/${name}`, storageKey: `k/${name}`,
+    sizeBytes: 1, uploadedBy: LEAD, status: 'committed',
+  }).returning();
+  const [sheet] = await db.insert(sheets).values({
+    uploadId: up.id, name, index: 0, rowCount: 20, colCount: 6,
+  }).returning();
+  return sheet.id;
+}
+
+async function addBlock(
+  db: TestDb, onSheet: string, archetype: BlockArchetype, opts: { top?: number; left?: number } = {},
+): Promise<string> {
+  const top = opts.top ?? 1;
+  const left = opts.left ?? 1;
+  const [block] = await db.insert(blocks).values({
+    sheetId: onSheet, top, left, bottom: top, right: left,
+    archetype, confidence: '1.0000', headerRow: null, fingerprint: null,
+    pipelineVersion: 1, rawGrid: [['x']],
+    confirmedBy: LEAD, confirmedAt: new Date(),
+  }).returning();
+  return block.id;
+}
 
 describe('the ledger', () => {
   it('reproduces the ברן 25 bottom line from its eight movements', async () => {
@@ -180,5 +210,43 @@ describe('the ledger', () => {
     const totals = await ledgerTotals(db, { seasonId: season.id });
     expect(totals.count).toBe(1);
     expect(totals.inAgorot).toBe(50000);
+  });
+});
+
+describe('a movement knows where it came from', () => {
+  it("carries a promoted entry's source block and row, and leaves a payment's null", async () => {
+    // Its own inline season/person/account fixtures — this file's real
+    // `beforeEach` is `db = await createTestDb();` alone, with no shared
+    // `s26`/`cash`. The brief's snippet assumed fixtures that do not exist.
+    const sheetId = await addSheet(db, '2026.xlsx', 'תנועות קופה');
+    const blockId = await addBlock(db, sheetId, 'ledger', { top: 1, left: 1 });
+
+    const season = await createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1500 });
+    const personId = await createPerson(db, 'יוסף', LEAD);
+    await addMember(db, personId, season.id);
+    await issueFlatDues(db, season.id);
+    const [row] = await listSeasonFees(db, season.id);
+    await recordPayment(db, {
+      dueId: row.dueId!, amount: 1500, channel: 'מזומן',
+      paidOn: new Date('2026-07-01T00:00:00Z'), recordedBy: LEAD,
+    });
+
+    await recordEntry(db, {
+      occurredOn: new Date('2026-09-12T00:00:00Z'), direction: 'in', amount: 185,
+      description: 'מסיבת גיוס — אוקטובר', seasonId: season.id,
+      recordedBy: LEAD, sourceBlockId: blockId, sourceRow: 41,
+    });
+
+    const moves = await listMovements(db, { seasonId: season.id });
+    const promoted = moves.find((move) => move.source === 'ledger')!;
+    expect(promoted.sourceBlockId).toBe(blockId);
+    expect(promoted.sourceRow).toBe(41);
+
+    const paid = moves.find((move) => move.source === 'dues')!;
+    // `payments` carries no provenance columns, and a dues payment genuinely
+    // is a lead typing into a form — null is the true answer, and the screen
+    // renders it as `נרשם ידנית`.
+    expect(paid.sourceBlockId).toBeNull();
+    expect(paid.sourceRow).toBeNull();
   });
 });
