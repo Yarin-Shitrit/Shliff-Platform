@@ -183,6 +183,28 @@
   font-size: var(--text-dense);
 }
 
+/* Sits at the row's far edge — `margin-inline-start`, so it follows the
+   writing direction rather than a physical side (A10). */
+.aliasUnlink {
+  margin-inline-start: auto;
+  color: var(--ink-3);
+  font-size: var(--text-dense);
+  text-decoration: none;
+}
+
+.aliasUnlink:hover {
+  color: var(--bad);
+  text-decoration: underline;
+}
+
+/* The one spelling a person cannot lose. Says why, in place of a control that
+   could only ever be refused. */
+.aliasLocked {
+  flex-basis: 100%;
+  color: var(--ink-4);
+  font-size: var(--text-dense);
+}
+
 .undatedHead {
   margin: var(--space-3) 0 var(--space-2);
   font-size: var(--text-dense);

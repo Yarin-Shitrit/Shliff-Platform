@@ -185,3 +185,117 @@ describe('ConfirmDialog', () => {
     expect(deleteButton.hasAttribute('inert')).toBe(false);
   });
 });
+
+/**
+ * Generated ids (`useId`) and the ids a caller derives from them are the only
+ * part of this markup that is allowed to move, so they are masked. Everything
+ * else — element names, nesting, classes, attributes, text — is the contract
+ * a screen written before `cancelHref` existed is relying on.
+ */
+function stableHtml(html: string): string {
+  return html.replace(/\b(id|for|aria-labelledby|aria-describedby|aria-errormessage)="[^"]*"/g, '$1="_"');
+}
+
+describe('ConfirmDialog — the additive guarantee', () => {
+  /**
+   * The net under the concurrent screen lanes: this snapshot was recorded
+   * against the implementation as it stood *before* `cancelHref` was added,
+   * from the prop set every existing caller passes. If a later change to this
+   * component alters what those callers render, this fails and nothing else
+   * has to notice.
+   */
+  it('renders the pre-cancelHref prop set byte for byte', () => {
+    const { container } = render(
+      <ConfirmDialog
+        title="מיזוג שני אנשים"
+        consequence="2 כינויים ו־3 תשלומים יעברו לרוני אדלר. המיזוג אינו הפיך."
+        confirmLabel="מיזוג האנשים"
+        cancelLabel="חזרה"
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+        acknowledge={{ id: 'ack', label: 'המיזוג אינו הפיך', checked: false, onChange: vi.fn() }}
+      >
+        <p>3 תשלומים · 2 כינויים</p>
+      </ConfirmDialog>,
+    );
+    expect(stableHtml(container.innerHTML)).toMatchInlineSnapshot(`"<div class="_scrim_487c05" aria-hidden="true"></div><div class="_dialog_487c05" role="alertdialog" aria-modal="true" aria-labelledby="_" aria-describedby="_"><h2 class="_title_487c05" id="_">מיזוג שני אנשים</h2><p class="_consequence_487c05 _danger_487c05" id="_">2 כינויים ו־3 תשלומים יעברו לרוני אדלר. המיזוג אינו הפיך.</p><div class="_preview_487c05"><p>3 תשלומים · 2 כינויים</p></div><label class="_checkbox_f50c5c" for="_"><input class="_checkboxInput_f50c5c" id="_" type="checkbox"><span class="_checkboxLabel_f50c5c">המיזוג אינו הפיך</span></label><div class="_actions_487c05"><div><button class="_btn_852a75 _ghost_852a75" type="button">חזרה</button></div><button class="_btn_852a75 _primary_852a75" type="button" disabled="">מיזוג האנשים</button></div></div>"`);
+  });
+});
+
+describe('ConfirmDialog — a cancel that is a link (plan 06, ruling 5)', () => {
+  const closeHref = '/members/p1?tab=aliases';
+
+  it('offers cancel as a link, so a Server Component can raise the dialog with no closure at all', () => {
+    render(
+      <ConfirmDialog
+        title="ביטול קישור הכינוי"
+        consequence="הכינוי יחזור לרשימת השמות שממתינים לשיוך."
+        confirmLabel="ביטול הקישור"
+        cancelHref={closeHref}
+        action={async () => {}}
+      />,
+    );
+    expect(screen.getByRole('link', { name: 'ביטול' }).getAttribute('href')).toBe(closeHref);
+    expect(screen.queryByRole('button', { name: 'ביטול' })).toBeNull();
+  });
+
+  it('opens with focus on that link, so Enter still cancels rather than destroys', () => {
+    render(
+      <ConfirmDialog
+        title="ביטול קישור הכינוי"
+        consequence="הכינוי יחזור לרשימת השמות שממתינים לשיוך."
+        confirmLabel="ביטול הקישור"
+        cancelHref={closeHref}
+        action={async () => {}}
+      />,
+    );
+    expect(document.activeElement).toBe(screen.getByRole('link', { name: 'ביטול' }));
+  });
+
+  it('sends esc to the cancel href', () => {
+    replace.mockClear();
+    render(
+      <ConfirmDialog
+        title="ביטול קישור הכינוי"
+        consequence="הכינוי יחזור לרשימת השמות שממתינים לשיוך."
+        confirmLabel="ביטול הקישור"
+        cancelHref={closeHref}
+        action={async () => {}}
+      />,
+    );
+    fireEvent.keyDown(screen.getByRole('alertdialog', { name: 'ביטול קישור הכינוי' }), { key: 'Escape' });
+    expect(replace).toHaveBeenCalledWith(closeHref);
+  });
+
+  it('sends a scrim click to the cancel href', () => {
+    replace.mockClear();
+    render(
+      <ConfirmDialog
+        title="ביטול קישור הכינוי"
+        consequence="הכינוי יחזור לרשימת השמות שממתינים לשיוך."
+        confirmLabel="ביטול הקישור"
+        cancelHref={closeHref}
+        action={async () => {}}
+      />,
+    );
+    const scrim = document.querySelector('[aria-hidden="true"]');
+    expect(scrim).not.toBeNull();
+    fireEvent.click(scrim!);
+    expect(replace).toHaveBeenCalledWith(closeHref);
+  });
+
+  it('still submits the bound Server Action from the confirm button', () => {
+    render(
+      <ConfirmDialog
+        title="ביטול קישור הכינוי"
+        consequence="הכינוי יחזור לרשימת השמות שממתינים לשיוך."
+        confirmLabel="ביטול הקישור"
+        cancelHref={closeHref}
+        action={async () => {}}
+      />,
+    );
+    const confirm = screen.getByRole('button', { name: 'ביטול הקישור' }) as HTMLButtonElement;
+    expect(confirm.type).toBe('submit');
+    expect(confirm.closest('form')).not.toBeNull();
+  });
+});

@@ -37,7 +37,9 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/members',
   useSearchParams: () => new URLSearchParams(),
 }));
-vi.mock('../actions', () => ({ addMemberAction: vi.fn(), createPersonAction: vi.fn() }));
+vi.mock('../actions', () => ({
+  addMemberAction: vi.fn(), createPersonAction: vi.fn(), unlinkAliasAction: vi.fn(),
+}));
 
 import PersonPage from './page';
 import styles from './person.module.css';
@@ -266,5 +268,82 @@ describe('/members/[id] — the side panel', () => {
     const panel = screen.getByRole('complementary', { name: 'פרטי הרשומה' });
     expect(within(panel).getByText(/הצטרפות לברן 26/)).toBeTruthy();
     expect(within(panel).queryByText(/אושר ע״י/)).toBeNull();
+  });
+});
+
+/*
+ * Plan 06, Task 10, ruling 5. The whole point of this dialog is that it is
+ * *server*-rendered: R7's two-client-component budget on this screen is spent
+ * on `people-table.tsx` and `merge-confirm.tsx`, so the confirmation is driven
+ * by `?unlink=<aliasId>` and cancels through a link, never a closure.
+ */
+describe('/members/[id] — unlinking a spelling', () => {
+  const TWO = [
+    { aliasId: 'al1', alias: 'רוני אדלר', source: 'manual' as const, mergedFromPersonId: null, confirmedBy: 'lead@shliff.camp', confirmedAt: new Date('2026-07-01'), cell: null },
+    { aliasId: 'al2', alias: 'Roni A.', source: 'import' as const, mergedFromPersonId: null, confirmedBy: null, confirmedAt: null, cell: null },
+  ];
+
+  it('carries a link per spelling that puts the decision in the URL', async () => {
+    aliasSourcesFor.mockResolvedValue(TWO);
+    await renderPage({ tab: 'aliases', season: 's26' });
+    const panel = screen.getByRole('complementary', { name: 'פרטי הרשומה' });
+    const controls = within(panel).getAllByRole('link', { name: 'ביטול הקישור' });
+    expect(controls).toHaveLength(2);
+    expect(controls[1].getAttribute('href')).toBe('/members/p1?season=s26&tab=aliases&unlink=al2');
+  });
+
+  it('raises the confirmation from the server when the URL names a spelling', async () => {
+    aliasSourcesFor.mockResolvedValue(TWO);
+    await renderPage({ tab: 'aliases', unlink: 'al2' });
+    const dialog = screen.getByRole('alertdialog', { name: 'ביטול קישור הכינוי' });
+    expect(within(dialog).getByText(/יחזור לרשימת השמות שממתינים לשיוך/)).toBeTruthy();
+    expect(within(dialog).getByText('Roni A.')).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'ביטול הקישור' })).toBeTruthy();
+  });
+
+  /* The load-bearing assertion: cancel is a link, which is the only reason
+     this dialog can exist on a Server Component at all. */
+  it('cancels by navigating back to the tab, with no closure anywhere', async () => {
+    aliasSourcesFor.mockResolvedValue(TWO);
+    await renderPage({ tab: 'aliases', unlink: 'al2' });
+    const dialog = screen.getByRole('alertdialog', { name: 'ביטול קישור הכינוי' });
+    expect(within(dialog).getByRole('link', { name: 'ביטול' }).getAttribute('href'))
+      .toBe('/members/p1?tab=aliases');
+  });
+
+  it('says so when the spelling arrived in a merge', async () => {
+    aliasSourcesFor.mockResolvedValue([
+      TWO[0],
+      { ...TWO[1], mergedFromPersonId: 'p9' },
+    ]);
+    await renderPage({ tab: 'aliases', unlink: 'al2' });
+    const dialog = screen.getByRole('alertdialog', { name: 'ביטול קישור הכינוי' });
+    expect(within(dialog).getByText(/הגיע ממיזוג/)).toBeTruthy();
+  });
+
+  it('raises nothing for an id that is not one of this person\'s spellings', async () => {
+    aliasSourcesFor.mockResolvedValue(TWO);
+    await renderPage({ tab: 'aliases', unlink: 'not-theirs' });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  /*
+   * `createPerson` writes the display name as the first alias and `resolveName`
+   * matches on aliases alone, so a person with none is invisible to every
+   * future import. `unlinkAliasAction` refuses it; the screen says why instead
+   * of offering a control that can only fail.
+   */
+  it('offers no control for a person\'s only spelling, and says why', async () => {
+    aliasSourcesFor.mockResolvedValue([TWO[0]]);
+    await renderPage({ tab: 'aliases' });
+    const panel = screen.getByRole('complementary', { name: 'פרטי הרשומה' });
+    expect(within(panel).queryByRole('link', { name: 'ביטול הקישור' })).toBeNull();
+    expect(within(panel).getByText(/אי אפשר יהיה לזהות את האדם בקבצים/)).toBeTruthy();
+  });
+
+  it('raises no dialog for that only spelling even when the URL asks for one', async () => {
+    aliasSourcesFor.mockResolvedValue([TWO[0]]);
+    await renderPage({ tab: 'aliases', unlink: 'al1' });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 });

@@ -20,10 +20,12 @@ import { Popover } from '@/components/ui/popover';
 import { StatTile } from '@/components/ui/stat-tile';
 import { SourceChip } from '@/components/ui/source-chip';
 import { EmptyState } from '@/components/ui/empty-state';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Icon } from '@/components/ui/icon';
 import { Money, DateText } from '@/components/format';
 import { formatShekels } from '@/lib/money';
 import { AddToSeason } from '../add-member';
+import { unlinkAliasAction } from '../actions';
 import styles from './person.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -190,6 +192,51 @@ export default async function PersonPage(
     if (next !== 'overview') query.set('tab', next);
     const text = query.toString();
     return text === '' ? `/members/${dossier!.personId}` : `/members/${dossier!.personId}?${text}`;
+  }
+
+  /*
+   * Ruling 5's confirmation, driven by the URL rather than by state. R7 allows
+   * this screen exactly two new client components and both are spent, so the
+   * dialog is raised by `?unlink=<aliasId>`, submits a bound Server Action, and
+   * cancels through `ConfirmDialog`'s `cancelHref` — no closure crosses the
+   * server/client boundary, and the decision survives a refresh like every
+   * other drawer here.
+   */
+  function unlinkHref(aliasId: string): string {
+    const query = new URLSearchParams();
+    if (requested !== '') query.set('season', requested);
+    if (tab !== 'overview') query.set('tab', tab);
+    query.set('unlink', aliasId);
+    return `/members/${dossier!.personId}?${query.toString()}`;
+  }
+
+  /*
+   * `createPerson` writes the display name as the first alias and `resolveName`
+   * matches on aliases alone, so a person with none is invisible to every future
+   * import. `unlinkAliasAction` refuses that case against the database — this is
+   * the same refusal said before the fact, so the screen never offers a control
+   * whose only outcome is a refusal.
+   */
+  const canUnlink = aliasSources.length > 1;
+  const unlinking = canUnlink
+    ? aliasSources.find((alias) => alias.aliasId === one(search.unlink)) ?? null
+    : null;
+
+  /*
+   * Wrapped in an inline Server Action rather than bound straight onto
+   * `action`: `unlinkAliasAction` answers with an `ActionResult`, and a plain
+   * `<form action>` — which is what `ConfirmDialog` submits through — has
+   * nowhere to put a returned refusal. The only refusal it can return here is
+   * the last-alias one, and `canUnlink` has already withheld the control for
+   * that case, so the wrapper drops a value that is `{ ok: true }` in every
+   * path this screen can reach. A refusal reached by a hand-typed `?unlink=`
+   * on somebody else's alias id is silent: that is a known gap, recorded
+   * rather than papered over, and the spelling simply stays where it was.
+   */
+  const unlinkingId = unlinking?.aliasId ?? '';
+  async function confirmUnlink() {
+    'use server';
+    await unlinkAliasAction(unlinkingId);
   }
 
   const counts: Record<PersonTab, number | undefined> = {
@@ -512,6 +559,15 @@ export default async function PersonPage(
                 <li key={alias.aliasId} className={styles.aliasRow}>
                   <span className={styles.aliasName}><bdi>{alias.alias}</bdi></span>
                   <AliasSourceMark alias={alias} />
+                  {canUnlink ? (
+                    <Link className={styles.aliasUnlink} href={unlinkHref(alias.aliasId)}>
+                      ביטול הקישור
+                    </Link>
+                  ) : (
+                    <span className={styles.aliasLocked}>
+                      הכינוי היחיד — בלעדיו אי אפשר יהיה לזהות את האדם בקבצים.
+                    </span>
+                  )}
                   {alias.mergedFromPersonId === null ? null : (
                     <span className={styles.mergedNote}>הכינוי הזה הגיע ממיזוג.</span>
                   )}
@@ -564,6 +620,21 @@ export default async function PersonPage(
           </section>
         </aside>
       </div>
+
+      {unlinking === null ? null : (
+        <ConfirmDialog
+          title="ביטול קישור הכינוי"
+          consequence={
+            <>
+              הכינוי <bdi>{unlinking.alias}</bdi> יחזור לרשימת השמות שממתינים לשיוך.
+              {unlinking.mergedFromPersonId === null ? null : ' הכינוי הזה הגיע ממיזוג.'}
+            </>
+          }
+          confirmLabel="ביטול הקישור"
+          cancelHref={tabHref(tab)}
+          action={confirmUnlink}
+        />
+      )}
     </main>
   );
 }
