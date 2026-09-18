@@ -124,3 +124,70 @@
   color: var(--ink-3);
   font-size: var(--text-meta);
 }
+
+/* The new-movement drawer's form. */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.kinds {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-3);
+  margin-inline: 0;
+}
+
+.kindsLegend {
+  padding-inline: var(--space-1);
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.kind {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: var(--tap-min);
+}
+
+.input {
+  inline-size: 100%;
+  min-block-size: var(--control-h);
+  padding-inline: var(--space-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.titleRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.newLink {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--control-h);
+  padding-inline: var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--brand);
+  color: var(--brand-ink);
+  text-decoration: none;
+  font-size: var(--text-dense);
+  font-weight: 600;
+}

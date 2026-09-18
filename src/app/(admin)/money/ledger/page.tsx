@@ -6,6 +6,7 @@ import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import { listSeasons } from '@/lib/members/roster';
 import { listAccounts } from '@/lib/money/accounts';
+import { listBudgetLines } from '@/lib/money/budget';
 import {
   listLedgerRows, applyLedgerView, viewCounts, ledgerStrip, groupByMonth,
   runningBalanceFor,
@@ -21,12 +22,15 @@ import { Avatar } from '@/components/ui/avatar';
 import { SourceChip } from '@/components/ui/source-chip';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Banner } from '@/components/ui/banner';
+import { Drawer } from '@/components/ui/drawer';
+import { openActHref, closePeekHref } from '@/components/ui/drawer-url';
 import { SavedViews } from '@/components/ui/saved-views';
 import { FilterBar } from '@/components/ui/filter-bar';
 import type { FilterChip, FilterOption } from '@/components/ui/filter-bar';
 import { StatTile } from '@/components/ui/stat-tile';
 import { chipSource } from '../chip-source';
 import { AttributeAccount } from './attribute-account';
+import { NewMovementForm } from './new-movement-form';
 import styles from './ledger.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -35,8 +39,20 @@ export const metadata: Metadata = { title: 'תנועות' };
 
 export type LedgerSearchParams = {
   season?: string; account?: string; view?: string; q?: string;
-  budget?: string; sort?: string;
+  budget?: string; sort?: string; act?: string;
 };
+
+const PATH = '/money/ledger';
+
+/** The current request's params, as the kit's drawer builders want them.
+ *  A19: no screen spells `act` or `peek` by hand. */
+function asParams(current: LedgerSearchParams): URLSearchParams {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(current)) {
+    if (value !== undefined && value !== '') search.set(key, value);
+  }
+  return search;
+}
 
 /** The season param that means "every year at once". R5 keeps the season in
  *  one param; this is a value of that param, not a second control. A ledger
@@ -146,9 +162,15 @@ export default async function LedgerPage(
     sort: parseSort(params.sort),
   };
 
-  const [all, accounts] = await Promise.all([
+  const creating = params.act === 'movement';
+
+  const [all, accounts, budgetLines] = await Promise.all([
     listLedgerRows(db, scope),
     listAccounts(db),
+    // Only for the create drawer's select. The table never shows a budget
+    // line a movement does not already carry, so querying them on every
+    // request would be a round trip for a control that is not on screen.
+    creating && season !== undefined ? listBudgetLines(db, season.id) : Promise.resolve([]),
   ]);
   const rows = applyLedgerView(all, query);
   const strip = ledgerStrip(rows);
@@ -339,7 +361,21 @@ export default async function LedgerPage(
   return (
     <main className={styles.page}>
       <div className={styles.head}>
-        <h1 className={styles.title}>תנועות</h1>
+        <div className={styles.titleRow}>
+          <h1 className={styles.title}>תנועות</h1>
+          {/*
+            * `העברה בין חשבונות` and `ייצוא` are on the artboard beside this
+            * link and are deliberately absent. The spec's out-of-scope list
+            * names transfers explicitly — a transfer is a two-account form
+            * with its own refusal and its own group-id semantics that no
+            * requirement here asks for — and no requirement in D7 asks for an
+            * export. Neither is rendered disabled: a button that does nothing
+            * is worse than an absent one, because it promises.
+            */}
+          <Link className={styles.newLink} href={openActHref(PATH, asParams(params), 'movement')}>
+            תנועה חדשה
+          </Link>
+        </div>
         <p className={styles.lead}>
           כל שקל שנכנס ויצא, משורות הגיליון ומדמי הקאמפ גם יחד.
           {campWide ? ' כרגע מוצגות כל השנים.' : null}
@@ -409,6 +445,22 @@ export default async function LedgerPage(
 
       {balance.shown ? null : (
         <p className={styles.balanceNote}>{balance.reason}</p>
+      )}
+
+      {!creating ? null : (
+        <Drawer
+          title="תנועה חדשה"
+          subtitle="נרשמת ביד, ותופיע בתנועות עם הסימון נרשם ידנית"
+          closeHref={closePeekHref(PATH, asParams(params))}
+        >
+          <NewMovementForm
+            seasonId={season?.id ?? null}
+            seasons={seasons.map((one) => ({ id: one.id, name: one.name }))}
+            accounts={accounts.map((one) => ({ id: one.id, name: one.name }))}
+            budgetLines={budgetLines.map((one) => ({ id: one.id, label: one.label }))}
+            closeHref={closePeekHref(PATH, asParams(params))}
+          />
+        </Drawer>
       )}
 
       <Table

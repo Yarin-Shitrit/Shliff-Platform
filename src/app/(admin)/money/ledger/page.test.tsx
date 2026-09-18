@@ -11,11 +11,12 @@ import type { SourceCell } from '@/lib/money/trace';
  * top-level `const` referenced inside one throws — `vi.hoisted` gives the
  * factories something to close over instead.
  */
-const { requireAdmin, listSeasons, listAccounts, listLedgerRows, runningBalanceFor } =
-  vi.hoisted(() => ({
-    requireAdmin: vi.fn(), listSeasons: vi.fn(), listAccounts: vi.fn(),
-    listLedgerRows: vi.fn(), runningBalanceFor: vi.fn(),
-  }));
+const {
+  requireAdmin, listSeasons, listAccounts, listLedgerRows, runningBalanceFor, listBudgetLines,
+} = vi.hoisted(() => ({
+  requireAdmin: vi.fn(), listSeasons: vi.fn(), listAccounts: vi.fn(),
+  listLedgerRows: vi.fn(), runningBalanceFor: vi.fn(), listBudgetLines: vi.fn(),
+}));
 /**
  * `FilterBar` (C3) is the kit's own client component: its chips and its sort
  * are links, but the search box holds what is being typed and debounces it
@@ -33,6 +34,7 @@ vi.mock('@/db', () => ({ db: {} }));
 vi.mock('@/lib/auth/guard', () => ({ requireAdmin }));
 vi.mock('@/lib/members/roster', () => ({ listSeasons }));
 vi.mock('@/lib/money/accounts', () => ({ listAccounts }));
+vi.mock('@/lib/money/budget', () => ({ listBudgetLines }));
 /**
  * Only the two database readers are replaced. `applyLedgerView`, `viewCounts`,
  * `ledgerStrip` and `groupByMonth` stay the real functions: they are the
@@ -74,6 +76,7 @@ beforeEach(() => {
   listSeasons.mockResolvedValue([SEASON]);
   listAccounts.mockResolvedValue([]);
   listLedgerRows.mockResolvedValue([]);
+  listBudgetLines.mockResolvedValue([]);
   runningBalanceFor.mockResolvedValue({ shown: false, reason: 'אין' });
 });
 
@@ -400,5 +403,43 @@ describe('money with no account', () => {
     listLedgerRows.mockResolvedValue([row({ id: '1' })]);
     await renderPage();
     expect(screen.queryByRole('status')).toBeNull();
+  });
+});
+
+/**
+ * A19: a create drawer has no record to peek at, so it is `?act=<verb>` with
+ * no `peek`, built through the kit's `openActHref`. This plan's `?new=movement`
+ * predates that ruling.
+ */
+describe('recording a movement by hand', () => {
+  it('offers תנועה חדשה in the page head, keeping the season', async () => {
+    await renderPage();
+    expect(screen.getByRole('link', { name: 'תנועה חדשה' }).getAttribute('href'))
+      .toBe('/money/ledger?season=s1&act=movement');
+  });
+
+  it('opens the form from the URL', async () => {
+    listAccounts.mockResolvedValue([{ id: 'a1', name: 'קופה מזומן', kind: 'cash' }]);
+    await renderPage({ act: 'movement' });
+    const drawer = screen.getByRole('dialog');
+    expect(within(drawer).getByRole('button', { name: 'רישום התנועה' })).toBeTruthy();
+    expect(within(drawer).getByRole('radio', { name: 'נכנס' })).toBeTruthy();
+  });
+
+  it('shows no drawer when the URL asks for none', async () => {
+    await renderPage();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  /**
+   * Both are out of scope and neither is rendered disabled. The spec's
+   * out-of-scope list names transfers explicitly, and no requirement in D7
+   * asks for an export — a button that does nothing is worse than an absent
+   * one, because it promises.
+   */
+  it('offers neither a transfer nor an export', async () => {
+    await renderPage();
+    expect(screen.queryByText('העברה בין חשבונות')).toBeNull();
+    expect(screen.queryByText('ייצוא')).toBeNull();
   });
 });
