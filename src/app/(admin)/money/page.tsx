@@ -5,50 +5,19 @@ import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import { listSeasons } from '@/lib/members/roster';
 import { moneyOverview } from '@/lib/money/overview';
-import type { ObligationRow } from '@/lib/money/obligations';
 import { formatILS, formatShekels } from '@/lib/money';
 import { Money } from '@/components/format';
 import { Banner } from '@/components/ui/banner';
 import { StatTile } from '@/components/ui/stat-tile';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StackedBar } from '@/components/charts/stacked-bar';
-import { Meter } from '@/components/charts/meter';
 import { AccountCard } from './account-card';
+import { ObligationsTable } from './obligations-table';
 import styles from './money.module.css';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = { title: 'כספים' };
-
-/**
- * One direction's worth of obligation rows. Split out so the page can render
- * "what we owe" and "what's owed to us" as two separately headed tables —
- * concatenating both directions under one header left a reader with no way
- * to tell, from a single row, which way the money was supposed to move.
- */
-function ObligationsTable({ rows }: { rows: ObligationRow[] }) {
-  return (
-    <table>
-      <thead>
-        <tr><th>למי</th><th>על מה</th><th>סכום</th><th>קוזז</th><th>נותר</th></tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => (
-          <tr key={row.id}>
-            <td>{row.displayParty ?? <span className="badge-warn">⚠ חסר שם</span>}</td>
-            <td>{row.description}</td>
-            <td><bdi>{formatILS(row.amountAgorot)} ₪</bdi></td>
-            <td>
-              <Meter label={row.description} valueAgorot={row.settledAgorot}
-                     totalAgorot={row.amountAgorot} />
-            </td>
-            <td><bdi>{formatILS(row.outstandingAgorot)} ₪</bdi></td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
 
 /**
  * The page the lead opens to see where the money is. It leads with the
@@ -279,44 +248,56 @@ export default async function MoneyPage(
         ) : null}
       </section>
 
-      <section className="card">
-        <h2>מה חייבים ומה חייבים לנו</h2>
-        {summary.campOwes.length === 0 && summary.owedToCamp.length === 0 ? (
-          <p className="muted">
-            אין חובות רשומים ל<bdi>{season.name}</bdi>. אפשר לייבא נתונים מ
-            <Link href="/upload">דף הייבוא</Link>, או אם חיפשתם שנה אחרת — לבחור
-            אותה למעלה.
-          </p>
-        ) : (
-          <>
-            <h3>מה אנחנו חייבים</h3>
-            {summary.campOwes.length === 0 ? (
-              <p className="muted">
-                אין חובות שהקאמפ חייב ל<bdi>{season.name}</bdi>. אפשר לייבא
-                נתונים מ<Link href="/upload">דף הייבוא</Link>, או אם חיפשתם
-                שנה אחרת — לבחור אותה למעלה.
-              </p>
-            ) : (
-              <ObligationsTable rows={summary.campOwes} />
-            )}
+      <section>
+        <div className={styles.sectionTitle}>
+          <h2 className={styles.sectionHeading}>מה חייבים ומה חייבים לנו</h2>
+          <Link className={`link ${styles.sectionLink}`} href={`/money/debts${scope}`}>
+            לכל החובות ←
+          </Link>
+        </div>
 
-            <h3>מה חייבים לנו</h3>
-            {summary.owedToCamp.length === 0 ? (
-              <p className="muted">
-                אין חובות שחייבים לקאמפ ל<bdi>{season.name}</bdi>. אפשר לייבא
-                נתונים מ<Link href="/upload">דף הייבוא</Link>, או אם חיפשתם
-                שנה אחרת — לבחור אותה למעלה.
-              </p>
-            ) : (
-              <ObligationsTable rows={summary.owedToCamp} />
-            )}
-          </>
+        {summary.campOwes.length === 0 && summary.owedToCamp.length === 0 ? (
+          <EmptyState kind="nothing-this-season" noun="חובות רשומים"
+                      seasonName={season.name}
+                      action={{ href: '/upload', label: 'לדף הייבוא' }} />
+        ) : (
+          <div className={styles.debtGrid}>
+            <div>
+              <h3 className={styles.debtHeading}>
+                מה אנחנו חייבים — <Money agorot={summary.campOwesAgorot} />
+              </h3>
+              {summary.campOwes.length === 0 ? (
+                <EmptyState kind="nothing-this-season" noun="חובות שהקאמפ חייב"
+                            seasonName={season.name}
+                            action={{ href: '/upload', label: 'לדף הייבוא' }} />
+              ) : (
+                <ObligationsTable direction="camp_owes" rows={summary.campOwes}
+                                  sources={view.sources} scope={scope} />
+              )}
+            </div>
+            <div>
+              <h3 className={styles.debtHeading}>
+                מה חייבים לנו — <Money agorot={summary.owedToCampAgorot} />
+              </h3>
+              {summary.owedToCamp.length === 0 ? (
+                <EmptyState kind="nothing-this-season" noun="חובות שחייבים לקאמפ"
+                            seasonName={season.name}
+                            action={{ href: '/upload', label: 'לדף הייבוא' }} />
+              ) : (
+                <ObligationsTable direction="owed_to_camp" rows={summary.owedToCamp}
+                                  sources={view.sources} scope={scope} />
+              )}
+            </div>
+          </div>
         )}
+
         {summary.unnamed.length > 0 ? (
-          <p className="badge-warn">
-            ⚠ <bdi>{summary.unnamed.length}</bdi> חובות בלי שם. אי אפשר לסגור
-            אותם עד שיירשם למי מגיע הכסף.
-          </p>
+          <Banner
+            tone="warn"
+            action={{ href: `/inbox${scope}`, label: 'לטיפול' }}
+            headline={<bdi>{summary.unnamed.length} חובות בלי שם.</bdi>}
+            detail="אי אפשר לסגור אותם עד שיירשם למי מגיע הכסף."
+          />
         ) : null}
       </section>
 

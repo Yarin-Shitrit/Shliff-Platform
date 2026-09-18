@@ -85,6 +85,16 @@ function account(overrides: Partial<AccountBalance> = {}): AccountBalance {
   };
 }
 
+function obligation(overrides: Partial<ObligationRow> = {}): ObligationRow {
+  return {
+    id: 'o1', direction: 'camp_owes', partyPersonId: 'p1', partyName: null,
+    displayParty: 'אורי', description: 'החזר על קרח', amountAgorot: 30000,
+    settledAgorot: 0, outstandingAgorot: 30000, settled: false, unnamed: false,
+    seasonId: 's1', sourceBlockId: null, sourceRow: null, settlements: [],
+    ...overrides,
+  };
+}
+
 function overview(overrides: Partial<MoneyOverview> = {}): MoneyOverview {
   return {
     summary: summary(),
@@ -302,7 +312,7 @@ describe('MoneyPage', () => {
     expect(screen.queryByText(/לא מסתכמים לתקציב/)).toBeNull();
   });
 
-  it('shows an unnamed obligation\'s warning glyph inline, and the un-settleable count separately', async () => {
+  it('says an unnamed obligation\'s refusal in a word, and counts the un-settleable separately', async () => {
     const named: ObligationRow = {
       id: 'o1', direction: 'camp_owes', partyPersonId: 'p1', partyName: null,
       displayParty: 'אופק', description: 'שכ״ט DJ', amountAgorot: 200000,
@@ -325,10 +335,13 @@ describe('MoneyPage', () => {
 
     const section = sectionFor('מה חייבים ומה חייבים לנו');
     const rows = within(section).getAllByRole('row');
-    // rows[0] is the header; the two data rows follow in array order.
+    // rows[0] is the header; the two data rows follow in array order. R3: the
+    // refusal is the word `חסר שם`, never a red `⚠` whose meaning only a
+    // sighted reader could recover.
     expect(within(rows[1]).getByText('אופק')).toBeTruthy();
-    expect(within(rows[1]).queryByText('⚠ חסר שם')).toBeNull();
-    expect(within(rows[2]).getByText('⚠ חסר שם')).toBeTruthy();
+    expect(within(rows[1]).queryByText('חסר שם')).toBeNull();
+    expect(within(rows[2]).getByText('חסר שם')).toBeTruthy();
+    expect(section.textContent).not.toContain('⚠');
 
     // The un-settleable count is a fact about `summary.unnamed` (one row),
     // independent of how many obligation rows the table happens to show
@@ -336,7 +349,9 @@ describe('MoneyPage', () => {
     // `getByText` only inspects an element's own direct text-node children
     // (see `getNodeText` in @testing-library/dom), so a phrase split across
     // a `<bdi>` needs a plain substring check on `textContent` instead.
-    expect(section.textContent).toMatch(/⚠ 1 חובות בלי שם/);
+    expect(section.textContent).toMatch(/1 חובות בלי שם/);
+    expect(within(section).getByRole('link', { name: 'לטיפול' }).getAttribute('href'))
+      .toBe('/inbox?season=s1');
   });
 
   it("flags a budget line's bad arithmetic inline, without hiding its total", async () => {
@@ -376,24 +391,38 @@ describe('MoneyPage', () => {
     render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
 
     // Each empty state must name the season *and* point somewhere actionable
-    // — the season switcher above is not enough on its own, because these
-    // three tables are only ever populated through /upload; a message that
+    // — the season switcher in the sidebar is not enough on its own, because
+    // these tables are only ever populated through /upload; a message that
     // just states absence (as the earlier version of this page did) leaves a
     // lead who just seeded a season with no idea what to do next.
-    for (const heading of ['התנועות', 'התקציב', 'מה חייבים ומה חייבים לנו']) {
+    //
+    // The sentence is the kit's (C10), not this screen's: `EmptyState` owns
+    // the wording so eleven lists do not grow eleven dialects of "nothing
+    // here". What this page supplies is the noun, the season and the action.
+    for (const heading of ['מה חייבים ומה חייבים לנו']) {
       const section = sectionFor(heading);
-      expect(within(section).getByText(SEASON.name)).toBeTruthy();
+      expect(section.textContent).toContain(SEASON.name);
+      const link = within(section).getByRole('link', { name: 'לדף הייבוא' });
+      expect(link.getAttribute('href')).toBe('/upload');
+    }
+
+    // Still Wave 1's hand-written sentences until Tasks 9 and 10 move these
+    // two bands onto the kit's EmptyState; both move into the loop above
+    // then. They are asserted here so the interim never goes uncovered.
+    for (const heading of ['התנועות', 'התקציב']) {
+      const section = sectionFor(heading);
+      expect(section.textContent).toContain(SEASON.name);
       const link = within(section).getByRole('link', { name: 'דף הייבוא' });
       expect(link.getAttribute('href')).toBe('/upload');
     }
 
     // Accounts are camp-wide, not season-scoped (see `accountBalances` in
-    // src/lib/money/accounts.ts) — pointing at "the season switcher above"
-    // for an empty account list would be actively misleading, since
-    // switching seasons can never change it. BarList's `emptyMessage` prop is
-    // a plain string, so this one is text-only, not a real link.
+    // src/lib/money/accounts.ts) — naming a season for an empty account list
+    // would be actively misleading, since switching seasons can never change
+    // it. So this one is `nothing-yet`, which says nothing about a year.
     const accountsSection = sectionFor('איפה הכסף');
-    expect(within(accountsSection).getByText(/דף הייבוא/)).toBeTruthy();
+    expect(within(accountsSection).getByRole('link', { name: 'לדף הייבוא' })).toBeTruthy();
+    expect(accountsSection.textContent).not.toContain(SEASON.name);
 
     // A `>= 0` off-by-one on the unnamed-count guard would show this banner
     // on every season, including one with nothing unnamed to chase down.
@@ -424,9 +453,9 @@ describe('MoneyPage', () => {
     // anywhere in the outer section would find both names regardless of
     // which table they actually landed in, and would not prove a reader can
     // tell the two directions apart.
-    const weOweTable = screen.getByRole('heading', { name: 'מה אנחנו חייבים' })
+    const weOweTable = screen.getByRole('heading', { level: 3, name: /מה אנחנו חייבים/ })
       .nextElementSibling as HTMLElement;
-    const owedToUsTable = screen.getByRole('heading', { name: 'מה חייבים לנו' })
+    const owedToUsTable = screen.getByRole('heading', { level: 3, name: /מה חייבים לנו/ })
       .nextElementSibling as HTMLElement;
 
     expect(within(weOweTable).getByText('דנה')).toBeTruthy();
@@ -461,13 +490,13 @@ describe('MoneyPage', () => {
     }));
     render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
 
-    const emptyDirection = screen.getByRole('heading', { name: 'מה אנחנו חייבים' })
+    const emptyDirection = screen.getByRole('heading', { level: 3, name: /מה אנחנו חייבים/ })
       .nextElementSibling as HTMLElement;
-    expect(within(emptyDirection).getByText(SEASON.name)).toBeTruthy();
-    const link = within(emptyDirection).getByRole('link', { name: 'דף הייבוא' });
+    expect(emptyDirection.textContent).toContain(SEASON.name);
+    const link = within(emptyDirection).getByRole('link', { name: 'לדף הייבוא' });
     expect(link.getAttribute('href')).toBe('/upload');
 
-    const populatedDirection = screen.getByRole('heading', { name: 'מה חייבים לנו' })
+    const populatedDirection = screen.getByRole('heading', { level: 3, name: /מה חייבים לנו/ })
       .nextElementSibling as HTMLElement;
     expect(within(populatedDirection).getByText('יוסי')).toBeTruthy();
   });
@@ -486,14 +515,14 @@ describe('MoneyPage', () => {
     }));
     render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
 
-    const populatedDirection = screen.getByRole('heading', { name: 'מה אנחנו חייבים' })
+    const populatedDirection = screen.getByRole('heading', { level: 3, name: /מה אנחנו חייבים/ })
       .nextElementSibling as HTMLElement;
     expect(within(populatedDirection).getByText('דנה')).toBeTruthy();
 
-    const emptyDirection = screen.getByRole('heading', { name: 'מה חייבים לנו' })
+    const emptyDirection = screen.getByRole('heading', { level: 3, name: /מה חייבים לנו/ })
       .nextElementSibling as HTMLElement;
-    expect(within(emptyDirection).getByText(SEASON.name)).toBeTruthy();
-    const link = within(emptyDirection).getByRole('link', { name: 'דף הייבוא' });
+    expect(emptyDirection.textContent).toContain(SEASON.name);
+    const link = within(emptyDirection).getByRole('link', { name: 'לדף הייבוא' });
     expect(link.getAttribute('href')).toBe('/upload');
   });
 
@@ -633,6 +662,27 @@ describe('MoneyPage', () => {
       // The bar list is gone: it compared a קופה against a bank account,
       // which is a comparison nobody asked for.
       expect(within(section).queryByRole('img', { name: /קופת מזומן/ })).toBeNull();
+    });
+  });
+  describe('what is owed, in both directions', () => {
+    it('heads the two debt tables with the direction each one runs in', async () => {
+      moneyOverview.mockResolvedValue(overview({
+        summary: summary({
+          campOwes: [obligation()],
+          owedToCamp: [obligation({ id: 'o9', direction: 'owed_to_camp' })],
+          campOwesAgorot: 30000, owedToCampAgorot: 30000,
+        }),
+      }));
+      render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+      expect(screen.getByRole('columnheader', { name: 'למי' })).toBeTruthy();
+      expect(screen.getByRole('columnheader', { name: 'ממי' })).toBeTruthy();
+      expect(screen.getAllByRole('columnheader', { name: 'למי' })).toHaveLength(1);
+    });
+
+    it('carries the whole register onward from the heading', async () => {
+      render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+      expect(screen.getByRole('link', { name: /לכל החובות/ }).getAttribute('href'))
+        .toBe('/money/debts?season=s1');
     });
   });
 });
