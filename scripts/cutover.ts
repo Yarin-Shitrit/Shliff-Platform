@@ -1238,8 +1238,13 @@ function reportDecisions(): void {
 }
 
 main().catch((error) => {
+  // The report buffer is flushed on EVERY exit, not only a refusal. A crash
+  // rolls the transaction back just as cleanly, but the lead still needs the
+  // before-counts, the money snapshot and the per-row verification to know how
+  // far the run got — and on a crash they need it more, not less. Printing it
+  // before the error keeps the stack trace as the last thing on screen.
+  process.stdout.write(`${out.join('\n')}\n\n`);
   if (error instanceof CutoverRefusal) {
-    process.stdout.write(`${out.join('\n')}\n\n`);
     console.error(`REFUSED: ${error.message}`);
     process.exit(2);
   }
