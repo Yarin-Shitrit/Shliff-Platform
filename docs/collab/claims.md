@@ -1,6 +1,6 @@
 # What is in flight
 
-**updated: 2026-09-18** · if that date is more than a day or two old, **this file
+**updated: 2026-09-19** · if that date is more than a day or two old, **this file
 is fiction**. Read §1 before you act on §3.
 
 This is the only document in `docs/collab/` that goes stale, and it goes stale
@@ -51,9 +51,10 @@ touching `docs/reference-data/`, and pushing or force-pushing shared branches.
 
 | Who | Area | Branch | State | As of |
 |---|---|---|---|---|
-| @Yarin-Shitrit | Phase 4 UI redesign | `feat/ui-01-foundation` | **active** — wave 3 | 2026-09-18 |
-| `@<teammate-handle>` | Logistics | — | onboarding, not yet started | 2026-09-18 |
-| @Yarin-Shitrit | Collaboration harness | `docs/collab-harness` | this document | 2026-09-18 |
+| @Yarin-Shitrit | Phase 4 UI redesign | `feat/ui-01-foundation` | **active** — wave 3, inbox lane | 2026-09-19 |
+| @Yarin-Shitrit | Promotion gate + sheet retirement | merged to `main`; migration `0008` pending | **active** | 2026-09-19 |
+| `@<teammate-handle>` | Logistics | — | onboarding, not yet started | 2026-09-19 |
+| @Yarin-Shitrit | Collaboration harness + CI | merged to `main` | done | 2026-09-19 |
 
 ### Phase 4, in more detail
 
@@ -76,7 +77,12 @@ Reported by the session executing it on 2026-09-18, **not independently verified
 settled, so Hebrew error strings are safe to add — add to that map, never start
 a second one.
 
-### Environment, as of 2026-09-18
+**Also in flight on the data side**, and easy to miss because it is not a UI
+plan: `main` now carries a promotion gate that skips any workbook table already
+owning rows, and a migration `0008` adding sheet retirement is coming. If your
+work reads `sheets` or renders block state, both change what it sees.
+
+### Environment, as of 2026-09-19
 
 - **Container state is a property of right now, not of the repo.** Any document
   asserting it is stale the moment it is written — this one included. Run
@@ -87,9 +93,20 @@ a second one.
   code. Starting or stopping it is the camp lead's call. On 2026-09-18 it was
   stopped and then restarted, with the lead's approval, inside an hour — that is
   the cadence you are documenting against.
-- `origin` carries `main` (`45fa275`) and `feat/ui-01-foundation`. Both were
-  pushed on 2026-09-18 after nine days during which the remote held nothing newer
-  than 2026-09-09.
+- `origin` carries `main` (`70a957c`) and `feat/ui-01-foundation`. Both were
+  pushed on 2026-09-18 after nine days in which the remote held nothing newer
+  than 2026-09-09. **Push early** — that gap put 334 commits on one laptop.
+- **CI runs on every PR and every push to `main`**: typecheck, lint, and the
+  suite with a guard that refuses a run which did not actually run. Measured at
+  903 tests in 11m20s on `main`; Phase 4 roughly doubles that.
+- **`npm ci` cannot start the suite on a clean machine.** `package-lock.json`
+  resolves none of rolldown's fifteen platform bindings, so a fresh checkout has
+  no native binding and vitest dies at startup. Workaround in
+  `onboarding.md`; the real fix moves ~40 versions and is not mid-wave work.
+- **Several sessions share this box.** `pgrep -fl vitest` before believing a mass
+  red, and before assuming a running suite is yours — attributing one by repo
+  rather than by measurement has already misdirected two sessions. Resolve the
+  owner from the process's own command line.
 
 ## 4. Updating this file
 
