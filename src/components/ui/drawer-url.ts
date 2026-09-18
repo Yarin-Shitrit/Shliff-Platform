@@ -44,3 +44,15 @@ export function openPeekHref(
 export function closePeekHref(pathname: string, current: ReadableParams): string {
   return build(pathname, current, () => {});
 }
+
+/**
+ * A create drawer has no record to peek at, so it is `?act=<verb>` with no
+ * `peek` — everything else survives exactly as it does for `openPeekHref` and
+ * `closePeekHref`. Opening a create drawer over an already-open record drawer
+ * replaces it rather than stacking both.
+ */
+export function openActHref(pathname: string, current: ReadableParams, act: string): string {
+  return build(pathname, current, (next) => {
+    next.set(ACT_PARAM, act);
+  });
+}

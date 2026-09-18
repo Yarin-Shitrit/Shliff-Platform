@@ -12,26 +12,17 @@
  * that wave's spec forbade writing a new `seasons` row. Both are now false —
  * it opens `NewSeasonDrawer` (rendered alongside this component in
  * `sidebar.tsx`) via `?act=season`. There is no record id to carry, so this
- * is an `act` with no `peek` (R6), built by hand below rather than through
- * `openPeekHref` (which always sets `peek`) — the same shape plan 10's
- * create drawer uses for `?act=task`.
+ * is an `act` with no `peek` (R6), built through `openActHref` — the same
+ * shape plan 10's create drawer uses for `?act=task`.
  */
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Icon } from '@/components/ui/icon';
-import { ACT_PARAM, PEEK_PARAM } from '@/components/ui/drawer-url';
+import { openActHref } from '@/components/ui/drawer-url';
 import { pickSeason } from '@/lib/seasons/pick';
 import { seasonHref } from './season-href';
 import styles from './sidebar.module.css';
-
-function newSeasonHref(pathname: string, search: string): string {
-  const params = new URLSearchParams(search);
-  params.delete(PEEK_PARAM);
-  params.set(ACT_PARAM, 'season');
-  const query = params.toString();
-  return query ? `${pathname}?${query}` : pathname;
-}
 
 export interface SwitchSeason {
   id: string;
@@ -124,7 +115,7 @@ export function SeasonSwitch({ seasons }: { seasons: SwitchSeason[] }) {
             <div className={styles.divider} />
             <Link
               className={styles.menuitem}
-              href={newSeasonHref(pathname, search)}
+              href={openActHref(pathname, searchParams, 'season')}
               onClick={() => setOpen(false)}
             >
               <Icon name="plus" size={16} />
