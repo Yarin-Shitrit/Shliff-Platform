@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import type { TestDb } from '@/test/db';
 import { createTestDb } from '@/test/db';
 import { createSeason } from '@/lib/members/roster';
-import { uploads, sheets } from '@/db/schema/source';
+import { uploads, sheets, blocks } from '@/db/schema/source';
+import { ledgerEntries } from '@/db/schema/money';
 import {
   setSheetSeason, setSheetAuthority, listSheets, sheetEligibility,
   retireSheet, unretireSheet,
@@ -313,5 +314,40 @@ describe('retirement', () => {
     const [row] = await listSheets(db);
     expect(row.seasonId).toBeNull();
     expect(row.retiredAt).not.toBeNull();
+  });
+
+  /**
+   * The allow-path R53's guard must never close off: this IS the eight
+   * closed-season ברן 23'/24' sheets the whole feature exists for — a live,
+   * labelled sheet sharing a name with a retired, SEASON-LESS copy that
+   * still owns rows from before this feature existed. `conflicts()` never
+   * treats a season-less retired sheet as a rival of a labelled live one
+   * (only an EXPLICIT same-season match survives retirement — see
+   * `conflicts()`'s own comment), so `refuseIfRetiredRivalOwnsRows` never
+   * even looks at this retired sheet's rows, and the live one may be marked
+   * authoritative freely. A version of the guard that matched by `name`
+   * alone, instead of going through `conflicts()`, would refuse this and
+   * silently start blocking the exact case R53 must not touch.
+   */
+  it('allows a live sheet to become authoritative even though a retired, season-less, same-named rival owns rows', async () => {
+    const live = await addSheet('26.xlsx', 'תקציב קאמפ');
+    await setSheetSeason(db, live, s26);
+
+    const retired = await addSheet('23.xlsx', 'תקציב קאמפ'); // no season, like the real ברן 23/24 sheets
+    await retireSheet(db, retired, 'lead@shliff.test');
+    const [block] = await db.insert(blocks).values({
+      sheetId: retired, top: 1, left: 1, bottom: 2, right: 4,
+      archetype: 'ledger', confidence: '1.0000', headerRow: 1, fingerprint: null,
+      pipelineVersion: 1, rawGrid: [['תאריך', 'פירוט']],
+    }).returning();
+    await db.insert(ledgerEntries).values({
+      occurredOn: new Date(), direction: 'out', amount: '100.00',
+      description: 'רשומה מלפני הפרישה', recordedBy: 'lead@shliff.test',
+      sourceBlockId: block.id, sourceRow: 1,
+    });
+
+    await expect(setSheetAuthority(db, live, true)).resolves.toBeUndefined();
+    const rows = await listSheets(db);
+    expect(rows.find((r) => r.id === live)?.authoritative).toBe(true);
   });
 });

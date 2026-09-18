@@ -71,10 +71,21 @@ export async function setSheetSeason(
  * The fix is not to let a retired block release its rows on this path —
  * that would make retiring a sheet destroy data as a side effect of an
  * unrelated action, exactly what R43 forbids. Instead this refuses the
- * transfer outright and tells the lead to `unretireSheet` the rival first:
- * with both copies live again, the ordinary transfer path (loser refuses,
- * `reject()` sweeps) is intact, and the lead can re-retire afterwards if
- * they still want to.
+ * transfer outright and tells the lead to `unretireSheet` the rival first.
+ *
+ * That restores the *visible* state exactly — with both copies live again,
+ * the rival correctly reads `sheet-superseded` the moment `sheetId` is
+ * chosen, so the register stops showing a live-looking sheet with an
+ * un-collectable authority conflict. It does NOT, by itself, restore the
+ * ordinary SWEEP: `promoteAllGated` (the app's actual bulk promote action)
+ * gates on `promotedRowCounts` before ever calling `promoteBlock`, and the
+ * rival's block already owns rows — so the gate skips it as
+ * `'already-promoted'` and `reject()`/`sweep()` never runs for it through
+ * that path. The rival's stale row physically leaves only through a direct
+ * `promoteBlock` call, which today means `scripts/cutover.ts` (guarded,
+ * evidence-gated, and deliberately the only caller allowed to re-promote a
+ * block that already owns rows). The lead can re-retire `sheetId`'s old
+ * rival afterwards either way.
  *
  * Not reachable for a season-less retired sheet (the eight ברן 23/24
  * sheets this feature exists for): `conflicts()` only lets a retired sheet
