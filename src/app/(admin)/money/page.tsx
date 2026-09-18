@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { StackedBar } from '@/components/charts/stacked-bar';
 import { AccountCard } from './account-card';
 import { ObligationsTable } from './obligations-table';
+import { BudgetTable } from './budget-table';
 import styles from './money.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -48,9 +49,6 @@ export default async function MoneyPage(
   const { summary } = view;
   const { identity } = summary;
   const scope = `?season=${season.id}`;
-  // Transitional: the budget band is still Wave 1's flat table until Task 9
-  // replaces it with `BudgetTable`, which reads the groups directly.
-  const budget = view.budget.flatMap((group) => group.lines);
   const movements = view.recent;
 
   // `duesFundingIdentity` (src/lib/money/funding.ts) sets both of these to
@@ -335,42 +333,15 @@ export default async function MoneyPage(
         )}
       </section>
 
-      <section className="card">
-        <h2>התקציב</h2>
-        {budget.length === 0 ? (
-          <p className="muted">
-            עדיין לא נרשם תקציב ל<bdi>{season.name}</bdi>. אפשר לייבא נתונים מ
-            <Link href="/upload">דף הייבוא</Link>, או אם חיפשתם שנה אחרת — לבחור
-            אותה למעלה.
-          </p>
-        ) : (
-          <div className="scroll-x">
-            <table>
-              <thead>
-                <tr><th>סעיף</th><th>כמות</th><th>ליחידה</th><th>סה״כ</th><th>למה</th></tr>
-              </thead>
-              <tbody>
-                {budget.map((line) => (
-                  <tr key={line.id}>
-                    <td>
-                      {line.label}
-                      {line.arithmeticOff ? (
-                        <span className="badge-warn" title="כמות × מחיר ליחידה אינו שווה לסה״כ">
-                          {' '}⚠
-                        </span>
-                      ) : null}
-                    </td>
-                    <td><bdi>{line.quantityText ?? ''}</bdi></td>
-                    <td>{line.unitCostAgorot === null
-                      ? '' : <bdi>{formatILS(line.unitCostAgorot)} ₪</bdi>}</td>
-                    <td><bdi>{formatILS(line.totalAgorot)} ₪</bdi></td>
-                    <td className="muted">{line.rationale ?? ''}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+      <section>
+        <div className={styles.sectionTitle}>
+          <h2 className={styles.sectionHeading}>התקציב</h2>
+          <span className={styles.sectionNote}>
+            עמודת ״למה״ היא הנימוק כפי שנכתב בגיליון
+          </span>
+        </div>
+        <BudgetTable groups={view.budget} totals={view.budgetTotals}
+                     sources={view.sources} seasonName={season.name} />
       </section>
     </main>
   );

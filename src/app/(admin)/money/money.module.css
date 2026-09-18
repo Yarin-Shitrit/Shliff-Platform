@@ -96,3 +96,16 @@
 @media (max-width: 1023px) { .debtGrid { grid-template-columns: 1fr; } }
 
 .debtHeading { font-size: var(--text-body); margin-block: 0 var(--space-2); }
+
+/* Status, not identity (A4): `--ink-3`, or `--bad` when the line overran.
+   Never a series hue and never the accent — and never the only carrier of
+   that meaning, because the row also says `חריגה` in words. */
+.spendBar { display: block; inline-size: 120px; margin-block-start: 5px; }
+.spendTrack { fill: var(--sunken); }
+.spendMark { fill: var(--ink-3); }
+.spendOver { fill: var(--bad); }
+
+.lineLabel { display: flex; align-items: center; gap: var(--space-2); }
+.quantity { display: block; font-size: var(--text-dense); color: var(--ink-3); }
+.rationale { font-size: var(--text-dense); color: var(--ink-3); }
+.dim { color: var(--ink-4); }

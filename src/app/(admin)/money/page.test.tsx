@@ -380,11 +380,43 @@ describe('MoneyPage', () => {
     render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
 
     const section = sectionFor('התקציב');
+    // rows[0] is the header and rows[1] the `קאמפ` group row; the two data
+    // rows follow. R3: the flag is a word now, never a bare red glyph.
     const rows = within(section).getAllByRole('row');
-    expect(within(rows[1]).getByText('⚠')).toBeTruthy();
-    expect(within(rows[1]).getByText(/400/)).toBeTruthy();
-    expect(within(rows[2]).queryByText('⚠')).toBeNull();
-    expect(within(rows[2]).getByText(/60\b/)).toBeTruthy();
+    expect(within(rows[2]).getByText('החשבון לא מסתדר')).toBeTruthy();
+    expect(within(rows[3]).queryByText('החשבון לא מסתדר')).toBeNull();
+    // Cells: סעיף(0) בתקציב(1) הוצא עד כה(2) נותר(3) למה(4) מקור(5). The
+    // planned cell is named explicitly because an unspent line's `נותר`
+    // carries the same figure, and a row-wide match would not say which of
+    // the two the flag failed to hide.
+    expect(within(within(rows[2]).getAllByRole('cell')[1]).getByText(/400/)).toBeTruthy();
+    expect(within(within(rows[3]).getAllByRole('cell')[1]).getByText(/60\b/)).toBeTruthy();
+    expect(section.textContent).not.toContain('⚠');
+  });
+
+  it('renders the budget band from the grouped view, with its category subtotal', async () => {
+    moneyOverview.mockResolvedValue(overview({
+      budget: [{
+        category: 'camp', label: 'קאמפ', count: 1,
+        lines: [{
+          id: 'b1', label: 'מים וקרח', quantityText: null, quantityNumAgorot: null,
+          unitCostAgorot: null, totalAgorot: 620000, rationale: null, category: 'camp',
+          arithmeticOff: false, sourceBlockId: null, sourceRow: null,
+          spentAgorot: 174000, remainingAgorot: 446000, overAgorot: 0,
+        }],
+        plannedAgorot: 620000, spentAgorot: 174000, remainingAgorot: 446000,
+      }],
+      budgetTotals: {
+        plannedAgorot: 620000, spentAgorot: 174000, remainingAgorot: 446000, count: 1,
+      },
+    }));
+    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+    const section = sectionFor('התקציב');
+    expect(within(section).getByText(/קאמפ · 1 סעיפים · 6,200 ₪/)).toBeTruthy();
+    expect(within(section).getByRole('columnheader', { name: 'בתקציב' })).toBeTruthy();
+    // The band reads `view.budget` and nothing else: a page that still called
+    // `listBudgetLines` would need a second mock to render at all.
+    expect(moneyOverview).toHaveBeenCalledTimes(1);
   });
 
   it('invites action instead of bare empty tables for a season with no movements, budget, or obligations', async () => {
@@ -399,17 +431,17 @@ describe('MoneyPage', () => {
     // The sentence is the kit's (C10), not this screen's: `EmptyState` owns
     // the wording so eleven lists do not grow eleven dialects of "nothing
     // here". What this page supplies is the noun, the season and the action.
-    for (const heading of ['מה חייבים ומה חייבים לנו']) {
+    for (const heading of ['מה חייבים ומה חייבים לנו', 'התקציב']) {
       const section = sectionFor(heading);
       expect(section.textContent).toContain(SEASON.name);
       const link = within(section).getByRole('link', { name: 'לדף הייבוא' });
       expect(link.getAttribute('href')).toBe('/upload');
     }
 
-    // Still Wave 1's hand-written sentences until Tasks 9 and 10 move these
-    // two bands onto the kit's EmptyState; both move into the loop above
-    // then. They are asserted here so the interim never goes uncovered.
-    for (const heading of ['התנועות', 'התקציב']) {
+    // Still Wave 1's hand-written sentence until Task 10 moves this band onto
+    // the kit's EmptyState, when it joins the loop above. Asserted here so
+    // the interim never goes uncovered.
+    for (const heading of ['התנועות']) {
       const section = sectionFor(heading);
       expect(section.textContent).toContain(SEASON.name);
       const link = within(section).getByRole('link', { name: 'דף הייבוא' });
