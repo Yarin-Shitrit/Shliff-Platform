@@ -19,7 +19,7 @@ import { setSheetSeason, setSheetAuthority } from '@/lib/import/sheets';
 import { applyConfirmation } from '@/lib/import/confirm';
 import type { ColumnMapping } from '@/lib/classify/map-columns';
 import type { BlockArchetype } from '@/lib/classify/types';
-import { promoteBlock, promoteAll } from './promote';
+import { promoteBlock, promoteAll, promotedRowCounts } from './promote';
 
 let db: TestDb;
 let s26: string;
@@ -1186,5 +1186,62 @@ describe('promoteAll', () => {
 
     const result = await promoteAll(db, { dryRun: false, recordedBy: 'lead@shliff.test' });
     expect(result.results.map((r) => r.blockId)).toEqual([confirmed]);
+  });
+});
+
+describe('promotedRowCounts', () => {
+  it('reports nothing for a block nobody has promoted', async () => {
+    const blockId = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
+    const counts = await promotedRowCounts(db, [blockId]);
+    expect(counts.has(blockId)).toBe(false);
+    expect(counts.get(blockId)).toBeUndefined();
+  });
+
+  it('counts a block\'s real rows after a real promotion, not what a dry run would write', async () => {
+    const blockId = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
+    await promoteBlock(db, blockId, DRY); // writes nothing
+    expect((await promotedRowCounts(db, [blockId])).has(blockId)).toBe(false);
+
+    await promoteBlock(db, blockId, LEAD); // writes 2 rows for real
+    const counts = await promotedRowCounts(db, [blockId]);
+    expect(counts.get(blockId)).toBe(2);
+  });
+
+  it('counts across whichever of the four target tables the block actually wrote to', async () => {
+    await createPerson(db, 'יוסף', 'lead@shliff.test');
+    const ledgerBlock = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP, { top: 1 });
+    const oblBlock = await addBlock(sheetId, 'obligations', OBL_GRID, OBL_MAP, { top: 20 });
+    await promoteBlock(db, ledgerBlock, LEAD);
+    await promoteBlock(db, oblBlock, LEAD);
+
+    const counts = await promotedRowCounts(db, [ledgerBlock, oblBlock]);
+    expect(counts.get(ledgerBlock)).toBe(2);
+    expect(counts.get(oblBlock)).toBe(2);
+  });
+
+  it('is a read-only lookup: the rows it counts are byte-identical before and after', async () => {
+    const blockId = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
+    await promoteBlock(db, blockId, LEAD);
+    const before = await db.select().from(ledgerEntries).orderBy(asc(ledgerEntries.sourceRow));
+
+    await promotedRowCounts(db, [blockId]);
+
+    const after = await db.select().from(ledgerEntries).orderBy(asc(ledgerEntries.sourceRow));
+    expect(after).toEqual(before);
+  });
+
+  it('returns an empty map for an empty block-id list without querying anything', async () => {
+    const counts = await promotedRowCounts(db, []);
+    expect(counts.size).toBe(0);
+  });
+
+  it('distinguishes a promoted block from an unpromoted one in the same call', async () => {
+    const promoted = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP, { top: 1 });
+    const fresh = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP, { top: 20 });
+    await promoteBlock(db, promoted, LEAD);
+
+    const counts = await promotedRowCounts(db, [promoted, fresh]);
+    expect(counts.get(promoted)).toBe(2);
+    expect(counts.has(fresh)).toBe(false);
   });
 });

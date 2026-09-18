@@ -295,6 +295,50 @@ async function sweep(
 }
 
 // ---------------------------------------------------------------------------
+// Promoted-row lookup
+// ---------------------------------------------------------------------------
+
+/**
+ * Which of `blockIds` already own at least one row in any of the four target
+ * tables, by non-null `source_block_id` — and how many.
+ *
+ * Lifted here from `src/lib/data/worklist.ts`, which used it first to make
+ * the register's `promoted` state mean rows that actually exist rather than
+ * rows a dry run would write. `promoteAllAction`'s skip gate needs exactly
+ * the same fact — whether a block has already produced rows, not whether a
+ * commit would write some — so `worklist.ts` now imports this rather than
+ * keeping a second copy: two implementations of "does this block already
+ * have rows" is the risk that gate exists to remove.
+ *
+ * Four queries for the whole set, not one per block: each is a single
+ * grouped `count(*) … where source_block_id in (…)`, over `TABLES`. A block
+ * appears in the result only if it has rows, so a count-reading caller uses
+ * `?? 0` and a yes/no-reading caller uses `.has(blockId)`.
+ */
+export async function promotedRowCounts(
+  db: AnyDb, blockIds: string[],
+): Promise<Map<string, number>> {
+  const totals = new Map<string, number>();
+  if (blockIds.length === 0) return totals;
+
+  const groups = await Promise.all(
+    Object.values(TABLES).map((t) => db
+      .select({ blockId: t.sourceBlockId, n: count() })
+      .from(t)
+      .where(inArray(t.sourceBlockId, blockIds))
+      .groupBy(t.sourceBlockId)),
+  );
+
+  for (const rows of groups) {
+    for (const row of rows) {
+      if (row.blockId === null) continue;
+      totals.set(row.blockId, (totals.get(row.blockId) ?? 0) + Number(row.n));
+    }
+  }
+  return totals;
+}
+
+// ---------------------------------------------------------------------------
 // promoteBlock
 // ---------------------------------------------------------------------------
 
