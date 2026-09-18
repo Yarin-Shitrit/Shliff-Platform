@@ -5,10 +5,8 @@ import { uploads } from '@/db/schema/source';
 import { getStorage, sha256Hex } from '@/lib/storage';
 import { runImport } from '@/lib/import/run-import';
 import { requireAdmin } from '@/lib/auth/guard';
+import { MAX_UPLOAD_BYTES, UPLOAD_EXTENSION } from '@/lib/import/upload-limits';
 
-const MAX_BYTES = 25 * 1024 * 1024;
-
-const XLSX_EXTENSION = '.xlsx';
 /** Every .xlsx is a zip container, and every zip starts with a local file header. */
 const ZIP_LOCAL_FILE_HEADER = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
 
@@ -20,7 +18,7 @@ const ZIP_LOCAL_FILE_HEADER = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
  * workbook renamed to `.csv` gets as far as the parser.
  */
 function looksLikeXlsx(filename: string, buffer: Buffer): boolean {
-  if (!filename.toLowerCase().endsWith(XLSX_EXTENSION)) return false;
+  if (!filename.toLowerCase().endsWith(UPLOAD_EXTENSION)) return false;
   return buffer.subarray(0, ZIP_LOCAL_FILE_HEADER.length).equals(ZIP_LOCAL_FILE_HEADER);
 }
 
@@ -41,7 +39,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (!(file instanceof File)) {
     return NextResponse.json({ error: 'missing file' }, { status: 400 });
   }
-  if (file.size > MAX_BYTES) {
+  if (file.size > MAX_UPLOAD_BYTES) {
     return NextResponse.json({ error: 'file too large' }, { status: 413 });
   }
 
