@@ -10,7 +10,7 @@ import {
 } from '@/db/schema/money';
 import { promoteBlock } from '@/lib/import/promote/promote';
 import { settleObligation } from '@/lib/money/obligations';
-import { setSheetSeason, setSheetAuthority } from '@/lib/import/sheets';
+import { setSheetSeason, setSheetAuthority, retireSheet } from '@/lib/import/sheets';
 import type { ColumnMapping } from '@/lib/classify/map-columns';
 import type { BlockArchetype } from '@/lib/classify/types';
 import {
@@ -520,6 +520,79 @@ describe('sheetsNeedingSeason', () => {
   it('excludes a sheet that already has a season', async () => {
     const rows = await sheetsNeedingSeason(db);
     expect(rows.map((r) => r.id)).not.toContain(sheetId);
+  });
+
+  it('excludes a retired, season-less sheet — retirement is not a decision waiting (R44)', async () => {
+    const orphan = await addSheet('23.xlsx', 'תקציב קאמפ ברן 23');
+    await retireSheet(db, orphan, LEAD);
+    const rows = await sheetsNeedingSeason(db);
+    expect(rows.map((r) => r.id)).not.toContain(orphan);
+  });
+});
+
+describe('retirement (R44)', () => {
+  it('worklist reports a retired sheet\'s block as retired, not refused, and keeps its row count', async () => {
+    const blockId = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
+    await promoteBlock(db, blockId, { dryRun: false, recordedBy: LEAD });
+    await retireSheet(db, sheetId, LEAD);
+
+    const rows = await worklist(db, LEAD);
+    const row = rows.find((r) => r.blockId === blockId);
+
+    expect(row?.state).toBe('retired');
+    // A lead must still see what they retired: the rows already written are
+    // still counted, not hidden or reported as deleted.
+    expect(row?.rowCount).toBe(2);
+    expect(row?.wouldWrite).toBe(0);
+    expect(row?.refusals).toEqual([]);
+    expect(row?.deleted).toBe(0);
+    expect(row?.retained).toEqual([]);
+    expect(await db.select().from(ledgerEntries)).toHaveLength(2);
+  });
+
+  it('coverage has no cell for a retired sheet\'s blocks — nobody will ever do that work', async () => {
+    const blockId = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
+    await promoteBlock(db, blockId, { dryRun: false, recordedBy: LEAD });
+    await retireSheet(db, sheetId, LEAD);
+
+    const cells = coverage(await worklist(db, LEAD));
+    expect(cells.find((c) => c.seasonName === 'ברן 26' && c.archetype === 'ledger')).toBeUndefined();
+    // Self-guarding: with only one block in this test (on the now-retired
+    // sheet), a `.find` returning undefined for the wrong reason — a typo'd
+    // key, say — would still pass the assertion above. Nothing should be in
+    // the list at all.
+    expect(cells).toEqual([]);
+  });
+
+  it('collisionGroups excludes a retired sheet — a retired copy cannot contest a live one', async () => {
+    const other = await addSheet('25.xlsx', 'סיכום כללי');
+    await setSheetSeason(db, other, s26);
+    await retireSheet(db, other, LEAD);
+
+    const groups = await collisionGroups(db);
+    expect(groups.find((g) => g.name === 'סיכום כללי')).toBeUndefined();
+  });
+
+  /**
+   * The positive case the exclusion test above cannot cover: retiring ONE
+   * copy of a THREE-way collision must still leave the other two reported
+   * as a real, two-member group — retirement removes only the retired
+   * sheet, not the live contest between the two that remain.
+   */
+  it('collisionGroups still reports the live members when only one of three same-named copies is retired', async () => {
+    const live2 = await addSheet('2025b.xlsx', 'סיכום כללי');
+    await setSheetSeason(db, live2, s26);
+    const retired = await addSheet('23.xlsx', 'סיכום כללי');
+    await setSheetSeason(db, retired, s26);
+    await retireSheet(db, retired, LEAD);
+
+    const groups = await collisionGroups(db);
+    const group = groups.find((g) => g.name === 'סיכום כללי');
+
+    expect(group).toBeDefined();
+    expect(group?.sheets.map((s) => s.id).sort()).toEqual([sheetId, live2].sort());
+    expect(group?.sheets.map((s) => s.id)).not.toContain(retired);
+    expect(group?.state).toBe('undecided');
   });
 });
 

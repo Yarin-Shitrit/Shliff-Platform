@@ -2,9 +2,11 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import type { TestDb } from '@/test/db';
 import { createTestDb } from '@/test/db';
 import { createSeason } from '@/lib/members/roster';
-import { uploads, sheets } from '@/db/schema/source';
+import { uploads, sheets, blocks } from '@/db/schema/source';
+import { ledgerEntries } from '@/db/schema/money';
 import {
   setSheetSeason, setSheetAuthority, listSheets, sheetEligibility,
+  retireSheet, unretireSheet,
 } from './sheets';
 
 let db: TestDb;
@@ -122,6 +124,65 @@ describe('eligibility', () => {
     expect(map.get(b)?.state).toBe('ambiguous');
   });
 
+  /**
+   * The wildcard case — a season-less sheet, which conflicts with every
+   * same-named sheet regardless of year because neither side has said which
+   * year it is — is what retirement suppresses. This is what the eight
+   * closed-season sheets need: they have no season (that is why they are
+   * retired), and without this a retired one would still pull every live,
+   * same-named sheet into a permanent collision.
+   */
+  it('a retired, season-less sheet never conflicts with a live one via the wildcard (R44)', async () => {
+    const a = await addSheet('23.xlsx', 'סיכום כללי');
+    const b = await addSheet('2026.xlsx', 'סיכום כללי');
+    await setSheetSeason(db, b, s26);
+    // a stays season-less — retired precisely because no season exists.
+    await retireSheet(db, a, 'lead@shliff.test');
+    const map = await sheetEligibility(db);
+    expect(map.get(b)?.state).toBe('eligible');
+    expect(map.get(b)?.contestedWith).toEqual([]);
+  });
+
+  /**
+   * An EXPLICIT contest — both sides name the same season — is different
+   * from the wildcard case above, and must NOT be suppressed by retirement.
+   * If it were, retiring the chosen copy of a real, resolved contest would
+   * leave the loser reading `'eligible'` on nobody's decision — see
+   * `promoteBlock — retiring an authoritative copy does not transfer
+   * authority` in promote.test.ts for the money-doubling this prevents.
+   */
+  it('an explicit same-season contest survives retirement — a lead must still choose (R44)', async () => {
+    const a = await addSheet('25.xlsx', 'סיכום כללי');
+    const b = await addSheet('2026.xlsx', 'סיכום כללי');
+    await setSheetSeason(db, a, s26);
+    await setSheetSeason(db, b, s26);
+    await retireSheet(db, a, 'lead@shliff.test');
+    const map = await sheetEligibility(db);
+    expect(map.get(b)?.state).toBe('undecided');
+    expect(map.get(b)?.contestedWith).toEqual([a]);
+  });
+
+  /**
+   * Both sheets share an explicit season here on purpose — without it,
+   * `conflicts()`'s both-retired guard is not the thing making this pass:
+   * the season-less case already falls through to the wildcard-suppression
+   * line below it and returns false regardless, so deleting the
+   * both-retired line would not fail this test. With an explicit shared
+   * season, line 3 (`a.seasonId === b.seasonId` → conflict) WOULD fire if
+   * the both-retired line above it were removed, so this pins it for real.
+   */
+  it('two retired copies of the same sheet, same season, do not conflict with each other', async () => {
+    const a = await addSheet('23.xlsx', 'תקציב קאמפ ברן 23');
+    const b = await addSheet('24.xlsx', 'תקציב קאמפ ברן 23');
+    await setSheetSeason(db, a, s25);
+    await setSheetSeason(db, b, s25);
+    await retireSheet(db, a, 'lead@shliff.test');
+    await retireSheet(db, b, 'lead@shliff.test');
+    const map = await sheetEligibility(db);
+    expect(map.get(a)?.contestedWith).toEqual([]);
+    expect(map.get(b)?.contestedWith).toEqual([]);
+  });
+
   it('an unlabelled sheet contests a same-named labelled one, and labelling it clears both', async () => {
     const a = await addSheet('25.xlsx', 'סיכום כללי');
     const b = await addSheet('2026.xlsx', 'סיכום כללי');
@@ -204,5 +265,89 @@ describe('authority guard', () => {
     const unknownId = '00000000-0000-0000-0000-000000000000';
     await expect(setSheetSeason(db, unknownId, s25))
       .rejects.toThrow(`unknown sheet ${unknownId}`);
+  });
+});
+
+describe('retirement', () => {
+  it('retireSheet stamps both columns', async () => {
+    const id = await addSheet('23.xlsx', 'תקציב קאמפ ברן 23');
+    await retireSheet(db, id, 'lead@shliff.test');
+    const [row] = await listSheets(db);
+    expect(row.retiredAt).not.toBeNull();
+    expect(row.retiredBy).toBe('lead@shliff.test');
+  });
+
+  it('unretireSheet clears both columns', async () => {
+    const id = await addSheet('23.xlsx', 'תקציב קאמפ ברן 23');
+    await retireSheet(db, id, 'lead@shliff.test');
+    await unretireSheet(db, id);
+    const [row] = await listSheets(db);
+    expect(row.retiredAt).toBeNull();
+    expect(row.retiredBy).toBeNull();
+  });
+
+  it('retiring an unknown sheet refuses rather than silently no-oping', async () => {
+    const unknownId = '00000000-0000-0000-0000-000000000000';
+    await expect(retireSheet(db, unknownId, 'lead@shliff.test'))
+      .rejects.toThrow(`unknown sheet ${unknownId}`);
+  });
+
+  it('unretiring an unknown sheet refuses rather than silently no-oping', async () => {
+    const unknownId = '00000000-0000-0000-0000-000000000000';
+    await expect(unretireSheet(db, unknownId))
+      .rejects.toThrow(`unknown sheet ${unknownId}`);
+  });
+
+  it('retirement is orthogonal to season and authority — a retired sheet keeps both', async () => {
+    const id = await addSheet('26.xlsx', 'תקציב קאמפ ברן 26');
+    await setSheetSeason(db, id, s26);
+    await setSheetAuthority(db, id, true);
+    await retireSheet(db, id, 'lead@shliff.test');
+    const [row] = await listSheets(db);
+    expect(row.seasonId).toBe(s26);
+    expect(row.authoritative).toBe(true);
+  });
+
+  it('a retired sheet with no season stays exactly that — retiring records the fact, not a season', async () => {
+    const id = await addSheet('23.xlsx', 'תקציב קאמפ ברן 23');
+    await retireSheet(db, id, 'lead@shliff.test');
+    const [row] = await listSheets(db);
+    expect(row.seasonId).toBeNull();
+    expect(row.retiredAt).not.toBeNull();
+  });
+
+  /**
+   * The allow-path R53's guard must never close off: this IS the eight
+   * closed-season ברן 23'/24' sheets the whole feature exists for — a live,
+   * labelled sheet sharing a name with a retired, SEASON-LESS copy that
+   * still owns rows from before this feature existed. `conflicts()` never
+   * treats a season-less retired sheet as a rival of a labelled live one
+   * (only an EXPLICIT same-season match survives retirement — see
+   * `conflicts()`'s own comment), so `refuseIfRetiredRivalOwnsRows` never
+   * even looks at this retired sheet's rows, and the live one may be marked
+   * authoritative freely. A version of the guard that matched by `name`
+   * alone, instead of going through `conflicts()`, would refuse this and
+   * silently start blocking the exact case R53 must not touch.
+   */
+  it('allows a live sheet to become authoritative even though a retired, season-less, same-named rival owns rows', async () => {
+    const live = await addSheet('26.xlsx', 'תקציב קאמפ');
+    await setSheetSeason(db, live, s26);
+
+    const retired = await addSheet('23.xlsx', 'תקציב קאמפ'); // no season, like the real ברן 23/24 sheets
+    await retireSheet(db, retired, 'lead@shliff.test');
+    const [block] = await db.insert(blocks).values({
+      sheetId: retired, top: 1, left: 1, bottom: 2, right: 4,
+      archetype: 'ledger', confidence: '1.0000', headerRow: 1, fingerprint: null,
+      pipelineVersion: 1, rawGrid: [['תאריך', 'פירוט']],
+    }).returning();
+    await db.insert(ledgerEntries).values({
+      occurredOn: new Date(), direction: 'out', amount: '100.00',
+      description: 'רשומה מלפני הפרישה', recordedBy: 'lead@shliff.test',
+      sourceBlockId: block.id, sourceRow: 1,
+    });
+
+    await expect(setSheetAuthority(db, live, true)).resolves.toBeUndefined();
+    const rows = await listSheets(db);
+    expect(rows.find((r) => r.id === live)?.authoritative).toBe(true);
   });
 });

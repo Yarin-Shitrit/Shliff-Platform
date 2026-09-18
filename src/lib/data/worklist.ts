@@ -3,7 +3,9 @@ import type { AnyDb } from '@/lib/db-types';
 import { blocks } from '@/db/schema/source';
 import type { BlockArchetype } from '@/lib/classify/types';
 import { promoteBlock, promotedRowCounts } from '@/lib/import/promote/promote';
-import type { Refusal, RefusalReason, RetainedRow } from '@/lib/import/promote/types';
+import type {
+  Refusal, RefusalReason, RetainedRow, SkippedBlock,
+} from '@/lib/import/promote/types';
 import { listSheets, sheetEligibility } from '@/lib/import/sheets';
 import type { SheetRow, SheetState } from '@/lib/import/sheets';
 import { listSeasons } from '@/lib/members/roster';
@@ -20,6 +22,9 @@ import type { BudgetLineRow } from '@/lib/money/budget';
  * `promoteBlock` (Ruling R6: unconfirmed blocks are never dry-run, because
  * `promoteBlock` itself would just report the `unconfirmed` whole-block
  * refusal back — the state is already known from the block's own row).
+ * A block on a retired sheet is never dry-run either, for the same reason:
+ * `promoteBlock` would just report the skip back (R43), and the state is
+ * already known from the sheet's own `retiredAt`.
  *
  * ### What a dry run can and cannot tell us
  *
@@ -35,6 +40,7 @@ import type { BudgetLineRow } from '@/lib/money/budget';
  *
  * | block record          | dry-run result                                          | rows exist | state         |
  * |-----------------------|---------------------------------------------------------|------------|---------------|
+ * | sheet is retired       | *(never run)*                                            | —          | `retired`     |
  * | `confirmedAt` is null  | *(never run)*                                            | —          | `unconfirmed` |
  * | confirmed              | `written: []`, one refusal, reason `no-promoter`          | —          | `no-promoter` |
  * | confirmed              | `written: []`, one refusal, reason `sheet-superseded`     | —          | `superseded`  |
@@ -65,7 +71,7 @@ import type { BudgetLineRow } from '@/lib/money/budget';
  */
 export type BlockState =
   | 'unconfirmed' | 'promoted' | 'confirmed-not-promoted'
-  | 'refused' | 'superseded' | 'no-promoter';
+  | 'refused' | 'superseded' | 'no-promoter' | 'retired';
 
 export interface WorklistRow {
   blockId: string;
@@ -154,7 +160,23 @@ const WHOLE_BLOCK_REASONS: ReadonlySet<RefusalReason> = new Set<RefusalReason>([
   'no-promoter', 'sheet-undecided', 'sheet-ambiguous', 'sheet-superseded', 'unmapped-column',
 ]);
 
-function stateOfConfirmed(written: number, refused: Refusal[], existingRows: number): BlockState {
+/**
+ * `skip` is checked first and unconditionally, even though `worklist()`
+ * below already short-circuits a retired sheet's block before ever calling
+ * `promoteBlock` (so today `skip` is always undefined here in practice).
+ * That short-circuit is a separate piece of code from this function, and
+ * nothing enforces that the two stay in sync: without this check, if the
+ * short-circuit were ever removed or bypassed, `stateOfConfirmed(0, [], n)`
+ * for a retired-but-already-promoted block (`n > 0`) would read `'promoted'`
+ * — a retired block reported as ready to promote — and the optional `skip`
+ * field on `PromotionResult` means the compiler cannot catch that mistake.
+ * Checking it here makes the function correct on its own, independent of
+ * the caller's short-circuit.
+ */
+function stateOfConfirmed(
+  written: number, refused: Refusal[], existingRows: number, skip: SkippedBlock | undefined,
+): BlockState {
+  if (skip) return 'retired';
   const wholeBlock = written === 0 && refused.length === 1 && WHOLE_BLOCK_REASONS.has(refused[0].reason);
   if (wholeBlock) {
     const [only] = refused;
@@ -212,6 +234,24 @@ export async function worklist(db: AnyDb, recordedBy: string): Promise<WorklistR
 
     const existingRows = existing.get(block.id) ?? 0;
 
+    if (sheet.retiredAt !== null) {
+      // A lead must still be able to see what they retired and undo it
+      // (R44): the rows this block already wrote are still counted, not
+      // hidden — only `wouldWrite`, `refusals`, `deleted`, and `retained`
+      // read as untouched, matching what `promoteBlock` itself reports for
+      // a retired sheet's block (R43: a skip, not a refusal).
+      rows.push({
+        ...base,
+        state: 'retired',
+        rowCount: existingRows,
+        wouldWrite: 0,
+        refusals: [],
+        deleted: 0,
+        retained: [],
+      });
+      continue;
+    }
+
     if (!block.confirmedAt) {
       // `rowCount` is still the real count, not a flat zero: an unconfirmed
       // block with rows is a block somebody promoted and then un-confirmed,
@@ -231,7 +271,7 @@ export async function worklist(db: AnyDb, recordedBy: string): Promise<WorklistR
     const dry = await promoteBlock(db, block.id, { dryRun: true, recordedBy });
     rows.push({
       ...base,
-      state: stateOfConfirmed(dry.written.length, dry.refused, existingRows),
+      state: stateOfConfirmed(dry.written.length, dry.refused, existingRows, dry.skip),
       rowCount: existingRows,
       wouldWrite: dry.written.length,
       refusals: dry.refused,
@@ -252,13 +292,16 @@ export async function worklist(db: AnyDb, recordedBy: string): Promise<WorklistR
  * takes already-computed `WorklistRow[]`, so it never touches the database
  * itself). Blocks whose sheet has no season are excluded: they cannot be
  * placed in this per-season matrix and are `sheetsNeedingSeason`'s to
- * surface instead.
+ * surface instead. Blocks on a retired sheet are excluded too (R44): a cell
+ * counting work nobody will ever do reads as an accusation rather than a
+ * fact, and retirement is exactly the decision that there is no more work
+ * here to count.
  */
 export function coverage(rows: WorklistRow[]): CoverageCell[] {
   const cells = new Map<string, CoverageCell>();
 
   for (const row of rows) {
-    if (row.seasonName === null) continue;
+    if (row.seasonName === null || row.state === 'retired') continue;
     const key = `${row.seasonName}\u0000${row.archetype}`;
     const cell = cells.get(key) ?? {
       seasonName: row.seasonName, archetype: row.archetype, promoted: 0, blocks: 0,
@@ -282,6 +325,20 @@ export function coverage(rows: WorklistRow[]): CoverageCell[] {
  * sharing a name with nothing else) never appears here — this is a list of
  * contests, not a list of every sheet.
  *
+ * A retired sheet is filtered out HERE, explicitly, rather than relying on
+ * `conflicts()` in sheets.ts to keep it out of every `contestedWith` edge
+ * (R44). It cannot: an explicit same-season contest deliberately survives
+ * retirement there (see `conflicts()`'s own comment) — if sheet `a` was
+ * promoted as the chosen copy of season S and is later retired, sheet `b`
+ * (same name, same season, never chosen) must stay contested, or `b` would
+ * read as uncontested and promote on its own, silently doubling the money
+ * `a` already wrote. So `sheetEligibility` still returns a retired sheet's
+ * `contestedWith` in that case, and this display function is where the
+ * retired sheet itself is dropped: it never seeds a group of its own, and
+ * it is filtered out of any group it is reached as a member of. A group
+ * left with fewer than two live members afterward is not a collision any
+ * more — retiring the only other copy resolves it — so it is not emitted.
+ *
  * `sheetEligibility` computes every member of a resolved group's state from
  * the same chosen set, so within one group the states are uniform except
  * for the eligible/superseded split on a resolved winner and its losers:
@@ -302,6 +359,14 @@ export async function collisionGroups(db: AnyDb): Promise<CollisionGroup[]> {
 
   for (const sheet of sheetRows) {
     if (visited.has(sheet.id)) continue;
+    // Belt-and-braces, not load-bearing: BFS reaches the identical
+    // component from any member of it, so seeding from a retired sheet
+    // instead of a live one in the same group would build the exact same
+    // `component` and the exact same filtered `members`/`state` below —
+    // this skip changes nothing about what gets emitted. Kept anyway so a
+    // retired sheet is never even considered a seed, which is the more
+    // obviously-correct reading of R44 for anyone skimming this loop.
+    if (sheet.retiredAt !== null) continue;
     visited.add(sheet.id);
     const info = eligibility.get(sheet.id);
     if (!info || info.contestedWith.length === 0) continue;
@@ -320,8 +385,16 @@ export async function collisionGroups(db: AnyDb): Promise<CollisionGroup[]> {
 
     const members = [...component]
       .map((id) => byId.get(id))
-      .filter((s): s is SheetRow => s !== undefined)
+      // A retired member is dropped from the group entirely, not merely
+      // hidden — it is display, and `sheetEligibility`'s state for it (if
+      // it even reaches this filter) describes a decision nobody can act
+      // on any more.
+      .filter((s): s is SheetRow => s !== undefined && s.retiredAt === null)
       .sort((a, b) => a.filename.localeCompare(b.filename));
+    // Retirement can leave a "group" of one live sheet with nothing left to
+    // contest it — not a collision any more, so it is not reported as one.
+    if (members.length < 2) continue;
+
     const states = members.map((member) => eligibility.get(member.id)!.state);
     const state: SheetState = states.includes('undecided')
       ? 'undecided'
@@ -337,11 +410,16 @@ export async function collisionGroups(db: AnyDb): Promise<CollisionGroup[]> {
   return groups;
 }
 
-/** Sheets nobody has labelled with a season yet — every collision and every
- *  promotion downstream of them is stuck until a lead does. */
+/**
+ * Sheets nobody has labelled with a season yet — every collision and every
+ * promotion downstream of them is stuck until a lead does. A retired sheet
+ * is excluded (R44): it is not a decision waiting, it is a decision already
+ * made — the eight closed-season sheets this exists for have no season
+ * precisely because retiring them is what settles that.
+ */
 export async function sheetsNeedingSeason(db: AnyDb): Promise<SheetRow[]> {
   const sheetRows = await listSheets(db);
-  return sheetRows.filter((sheet) => sheet.seasonId === null);
+  return sheetRows.filter((sheet) => sheet.seasonId === null && sheet.retiredAt === null);
 }
 
 /**
