@@ -1,0 +1,387 @@
+<!--meta {"file": "Files.dc.html", "w": 1440, "h": 1060, "nav": "files", "title": "סקירת ייבוא", "interactive": true} -->
+<!doctype html>
+<html lang="he">
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!--HEAD-->
+<div class="app {{themeClass}}" dir="rtl" style="width: __W__px; height: __H__px;">
+<!--SIDEBAR-->
+  <div class="main">
+    <header class="topbar">
+      <div class="crumbs">
+        <a href="Main.dc.html">קבצים</a>
+        [[i:left:14]]
+        <span class="here"><bdi>קופת קאמפ 2026.xlsx</bdi></span>
+      </div>
+      <span class="scopechip">[[i:calendar:14]] ברן 26</span>
+      <span class="spacer"></span>
+      <span class="muted" style="font-size: 13px;">הועלה <bdi>12/09/26</bdi> ע״י שירה</span>
+      <button class="btn sm" type="button">[[i:history:14]] היסטוריית ייבוא</button>
+    </header>
+
+    <div class="page" style="gap: 14px;">
+      <div class="pagehead">
+        <div>
+          <h1>סקירת ייבוא</h1>
+          <p class="sub"><bdi>5</bdi> גיליונות · <bdi>11</bdi> טבלאות זוהו · <bdi>3</bdi> אושרו</p>
+        </div>
+        <div class="actions">
+          <button class="btn sm" type="button">[[i:upload:14]] קובץ חדש</button>
+          <button class="btn primary sm" type="button">[[i:check:14]] קידום <bdi>3</bdi> טבלאות מאושרות</button>
+        </div>
+      </div>
+
+      <!-- stepper -->
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="display: flex; align-items: center; gap: 8px;">
+          <span style="width: 22px; height: 22px; border-radius: 50%; background: var(--ok); color: #FFFFFF; display: inline-flex; align-items: center; justify-content: center;">[[i:check:13]]</span>
+          <span class="muted" style="font-size: 13px;">העלאה</span>
+        </span>
+        <span class="dim" style="display: inline-flex;">[[i:left:14]]</span>
+        <span style="display: flex; align-items: center; gap: 8px;">
+          <span style="width: 22px; height: 22px; border-radius: 50%; background: var(--ok); color: #FFFFFF; display: inline-flex; align-items: center; justify-content: center;">[[i:check:13]]</span>
+          <span class="muted" style="font-size: 13px;">זיהוי טבלאות</span>
+        </span>
+        <span class="dim" style="display: inline-flex;">[[i:left:14]]</span>
+        <span style="display: flex; align-items: center; gap: 8px;">
+          <span style="width: 22px; height: 22px; border-radius: 50%; background: var(--brand); color: var(--brand-ink); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;"><bdi>3</bdi></span>
+          <span style="font-size: 13px; font-weight: 600;">סקירה ואישור</span>
+        </span>
+        <span class="dim" style="display: inline-flex;">[[i:left:14]]</span>
+        <span style="display: flex; align-items: center; gap: 8px;">
+          <span style="width: 22px; height: 22px; border-radius: 50%; background: var(--sunken); color: var(--ink-3); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;"><bdi>4</bdi></span>
+          <span class="muted" style="font-size: 13px;">קידום לנתונים</span>
+        </span>
+
+        <span style="margin-inline-start: auto; display: flex; align-items: center; gap: 10px;">
+          <span class="muted" style="font-size: 12.5px;">אושרו <bdi>3</bdi> מתוך <bdi>11</bdi></span>
+          <span class="bar" style="width: 120px;"><i style="width: 27%; background: var(--brand);"></i></span>
+        </span>
+      </div>
+
+      <!-- split -->
+      <div style="display: flex; gap: 16px; flex: 1; min-height: 0;">
+
+        <!-- rail -->
+        <div class="tablewrap" style="width: 340px; flex-shrink: 0; overflow: hidden;">
+          <ul>
+            <li style="display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: var(--canvas); font-size: 12.5px; color: var(--ink-3); border-bottom: 1px solid var(--line);">
+              תנועות קופה
+              <span class="dim"><bdi>61×8</bdi></span>
+              <span class="pill" style="margin-inline-start: auto;">ברן 26</span>
+            </li>
+            <li>
+              <button type="button" style="width: 100%; text-align: start; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--line); background: transparent; cursor: pointer;">
+                <span style="flex: 1; min-width: 0;">
+                  <span style="display: block; font-weight: 500;">יתרות חשבון</span>
+                  <span class="muted" style="display: block; font-size: 12.5px;"><bdi>A1:B2</bdi> · <bdi>2</bdi> שורות</span>
+                </span>
+                <span style="color: var(--ok); display: inline-flex;">[[i:check:14]]</span>
+              </button>
+            </li>
+            <li>
+              <button type="button" style="width: 100%; text-align: start; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--line); border-inline-end: 3px solid var(--brand); background: var(--selected); cursor: pointer;">
+                <span style="flex: 1; min-width: 0;">
+                  <span style="display: block; font-weight: 600;">תנועות קופה</span>
+                  <span class="muted" style="display: block; font-size: 12.5px;"><bdi>A3:H61</bdi> · <bdi>59</bdi> שורות</span>
+                </span>
+                <span class="pill brand">לבדיקה</span>
+              </button>
+            </li>
+            <li>
+              <button type="button" style="width: 100%; text-align: start; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--line); background: transparent; cursor: pointer;">
+                <span style="flex: 1; min-width: 0;">
+                  <span style="display: block; font-weight: 500;">ערוצי הכנסה</span>
+                  <span class="muted" style="display: block; font-size: 12.5px;"><bdi>J3:L12</bdi> · <bdi>9</bdi> שורות</span>
+                </span>
+                <span class="pill">זוהה</span>
+              </button>
+            </li>
+
+            <li style="display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: var(--canvas); font-size: 12.5px; color: var(--ink-3); border-bottom: 1px solid var(--line); border-top: 1px solid var(--line);">
+              תקציב 26
+              <span class="dim"><bdi>44×6</bdi></span>
+              <span class="pill" style="margin-inline-start: auto;">ברן 26</span>
+            </li>
+            <li>
+              <button type="button" style="width: 100%; text-align: start; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--line); background: transparent; cursor: pointer;">
+                <span style="flex: 1; min-width: 0;">
+                  <span style="display: block; font-weight: 500;">שורות תקציב</span>
+                  <span class="muted" style="display: block; font-size: 12.5px;"><bdi>A2:F40</bdi> · <bdi>38</bdi> שורות</span>
+                </span>
+                <span style="color: var(--ok); display: inline-flex;">[[i:check:14]]</span>
+              </button>
+            </li>
+            <li>
+              <button type="button" style="width: 100%; text-align: start; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--line); background: transparent; cursor: pointer;">
+                <span style="flex: 1; min-width: 0;">
+                  <span style="display: block; font-weight: 500;">טבלה בלי סיווג</span>
+                  <span class="muted" style="display: block; font-size: 12.5px;"><bdi>H2:K9</bdi> · <bdi>7</bdi> שורות</span>
+                </span>
+                <span class="pill brand">לבדיקה</span>
+              </button>
+            </li>
+
+            <li style="display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: var(--canvas); font-size: 12.5px; color: var(--ink-3); border-bottom: 1px solid var(--line); border-top: 1px solid var(--line);">
+              דמי קאמפ
+              <span class="dim"><bdi>38×5</bdi></span>
+              <span class="pill" style="margin-inline-start: auto;">ברן 26</span>
+            </li>
+            <li>
+              <button type="button" style="width: 100%; text-align: start; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--line); background: transparent; cursor: pointer;">
+                <span style="flex: 1; min-width: 0;">
+                  <span style="display: block; font-weight: 500;">דמי חבר</span>
+                  <span class="muted" style="display: block; font-size: 12.5px;"><bdi>A1:E31</bdi> · <bdi>30</bdi> שורות</span>
+                </span>
+                <span style="color: var(--ok); display: inline-flex;">[[i:check:14]]</span>
+              </button>
+            </li>
+            <li>
+              <button type="button" style="width: 100%; text-align: start; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--line); background: transparent; cursor: pointer;">
+                <span style="flex: 1; min-width: 0;">
+                  <span style="display: block; font-weight: 500;">התחייבויות</span>
+                  <span class="muted" style="display: block; font-size: 12.5px;"><bdi>A34:E38</bdi> · <bdi>4</bdi> שורות</span>
+                </span>
+                <span class="pill brand">לבדיקה</span>
+              </button>
+            </li>
+
+            <li style="display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: var(--canvas); font-size: 12.5px; color: var(--ink-3); border-bottom: 1px solid var(--line); border-top: 1px solid var(--line);">
+              מסיבות
+              <span class="dim"><bdi>52×9</bdi></span>
+              <span class="pill warn" style="margin-inline-start: auto;">בלי שנה</span>
+            </li>
+            <li>
+              <button type="button" style="width: 100%; text-align: start; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--line); background: transparent; cursor: pointer;">
+                <span style="flex: 1; min-width: 0;">
+                  <span style="display: block; font-weight: 500;">שורות אירוע</span>
+                  <span class="muted" style="display: block; font-size: 12.5px;"><bdi>A2:G24</bdi> · <bdi>22</bdi> שורות</span>
+                </span>
+                <span class="pill">זוהה</span>
+              </button>
+            </li>
+            <li>
+              <button type="button" style="width: 100%; text-align: start; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--line); background: transparent; cursor: pointer;">
+                <span style="flex: 1; min-width: 0;">
+                  <span style="display: block; font-weight: 500;">סבבי כרטיסים</span>
+                  <span class="muted" style="display: block; font-size: 12.5px;"><bdi>A27:F41</bdi> · <bdi>14</bdi> שורות</span>
+                </span>
+                <span class="pill dim">אין מנגנון</span>
+              </button>
+            </li>
+            <li>
+              <button type="button" style="width: 100%; text-align: start; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--line); background: transparent; cursor: pointer;">
+                <span style="flex: 1; min-width: 0;">
+                  <span style="display: block; font-weight: 500;">ערוצי הכנסה</span>
+                  <span class="muted" style="display: block; font-size: 12.5px;"><bdi>A44:D52</bdi> · <bdi>8</bdi> שורות</span>
+                </span>
+                <span class="pill">זוהה</span>
+              </button>
+            </li>
+
+            <li style="display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: var(--canvas); font-size: 12.5px; color: var(--ink-3); border-bottom: 1px solid var(--line); border-top: 1px solid var(--line);">
+              סיכום כללי
+              <span class="dim"><bdi>18×4</bdi></span>
+              <span class="pill" style="margin-inline-start: auto;">ברן 26</span>
+            </li>
+            <li>
+              <button type="button" style="width: 100%; text-align: start; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 0; background: transparent; cursor: pointer;">
+                <span style="flex: 1; min-width: 0;">
+                  <span style="display: block; font-weight: 500;">טבלה בלי סיווג</span>
+                  <span class="muted" style="display: block; font-size: 12.5px;"><bdi>A3:D18</bdi> · <bdi>15</bdi> שורות</span>
+                </span>
+                <span class="pill brand">לבדיקה</span>
+              </button>
+            </li>
+          </ul>
+        </div>
+
+        <!-- detail -->
+        <div class="card" style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+          <div class="card-h" style="gap: 10px;">
+            <h2 style="font-size: 17px;">תנועות קופה</h2>
+            <span class="src"><bdi>תנועות קופה!A3:H61</bdi></span>
+            <span class="pill info">זוהה מפריסה מוכרת משנה שעברה</span>
+            <span class="more" style="display: flex; gap: 6px; align-items: center;">
+              <span class="muted" style="font-size: 12.5px;"><bdi>2</bdi> מתוך <bdi>11</bdi></span>
+              <button class="btn ghost sm icon" type="button" aria-label="הטבלה הקודמת">[[i:up:15]]</button>
+              <button class="btn ghost sm icon" type="button" aria-label="הטבלה הבאה">[[i:down:15]]</button>
+            </span>
+          </div>
+
+          <div style="padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; flex: 1; min-height: 0;">
+
+            <!-- מה זה -->
+            <section>
+              <div class="sectitle" style="margin-bottom: 8px;">[[i:layers:15]] מה זה</div>
+              <div style="display: flex; align-items: flex-end; gap: 12px;">
+                <div class="field" style="width: 240px; flex-shrink: 0;">
+                  <label>סוג הטבלה</label>
+                  <span class="input" style="height: 34px;">
+                    תנועות קופה
+                    <span class="dim" style="margin-inline-start: auto; display: inline-flex;">[[i:down:14]]</span>
+                  </span>
+                </div>
+                <p class="muted" style="font-size: 12.5px; padding-bottom: 8px;">שינוי הסוג יחשב מחדש את התאמת העמודות.</p>
+                <span class="pill ok" style="margin-bottom: 7px;">בטוח</span>
+              </div>
+            </section>
+
+            <!-- העמודות -->
+            <section>
+              <div class="sectitle" style="margin-bottom: 8px;">[[i:columns:15]] העמודות</div>
+              <div class="tablewrap" style="--row: 34px;">
+                <table class="tbl" style="font-size: 13.5px;">
+                  <thead>
+                    <tr>
+                      <th>עמודה בקובץ</th>
+                      <th>דוגמאות</th>
+                      <th class="w0" style="text-align: center; width: 30px;">[[i:left:14]]</th>
+                      <th style="width: 190px;">שדה במערכת</th>
+                      <th class="w0">ביטחון</th>
+                      <th class="w0" style="text-align: center;">לא לייבא</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><span style="display: flex; align-items: center; gap: 8px;"><span style="font-weight: 500;">תאריך</span><span class="src"><bdi>A</bdi></span></span></td>
+                      <td class="muted" style="font-size: 12.5px;"><bdi>05/07/26</bdi> · <bdi>08/07/26</bdi> · <bdi>11/07/26</bdi></td>
+                      <td class="dim" style="text-align: center;">[[i:left:14]]</td>
+                      <td><span class="input" style="height: 28px; font-size: 13px;">תאריך התנועה <span class="dim" style="margin-inline-start: auto; display: inline-flex;">[[i:down:13]]</span></span></td>
+                      <td><span class="pill ok">בטוח</span></td>
+                      <td style="text-align: center;"><button class="check" type="button" aria-label="לא לייבא את עמודה A"></button></td>
+                    </tr>
+                    <tr>
+                      <td><span style="display: flex; align-items: center; gap: 8px;"><span style="font-weight: 500;">פירוט</span><span class="src"><bdi>B</bdi></span></span></td>
+                      <td class="muted" style="font-size: 12.5px;">תשלום גנרטור · קניות מטבח · דלק</td>
+                      <td class="dim" style="text-align: center;">[[i:left:14]]</td>
+                      <td><span class="input" style="height: 28px; font-size: 13px;">תיאור <span class="dim" style="margin-inline-start: auto; display: inline-flex;">[[i:down:13]]</span></span></td>
+                      <td><span class="pill ok">בטוח</span></td>
+                      <td style="text-align: center;"><button class="check" type="button" aria-label="לא לייבא את עמודה B"></button></td>
+                    </tr>
+                    <tr>
+                      <td><span style="display: flex; align-items: center; gap: 8px;"><span style="font-weight: 500;">יצא</span><span class="src"><bdi>C</bdi></span></span></td>
+                      <td class="muted" style="font-size: 12.5px;"><bdi>4,200</bdi> · <bdi>1,860</bdi> · <bdi>640</bdi></td>
+                      <td class="dim" style="text-align: center;">[[i:left:14]]</td>
+                      <td><span class="input" style="height: 28px; font-size: 13px;">סכום — יצא <span class="dim" style="margin-inline-start: auto; display: inline-flex;">[[i:down:13]]</span></span></td>
+                      <td><span class="pill ok">בטוח</span></td>
+                      <td style="text-align: center;"><button class="check" type="button" aria-label="לא לייבא את עמודה C"></button></td>
+                    </tr>
+                    <tr>
+                      <td><span style="display: flex; align-items: center; gap: 8px;"><span style="font-weight: 500;">נכנס</span><span class="src"><bdi>D</bdi></span></span></td>
+                      <td class="muted" style="font-size: 12.5px;"><bdi>1,200</bdi> · <bdi>3,500</bdi> · <bdi>800</bdi></td>
+                      <td class="dim" style="text-align: center;">[[i:left:14]]</td>
+                      <td><span class="input" style="height: 28px; font-size: 13px;">סכום — נכנס <span class="dim" style="margin-inline-start: auto; display: inline-flex;">[[i:down:13]]</span></span></td>
+                      <td><span class="pill ok">בטוח</span></td>
+                      <td style="text-align: center;"><button class="check" type="button" aria-label="לא לייבא את עמודה D"></button></td>
+                    </tr>
+                    <tr>
+                      <td><span style="display: flex; align-items: center; gap: 8px;"><span style="font-weight: 500;">הערות</span><span class="src"><bdi>F</bdi></span></span></td>
+                      <td class="muted" style="font-size: 12.5px;">שילם בביט · לבדוק מול שירה · —</td>
+                      <td class="dim" style="text-align: center;">[[i:left:14]]</td>
+                      <td><span class="input" style="height: 28px; font-size: 13px; color: var(--ink-3);">לא מיובא <span class="dim" style="margin-inline-start: auto; display: inline-flex;">[[i:down:13]]</span></span></td>
+                      <td><span class="pill warn">לא בטוח</span></td>
+                      <td style="text-align: center;"><button class="check on" type="button" aria-label="לא לייבא את עמודה F">[[i:check:12]]</button></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p class="muted" style="font-size: 12.5px; margin-top: 6px;">עמודה שלא מופתה לא נכתבת — היא נשארת בגיליון ואפשר לחזור אליה.</p>
+            </section>
+
+            <!-- הטבלה כפי שהיא -->
+            <section style="display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0;">
+              <div class="sectitle">
+                [[i:grid:15]] הטבלה כפי שהיא
+                <span class="seg more">
+                  <button type="button" aria-pressed="true">הכול <bdi>59</bdi></button>
+                  <button type="button">ייכתבו <bdi>52</bdi></button>
+                  <button type="button">נדחו <bdi>7</bdi></button>
+                </span>
+              </div>
+              <div class="tablewrap" style="--row: 30px; flex: 1; min-height: 0; overflow: hidden;">
+                <table class="tbl" style="font-size: 13px;">
+                  <thead>
+                    <tr>
+                      <th class="w0" style="width: 40px; text-align: center;"></th>
+                      <th style="width: 96px;"><bdi>A</bdi></th>
+                      <th><bdi>B</bdi></th>
+                      <th class="n" style="width: 90px;"><bdi>C</bdi></th>
+                      <th class="n" style="width: 90px;"><bdi>D</bdi></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td class="muted" style="text-align: center;"><bdi>4</bdi></td>
+                      <td><bdi>05/07/26</bdi></td><td>תשלום גנרטור</td><td class="n"><bdi>4,200</bdi></td><td class="n dim">—</td>
+                    </tr>
+                    <tr>
+                      <td class="muted" style="text-align: center;"><bdi>5</bdi></td>
+                      <td><bdi>08/07/26</bdi></td><td>קניות מטבח</td><td class="n"><bdi>1,860</bdi></td><td class="n dim">—</td>
+                    </tr>
+                    <tr>
+                      <td class="muted" style="text-align: center;"><bdi>6</bdi></td>
+                      <td><bdi>10/07/26</bdi></td><td>מכירת כרטיסים ערב ראשון</td><td class="n dim">—</td><td class="n"><bdi>3,500</bdi></td>
+                    </tr>
+                    <tr>
+                      <td class="muted" style="text-align: center;"><bdi>7</bdi></td>
+                      <td><bdi>12/07/26</bdi></td><td>דלק לרכב הפקה</td><td class="n"><bdi>640</bdi></td><td class="n dim">—</td>
+                    </tr>
+                    <tr style="background: var(--warn-soft);">
+                      <td class="muted" style="text-align: center;"><bdi>8</bdi></td>
+                      <td><bdi>14/07/26</bdi></td><td>נועה ל.</td><td class="n dim">—</td><td class="n"><bdi>1,200</bdi></td>
+                    </tr>
+                    <tr>
+                      <td colspan="5" style="background: var(--warn-soft); height: 26px; font-size: 12.5px; color: var(--warn);">
+                        <span style="display: flex; align-items: center; gap: 8px;">
+                          נכתב עם הערה: השם ״נועה ל.״ לא זוהה — נשמר כטקסט וממתין לקישור
+                          <a class="link" href="Inbox.dc.html">לטיפול</a>
+                        </span>
+                      </td>
+                    </tr>
+                    <tr style="background: var(--bad-soft);">
+                      <td style="text-align: center;"><span style="color: var(--bad); display: inline-flex;">[[i:alert:12]]</span></td>
+                      <td class="dim">—</td><td style="font-weight: 500;">סה״כ</td><td class="n"><bdi>6,700</bdi></td><td class="n"><bdi>4,700</bdi></td>
+                    </tr>
+                    <tr>
+                      <td colspan="5" style="background: var(--bad-soft); height: 26px; font-size: 12.5px; color: var(--bad);">
+                        לא נכתב: שורת סה״כ היא סכום מחושב, לא תנועה
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <div class="drawer-f" style="align-items: center;">
+            <span style="font-size: 13px;">
+              ייכתבו <button class="link" type="button" style="border: 0; background: none; padding: 0; cursor: pointer;"><bdi>52</bdi></button> שורות ·
+              <button class="link" type="button" style="border: 0; background: none; padding: 0; cursor: pointer;"><bdi>7</bdi></button> יידחו עם סיבה ·
+              <button class="link" type="button" style="border: 0; background: none; padding: 0; cursor: pointer;"><bdi>2</bdi></button> שמות ימתינו לקישור
+            </span>
+            <span class="grow"></span>
+            <button class="btn sm" type="button">דילוג</button>
+            <button class="btn primary" type="button">[[i:check:14]] אישור וקידום <bdi>52</bdi> שורות</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+<!--OVERLAYS-->
+</div>
+</x-dc>
+<script data-dc-script data-props='__PROPS__'>
+class Component extends DCLogic {
+/*SHELL*/
+  renderVals() {
+    return { ...this.shell() };
+  }
+}
+</script>
+</body>
+</html>

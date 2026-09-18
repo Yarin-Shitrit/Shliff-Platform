@@ -1,0 +1,187 @@
+<!--meta {"file":"MobileHome.dc.html","w":390,"h":844,"nav":"","title":"מובייל — בית","interactive":false} -->
+<!doctype html>
+<html lang="he">
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!--HEAD-->
+<div class="app {{themeClass}}" dir="rtl" style="width: __W__px; height: __H__px;">
+  <div style="flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--canvas);">
+
+    <header style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--line);">
+      <img src="/_blob/abe46633bf64239605ece9df922f723b" alt="" style="width: 26px; height: 26px; border-radius: 50%;">
+      <span class="wordmark" style="font-size: 17px;">קופת שליף</span>
+      <button class="btn ghost icon" type="button" aria-label="חיפוש" style="margin-inline-start: auto; width: 44px; height: 44px;">[[i:search:20]]</button>
+      <span class="av c5">שא</span>
+    </header>
+
+    <div style="padding: 12px 14px 0;">
+      <button class="season-switch" type="button" style="min-height: 52px;">
+        <span>
+          <span class="ss-label" style="display: block;">שנה</span>
+          <span class="ss-name" style="display: block;">ברן 26</span>
+        </span>
+        <span class="ss-meta">
+          <span class="pill ok">פעילה</span>
+          [[i:updown:15]]
+        </span>
+      </button>
+    </div>
+
+    <div style="flex: 1; overflow: hidden; padding: 14px; display: flex; flex-direction: column; gap: 12px;">
+
+      <a class="card stat" href="Dues.dc.html">
+        <span class="k">[[i:receipt:14]] נגבה מדמי קאמפ</span>
+        <span class="v"><bdi>24,300</bdi> <small>מתוך <bdi>36,500 ₪</bdi></small></span>
+        <span class="bar" style="margin: 6px 0 4px;"><i style="width: 67%; background: var(--viz-dues);"></i></span>
+        <span class="d"><bdi>9</bdi> טרם שילמו · <bdi>3</bdi> חלקית</span>
+      </a>
+
+      <section class="card">
+        <div class="card-h" style="padding: 12px 14px;">
+          <span style="color: var(--brand-text); display: inline-flex;">[[i:inbox:16]]</span>
+          <h2>לטיפול</h2>
+          <span class="pill brand"><bdi>12</bdi></span>
+          <a class="link more" href="Inbox.dc.html">הכול ←</a>
+        </div>
+        <ul>
+          <li style="border-bottom: 1px solid var(--line);">
+            <a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 8px 14px;">
+              <span class="av c2" style="background: var(--info-soft); color: var(--info);">[[i:link:15]]</span>
+              <span style="flex: 1; min-width: 0;">
+                <span style="display: block; font-weight: 600;">״נועה ל.״</span>
+                <span class="muted" style="display: block; font-size: 12.5px;">שם מקובץ · הצעה: נועה לוי</span>
+              </span>
+              [[i:left:16]]
+            </a>
+          </li>
+          <li style="border-bottom: 1px solid var(--line);">
+            <a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 8px 14px;">
+              <span class="av c5" style="background: var(--warn-soft); color: var(--warn);">[[i:calendar:15]]</span>
+              <span style="flex: 1; min-width: 0;">
+                <span style="display: block; font-weight: 600;">לגיליון ״סיכום כללי״ אין שנה</span>
+                <span class="muted" style="display: block; font-size: 12.5px;"><bdi>39</bdi> שורות תקציב ממתינות</span>
+              </span>
+              [[i:left:16]]
+            </a>
+          </li>
+          <li>
+            <a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 8px 14px;">
+              <span class="av" style="background: var(--bad-soft); color: var(--bad);">[[i:scale:15]]</span>
+              <span style="flex: 1; min-width: 0;">
+                <span style="display: block; font-weight: 600;"><bdi>2</bdi> חובות בלי שם</span>
+                <span class="muted" style="display: block; font-size: 12.5px;"><bdi>740 ₪</bdi> · אי אפשר לסגור בלי שם</span>
+              </span>
+              [[i:left:16]]
+            </a>
+          </li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <div class="card-h" style="padding: 12px 14px;">
+          <span style="color: var(--ink-3); display: inline-flex;">[[i:receipt:16]]</span>
+          <h2>טרם שילמו</h2>
+          <span class="pill"><bdi>12</bdi></span>
+          <a class="link more" href="Dues.dc.html">הכול ←</a>
+        </div>
+        <ul>
+          <li style="display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 6px 10px 6px 14px; border-bottom: 1px solid var(--line);">
+            <span class="av c2">אכ</span>
+            <a href="Main.dc.html" style="flex: 1; min-width: 0; font-weight: 500;">איתי כהן</a>
+            <bdi style="font-weight: 500;">1,200 ₪</bdi>
+            <button class="btn icon" type="button" aria-label="רישום תשלום לאיתי כהן" style="width: 44px; height: 44px;">[[i:plus:16]]</button>
+          </li>
+          <li style="display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 6px 10px 6px 14px; border-bottom: 1px solid var(--line);">
+            <span class="av c5">גב</span>
+            <a href="Main.dc.html" style="flex: 1; min-width: 0; font-weight: 500;">גיל ברק</a>
+            <bdi style="font-weight: 500;">900 ₪</bdi>
+            <button class="btn icon" type="button" aria-label="רישום תשלום לגיל ברק" style="width: 44px; height: 44px;">[[i:plus:16]]</button>
+          </li>
+          <li style="display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 6px 10px 6px 14px; border-bottom: 1px solid var(--line);">
+            <span class="av c4">מר</span>
+            <a href="Main.dc.html" style="flex: 1; min-width: 0; font-weight: 500;">מיכל רוזן</a>
+            <bdi style="font-weight: 500;">1,200 ₪</bdi>
+            <button class="btn icon" type="button" aria-label="רישום תשלום למיכל רוזן" style="width: 44px; height: 44px;">[[i:plus:16]]</button>
+          </li>
+          <li style="display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 6px 10px 6px 14px;">
+            <span class="av c3">עב</span>
+            <a href="Main.dc.html" style="flex: 1; min-width: 0; font-weight: 500;">עומר ביטון</a>
+            <bdi style="font-weight: 500;">700 ₪</bdi>
+            <button class="btn icon" type="button" aria-label="רישום תשלום לעומר ביטון" style="width: 44px; height: 44px;">[[i:plus:16]]</button>
+          </li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <div class="card-h" style="padding: 12px 14px;">
+          <span style="color: var(--ink-3); display: inline-flex;">[[i:tasks:16]]</span>
+          <h2>חסרים אנשים</h2>
+          <a class="link more" href="Tasks.dc.html">הכול ←</a>
+        </div>
+        <ul>
+          <li style="display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 8px 14px; border-bottom: 1px solid var(--line);">
+            <span style="flex: 1; min-width: 0;">
+              <span style="display: block; font-weight: 500;">הקמת הצל והמבנה</span>
+              <span class="muted" style="display: block; font-size: 12.5px;"><bdi>2</bdi> ימים לפני השער</span>
+            </span>
+            <span class="stack">
+              <span class="av sm c1">רא</span><span class="av sm c3">יל</span><span class="av sm c2">דש</span><span class="av sm empty">+</span>
+            </span>
+            <span class="pill warn"><bdi>5/8</bdi></span>
+          </li>
+          <li style="display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 8px 14px;">
+            <span style="flex: 1; min-width: 0;">
+              <span style="display: block; font-weight: 500;">פירוק ו־<bdi>MOOP</bdi></span>
+              <span class="muted" style="display: block; font-size: 12.5px;">יום אחרי השער</span>
+            </span>
+            <span class="pill bad"><bdi>0/6</bdi></span>
+          </li>
+        </ul>
+      </section>
+
+    </div>
+
+    <nav style="display: flex; border-top: 1px solid var(--line); background: var(--panel); padding: 6px 4px 10px;">
+      <a href="MobileHome.dc.html" aria-current="page" style="flex: 1; height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--brand-text); font-size: 11.5px; font-weight: 600;">
+        [[i:home:20]]
+        <span>בית</span>
+      </a>
+      <a href="People.dc.html" style="flex: 1; height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--ink-3); font-size: 11.5px;">
+        [[i:users:20]]
+        <span>אנשים</span>
+      </a>
+      <a href="Money.dc.html" style="flex: 1; height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--ink-3); font-size: 11.5px;">
+        [[i:wallet:20]]
+        <span>כספים</span>
+      </a>
+      <a href="Inbox.dc.html" style="flex: 1; height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--ink-3); font-size: 11.5px;">
+        <span style="position: relative; display: inline-flex;">
+          [[i:inbox:20]]
+          <span style="position: absolute; top: -5px; inset-inline-start: -9px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px; background: var(--brand); color: var(--brand-ink); font-size: 10.5px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center;"><bdi>12</bdi></span>
+        </span>
+        <span>לטיפול</span>
+      </a>
+      <a href="Foundations.dc.html" style="flex: 1; height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--ink-3); font-size: 11.5px;">
+        [[i:menu:20]]
+        <span>עוד</span>
+      </a>
+    </nav>
+
+  </div>
+<!--OVERLAYS-->
+</div>
+</x-dc>
+<script data-dc-script data-props='__PROPS__'>
+class Component extends DCLogic {
+/*SHELL*/
+  renderVals() {
+    return { ...this.shell() };
+  }
+}
+</script>
+</body>
+</html>

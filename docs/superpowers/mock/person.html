@@ -1,0 +1,271 @@
+<!--meta {"file": "Person.dc.html", "w": 1440, "h": 1120, "nav": "people", "title": "דף אדם", "interactive": true} -->
+<!doctype html>
+<html lang="he">
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!--HEAD-->
+<div class="app {{themeClass}}" dir="rtl" style="width: __W__px; height: __H__px;">
+<!--SIDEBAR-->
+  <div class="main">
+    <header class="topbar">
+      <div class="crumbs">
+        <a href="People.dc.html">אנשים</a>
+        [[i:left:14]]
+        <span class="here">רוני אדלר</span>
+      </div>
+      <span class="spacer"></span>
+      <span class="muted" style="font-size: 12.5px;"><bdi>3</bdi> מתוך <bdi>35</bdi></span>
+      <button class="btn ghost sm icon" type="button" aria-label="הקודם">[[i:up:15]]</button>
+      <button class="btn ghost sm icon" type="button" aria-label="הבא">[[i:down:15]]</button>
+      <button class="btn sm" type="button">[[i:merge:14]] מיזוג</button>
+      <button class="btn sm" type="button">[[i:tasks:14]] שיבוץ למשימה</button>
+      <button class="btn primary sm" type="button">[[i:receipt:14]] רישום תשלום</button>
+    </header>
+
+    <div class="page" style="gap: 16px;">
+      <!-- header -->
+      <div style="display: flex; gap: 16px; align-items: flex-start;">
+        <span class="av lg c1">רא</span>
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <h1 style="font-size: 24px; font-weight: 600;">רוני אדלר</h1>
+            <span class="pill outline">ראש/ת צוות</span>
+            <span class="pill">ברן 26</span>
+            <button class="btn ghost sm icon" type="button" aria-label="עריכת פרטים">[[i:pencil:15]]</button>
+          </div>
+          <p class="muted" style="margin-top: 4px;">
+            גם: <bdi>Roni A.</bdi> · רוני · רוני א׳
+            <span style="margin-inline: 8px;">·</span>
+            <bdi>050-1234567</bdi>
+            <span style="margin-inline: 8px;">·</span>
+            <bdi>roni@example.com</bdi>
+          </p>
+        </div>
+      </div>
+
+      <!-- highlights -->
+      <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px;">
+        <div class="card stat">
+          <span class="k">דמי קאמפ · ברן 26</span>
+          <span class="v" style="font-size: 18px;"><span class="pill ok" style="height: 24px;"><span class="dot"></span>שולם בקיזוז</span></span>
+          <span class="d"><bdi>1,200 ₪</bdi> · <bdi>02/07/26</bdi></span>
+        </div>
+        <div class="card stat">
+          <span class="k">יתרה לתשלום</span>
+          <span class="v"><bdi>0 ₪</bdi></span>
+          <span class="d">אין חוב לקאמפ</span>
+        </div>
+        <a class="card stat" href="Debts.dc.html">
+          <span class="k">הקאמפ חייב לה</span>
+          <span class="v" style="color: var(--warn);"><bdi>910 ₪</bdi></span>
+          <span class="d">מתוך <bdi>15,240 ₪</bdi> · <bdi>14,330</bdi> קוזזו</span>
+        </a>
+        <a class="card stat" href="Money.dc.html">
+          <span class="k">מחזיקה חשבון</span>
+          <span class="v"><bdi>52,940.55 ₪</bdi></span>
+          <span class="d" style="color: var(--warn);">חשבון פרטי עם כסף של הקאמפ</span>
+        </a>
+        <a class="card stat" href="Tasks.dc.html">
+          <span class="k">משימות בברן 26</span>
+          <span class="v"><bdi>2</bdi></span>
+          <span class="d">גנרטור וחשמל · הקמת הצל</span>
+        </a>
+      </div>
+
+      <div style="display: flex; gap: 16px; flex: 1; min-height: 0; align-items: flex-start;">
+        <!-- main column -->
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px;">
+          <div class="tabs" style="margin: 0; padding: 0;">
+            <button class="tab" type="button" aria-selected="true">סקירה</button>
+            <button class="tab" type="button">תשלומים <span class="n"><bdi>4</bdi></span></button>
+            <button class="tab" type="button">משימות <span class="n"><bdi>2</bdi></span></button>
+            <button class="tab" type="button">חובות <span class="n"><bdi>1</bdi></span></button>
+            <button class="tab" type="button">כינויים ומקורות <span class="n"><bdi>3</bdi></span></button>
+            <button class="tab" type="button">היסטוריה</button>
+          </div>
+
+          <section>
+            <div class="sectitle" style="margin-bottom: 8px;">[[i:calendar:15]] השנים בקאמפ</div>
+            <div class="tablewrap">
+              <table class="tbl">
+                <thead>
+                  <tr>
+                    <th>שנה</th>
+                    <th>תפקיד</th>
+                    <th class="n">לתשלום</th>
+                    <th class="n">שולם</th>
+                    <th>איך</th>
+                    <th>הערה</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><b style="font-weight: 600;">ברן 26</b> <span class="pill brand" style="margin-inline-start: 6px;">נוכחית</span></td>
+                    <td>ראש/ת צוות</td>
+                    <td class="n"><bdi>1,200 ₪</bdi></td>
+                    <td class="n"><bdi>1,200 ₪</bdi></td>
+                    <td><span class="pill">קיזוז</span></td>
+                    <td class="muted">מול החוב על מקדמת הגנרטור</td>
+                  </tr>
+                  <tr>
+                    <td>ברן 25</td>
+                    <td>ראש/ת צוות</td>
+                    <td class="n"><bdi>1,500 ₪</bdi></td>
+                    <td class="n"><bdi>1,500 ₪</bdi></td>
+                    <td><span class="pill">העברה</span></td>
+                    <td class="muted">—</td>
+                  </tr>
+                  <tr>
+                    <td>ברן 24</td>
+                    <td>חברה</td>
+                    <td class="n dim">—</td>
+                    <td class="n dim">—</td>
+                    <td class="dim">—</td>
+                    <td class="muted">לא נרשמו דמי קאמפ לשנה הזו</td>
+                  </tr>
+                  <tr>
+                    <td>ברן 23</td>
+                    <td>חברה</td>
+                    <td class="n dim">—</td>
+                    <td class="n dim">—</td>
+                    <td class="dim">—</td>
+                    <td class="muted">לא נרשמו דמי קאמפ לשנה הזו</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <div class="sectitle" style="margin-bottom: 8px;">
+              [[i:scale:15]] חובות
+              <a class="link more" href="Debts.dc.html">לכל החובות ←</a>
+            </div>
+            <div class="card" style="padding: 14px 16px; display: flex; align-items: center; gap: 14px;">
+              <span style="flex: 1; min-width: 0;">
+                <span style="display: flex; align-items: center; gap: 8px;">
+                  <b style="font-weight: 600;">הקאמפ חייב לרוני <bdi>910 ₪</bdi></b>
+                  <span class="pill">מקדמה לגנרטור ששולמה מכיסה</span>
+                </span>
+                <span class="muted" style="display: block; font-size: 12.5px; margin-top: 4px;">
+                  נפתח <bdi>02/07/26</bdi> על <bdi>15,240 ₪</bdi> · קוזז עד כה <bdi>14,330 ₪</bdi> ב<bdi>-</bdi><bdi>4</bdi> קיזוזים
+                </span>
+                <span class="bar" style="width: 240px; margin-top: 8px;"><i style="width: 94%; background: var(--ink-2);"></i></span>
+              </span>
+              <span class="src"><bdi>קופה 25!D31</bdi></span>
+              <button class="btn sm" type="button">סגירת החוב</button>
+            </div>
+          </section>
+
+          <section>
+            <div class="sectitle" style="margin-bottom: 8px;">[[i:receipt:15]] תשלומים אחרונים</div>
+            <div class="tablewrap">
+              <table class="tbl">
+                <tbody>
+                  <tr>
+                    <td><bdi>02/07/26</bdi></td>
+                    <td>דמי קאמפ ברן 26</td>
+                    <td><span class="pill">קיזוז</span></td>
+                    <td class="muted">קוזז מול החוב על מקדמת הגנרטור</td>
+                    <td class="n"><bdi>1,200 ₪</bdi></td>
+                    <td><span class="src manual">נרשם ידנית</span></td>
+                  </tr>
+                  <tr>
+                    <td><bdi>18/05/25</bdi></td>
+                    <td>דמי קאמפ ברן 25</td>
+                    <td><span class="pill">העברה</span></td>
+                    <td class="muted">—</td>
+                    <td class="n"><bdi>1,500 ₪</bdi></td>
+                    <td><span class="src"><bdi>דמי קאמפ!B9</bdi></span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <!-- side panel -->
+        <aside style="width: 320px; flex-shrink: 0; display: flex; flex-direction: column; gap: 14px;">
+          <section class="card">
+            <div class="card-h"><h3>פרטים</h3><button class="btn ghost sm icon more" type="button" aria-label="עריכה">[[i:pencil:15]]</button></div>
+            <div class="card-b">
+              <dl class="kv">
+                <dt>תפקיד</dt><dd>ראש/ת צוות</dd>
+                <dt>שנים</dt><dd><span class="seasons"><span class="on">23</span><span class="on">24</span><span class="on">25</span><span class="on">26</span></span></dd>
+                <dt>טלפון</dt><dd><bdi>050-1234567</bdi></dd>
+                <dt>אימייל</dt><dd><bdi>roni@example.com</bdi></dd>
+                <dt>מחזיקה קופה</dt><dd><a class="link" href="Money.dc.html">החשבון של רוני</a></dd>
+                <dt>נוספה</dt><dd><bdi>14/03/23</bdi></dd>
+              </dl>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-h"><h3>כינויים ומקורות</h3><span class="pill more"><bdi>3</bdi></span></div>
+            <div class="card-b" style="display: flex; flex-direction: column; gap: 10px;">
+              <p class="muted" style="font-size: 12.5px;">כל איות שהופיע בקבצים וקושר לאדם הזה. קישור אפשר לבטל; מיזוג לא.</p>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="flex: 1;"><bdi>Roni A.</bdi></span>
+                <span class="src"><bdi>קופה 25!B12</bdi></span>
+                <button class="btn ghost sm icon" type="button" aria-label="ביטול הקישור">[[i:x:14]]</button>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="flex: 1;">רוני</span>
+                <span class="src"><bdi>מסיבות!A7</bdi></span>
+                <button class="btn ghost sm icon" type="button" aria-label="ביטול הקישור">[[i:x:14]]</button>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="flex: 1;">רוני א׳</span>
+                <span class="src manual">נרשם ידנית</span>
+                <button class="btn ghost sm icon" type="button" aria-label="ביטול הקישור">[[i:x:14]]</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-h"><h3>היסטוריית שינויים</h3></div>
+            <div class="card-b" style="display: flex; flex-direction: column; gap: 12px;">
+              <div style="display: flex; gap: 10px;">
+                <span class="av sm c5">שא</span>
+                <span style="flex: 1; min-width: 0;">
+                  <span style="font-size: 13px;">רשמה תשלום בקיזוז <bdi>1,200 ₪</bdi></span>
+                  <span class="muted" style="display: block; font-size: 12px;"><bdi>02/07/26</bdi> · שירה אברהם</span>
+                </span>
+              </div>
+              <div style="display: flex; gap: 10px;">
+                <span class="av sm c3">נל</span>
+                <span style="flex: 1; min-width: 0;">
+                  <span style="font-size: 13px;">קישרה את הכינוי <bdi>Roni A.</bdi></span>
+                  <span class="muted" style="display: block; font-size: 12px;"><bdi>28/06/26</bdi> · נועה לוי</span>
+                </span>
+              </div>
+              <div style="display: flex; gap: 10px;">
+                <span class="av sm c5">שא</span>
+                <span style="flex: 1; min-width: 0;">
+                  <span style="font-size: 13px;">שייכה לברן 26 כראש צוות</span>
+                  <span class="muted" style="display: block; font-size: 12px;"><bdi>11/04/26</bdi> · שירה אברהם</span>
+                </span>
+              </div>
+            </div>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </div>
+<!--OVERLAYS-->
+</div>
+</x-dc>
+<script data-dc-script data-props='__PROPS__'>
+class Component extends DCLogic {
+/*SHELL*/
+  renderVals() {
+    return { ...this.shell() };
+  }
+}
+</script>
+</body>
+</html>
