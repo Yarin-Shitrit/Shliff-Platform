@@ -1,0 +1,121 @@
+'use client';
+
+/**
+ * Client component: it opens a menu, and it reads `?season=` — which a
+ * layout is not given (Ruling S2). The list of seasons is server data,
+ * handed down as a prop; the *choice* is the URL's, read here with the same
+ * `pickSeason` every page's `resolveSeason` uses, so the button can never
+ * name a season the page below it is not showing.
+ *
+ * "שנה חדשה" (B4) is deferred by the plan's own Ruling S4: the mock's affordance
+ * points at a settings screen no plan in this wave builds, and this wave's spec
+ * explicitly forbids writing a new `seasons` row. Rather than ship a control
+ * that opens onto nothing, the menu ends where the mock's camp-wide note ends —
+ * no dead link is rendered in its place.
+ */
+import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { Icon } from '@/components/ui/icon';
+import { pickSeason } from '@/lib/seasons/pick';
+import { seasonHref } from './season-href';
+import styles from './sidebar.module.css';
+
+export interface SwitchSeason {
+  id: string;
+  name: string;
+  /** The word under the name in the menu: פעילה / הסתיימה / בלי דמי קאמפ. */
+  state: string;
+}
+
+export function SeasonSwitch({ seasons }: { seasons: SwitchSeason[] }) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const search = searchParams.toString();
+  const current = pickSeason(seasons, searchParams.get('season'));
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.code === 'Escape') setOpen(false);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  // A9: whatever closes the popover — esc, the scrim, or picking a season —
+  // hands focus back to the button that opened it, so a keyboard user is
+  // never dropped onto the page with nothing focused.
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (wasOpen.current && !open) triggerRef.current?.focus();
+    wasOpen.current = open;
+  }, [open]);
+
+  if (!current) {
+    return <div className={styles.seasonEmpty}>עדיין אין שנים</div>;
+  }
+
+  return (
+    <div className={styles.seasonWrap}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={styles.seasonSwitch}
+        aria-haspopup="true"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        <span className={styles.seasonNames}>
+          <span className={styles.seasonKicker}>שנה</span>
+          <span className={styles.seasonName}>{current.name}</span>
+        </span>
+        <span className={styles.seasonMeta}>
+          <span className={styles.seasonState}>{current.state}</span>
+          <Icon name="updown" size={14} />
+        </span>
+      </button>
+
+      {open && (
+        <>
+          <button
+            type="button"
+            className={styles.scrim}
+            aria-label="סגירה"
+            onClick={() => setOpen(false)}
+          />
+          {/*
+            No `role="menu"`/`"menuitem"` here: every row is a real link that
+            navigates (via `seasonHref`), not a command, so overriding the
+            anchor's implicit link role would take away the one role a
+            keyboard or screen-reader user actually needs to act on it.
+          */}
+          <div className={styles.seasonPop}>
+            <div className={styles.menusect}>שנות פעילות</div>
+            {seasons.map((season) => (
+              <Link
+                key={season.id}
+                className={styles.menuitem}
+                href={seasonHref(pathname, search, season.id)}
+                aria-current={season.id === current.id ? 'true' : undefined}
+                onClick={() => setOpen(false)}
+              >
+                {season.id === current.id
+                  ? <Icon name="check" size={16} />
+                  : <span className={styles.menuGutter} />}
+                <span>{season.name}</span>
+                <span className={styles.menumeta}>{season.state}</span>
+              </Link>
+            ))}
+            <div className={styles.divider} />
+            <p className={styles.menunote}>
+              חשבונות, אנשים וחובות בלי שנה נשארים גלויים בכל שנה.
+            </p>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
