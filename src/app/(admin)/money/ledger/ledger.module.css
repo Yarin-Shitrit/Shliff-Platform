@@ -1,0 +1,69 @@
+/* A10: logical properties throughout. The one physical exception is the
+ * numeric column's `text-align: right`, which lives in the global `.num`
+ * utility that `Table` composes — never redeclared here. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.title {
+  margin-block: 0;
+  font-size: var(--text-title);
+  line-height: var(--leading-title);
+}
+
+.lead {
+  margin-block: 0;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+  max-inline-size: 48rem;
+}
+
+/**
+ * Why the running balance is absent, said once, where the column would be.
+ * Not a Banner: nothing is wrong, and a warning tone would send a lead off to
+ * fix something that is working exactly as designed.
+ */
+.balanceNote {
+  margin-block: 0;
+  padding-block: var(--space-2);
+  padding-inline: var(--space-3);
+  border-inline-start: 3px solid var(--line-strong);
+  background: var(--sunken);
+  border-start-end-radius: var(--radius-sm);
+  border-end-end-radius: var(--radius-sm);
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.description {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.party {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: inherit;
+  text-decoration: none;
+}
+
+.party:hover {
+  text-decoration: underline;
+}
+
+/* An absent value: drawn, never announced. */
+.none {
+  color: var(--ink-4);
+}
