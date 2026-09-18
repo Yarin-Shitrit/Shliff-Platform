@@ -1,0 +1,37 @@
+/*
+ * The scrim's dimming colour is the one literal, undocumented value in this
+ * file, transcribed rather than invented — the same pattern drawer.module.css
+ * uses for its own scrim (there is no `--scrim` token yet, and this task does
+ * not add one). z-index reads the ladder in tokens.css (`--z-dialog-scrim`,
+ * `--z-dialog`) rather than repeating its numbers here.
+ */
+.scrim { position: absolute; inset: 0; z-index: var(--z-dialog-scrim); background: rgb(28 25 23 / 24%); }
+:root[data-theme='dark'] .scrim { background: rgb(0 0 0 / 60%); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .scrim { background: rgb(0 0 0 / 60%); }
+}
+
+.dialog {
+  position: absolute; z-index: var(--z-dialog);
+  inset-block-start: 50%; inset-inline-start: 50%; transform: translate(50%, -50%);
+  inline-size: 400px; max-inline-size: calc(100% - 32px);
+  padding: 20px; border-radius: 14px;
+  background: var(--panel); box-shadow: var(--shadow-pop);
+  display: flex; flex-direction: column; gap: 12px;
+}
+
+.title { font-size: 16px; font-weight: 600; margin: 0; }
+.consequence { font-size: 13.5px; color: var(--ink-2); margin: 0; }
+.danger { color: var(--ink); }
+
+.preview {
+  padding: 12px; border-radius: 10px; background: var(--sunken);
+  font-size: 13px; color: var(--ink-2);
+}
+
+.actions { display: flex; gap: 8px; justify-content: flex-end; margin-block-start: 4px; }
+.actions form { display: contents; }
+
+@media (max-width: 768px) {
+  .dialog { inline-size: calc(100% - 32px); }
+}
