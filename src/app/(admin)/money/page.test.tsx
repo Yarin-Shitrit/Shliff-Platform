@@ -6,8 +6,9 @@ import { render, screen, within } from '@testing-library/react';
 import type { SeasonMoneySummary } from '@/lib/money/summary';
 import type { DuesFundingIdentity } from '@/lib/money/funding';
 import type { ObligationRow } from '@/lib/money/obligations';
-import type { BudgetLineRow, DerivationRow } from '@/lib/money/budget';
+import type { BudgetGroup, BudgetLineActuals } from '@/lib/money/budget';
 import type { Movement } from '@/lib/money/ledger';
+import type { MoneyOverview } from '@/lib/money/overview';
 
 /**
  * `vi.mock` factories are hoisted above every other statement, so a plain
@@ -15,23 +16,24 @@ import type { Movement } from '@/lib/money/ledger';
  * initialization" — `vi.hoisted` gives the factories something to close
  * over instead (see `src/lib/auth/guard.test.ts`).
  */
-const {
-  requireAdmin, listSeasons, seasonMoneySummary, listMovements,
-  listBudgetLines, budgetDerivation,
-} = vi.hoisted(() => ({
+const { requireAdmin, listSeasons, moneyOverview } = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   listSeasons: vi.fn(),
-  seasonMoneySummary: vi.fn(),
-  listMovements: vi.fn(),
-  listBudgetLines: vi.fn(),
-  budgetDerivation: vi.fn(),
+  moneyOverview: vi.fn(),
 }));
 vi.mock('@/db', () => ({ db: {} }));
 vi.mock('@/lib/auth/guard', () => ({ requireAdmin }));
 vi.mock('@/lib/members/roster', () => ({ listSeasons }));
-vi.mock('@/lib/money/summary', () => ({ seasonMoneySummary }));
-vi.mock('@/lib/money/ledger', () => ({ listMovements }));
-vi.mock('@/lib/money/budget', () => ({ listBudgetLines, budgetDerivation }));
+/**
+ * Only `moneyOverview` is replaced. `sourceKey` stays the real function,
+ * because the band components call it to read the very map this file builds
+ * — a second spelling of `table:id` here would let a test agree with itself
+ * about the wrong key and prove nothing about the page.
+ */
+vi.mock('@/lib/money/overview', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/money/overview')>()),
+  moneyOverview,
+}));
 
 import MoneyPage from './page';
 import styles from './money.module.css';
@@ -74,6 +76,20 @@ function summary(overrides: Partial<SeasonMoneySummary> = {}): SeasonMoneySummar
   };
 }
 
+function overview(overrides: Partial<MoneyOverview> = {}): MoneyOverview {
+  return {
+    summary: summary(),
+    budget: [],
+    budgetTotals: { plannedAgorot: 0, spentAgorot: 0, remainingAgorot: 0, count: 0 },
+    fundraising: { targetAgorot: 2237530, raisedAgorot: 1850000, remainingAgorot: 387530 },
+    decisions: { unnamedCount: 0, arithmeticCount: 0, total: 0 },
+    recent: [],
+    movementCount: 0,
+    sources: new Map(),
+    ...overrides,
+  };
+}
+
 function sectionFor(headingText: string): HTMLElement {
   const section = screen.getByRole('heading', { name: headingText }).closest('section');
   if (!section) throw new Error(`no <section> ancestor for heading "${headingText}"`);
@@ -83,10 +99,7 @@ function sectionFor(headingText: string): HTMLElement {
 beforeEach(() => {
   vi.clearAllMocks();
   listSeasons.mockResolvedValue([SEASON]);
-  seasonMoneySummary.mockResolvedValue(summary());
-  listMovements.mockResolvedValue([]);
-  listBudgetLines.mockResolvedValue([]);
-  budgetDerivation.mockResolvedValue([]);
+  moneyOverview.mockResolvedValue(overview());
   requireAdmin.mockResolvedValue({ ok: true, email: 'lead@shliff.camp' });
 });
 
@@ -103,7 +116,31 @@ describe('MoneyPage', () => {
     listSeasons.mockResolvedValue([]);
     render(await MoneyPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText('עדיין אין שנים. הריצו את הזריעה מדף הייבוא.')).toBeTruthy();
-    expect(seasonMoneySummary).not.toHaveBeenCalled();
+    expect(moneyOverview).not.toHaveBeenCalled();
+  });
+
+  it('sends the lead from the flat rate to the screen that can change it', async () => {
+    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+    expect(screen.getByRole('link', { name: /לדף דמי הקאמפ/ }).getAttribute('href'))
+      .toBe('/fees?season=s1');
+  });
+
+  it('points at the sidebar switcher, not at a picker this page no longer has', async () => {
+    moneyOverview.mockResolvedValue(overview({
+      summary: summary({
+        identity: identity({
+          plannedSize: null, duesCoverAgorot: null,
+          perPersonFullAgorot: null, perPersonFundingAgorot: null, closes: false,
+        }),
+      }),
+    }));
+    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+    expect(screen.getByText(/אי אפשר לחשב עלות לאדם/).textContent)
+      .toContain('בחרו אותה בבורר השנה בסרגל הצד');
+    // R5 deleted the control the old pointer pointed at. A sentence that still
+    // said "בחרו אותה למעלה" would send a lead hunting for a picker that is
+    // now in the shell's sidebar.
+    expect(screen.queryByRole('navigation', { name: 'בחירת שנה' })).toBeNull();
   });
 
   it('leads with the hero figure and the thesis sentence, all four numbers', async () => {
@@ -125,17 +162,34 @@ describe('MoneyPage', () => {
   });
 
   it("shows the mismatch warning, not the can't-compute one, when dues+funding miss the budget", async () => {
-    seasonMoneySummary.mockResolvedValue(summary({ identity: identity({ closes: false }) }));
+    moneyOverview.mockResolvedValue(overview({
+      summary: summary({ identity: identity({ closes: false }) }),
+    }));
     render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
     expect(screen.getByText(/לא מסתכמים לתקציב/)).toBeTruthy();
     expect(screen.queryByText(/אי אפשר לחשב עלות לאדם/)).toBeNull();
   });
 
+  // R3: the warning was a bare `⚠` glyph in a red `.badge-warn`, where the
+  // colour was doing work no colour-blind reader could read. It is now gold,
+  // carries an icon, and says what is wrong in a sentence.
+  it('warns in gold with a sentence, not a bare glyph, when the identity does not close', async () => {
+    moneyOverview.mockResolvedValue(overview({
+      summary: summary({ identity: identity({ closes: false }) }),
+    }));
+    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+    expect(screen.getByText(/דמי הקאמפ והגיוס לא מסתכמים לתקציב/)).toBeTruthy();
+    expect(screen.getByText(/משהו כאן לא מתאים — התקציב, היעד או גודל המחנה/)).toBeTruthy();
+    expect(screen.queryByText('⚠')).toBeNull();
+  });
+
   it('shows the can\'t-compute message, not the mismatch warning, when there is no planned size', async () => {
-    seasonMoneySummary.mockResolvedValue(summary({
-      identity: identity({
-        plannedSize: null, duesCoverAgorot: null,
-        perPersonFullAgorot: null, perPersonFundingAgorot: null, closes: false,
+    moneyOverview.mockResolvedValue(overview({
+      summary: summary({
+        identity: identity({
+          plannedSize: null, duesCoverAgorot: null,
+          perPersonFullAgorot: null, perPersonFundingAgorot: null, closes: false,
+        }),
       }),
     }));
     render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
@@ -155,11 +209,13 @@ describe('MoneyPage', () => {
   });
 
   it('never draws a "דמי קאמפ" segment as a lying zero when there is a budget and a funding target but no planned camp size', async () => {
-    seasonMoneySummary.mockResolvedValue(summary({
-      identity: identity({
-        budgetTotalAgorot: 7000000, fundingTargetAgorot: 1500000,
-        plannedSize: null, duesCoverAgorot: null,
-        perPersonFullAgorot: null, perPersonFundingAgorot: null, closes: false,
+    moneyOverview.mockResolvedValue(overview({
+      summary: summary({
+        identity: identity({
+          budgetTotalAgorot: 7000000, fundingTargetAgorot: 1500000,
+          plannedSize: null, duesCoverAgorot: null,
+          perPersonFullAgorot: null, perPersonFundingAgorot: null, closes: false,
+        }),
       }),
     }));
     render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
@@ -172,8 +228,10 @@ describe('MoneyPage', () => {
   });
 
   it('flags unattributed inflow — ledger and dues payments combined — without folding it into an account', async () => {
-    seasonMoneySummary.mockResolvedValue(summary({
-      unattributed: { inAgorot: 15000, outAgorot: 0, paymentsAgorot: 20000 },
+    moneyOverview.mockResolvedValue(overview({
+      summary: summary({
+        unattributed: { inAgorot: 15000, outAgorot: 0, paymentsAgorot: 20000 },
+      }),
     }));
     render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
     const section = sectionFor('איפה הכסף');
@@ -185,8 +243,10 @@ describe('MoneyPage', () => {
   });
 
   it('flags unattributed outflow separately from inflow, with its own sentence', async () => {
-    seasonMoneySummary.mockResolvedValue(summary({
-      unattributed: { inAgorot: 0, outAgorot: 30000, paymentsAgorot: 0 },
+    moneyOverview.mockResolvedValue(overview({
+      summary: summary({
+        unattributed: { inAgorot: 0, outAgorot: 30000, paymentsAgorot: 0 },
+      }),
     }));
     render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
     const section = sectionFor('איפה הכסף');
@@ -198,8 +258,10 @@ describe('MoneyPage', () => {
   it('says nothing about unattributed money when every shekel is placed', async () => {
     // The zero case is not "no news" — a `>= 0` off-by-one here would show
     // the same warning for every season, training the lead to ignore it.
-    seasonMoneySummary.mockResolvedValue(summary({
-      unattributed: { inAgorot: 0, outAgorot: 0, paymentsAgorot: 0 },
+    moneyOverview.mockResolvedValue(overview({
+      summary: summary({
+        unattributed: { inAgorot: 0, outAgorot: 0, paymentsAgorot: 0 },
+      }),
     }));
     render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
     expect(screen.queryByText(/נרשמו בלי לציין לאיזה חשבון נכנסו/)).toBeNull();
@@ -215,9 +277,11 @@ describe('MoneyPage', () => {
    * known — what's missing is the budget itself.
    */
   it('reports the camp budget as not recorded yet, not as a lying zero, when the season has no camp-category budget lines', async () => {
-    seasonMoneySummary.mockResolvedValue(summary({
-      identity: identity({
-        budgetTotalAgorot: 0, perPersonFullAgorot: 0, perPersonFundingAgorot: 0, closes: false,
+    moneyOverview.mockResolvedValue(overview({
+      summary: summary({
+        identity: identity({
+          budgetTotalAgorot: 0, perPersonFullAgorot: 0, perPersonFundingAgorot: 0, closes: false,
+        }),
       }),
     }));
     const { container } = render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
@@ -242,9 +306,11 @@ describe('MoneyPage', () => {
       settledAgorot: 0, outstandingAgorot: 50000, settled: false, unnamed: true,
       seasonId: 's1', sourceBlockId: null, sourceRow: null, settlements: [],
     };
-    seasonMoneySummary.mockResolvedValue(summary({
-      campOwes: [named, unnamed], owedToCamp: [], campOwesAgorot: 250000,
-      unnamed: [unnamed],
+    moneyOverview.mockResolvedValue(overview({
+      summary: summary({
+        campOwes: [named, unnamed], owedToCamp: [], campOwesAgorot: 250000,
+        unnamed: [unnamed],
+      }),
     }));
     render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
 
@@ -265,17 +331,28 @@ describe('MoneyPage', () => {
   });
 
   it("flags a budget line's bad arithmetic inline, without hiding its total", async () => {
-    const off: BudgetLineRow = {
+    const off: BudgetLineActuals = {
       id: 'b1', label: 'קבוצה א', quantityText: '10', quantityNumAgorot: 1000,
       unitCostAgorot: 5000, totalAgorot: 40000, rationale: null, category: 'camp',
       arithmeticOff: true, sourceBlockId: null, sourceRow: null,
+      spentAgorot: 0, remainingAgorot: 40000, overAgorot: 0,
     };
-    const ok: BudgetLineRow = {
+    const ok: BudgetLineActuals = {
       id: 'b2', label: 'קבוצה ב', quantityText: '2', quantityNumAgorot: 200,
       unitCostAgorot: 3000, totalAgorot: 6000, rationale: null, category: 'camp',
       arithmeticOff: false, sourceBlockId: null, sourceRow: null,
+      spentAgorot: 0, remainingAgorot: 6000, overAgorot: 0,
     };
-    listBudgetLines.mockResolvedValue([off, ok]);
+    const group: BudgetGroup = {
+      category: 'camp', label: 'קאמפ', lines: [off, ok],
+      plannedAgorot: 46000, spentAgorot: 0, remainingAgorot: 46000, count: 2,
+    };
+    moneyOverview.mockResolvedValue(overview({
+      budget: [group],
+      budgetTotals: {
+        plannedAgorot: 46000, spentAgorot: 0, remainingAgorot: 46000, count: 2,
+      },
+    }));
     render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
 
     const section = sectionFor('התקציב');
@@ -284,47 +361,6 @@ describe('MoneyPage', () => {
     expect(within(rows[1]).getByText(/400/)).toBeTruthy();
     expect(within(rows[2]).queryByText('⚠')).toBeNull();
     expect(within(rows[2]).getByText(/60\b/)).toBeTruthy();
-  });
-
-  it('renders new-this-season and dropped-from-budget derivation rows distinctly, never as zero', async () => {
-    listSeasons.mockResolvedValue([
-      { ...SEASON, id: 's2', name: 'ברן 27', year: 2027 },
-      SEASON,
-    ]);
-    const newThisSeason: DerivationRow = {
-      label: 'סעיף חדש לגמרי', actualAgorot: null, forecastAgorot: 500000,
-      bufferAgorot: null, rationale: '',
-    };
-    const droppedFromBudget: DerivationRow = {
-      label: 'סעיף שירד', actualAgorot: 300000, forecastAgorot: null,
-      bufferAgorot: -300000, rationale: 'לא נכלל בתקציב הבא',
-    };
-    budgetDerivation.mockResolvedValue([newThisSeason, droppedFromBudget]);
-
-    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's2' }) }));
-
-    const section = sectionFor('מאיפה התקציב הזה בא');
-    const rows = within(section).getAllByRole('row');
-    // Each of these two positive assertions is itself the "never zero, never
-    // blank" guarantee: a mutant that defaulted a null actual/forecast to 0
-    // and formatted it would render "0 ₪" in place of the label span below,
-    // so that span would stop being found — there is no separate value to
-    // check `!== 0` against once the label itself is confirmed present.
-    expect(within(rows[1]).getByText('סעיף חדש')).toBeTruthy();
-    expect(within(rows[1]).getByText(/5,000/)).toBeTruthy();
-    expect(within(rows[2]).getByText('ירד מהתקציב')).toBeTruthy();
-    // Scoped to the "actual" cell specifically: the row's buffer cell also
-    // contains "3,000" (as "-3,000", the negative buffer for a dropped
-    // line), so an unscoped match on the row would pass on either cell and
-    // stop discriminating which one actually holds the actual-spend figure.
-    const actualCell = within(rows[2]).getAllByRole('cell')[1];
-    expect(within(actualCell).getByText(/3,000/)).toBeTruthy();
-  });
-
-  it('omits the derivation section entirely when there is no previous season to derive from', async () => {
-    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
-    expect(screen.queryByText('מאיפה התקציב הזה בא')).toBeNull();
-    expect(budgetDerivation).not.toHaveBeenCalled();
   });
 
   it('invites action instead of bare empty tables for a season with no movements, budget, or obligations', async () => {
@@ -368,8 +404,10 @@ describe('MoneyPage', () => {
       settledAgorot: 0, outstandingAgorot: 45000, settled: false, unnamed: false,
       seasonId: 's1', sourceBlockId: null, sourceRow: null, settlements: [],
     };
-    seasonMoneySummary.mockResolvedValue(summary({
-      campOwes: [weOweRow], owedToCamp: [owedToUsRow],
+    moneyOverview.mockResolvedValue(overview({
+      summary: summary({
+        campOwes: [weOweRow], owedToCamp: [owedToUsRow],
+      }),
     }));
     render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
 
@@ -407,8 +445,10 @@ describe('MoneyPage', () => {
       settledAgorot: 0, outstandingAgorot: 45000, settled: false, unnamed: false,
       seasonId: 's1', sourceBlockId: null, sourceRow: null, settlements: [],
     };
-    seasonMoneySummary.mockResolvedValue(summary({
-      campOwes: [], owedToCamp: [owedToUsRow],
+    moneyOverview.mockResolvedValue(overview({
+      summary: summary({
+        campOwes: [], owedToCamp: [owedToUsRow],
+      }),
     }));
     render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
 
@@ -430,8 +470,10 @@ describe('MoneyPage', () => {
       settledAgorot: 0, outstandingAgorot: 80000, settled: false, unnamed: false,
       seasonId: 's1', sourceBlockId: null, sourceRow: null, settlements: [],
     };
-    seasonMoneySummary.mockResolvedValue(summary({
-      campOwes: [weOweRow], owedToCamp: [],
+    moneyOverview.mockResolvedValue(overview({
+      summary: summary({
+        campOwes: [weOweRow], owedToCamp: [],
+      }),
     }));
     render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
 
@@ -461,7 +503,9 @@ describe('MoneyPage', () => {
         sourceBlockId: null, sourceRow: null,
       },
     ];
-    listMovements.mockResolvedValue(moves);
+    moneyOverview.mockResolvedValue(overview({
+      recent: moves, movementCount: moves.length,
+    }));
     render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
 
     const section = sectionFor('התנועות');
@@ -480,41 +524,5 @@ describe('MoneyPage', () => {
     // No account named on the second movement — shown as its own admission,
     // not folded into a guessed account.
     expect(within(outRow).getByText('לא צוין')).toBeTruthy();
-  });
-
-  /**
-   * Spec §4 band 6: a running balance, not just per-row in/out. `listMovements`
-   * already returns rows sorted by date, so this is a reduce over the array
-   * the page already holds. Both rows are checked, not just the second — a
-   * mutation that always printed the *final* balance in every row (rather
-   * than genuinely accumulating one row at a time) would still pass a
-   * check of the last row alone.
-   */
-  it('accumulates a running balance column, in adding and out subtracting', async () => {
-    const moves: Movement[] = [
-      {
-        id: 'm1', source: 'ledger', occurredOn: new Date('2026-01-05'), direction: 'in',
-        amountAgorot: 70000, description: 'תרומה', accountId: 'a1', accountName: 'קופה',
-        seasonId: 's1', eventId: null, transferGroupId: null,
-        sourceBlockId: null, sourceRow: null,
-      },
-      {
-        id: 'm2', source: 'ledger', occurredOn: new Date('2026-01-06'), direction: 'out',
-        amountAgorot: 30000, description: 'ציוד', accountId: null, accountName: null,
-        seasonId: 's1', eventId: null, transferGroupId: null,
-        sourceBlockId: null, sourceRow: null,
-      },
-    ];
-    listMovements.mockResolvedValue(moves);
-    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
-
-    const section = sectionFor('התנועות');
-    const rows = within(section).getAllByRole('row');
-    const [, inRow, outRow] = rows;
-    // Columns: תאריך(0) תיאור(1) חשבון(2) נכנס(3) יצא(4) יתרה(5).
-    const inCells = within(inRow).getAllByRole('cell');
-    const outCells = within(outRow).getAllByRole('cell');
-    expect(within(inCells[5]).getByText(/700/)).toBeTruthy();
-    expect(within(outCells[5]).getByText(/400/)).toBeTruthy();
   });
 });

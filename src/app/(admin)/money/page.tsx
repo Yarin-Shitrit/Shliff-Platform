@@ -4,11 +4,11 @@ import Link from 'next/link';
 import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import { listSeasons } from '@/lib/members/roster';
-import { seasonMoneySummary } from '@/lib/money/summary';
-import { listMovements } from '@/lib/money/ledger';
-import { listBudgetLines, budgetDerivation } from '@/lib/money/budget';
+import { moneyOverview } from '@/lib/money/overview';
 import type { ObligationRow } from '@/lib/money/obligations';
 import { formatILS } from '@/lib/money';
+import { Money } from '@/components/format';
+import { Banner } from '@/components/ui/banner';
 import { StatTile } from '@/components/ui/stat-tile';
 import { BarList } from '@/components/charts/bar-list';
 import { StackedBar } from '@/components/charts/stacked-bar';
@@ -74,29 +74,14 @@ export default async function MoneyPage(
 
   const { season: requested } = await searchParams;
   const season = seasons.find((s) => s.id === requested) ?? seasons[0];
-  const summary = await seasonMoneySummary(db, season.id);
-  const movements = await listMovements(db, { seasonId: season.id });
-  // `listMovements` already returns its rows sorted by date (see its own
-  // ordering), so the running balance is a plain reduce over what's already
-  // held — no separate query. `in` adds, `out` subtracts; index-aligned with
-  // `movements` for the render loop below.
-  const runningBalancesAgorot = movements.reduce<number[]>((balances, move) => {
-    const previous = balances.length > 0 ? balances[balances.length - 1] : 0;
-    balances.push(move.direction === 'in'
-      ? previous + move.amountAgorot
-      : previous - move.amountAgorot);
-    return balances;
-  }, []);
-  const budget = await listBudgetLines(db, season.id);
+  const view = await moneyOverview(db, season.id);
+  const { summary } = view;
   const { identity } = summary;
-
-  // `listSeasons` is ordered by year descending, so the first season older
-  // than this one is its predecessor. Without one there is nothing to derive
-  // from, and the section is omitted rather than rendered empty.
-  const previousSeason = seasons.find((option) => option.year < season.year);
-  const derivation = previousSeason
-    ? await budgetDerivation(db, previousSeason.id, season.id)
-    : [];
+  const scope = `?season=${season.id}`;
+  // Transitional: the budget band is still Wave 1's flat table until Task 9
+  // replaces it with `BudgetTable`, which reads the groups directly.
+  const budget = view.budget.flatMap((group) => group.lines);
+  const movements = view.recent;
 
   // `duesFundingIdentity` (src/lib/money/funding.ts) sets both of these to
   // `null` in exactly the same branch — no planned camp size — so bundling
@@ -122,63 +107,73 @@ export default async function MoneyPage(
   const unattributedOutAgorot = summary.unattributed.outAgorot;
 
   return (
-    <main>
-      <h1>כספים</h1>
+    <main className={styles.page}>
+      <h1 className="sr-only">כספים</h1>
 
-      <nav className={styles.seasons} aria-label="בחירת שנה">
-        {seasons.map((option) => (
-          <Link key={option.id} href={`/money?season=${option.id}`}
-                aria-current={option.id === season.id ? 'page' : undefined}>
-            {option.name}
-          </Link>
-        ))}
-      </nav>
+      <section className={`card ${styles.lead}`}>
+        <div className={styles.leadFigure}>
+          <div className={styles.leadLabel}>דמי קאמפ לאדם · <bdi>{season.name}</bdi></div>
+          <p className={styles.hero}><Money agorot={identity.flatRateAgorot} /></p>
+          <Link className="link" href={`/fees${scope}`}>לדף דמי הקאמפ ←</Link>
+        </div>
 
-      <section className={styles.lead}>
-        <p className={styles.hero}><bdi>{formatILS(identity.flatRateAgorot)} ₪</bdi></p>
-        {perPerson ? (
-          <p className={styles.thesis}>
-            כל חבר משלם. התקציב המלא הוא{' '}
-            <bdi>{formatILS(identity.budgetTotalAgorot)} ₪</bdi> ל־
-            <bdi>{identity.plannedSize}</bdi> איש —{' '}
-            <bdi>{formatILS(perPerson.fullAgorot)} ₪</bdi> לאדם.
-            הגיוס מכסה <bdi>{formatILS(perPerson.fundingAgorot)} ₪</bdi> מכל אחד מהם.
-          </p>
-        ) : identity.plannedSize === null ? (
-          <p className="muted">
-            אי אפשר לחשב עלות לאדם ל<bdi>{season.name}</bdi> בלי גודל מחנה
-            מתוכנן. אם חיפשתם שנה אחרת, בחרו אותה למעלה.
-          </p>
-        ) : (
-          <p className="muted">
-            ל<bdi>{season.name}</bdi> עדיין לא נרשם תקציב קאמפ, ולכן אי אפשר
-            לחשב עלות לאדם. אם חיפשתם שנה אחרת, בחרו אותה למעלה.
-          </p>
-        )}
-        {!identity.closes && perPerson ? (
-          <p className="badge-warn">
-            ⚠ דמי הקאמפ והגיוס לא מסתכמים לתקציב. משהו כאן לא מתאים — התקציב,
-            היעד או גודל המחנה.
-          </p>
-        ) : null}
+        <div className={styles.leadArgument}>
+          {perPerson ? (
+            <p className={styles.thesis}>
+              כל חבר משלם. התקציב המלא הוא{' '}
+              <Money agorot={identity.budgetTotalAgorot} /> ל־
+              <bdi>{identity.plannedSize}</bdi> איש —{' '}
+              <Money agorot={perPerson.fullAgorot} /> לאדם.
+              הגיוס מכסה <Money agorot={perPerson.fundingAgorot} /> מכל אחד מהם.
+            </p>
+          ) : identity.plannedSize === null ? (
+            <p className="muted">
+              אי אפשר לחשב עלות לאדם ל<bdi>{season.name}</bdi> בלי גודל מחנה
+              מתוכנן. אם חיפשתם שנה אחרת, בחרו אותה בבורר השנה בסרגל הצד.
+            </p>
+          ) : (
+            <p className="muted">
+              ל<bdi>{season.name}</bdi> עדיין לא נרשם תקציב קאמפ, ולכן אי אפשר
+              לחשב עלות לאדם. אם חיפשתם שנה אחרת, בחרו אותה בבורר השנה בסרגל הצד.
+            </p>
+          )}
 
-        {/*
-          * `duesCoverAgorot` is only ever `null` in the same "no planned
-          * size" branch that makes `perPerson` null, so the bar is gated on
-          * that instead of defaulted to 0 — a zero-length "דמי קאמפ" segment
-          * would assert the camp collects ₪0 in dues, which is false; it is
-          * simply not computable yet, and the muted message above already
-          * says so on its own.
-          */}
-        {perPerson ? (
-          <StackedBar
-            segments={[
-              { id: 'dues', label: 'דמי קאמפ', valueAgorot: identity.duesCoverAgorot ?? 0, series: 1 },
-              { id: 'raise', label: 'יעד גיוס', valueAgorot: identity.fundingTargetAgorot, series: 2 },
-            ]}
-            totalAgorot={identity.budgetTotalAgorot}
-          />
-        ) : null}
+          {/*
+            * R3: gold, an icon and a sentence, in place of a bare `⚠` in a red
+            * `.badge-warn` — a glyph whose only carrier of meaning was colour.
+            * `Banner` takes the lead clause and the rest of the sentence as
+            * two props (C9), so the sentence is split at its own full stop
+            * rather than reworded.
+            */}
+          {!identity.closes && perPerson ? (
+            <Banner
+              tone="warn"
+              headline="דמי הקאמפ והגיוס לא מסתכמים לתקציב."
+              detail="משהו כאן לא מתאים — התקציב, היעד או גודל המחנה."
+            />
+          ) : null}
+
+          {/*
+            * `duesCoverAgorot` is only ever `null` in the same "no planned
+            * size" branch that makes `perPerson` null, so the bar is gated on
+            * that instead of defaulted to 0 — a zero-length "דמי קאמפ" segment
+            * would assert the camp collects ₪0 in dues, which is false; it is
+            * simply not computable yet, and the muted message above already
+            * says so on its own.
+            */}
+          {perPerson ? (
+            <StackedBar
+              segments={[
+                { id: 'dues', label: 'דמי קאמפ', valueAgorot: identity.duesCoverAgorot ?? 0, series: 1 },
+                { id: 'raise', label: 'יעד גיוס', valueAgorot: identity.fundingTargetAgorot, series: 2 },
+              ]}
+              totalAgorot={identity.budgetTotalAgorot}
+            />
+          ) : null}
+          <p className={styles.provenanceNote}>
+            כל מספר כאן נגזר משורות אמיתיות. אין כאן שום סכום שנכתב ביד.
+          </p>
+        </div>
       </section>
 
       <section className={styles.tiles}>
@@ -273,11 +268,10 @@ export default async function MoneyPage(
               <thead>
                 <tr>
                   <th>תאריך</th><th>תיאור</th><th>חשבון</th><th>נכנס</th><th>יצא</th>
-                  <th>יתרה</th>
                 </tr>
               </thead>
               <tbody>
-                {movements.map((move, index) => (
+                {movements.map((move) => (
                   <tr key={`${move.source}-${move.id}`}>
                     <td><bdi>{move.occurredOn.toLocaleDateString('he-IL')}</bdi></td>
                     <td>{move.description}</td>
@@ -286,7 +280,6 @@ export default async function MoneyPage(
                       ? <bdi>{formatILS(move.amountAgorot)} ₪</bdi> : null}</td>
                     <td>{move.direction === 'out'
                       ? <bdi>{formatILS(move.amountAgorot)} ₪</bdi> : null}</td>
-                    <td><bdi>{formatILS(runningBalancesAgorot[index])} ₪</bdi></td>
                   </tr>
                 ))}
               </tbody>
@@ -294,43 +287,6 @@ export default async function MoneyPage(
           </div>
         )}
       </section>
-
-      {derivation.length > 0 ? (
-        <section className="card">
-          <h2>מאיפה התקציב הזה בא</h2>
-          <p className="muted">
-            כל סעיף מול מה שהוצא עליו ב<bdi>{previousSeason!.name}</bdi>.
-          </p>
-          <div className="scroll-x">
-            <table>
-              <thead>
-                <tr>
-                  <th>סעיף</th><th>בפועל</th><th>בתקציב</th><th>הפרש</th><th>למה</th>
-                </tr>
-              </thead>
-              <tbody>
-                {derivation.map((row) => (
-                  <tr key={row.label}>
-                    <td>{row.label}</td>
-                    <td>{row.actualAgorot === null
-                      ? <span className="muted">סעיף חדש</span>
-                      : <bdi>{formatILS(row.actualAgorot)} ₪</bdi>}</td>
-                    <td>{row.forecastAgorot === null
-                      ? <span className="muted">ירד מהתקציב</span>
-                      : <bdi>{formatILS(row.forecastAgorot)} ₪</bdi>}</td>
-                    <td>{row.bufferAgorot === null ? '' : (
-                      <bdi className={row.bufferAgorot < 0 ? 'badge-warn' : undefined}>
-                        {row.bufferAgorot > 0 ? '+' : ''}{formatILS(row.bufferAgorot)} ₪
-                      </bdi>
-                    )}</td>
-                    <td className="muted">{row.rationale}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      ) : null}
 
       <section className="card">
         <h2>התקציב</h2>

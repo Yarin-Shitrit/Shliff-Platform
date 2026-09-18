@@ -1,24 +1,41 @@
-.seasons { display: flex; gap: 1rem; margin-block-end: 1.5rem; }
-.seasons a[aria-current='page'] { color: var(--sand); text-decoration: none; }
+.page { display: flex; flex-direction: column; gap: var(--space-4); }
 
 .lead {
-  border-inline-start: 3px solid var(--flare);
-  padding-inline-start: 1rem;
-  margin-block-end: 2rem;
+  display: flex;
+  gap: var(--space-6);
+  align-items: center;
+  margin-block-end: 0;
 }
+.leadFigure { flex-shrink: 0; }
+.leadLabel { font-size: var(--text-meta); color: var(--ink-3); }
+.leadArgument { flex: 1; min-inline-size: 0; }
 
 .hero {
   font-family: var(--font-display), Georgia, serif;
-  font-size: clamp(2.5rem, 8vw, 4rem);
-  line-height: 1.1;
-  margin-block: 0 0.25rem;
+  font-size: var(--text-display-lg);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.5px;
+  margin-block: 0 var(--space-1);
   font-variant-numeric: tabular-nums;
 }
 
 .thesis {
   max-inline-size: 42rem;
-  color: var(--dust);
-  margin-block: 0 1rem;
+  font-size: var(--text-lead);
+  line-height: 1.55;
+  margin-block: 0 var(--space-3);
+}
+
+.provenanceNote {
+  font-size: var(--text-meta);
+  color: var(--ink-3);
+  margin-block-start: var(--space-2);
+  margin-block-end: 0;
+}
+
+@media (max-width: 767px) {
+  .lead { flex-direction: column; align-items: start; gap: var(--space-4); }
 }
 
 .tiles {
