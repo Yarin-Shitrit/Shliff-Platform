@@ -666,3 +666,26 @@ reason, and a sixty-sixth entry added by one lane is a conflict for every other.
 If no glyph in the set carries the meaning, that is worth escalating rather than
 approximating, because an icon that means nearly the right thing is worse than a
 word.
+
+### A17 — One `<bdi>` per phrase, not one per number
+
+**18 places across six plans** write a mixed phrase as two isolates —
+`<bdi>{a}</bdi> מתוך <bdi>{b}</bdi>` — and **every paired test that queries the
+whole phrase will fail against it.** `@testing-library/dom`'s `getNodeText` reads
+only *direct* text-node children, so `getByText('1 מתוך 9')` never matches when
+the numbers sit in child elements.
+
+Counts: plan 07 ×8, plans 05 and 11 ×3 each, plan 10 ×2, plans 03 and 08 ×1.
+None has shipped — a Drawer implementer hit it first and fixed it.
+
+**Ruling: wrap the whole phrase in one `<bdi>`** when a number and words form a
+single readable sentence fragment. Both forms are visually correct — A11 only
+requires that an amount be isolated, and a phrase beginning with a Hebrew letter
+resolves RTL either way — so the tie is broken by testability and by existing
+precedent (`assign-control.tsx` already does this). Separate isolates stay correct
+where two *independent* amounts sit adjacent with no shared phrase between them.
+
+**The reason this is a ruling and not a note:** when the paired test fails, the
+cheap fix is to weaken the query — `getByText(/1/)`, or an assertion on
+`textContent` — and a weakened query is a test that stops checking the thing the
+phrase exists to say. The markup is what should change.
