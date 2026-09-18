@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { isBlank } from '@/lib/text/normalize';
+import { ROLE_LABELS } from '@/lib/members/labels';
 import { addMemberAction, createPersonAction } from './actions';
 import styles from './members.module.css';
 
@@ -12,10 +13,6 @@ export interface SeasonOption {
   name: string;
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  member: 'חבר/ה',
-  lead: 'ראש/ת צוות',
-};
 const ROLES = Object.keys(ROLE_LABELS);
 
 /**

@@ -59,4 +59,40 @@ describe('GET /members/export', () => {
     const body = await (await GET(new Request('http://x/members/export'))).text();
     expect(body).toContain(`"'=1+1"`);
   });
+
+  it('writes the role and the due kind in Hebrew, never the column value', async () => {
+    requireAdmin.mockResolvedValue({ ok: true, email: 'lead@shliff.camp' });
+    listRoster.mockResolvedValue([
+      { personId: 'p1', displayName: 'אופק', role: 'lead', joinedAt: new Date() },
+    ]);
+    const { listDues } = await import('@/lib/fees/dues');
+    vi.mocked(listDues).mockResolvedValue([{
+      dueId: 'd1', personId: 'p1', displayName: 'אופק', amountAgorot: 120000,
+      kind: 'exception', exceptionReason: 'הוביל את ההקמה', decidedBy: 'lead@shliff.camp',
+    }]);
+    const { settlementFor } = await import('@/lib/fees/payments');
+    vi.mocked(settlementFor).mockResolvedValue({
+      dueAgorot: 120000, paidAgorot: 0, outstandingAgorot: 120000,
+      settled: false, overpaid: false,
+    });
+
+    const body = await (await GET(new Request('http://x/members/export'))).text();
+
+    expect(body).toContain('"ראש/ת צוות"');
+    expect(body).toContain('"חריג"');
+    expect(body).not.toContain('"lead"');
+    expect(body).not.toContain('"exception"');
+  });
+
+  it('exports only the selected people when ?ids= names some', async () => {
+    requireAdmin.mockResolvedValue({ ok: true, email: 'lead@shliff.camp' });
+    listRoster.mockResolvedValue([
+      { personId: 'p1', displayName: 'אופק', role: 'member', joinedAt: new Date() },
+      { personId: 'p2', displayName: 'עמירם דהן', role: 'member', joinedAt: new Date() },
+    ]);
+    const body = await (await GET(new Request('http://x/members/export?ids=p2'))).text();
+
+    expect(body).toContain('עמירם דהן');
+    expect(body).not.toContain('אופק');
+  });
 });
