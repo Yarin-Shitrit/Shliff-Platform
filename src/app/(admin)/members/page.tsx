@@ -1,28 +1,89 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
-import { listPeople } from '@/lib/members/dossier';
 import { listUnlinkedNames, resolveName } from '@/lib/members/identity';
 import { listSeasons } from '@/lib/members/roster';
-import { formatILS } from '@/lib/money';
+import { listPeopleForSeason } from '@/lib/members/people-list';
+import {
+  PEOPLE_PATH, PEOPLE_SORTS, applyPeopleQuery, parsePeopleQuery, viewCounts,
+  type PeopleSort, type PeopleView, type RawParams,
+} from '@/lib/members/people-views';
+import { SavedViews, type SavedView } from '@/components/ui/saved-views';
+import { FilterBar, type FilterOption } from '@/components/ui/filter-bar';
+import { EmptyState, type EmptyStateProps } from '@/components/ui/empty-state';
 import { AddMember } from './add-member';
+import { PeopleTable, DUES_STATE_LABELS } from './people-table';
 import { UnlinkedQueue, type QueuedName } from './unlinked-queue';
-import styles from './members.module.css';
+import styles from './people.module.css';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = { title: 'אנשים' };
+export const metadata: Metadata = { title: 'אנשים · פלטפורמת שליף' };
 
-export default async function MembersPage() {
+const SORT_LABELS: Record<PeopleSort, string> = {
+  name: 'שם',
+  balance: 'יתרה',
+  tasks: 'משימות',
+  activity: 'פעילות אחרונה',
+};
+
+function one(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value[0] ?? '';
+  return value ?? '';
+}
+
+/** Every list link keeps the season (R5) and drops only what it is changing. */
+function listHref(params: RawParams, changes: Record<string, string | null>): string {
+  const next = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (key === 'peek' || key === 'act' || key === 'with') continue;
+    if (value === undefined) continue;
+    for (const single of Array.isArray(value) ? value : [value]) next.append(key, single);
+  }
+  for (const [key, value] of Object.entries(changes)) {
+    if (value === null) next.delete(key);
+    else next.set(key, value);
+  }
+  const query = next.toString();
+  return query === '' ? PEOPLE_PATH : `${PEOPLE_PATH}?${query}`;
+}
+
+export default async function MembersPage(
+  { searchParams }: { searchParams: Promise<RawParams> },
+) {
   const admin = await requireAdmin();
   if (!admin.ok) notFound();
 
-  const people = await listPeople(db);
-  const unlinked = await listUnlinkedNames(db);
+  const params = await searchParams;
   const seasons = await listSeasons(db);
+  const requested = one(params.season);
+  const scope = seasons.find((season) => season.id === requested) ?? seasons[0] ?? null;
 
+  const rows = await listPeopleForSeason(db, scope?.id ?? null);
+  const query = parsePeopleQuery(params, scope !== null);
+  const counts = viewCounts(rows);
+  const shown = applyPeopleQuery(rows, query);
+
+  const viewLabels: Record<PeopleView, string> = {
+    all: 'כולם',
+    // Named after the season itself: "the roster" is not a thing a lead thinks in.
+    roster: scope?.name ?? 'רשימת השנה',
+    unpaid: 'טרם שילמו',
+    new: 'חדשים השנה',
+    leads: 'ראשי צוות',
+    lapsed: 'לא חזרו השנה',
+  };
+
+  const views: SavedView[] = (['all', 'roster', 'unpaid', 'new', 'leads', 'lapsed'] as const)
+    .map((view) => ({
+      id: view,
+      label: viewLabels[view],
+      count: counts[view],
+      href: listHref(params, { view }),
+    }));
+
+  const unlinked = await listUnlinkedNames(db);
   const queue: QueuedName[] = [];
   for (const name of unlinked) {
     const resolution = await resolveName(db, name.alias);
@@ -37,11 +98,116 @@ export default async function MembersPage() {
     });
   }
 
+  /*
+   * C10/E1's five kinds, chosen from the data rather than from the view alone.
+   * "Nothing at all" and "nothing this year" and "nothing matching what you
+   * typed" send a lead to three different places, and getting it wrong sends
+   * them hunting for a filter they never set. The fifth kind, `not-permitted`,
+   * is the shell's (B9) — this page has already called `notFound()`.
+   */
+  const filtered = query.q !== '' || query.dues !== null;
+  let empty: EmptyStateProps;
+  if (rows.length === 0) {
+    empty = { kind: 'nothing-yet', noun: 'אנשים', action: { label: 'הוספת אדם', href: '#add-person' } };
+  } else if (query.view === 'unpaid' && !filtered) {
+    empty = { kind: 'all-clear' };
+  } else if (query.view === 'roster' && !filtered && scope !== null) {
+    empty = {
+      kind: 'nothing-this-season',
+      noun: 'אנשים',
+      seasonName: scope.name,
+      action: { label: 'הוספת אדם', href: '#add-person' },
+    };
+  } else {
+    empty = {
+      kind: 'no-matches',
+      action: { label: 'ניקוי הסינון', href: listHref(params, { q: null, dues: null }) },
+    };
+  }
+
+  const duesOptions: FilterOption[] = (Object.keys(DUES_STATE_LABELS) as Array<keyof typeof DUES_STATE_LABELS>)
+    .map((state) => ({
+      id: state,
+      label: DUES_STATE_LABELS[state],
+      href: listHref(params, { dues: state }),
+      current: query.dues === state,
+    }));
+
+  const sortOptions: FilterOption[] = PEOPLE_SORTS.map((sort) => ({
+    id: sort,
+    label: SORT_LABELS[sort],
+    href: listHref(params, { sort }),
+    current: query.sort === sort,
+  }));
+
   return (
     <main>
-      <h1>חברי מחנה</h1>
+      <div className={styles.head}>
+        <div className={styles.headText}>
+          <h1>אנשים</h1>
+          <p className={styles.subline}>
+            <bdi>{`${counts.all} אנשים בקאמפ · ${counts.roster} ב${viewLabels.roster}`}</bdi>
+          </p>
+        </div>
+        {/*
+          One plain anchor per season, deliberately: this is a file download
+          from a Route Handler, not a page to navigate to client-side — `Link`
+          would prefetch the CSV response on hover/viewport for nothing. The
+          season used to be implicit (whichever the route defaulted to), so a
+          lead exporting for one season silently got a different one's roster
+          with nothing saying so — naming every season here and carrying it
+          through the query string is the fix.
+        */}
+        {seasons.length === 0 ? null : (
+          <span className={styles.headActions}>
+            ייצוא לקובץ CSV:{' '}
+            {seasons.map((season, index) => (
+              <span key={season.id}>
+                {index > 0 && ' · '}
+                <a href={`/members/export?season=${season.id}`}>{season.name}</a>
+              </span>
+            ))}
+          </span>
+        )}
+      </div>
 
-      <section className="card">
+      <SavedViews label="תצוגות שמורות" views={views} currentId={query.view} />
+
+      <div className={styles.toolbar}>
+        <FilterBar
+          searchValue={query.q}
+          searchLabel="חיפוש אנשים"
+          searchPlaceholder="שם או כינוי"
+          chips={query.dues === null ? [] : [{
+            id: 'dues',
+            label: 'דמי קאמפ',
+            value: DUES_STATE_LABELS[query.dues],
+            clearHref: listHref(params, { dues: null }),
+            options: duesOptions,
+          }]}
+          addFilter={query.dues === null ? { options: duesOptions } : undefined}
+          sort={{ value: SORT_LABELS[query.sort], options: sortOptions }}
+          rowCount={shown.length}
+        />
+      </div>
+
+      <PeopleTable
+        rows={shown}
+        seasonYears={seasons.map((season) => season.year).sort((a, b) => a - b)}
+        params={params}
+        seasonId={scope?.id ?? null}
+        viewLabel={viewLabels[query.view]}
+        empty={<EmptyState {...empty} />}
+      />
+
+      {/*
+        D3 sends this queue to /inbox, which plan 05 builds in wave 3. Until
+        that screen exists the queue stays here: a name the importer could not
+        attribute is an unresolved decision, and the platform's rule is that an
+        unresolved thing is visible somewhere rather than nowhere. A banner
+        pointing at a route that 404s would satisfy neither.
+      */}
+      <section className={styles.section}>
         <h2>שמות שממתינים לשיוך</h2>
         <p className="muted">
           שמות שהמערכת מצאה בקבצים ולא ידעה לשייך בוודאות. היא לא מנחשת — מיזוג
@@ -50,60 +216,9 @@ export default async function MembersPage() {
         <UnlinkedQueue names={queue} />
       </section>
 
-      <section>
-        <div className={styles.sectionHead}>
-          <h2>אנשים</h2>
-          {/*
-            One plain anchor per season, deliberately: this is a file download
-            from a Route Handler, not a page to navigate to client-side —
-            `Link` would prefetch the CSV response on hover/viewport for
-            nothing. The season used to be implicit (whichever the route
-            defaulted to), so a lead exporting for one season silently got a
-            different one's roster with nothing saying so — naming every
-            season here and carrying it through the query string is the fix.
-          */}
-          {seasons.length > 0 && (
-            <span className={styles.exportLinks}>
-              ייצוא לקובץ CSV:{' '}
-              {seasons.map((season, index) => (
-                <span key={season.id}>
-                  {index > 0 && ' · '}
-                  <a href={`/members/export?season=${season.id}`}>{season.name}</a>
-                </span>
-              ))}
-            </span>
-          )}
-        </div>
+      <section className={styles.section} id="add-person">
+        <h2>הוספת אדם</h2>
         <AddMember seasons={seasons.map((season) => ({ id: season.id, name: season.name }))} />
-        <div className="scroll-x">
-          <table>
-            <thead>
-              <tr>
-                <th>שם</th>
-                <th>כינויים</th>
-                <th>שנים</th>
-                <th>יתרה לתשלום</th>
-              </tr>
-            </thead>
-            <tbody>
-              {people.map((person) => (
-                <tr key={person.personId}>
-                  <td>
-                    <Link href={`/members/${person.personId}`}>{person.displayName}</Link>
-                  </td>
-                  <td><bdi>{person.aliasCount}</bdi></td>
-                  <td><bdi>{person.seasonCount}</bdi></td>
-                  <td className={person.outstandingAgorot > 0 ? 'badge-warn' : undefined}>
-                    <bdi>{formatILS(person.outstandingAgorot)} ₪</bdi>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {people.length === 0 && (
-          <p className="muted">עדיין אין אנשים. הריצו את הזריעה מדף הייבוא.</p>
-        )}
       </section>
     </main>
   );

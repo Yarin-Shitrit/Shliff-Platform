@@ -1,0 +1,187 @@
+/*
+ * D3's אנשים screen. Written against plan 01's tokens — no literal colour, no
+ * literal radius, no z-index outside the ladder.
+ *
+ * A10: logical properties everywhere. The one physical rule in the file is
+ * `.seasons { direction: ltr }`, which is not a layout choice — a run of year
+ * chips is a number line, and a number line reads left to right in Hebrew too.
+ */
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-block-end: var(--space-4);
+}
+
+.headText h1 {
+  margin: 0;
+  font-size: var(--text-title);
+  line-height: var(--leading-title);
+}
+
+.subline {
+  margin: var(--space-1) 0 0;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.headActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.toolbar {
+  margin-block: var(--space-3);
+}
+
+.section {
+  margin-block-start: var(--space-5);
+}
+
+/* ── The name cell ───────────────────────────────────────────── */
+
+.namecell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.nameText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.nm {
+  font-weight: 500;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.nm:hover { text-decoration: underline; }
+
+.al {
+  font-size: var(--text-meta);
+  color: var(--ink-3);
+}
+
+/* ── Season chips ────────────────────────────────────────────── */
+
+.seasons {
+  display: inline-flex;
+  gap: 3px;
+  /* A10's second documented exception, and the reason is the same as `.num`'s:
+     these are digits, and a digit run reads left-to-right in every locale. */
+  direction: ltr;
+}
+
+.seasons span {
+  inline-size: 22px;
+  block-size: 18px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-dense);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sunken);
+  color: var(--ink-4);
+}
+
+.seasons span[data-on='true'] {
+  background: var(--ink);
+  color: var(--panel);
+  font-weight: 600;
+}
+
+/* ── The dues cell ───────────────────────────────────────────── */
+
+.duesCell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.meter {
+  block-size: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--viz-track);
+  overflow: hidden;
+  inline-size: 64px;
+}
+
+.meter i {
+  display: block;
+  block-size: 100%;
+  background: var(--ink-2);
+  border-radius: var(--radius-pill);
+}
+
+/* ── The row action ──────────────────────────────────────────── */
+
+.rowact {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  color: var(--ink-3);
+  border-radius: var(--radius-control);
+  padding: var(--space-1);
+}
+
+.rowact:hover { color: var(--ink); background: var(--hover); }
+
+/* ── The totals row ──────────────────────────────────────────── */
+
+.totalsBreakdown {
+  color: var(--ink-3);
+  font-weight: 400;
+}
+
+/*
+ * Carried over from members.module.css, rewritten against plan 01's tokens.
+ * `add-member.tsx` is the only consumer of the two form rules.
+ */
+
+.addMember,
+.addToSeason {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  margin-block: var(--space-3);
+}
+
+.addMember label,
+.addToSeason label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-label);
+  color: var(--ink-2);
+}
+
+.addMember input,
+.addMember select,
+.addToSeason select {
+  block-size: var(--control-h);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-body);
+}
+
+.addMember input:focus-visible,
+.addMember select:focus-visible,
+.addToSeason select:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}

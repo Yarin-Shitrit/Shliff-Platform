@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { isBlank } from '@/lib/text/normalize';
 import { ROLE_LABELS } from '@/lib/members/labels';
 import { addMemberAction, createPersonAction } from './actions';
-import styles from './members.module.css';
+import styles from './people.module.css';
 
 export interface SeasonOption {
   id: string;
