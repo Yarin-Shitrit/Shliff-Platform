@@ -257,7 +257,17 @@ describe('charts.module.css', () => {
     expect(charts()).not.toContain('--font-display');
   });
 
-  it('keeps the derivation line readable', () => {
-    expect(block(charts(), '.tileDerivation {')).toContain('var(--ink-3)');
+  /**
+   * `StatTile` (`.tile`/`.tileValue`/`.tileLabel`/`.tileDerivation`) moved to
+   * `src/components/ui/stat-tile.module.css` in plan 03's Task 7 migration —
+   * this file keeps only `.viz` and the other chart classes. The derivation
+   * line's contrast is now pinned in `src/components/ui/stat-tile.test.tsx`.
+   */
+  it('no longer carries the retired StatTile rules', () => {
+    const css = charts();
+    expect(css).not.toContain('.tile ');
+    expect(css).not.toContain('.tileValue');
+    expect(css).not.toContain('.tileLabel');
+    expect(css).not.toContain('.tileDerivation');
   });
 });

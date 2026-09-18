@@ -1,0 +1,45 @@
+.tile {
+  display: flex; flex-direction: column; gap: 4px;
+  padding-block: 14px; padding-inline: 16px;
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--panel); color: var(--ink); text-decoration: none;
+}
+.linked:hover { border-color: var(--line-strong); background: var(--hover); }
+.linked:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.label { font-size: 12.5px; color: var(--ink-3); display: flex; align-items: center; gap: 6px; }
+.value {
+  font-size: 26px; font-weight: 600; line-height: 1.2; letter-spacing: -0.3px;
+  font-variant-numeric: tabular-nums;
+}
+.ok { color: var(--ok); }
+.warn { color: var(--warn); }
+.bad { color: var(--bad); }
+
+/* C11: the derivation line must stay legible. --ink-4 on --panel is 2.52:1;
+   --ink-3 is the muted step that still clears text contrast. */
+.derivation { font-size: 12.5px; color: var(--ink-3); }
+
+.bar {
+  block-size: 6px; border-radius: 999px; background: var(--viz-track);
+  overflow: hidden; display: flex; gap: 2px; margin-block: 4px 2px;
+}
+.bar > i { display: block; block-size: 100%; }
+
+/*
+ * Plan 01's tokens.css defines `--viz-track` but not `--viz-dues`,
+ * `--viz-fund` or `--viz-reserve`, even though the mock declares all three at
+ * `:root` (`docs/superpowers/mock/shared.css:23-25`) and `charts.module.css`
+ * already carries the identical values, scoped to `.viz`, as `--series-1/2/3`
+ * (comment there records the contrast: 3.88:1, 3.64:1, 3.41:1 on the light
+ * panel). Rather than import `charts.module.css` into the kit — which would
+ * put a `src/components/ui/` stylesheet back in a dependency on
+ * `src/components/charts/`, the coupling this migration removes — the same
+ * validated values are repeated here as the literals `charts.module.css`
+ * itself uses, following that file's own precedent for scoped, non-theme
+ * chart colour. Flagged in the task report; the token gap belongs to plan 01.
+ */
+.dues { background: #D95926; }
+.fund { background: #3987E5; }
+.reserve { background: #199E70; }
+.partial { background: var(--warn-line); }

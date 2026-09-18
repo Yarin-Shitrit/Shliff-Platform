@@ -9,7 +9,7 @@ import { listMovements } from '@/lib/money/ledger';
 import { listBudgetLines, budgetDerivation } from '@/lib/money/budget';
 import type { ObligationRow } from '@/lib/money/obligations';
 import { formatILS } from '@/lib/money';
-import { StatTile } from '@/components/charts/stat-tile';
+import { StatTile } from '@/components/ui/stat-tile';
 import { BarList } from '@/components/charts/bar-list';
 import { StackedBar } from '@/components/charts/stacked-bar';
 import { Meter } from '@/components/charts/meter';

@@ -78,13 +78,3 @@
   white-space: nowrap;
 }
 
-.tile { padding-block: var(--space-2); }
-.tileValue {
-  font-size: var(--text-display);
-  font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: -.3px;
-  font-variant-numeric: tabular-nums;
-}
-.tileLabel { color: var(--ink-3); font-size: var(--text-meta); }
-.tileDerivation { color: var(--ink-3); font-size: var(--text-meta); }
