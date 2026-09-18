@@ -8,6 +8,7 @@ import {
   assignFailureMessage, createTaskFailureMessage, actionFailureMessage,
   ASSIGN_ERRORS, CREATE_TASK_ERRORS,
 } from './failure-messages';
+import { HebrewRefusal } from '@/lib/errors/hebrew';
 
 const LEAD = 'lead@shliff.camp';
 
@@ -151,5 +152,41 @@ describe('the wording the mapping matches on', () => {
       .catch((e) => e);
     expect(createTaskFailureMessage(error))
       .toBe('משמרת חייבת לכלול שעת התחלה ושעת סיום.');
+  });
+});
+
+/**
+ * Integration §5 A27. This module's local `innermost` was the correct fix in
+ * the wrong place; it now lives in `@/lib/errors/hebrew` and `toHebrewError`
+ * walks the chain itself. Unwrapping here as well is not harmless — it hands
+ * `toHebrewError` a single link and throws the rest of the chain away, so
+ * both of the things the shared walk added are unreachable from these
+ * actions.
+ */
+describe('the unwrap happens once, in the shared boundary', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  /** A marked refusal is the outermost link by construction. Unwrapping to
+   *  the innermost one first discards the marker, and the refusal a lead was
+   *  meant to read becomes the action's generic fallback. */
+  it('keeps a marked refusal that wraps a database failure', () => {
+    const refusal = new HebrewRefusal('המשימה "Build week" כבר נסגרה.', {
+      cause: new Error('connection terminated unexpectedly'),
+    });
+    expect(actionFailureMessage(refusal, 'נכשל.')).toBe('המשימה "Build week" כבר נסגרה.');
+  });
+
+  /** The outer message is the second thing the shared walk tries. Unwrapping
+   *  first means it is never tried at all, so a hand-thrown wrapper carrying
+   *  the meaning degrades to the fallback. */
+  it('still reads a hand-thrown wrapper whose cause is infrastructural noise', () => {
+    const wrapped = new Error('unknown person 8f1e', {
+      cause: new Error('connection terminated unexpectedly'),
+    });
+    expect(assignFailureMessage(wrapped)).toBe('לא מצאנו את האדם הזה');
   });
 });

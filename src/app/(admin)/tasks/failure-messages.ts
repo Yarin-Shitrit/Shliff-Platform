@@ -54,33 +54,22 @@ export const CREATE_TASK_ERRORS: HebrewErrors = [
 ];
 
 /**
- * The error the refusal is actually written on.
+ * `toHebrewError`'s own fallback is one generic sentence for the whole app.
+ * Each action here has a more useful one — a lead who is told what failed
+ * knows whether to retry it or to go and fix something else.
  *
- * Drizzle wraps a driver failure: what it throws has
- * `Failed query: insert into "task_assignments" …` as its `message`, and the
- * constraint name — the only part that says *which* refusal this is — lives
- * on `error.cause`. Matching the wrapper matches the SQL text, so
- * `task_assignments_task_person_key` is unreachable from `message` and every
- * duplicate assignment would reach a lead as the generic fallback.
+ * The bounded `.cause` unwrapper this file used to hold was the correct fix
+ * in the wrong place: it was local to one screen while every other screen
+ * kept missing the same refusals. It now lives in `@/lib/errors/hebrew` and
+ * `toHebrewError` walks the chain itself (integration §5 A27).
  *
- * The domain's own refusals (`assignPerson`, `createTask`) are bare `Error`s
- * with no `cause`, so they are their own innermost link and are unaffected.
+ * Unwrapping here as well would not be harmless. It hands `toHebrewError` a
+ * single link and discards the rest of the chain, which loses both a marked
+ * `HebrewRefusal` wrapping a database failure and the outer message of a
+ * hand-thrown wrapper.
  */
-function innermost(error: unknown): unknown {
-  let current = error;
-  // Bounded: a cause cycle would otherwise spin here.
-  for (let depth = 0; depth < 8; depth += 1) {
-    if (!(current instanceof Error) || !(current.cause instanceof Error)) return current;
-    current = current.cause;
-  }
-  return current;
-}
-
-/** `toHebrewError`'s own fallback is one generic sentence for the whole app.
- *  Each action here has a more useful one — a lead who is told what failed
- *  knows whether to retry it or to go and fix something else. */
 function withFallback(error: unknown, map: HebrewErrors, fallback: string): string {
-  const hebrew = toHebrewError(innermost(error), map);
+  const hebrew = toHebrewError(error, map);
   return hebrew === HEBREW_FALLBACK ? fallback : hebrew;
 }
 
