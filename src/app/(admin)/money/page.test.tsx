@@ -590,4 +590,49 @@ describe('MoneyPage', () => {
       expect(tile.textContent).toContain('הכל מטופל');
     });
   });
+  describe('where the money is', () => {
+    it('places the unplaced money beside the accounts, with a way to fix it', async () => {
+      moneyOverview.mockResolvedValue(overview({
+        summary: summary({
+          accounts: [account()],
+          unattributed: { inAgorot: 200000, outAgorot: 0, paymentsAgorot: 40000 },
+        }),
+      }));
+      render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+      const banner = screen.getByText(/נרשמו בלי לציין לאיזה חשבון נכנסו/).closest('*[class]')!;
+      expect(banner.textContent).toContain('2,400');
+      expect(screen.getByRole('link', { name: 'שיוך לחשבון' }).getAttribute('href'))
+        .toBe('/money/ledger?season=s1');
+    });
+
+    it('says nothing about unplaced money when every shekel is placed', async () => {
+      render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+      expect(screen.queryByText(/בלי לציין/)).toBeNull();
+    });
+
+    it('gives every account its own card, with the personal one warned in words', async () => {
+      moneyOverview.mockResolvedValue(overview({
+        summary: summary({
+          accounts: [
+            account(),
+            account({
+              accountId: 'a2', name: 'עו״ש אופק', kind: 'personal',
+              holderPersonId: 'p9', holderName: 'אופק', balanceAgorot: 1407955,
+            }),
+          ],
+        }),
+      }));
+      render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+      const section = sectionFor('איפה הכסף');
+      expect(within(section).getByText('קופת מזומן')).toBeTruthy();
+      // The holder's name is a link, so the sentence spans two elements and
+      // `getByText` (which reads only direct text children) has to be given
+      // the half that is one text node, then checked whole on `textContent`.
+      const warning = within(section).getByText(/שמחזיק כסף של הקאמפ/);
+      expect(warning.textContent).toContain('חשבון פרטי של אופק שמחזיק כסף של הקאמפ');
+      // The bar list is gone: it compared a קופה against a bank account,
+      // which is a comparison nobody asked for.
+      expect(within(section).queryByRole('img', { name: /קופת מזומן/ })).toBeNull();
+    });
+  });
 });

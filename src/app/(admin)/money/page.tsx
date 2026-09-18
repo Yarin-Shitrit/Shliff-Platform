@@ -10,9 +10,10 @@ import { formatILS, formatShekels } from '@/lib/money';
 import { Money } from '@/components/format';
 import { Banner } from '@/components/ui/banner';
 import { StatTile } from '@/components/ui/stat-tile';
-import { BarList } from '@/components/charts/bar-list';
+import { EmptyState } from '@/components/ui/empty-state';
 import { StackedBar } from '@/components/charts/stacked-bar';
 import { Meter } from '@/components/charts/meter';
+import { AccountCard } from './account-card';
 import styles from './money.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -236,31 +237,45 @@ export default async function MoneyPage(
         </li>
       </ul>
 
-      <section className="card">
-        <h2>איפה הכסף</h2>
-        <BarList
-          emptyMessage="עדיין לא נרשמו חשבונות. אפשר לייבא נתונים מדף הייבוא."
-          items={summary.accounts.map((account) => ({
-            id: account.accountId,
-            label: account.name,
-            valueAgorot: account.balanceAgorot,
-            tone: account.kind === 'personal' ? ('warning' as const) : undefined,
-            note: account.kind === 'personal'
-              ? `חשבון פרטי של ${account.holderName ?? 'חבר מחנה'} שמחזיק כסף של הקאמפ`
-              : undefined,
-          }))}
-        />
+      <section>
+        {/* The note sits beside the heading, not inside it: an `<h2>` whose
+          * accessible name carries a whole caveat is a heading nobody can
+          * navigate to by name. */}
+        <div className={styles.sectionTitle}>
+          <h2 className={styles.sectionHeading}>איפה הכסף</h2>
+          <span className={styles.sectionNote}>
+            חשבונות אינם שייכים לשנה — היתרה היא תמיד הנוכחית
+          </span>
+        </div>
+
+        {/* A bar list compared account balances against each other, which is
+          * not a question anyone asks — a קופה does not compete with a bank
+          * account. A card answers the questions that are asked: how much,
+          * whose, and is anything wrong with it. */}
+        {summary.accounts.length === 0 ? (
+          <EmptyState kind="nothing-yet" noun="חשבונות"
+                      action={{ href: '/upload', label: 'לדף הייבוא' }} />
+        ) : (
+          <div className={styles.accountGrid}>
+            {summary.accounts.map((row) => (
+              <AccountCard key={row.accountId} account={row} />
+            ))}
+          </div>
+        )}
+
         {unattributedInAgorot > 0 ? (
-          <p className="badge-warn">
-            ⚠ <bdi>{formatILS(unattributedInAgorot)} ₪</bdi>{' '}
-            נרשמו בלי לציין לאיזה חשבון נכנסו.
-          </p>
+          <Banner
+            tone="warn"
+            action={{ href: `/money/ledger${scope}`, label: 'שיוך לחשבון' }}
+            headline={<><Money agorot={unattributedInAgorot} /> נרשמו בלי לציין לאיזה חשבון נכנסו.</>}
+          />
         ) : null}
         {unattributedOutAgorot > 0 ? (
-          <p className="badge-warn">
-            ⚠ <bdi>{formatILS(unattributedOutAgorot)} ₪</bdi>{' '}
-            נרשמו בלי לציין מאיזה חשבון יצאו.
-          </p>
+          <Banner
+            tone="warn"
+            action={{ href: `/money/ledger${scope}`, label: 'שיוך לחשבון' }}
+            headline={<><Money agorot={unattributedOutAgorot} /> נרשמו בלי לציין מאיזה חשבון יצאו.</>}
+          />
         ) : null}
       </section>
 
