@@ -9,7 +9,7 @@ import { shellCounts, type ShellCounts } from '@/lib/shell/counts';
 import { searchPalette, type PaletteHit } from '@/lib/search/palette';
 import { createSeason } from '@/lib/members/roster';
 import { isBlank } from '@/lib/text/normalize';
-import { toHebrewError, type HebrewErrors } from '@/lib/errors/hebrew';
+import { toHebrewError, type HebrewConstraints } from '@/lib/errors/hebrew';
 import type { ActionResult } from '@/lib/action-result';
 
 /**
@@ -77,23 +77,28 @@ export interface NewSeasonInput {
 }
 
 /**
- * `createSeason`'s insert throws Drizzle's `DrizzleQueryError`; its own
- * `.message` is the fixed, parameterised SQL text —
- * `Failed query: insert into "seasons" (...) ... returning ...` — not the
- * driver's message, which sits on `.cause` and `toHebrewError` never reads.
- * Confirmed empirically (a duplicate `name` throws with
- * `.cause.constraint === 'seasons_name_unique'` and `.cause.message ===
- * 'duplicate key value violates unique constraint "seasons_name_unique"'`):
- * the wrapper's message is the same fixed prefix regardless of which value
- * violated a constraint. `name` is the only constraint that insert can still
- * violate once the checks below have run (year/flatRate/plannedSize are
- * already known to be well-formed numbers, and none of the NOT NULL columns
- * can still be empty), so one prefix is enough — and it can finally name the
- * season that clashed, which a raw Postgres message never could.
+ * `createSeason`'s insert throws Drizzle's `DrizzleQueryError`, whose own
+ * `.message` is the fixed, parameterised SQL text — `Failed query: insert
+ * into "seasons" (...) ... returning ...`. The driver's message, and
+ * `constraint`, sit on `.cause`.
+ *
+ * This used to match that SQL prefix, on the argument that `name` was the
+ * only constraint the insert could still violate once the checks below had
+ * run. That was true when it was written, and it was an invariant held by a
+ * comment: the prefix is identical for *every* failed insert into the table,
+ * so it reported a duplicate name for any of them. A year that passes
+ * `Number.isInteger` and then overflows int4 is the case that shows it —
+ * `כבר קיימת שנה בשם "X".` for a failure with nothing to do with the name,
+ * confident, specific and wrong (integration §5 A27).
+ *
+ * Keying on `constraint` asks the driver which refusal this was instead of
+ * inferring it. It still names the season that clashed, which a raw Postgres
+ * message never could; anything else falls back, because a specific cause
+ * claimed from a generic symptom is a guess.
  */
-function seasonErrors(name: string): HebrewErrors {
+function seasonConstraints(name: string): HebrewConstraints {
   return [
-    ['Failed query: insert into "seasons"', `כבר קיימת שנה בשם "${name}".`],
+    ['seasons_name_unique', `כבר קיימת שנה בשם "${name}".`],
   ];
 }
 
@@ -130,7 +135,7 @@ export async function createSeasonAction(input: NewSeasonInput): Promise<ActionR
   try {
     await createSeason(db, { name: input.name, year, flatRate, plannedSize, startsOn });
   } catch (error) {
-    return { ok: false, error: toHebrewError(error, seasonErrors(input.name)) };
+    return { ok: false, error: toHebrewError(error, [], seasonConstraints(input.name)) };
   }
 
   // The switcher renders on every admin page, and a lead who just created a

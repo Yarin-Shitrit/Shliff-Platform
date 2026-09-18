@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createTestDb, type TestDb } from '@/test/db';
 import { listSeasons } from '@/lib/members/roster';
 import type { AdminCheck } from '@/lib/auth/guard';
+import { HEBREW_FALLBACK } from '@/lib/errors/hebrew';
 
 /**
  * `./actions` imports `@/db` at module scope (which throws without
@@ -112,6 +113,32 @@ describe('createSeasonAction', () => {
     const result = await createSeasonAction({ name: 'ברן 27', year: '2027', flatRate: '900' });
 
     expect(result).toEqual({ ok: false, error: 'אין הרשאה' });
+    expect(await listSeasons(dbRef.current!)).toHaveLength(0);
+  });
+
+  /**
+   * Integration §5 A27. This screen used to match the prefix
+   * `Failed query: insert into "seasons"` — the wrapper's SQL text, which is
+   * identical for every failed insert into the table. Its author argued that
+   * `name` was the only constraint the insert could still violate after the
+   * checks above, and that was true; but it was an invariant held by a
+   * comment, and this is the case that shows what it costs when the comment
+   * stops being true.
+   *
+   * The year passes every check above — `Number.isInteger(99999999999)` is
+   * true — and then overflows int4 in the database. The old prefix matched
+   * anyway and told a lead `כבר קיימת שנה בשם "ברן 28".`, a confident,
+   * specific and entirely wrong reason. A generic cause claimed from a
+   * generic symptom is a guess, and the fallback is the honest answer.
+   */
+  it('does not report a duplicate name for a failure that has nothing to do with the name', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await createSeasonAction({
+      name: 'ברן 28', year: '99999999999', flatRate: '1200',
+    });
+
+    expect(result).toEqual({ ok: false, error: HEBREW_FALLBACK });
     expect(await listSeasons(dbRef.current!)).toHaveLength(0);
   });
 });
