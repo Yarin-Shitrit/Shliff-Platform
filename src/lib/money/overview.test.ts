@@ -97,8 +97,18 @@ describe('the open-decision count', () => {
       seasonId: s26, label: 'ביטוח ואישורים', quantityText: '5', quantityNum: 5,
       unitCost: 700, total: 3875, category: 'camp',
     });
+    // Unplaced money, deliberately present: it has its own banner with its
+    // own fix in "איפה הכסף", and counting it here as well would make the
+    // tile disagree with the band under it. Without this row the ruling is
+    // unpinned — a `total` that also counted unplaced money would still read
+    // 2 against a fixture that has none.
+    await recordEntry(db, {
+      occurredOn: new Date('2026-09-04T00:00:00Z'), direction: 'in', amount: 2000,
+      description: 'מזומן מהמסיבה, בלי לציין קופה', seasonId: s26, recordedBy: LEAD,
+    });
 
     const overview = await moneyOverview(db, s26);
+    expect(overview.summary.unattributed.inAgorot).toBe(200000);
     expect(overview.decisions.unnamedCount).toBe(1);
     expect(overview.decisions.arithmeticCount).toBe(1);
     expect(overview.decisions.total).toBe(2);
@@ -147,7 +157,11 @@ describe('the source index', () => {
     expect(index.get(sourceKey('ledger_entries', typedId))).toBeUndefined();
   });
 
-  it('asks the trace module once per block, however many rows that block produced', async () => {
+  // Named for what it checks. The "one traceBlock call per distinct block"
+  // rule is real and load-bearing, but nothing here can observe the call
+  // count: a `traceRow`-per-row implementation would return exactly this
+  // index. That rule is held by review, not by this test.
+  it('resolves every row one block produced, in a single index', async () => {
     const blockId = await seedBlock(db, {
       sheetName: 'תקציב 26', left: 3, archetype: 'budget_lines',
     });
