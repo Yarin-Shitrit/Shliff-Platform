@@ -1245,3 +1245,50 @@ now been caught eliding source lines and truncating `grep` match counts — but
 that is a hypothesis, not a measurement, and this document does not record
 hypotheses as causes. Verifying Hebrew with `Read` or `node` costs little and is
 robust against every candidate; do that when it matters.
+
+### A34 — The per-file promote covers `confirmed` blocks only (RULING)
+
+`promoteUpload` filters `b.state === 'confirmed' || b.state === 'promoted'`, so
+the per-file button **re-promotes blocks that already promoted**. Plan 11 found
+the symptom — the button counted 1 while the action touched 4 — and made the
+count match the action. **That is the wrong direction, and the mechanism says
+why.**
+
+`promoteBlock` deletes a block's prior rows before writing, which makes
+re-promotion idempotent — **except for rows something else references.** Those
+are `retained`, not deleted (`promote.ts:251`). So re-promoting a block whose
+rows are referenced keeps the old rows *and* writes new ones. That is not a
+variant of A23's hazard; **it is the same hazard**, and it explains A23's
+arithmetic: the four dancefloor budget lines carry four task references and no
+foreign key, so they are retained, and a re-promotion adds a second copy on top
+rather than replacing them.
+
+**Ruling: the per-file promote button covers blocks in state `confirmed` only.
+Its count and its action must be the same set — narrow the action, not widen the
+count.** Re-promoting an already-`promoted` block stays available as a
+**single-block** action on the review screen, which already renders that block's
+`deleted` and `retained` counts. That is the difference that matters: a per-block
+re-promotion shows what it will keep and what it will replace, so a lead consents
+to a known outcome; the per-file button hides it behind one number.
+
+This preserves the real workflow — a lead who edits a sheet can still update its
+rows — while removing the path where one click silently duplicates money nobody
+was shown.
+
+**Both of plan 11's lying numbers were found by running against the real
+database, and neither was findable by any test in this repo.** The other:
+`promoteBlock` refuses an unconfirmed block whole, so the button read
+`אישור וקידום 0 שורות` on exactly the blocks the review screen exists to review —
+and then wrote 24 rows. A button that promises nothing and writes 24 is the
+platform's first rule inverted twice over.
+
+### A35 — A repo-wide test hazard: spy call history does not accumulate here
+
+Plan 11's missing-key test could not fail, for two independent reasons, and the
+second is general: **vitest clears spy call history between tests in this
+repo's configuration.** Any test that reads accumulated `mock.calls` from work
+done in an *earlier* test is asserting against an empty array and passes
+vacuously. (The first reason was narrower: React dedupes its key warning per
+owner component.) Rebuilt in its own file with a positive control and
+mutation-verified. **Audit for this pattern when a test asserts on a spy it did
+not itself exercise.**
