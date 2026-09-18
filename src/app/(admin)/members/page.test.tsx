@@ -340,6 +340,21 @@ describe('/members — merge, side by side', () => {
     }
   });
 
+  /* The kit's `selectionLabel` sets the precedent: the Hebrew agrees with the
+     number. `יעברו 1 כינויים` is not a sentence anybody writes. */
+  it('says יעבור כינוי אחד for one spelling, not יעברו 1', async () => {
+    previewMerge.mockResolvedValue({
+      source: side({ personId: 'a', displayName: 'אופק' }),
+      target: side({ personId: 'b', displayName: 'אופק כהן' }),
+      movingAliases: ['אופק'],
+      conflicts: [],
+      blockers: [],
+    });
+    await renderPage(MERGE_PARAMS);
+    const panel = screen.getByRole('dialog');
+    expect(within(panel).getByText('יעבור כינוי אחד')).toBeTruthy();
+  });
+
   it('keeps the irreversibility paragraph and the acknowledgement when a merge is possible', async () => {
     previewMerge.mockResolvedValue({
       source: side({ personId: 'a', displayName: 'אופק' }),

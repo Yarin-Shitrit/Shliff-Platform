@@ -23,6 +23,17 @@ import type { MergePreview, MergeSide } from '@/lib/members/link';
 import { MergeConfirm } from './merge-confirm';
 import styles from './people.module.css';
 
+/**
+ * The Hebrew agrees with the number, the same rule the kit's `selectionLabel`
+ * follows: `יעברו 1 כינויים` is not a sentence anybody writes, and a merge is
+ * the one screen where a lead is being asked to read carefully.
+ */
+function movingSentence(count: number): string {
+  if (count === 0) return 'לא יעבור אף כינוי';
+  if (count === 1) return 'יעבור כינוי אחד';
+  return `יעברו ${count} כינויים`;
+}
+
 export interface MergePanelProps {
   preview: MergePreview;
   /** Back to the screen the merge was started from. */
@@ -100,7 +111,7 @@ export function MergePanel({ preview, cancelHref, swapHref }: MergePanelProps): 
 
       <section className={styles.mergeBlock}>
         <h3>מה יעבור</h3>
-        <p><bdi>{`יעברו ${preview.movingAliases.length} כינויים`}</bdi></p>
+        <p><bdi>{movingSentence(preview.movingAliases.length)}</bdi></p>
         <p>{preview.movingAliases.join(' · ')}</p>
         {/*
           The honest form of the library's rule: a permitted merge moves
