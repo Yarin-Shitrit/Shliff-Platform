@@ -17,11 +17,16 @@ describe('selectionLabel', () => {
 });
 
 describe('BulkBar', () => {
-  it('renders nothing when nothing is selected', () => {
-    const { container } = render(
+  it('keeps no toolbar in view or in the tree when nothing is selected', () => {
+    // Not literally nothing any more (see the next test): a silent,
+    // permanently-mounted live region has to persist even at zero so its
+    // *first* content change is announced. What must still be absent is the
+    // bar itself — its region role, its accessible name, every button.
+    render(
       <BulkBar count={0} label="פעולות על הנבחרים" actions={actions} onClear={vi.fn()} />,
     );
-    expect(container.firstChild).toBeNull();
+    expect(screen.queryByRole('region')).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
   });
 
   it('keeps the live region mounted before the first selection, so it is announced', () => {
