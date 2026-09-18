@@ -1,0 +1,77 @@
+name: CI
+
+# Pushes to main, and every pull request. A feature branch without a PR is not
+# tested -- open the PR early if you want the signal.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push to the same branch cancels the run it superseded. This repository
+# is private, so Actions minutes are billed.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: typecheck · lint · test
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      # src/db/index.ts reads DATABASE_URL at import time. The suite never talks
+      # to this address -- tests use an in-process PGlite from src/test/db.ts --
+      # but a bare runner would throw on import without it.
+      DATABASE_URL: postgres://ci:ci@127.0.0.1:5432/ci
+      AUTH_SECRET: ci-not-a-real-secret
+      STORAGE_DRIVER: local
+      LOCAL_STORAGE_DIR: ./.uploads
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # package.json declares no engines field, so the version is pinned here.
+      # Keep it matching what the team runs locally.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      # Every flag is load-bearing; CLAUDE.md explains why. Two differences from
+      # the local command, both deliberate:
+      #   --maxWorkers=2, not 4 -- a standard runner is 2-core/7GB, and four
+      #     in-process Postgres instances on it is the contention that fabricates
+      #     ~110 beforeEach timeouts.
+      #   a fixed --outputFile -- the local command needs a unique path because
+      #     two people share a machine. A runner is nobody else's.
+      # Never drop --reporter=default: --reporter=json alone REPLACES it, and the
+      # run loses the Unhandled Errors block where a SIGKILLed worker shows up.
+      - name: Test
+        run: |
+          npx vitest run \
+            --maxWorkers=2 \
+            --hookTimeout 60000 \
+            --testTimeout 60000 \
+            --reporter=default \
+            --reporter=json \
+            --outputFile vitest-report.json || VITEST_EXIT=$?
+          echo "vitest exited ${VITEST_EXIT:-0}"
+          node scripts/verify-test-report.mjs vitest-report.json "${VITEST_EXIT:-0}"
+
+      - name: Keep the report when something went wrong
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-report
+          path: vitest-report.json
+          if-no-files-found: warn
+          retention-days: 14
