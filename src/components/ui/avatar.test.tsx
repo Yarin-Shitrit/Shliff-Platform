@@ -16,7 +16,12 @@ describe('initials', () => {
 
 describe('tintIndex', () => {
   it('is stable for the same name, so the server and the browser agree', () => {
-    expect(tintIndex('רוני אדלר')).toBe(tintIndex('רוני אדלר'));
+    // Pinned, not re-derived: the real mapping for this name is tint 5. A
+    // change to `normalizeHebrew` (or to the sum-of-code-points scheme
+    // itself) that silently recolours every avatar in the app fails here —
+    // calling the function twice and comparing the two results, as this
+    // test used to, could only ever catch a call to `Math.random()`.
+    expect(tintIndex('רוני אדלר')).toBe(5);
   });
 
   it('stays inside the six tints', () => {

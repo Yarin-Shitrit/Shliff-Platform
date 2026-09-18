@@ -1,12 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { PEEK_PARAM, ACT_PARAM, openPeekHref, closePeekHref } from './drawer-url';
+import { PEEK_PARAM, openPeekHref, closePeekHref } from './drawer-url';
 
 const list = () => new URLSearchParams('season=s-9f2&view=unpaid&sort=balance');
 
 describe('the drawer URL contract', () => {
   it('names the params R6 specifies', () => {
+    // `?peek=<id>` is the name R6 gives the spec, so pinning it catches a
+    // rename against the spec, not just against this file. `ACT_PARAM` has
+    // no such external name to answer to — asserting it against the
+    // constant this same file imports would only pin the file against
+    // itself, so that half of the check is dropped rather than kept.
     expect(PEEK_PARAM).toBe('peek');
-    expect(ACT_PARAM).toBe('act');
   });
 
   it('opens a record without disturbing the list it was opened from', () => {

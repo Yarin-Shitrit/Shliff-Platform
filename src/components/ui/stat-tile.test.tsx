@@ -52,18 +52,79 @@ describe('StatTile', () => {
 
 /**
  * C11's rule is that no number is unexplained — which fails silently if the
- * explanation cannot be read. `--ink-4` on `--panel` is 2.52:1; `--ink-3` is
- * the muted step that still clears text contrast. This replaces the check
- * that used to live in `src/app/tokens.test.ts` against
- * `charts.module.css`'s `.tileDerivation`, retired by this migration.
+ * explanation cannot be read. What actually protects that rule is a contrast
+ * ratio, not which token name appears in the stylesheet: grepping for
+ * `var(--ink-3)` passes even if `.derivation` stops being applied to
+ * anything, and can only fail if someone hand-edits that one line. So this
+ * computes the real contrast ratio of whatever colour token `.derivation`
+ * uses against `--panel`, reading `src/app/tokens.css` the way
+ * `src/app/tokens.test.ts` does, and asserts it clears the WCAG AA
+ * normal-text threshold (4.5:1). `--ink-4` on `--panel` is 2.52:1 and fails
+ * that; `--ink-3` is 5.82:1 and clears it. This replaces the check that used
+ * to live in `src/app/tokens.test.ts` against `charts.module.css`'s
+ * `.tileDerivation`, retired by this migration.
  */
 describe('stat-tile.module.css', () => {
-  it('keeps the derivation line on the readable muted step', () => {
-    const css = readFileSync(join(process.cwd(), 'src/components/ui/stat-tile.module.css'), 'utf8');
-    const start = css.indexOf('.derivation {');
-    expect(start).toBeGreaterThan(-1);
-    const end = css.indexOf('}', start);
-    expect(css.slice(start, end)).toContain('var(--ink-3)');
-    expect(css.slice(start, end)).not.toContain('var(--ink-4)');
+  /** Brace-counting block extraction, same approach as `src/app/tokens.test.ts`. */
+  function block(css: string, selector: string): string {
+    const start = css.indexOf(selector);
+    if (start < 0) throw new Error(`no rule for ${selector}`);
+    const open = css.indexOf('{', start);
+    let depth = 0;
+    let index = open;
+    for (; index < css.length; index += 1) {
+      if (css[index] === '{') depth += 1;
+      else if (css[index] === '}') {
+        depth -= 1;
+        if (depth === 0) break;
+      }
+    }
+    return css.slice(open + 1, index);
+  }
+
+  /** `--ink-3` must not match `--ink-30` or similar, same guard as tokens.test.ts. */
+  function tokenValue(body: string, name: string): string {
+    const match = body.match(new RegExp(`--${name}\\s*:\\s*([^;]+);`));
+    if (!match) throw new Error(`no value for --${name}`);
+    return match[1].trim();
+  }
+
+  function relativeLuminance(hex: string): number {
+    const value = hex.replace('#', '');
+    const channel = (c: number) => {
+      const s = c / 255;
+      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    };
+    const r = channel(parseInt(value.slice(0, 2), 16));
+    const g = channel(parseInt(value.slice(2, 4), 16));
+    const b = channel(parseInt(value.slice(4, 6), 16));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+
+  function contrastRatio(hexA: string, hexB: string): number {
+    const a = relativeLuminance(hexA);
+    const b = relativeLuminance(hexB);
+    const lighter = Math.max(a, b);
+    const darker = Math.min(a, b);
+    return (lighter + 0.05) / (darker + 0.05);
+  }
+
+  it('keeps the derivation line on a token that clears readable-text contrast', () => {
+    const componentCss = readFileSync(
+      join(process.cwd(), 'src/components/ui/stat-tile.module.css'),
+      'utf8',
+    );
+    const derivationRule = block(componentCss, '.derivation {');
+    const usedToken = derivationRule.match(/color:\s*var\(--([\w-]+)\)/);
+    expect(usedToken).not.toBeNull();
+
+    const tokensCss = readFileSync(join(process.cwd(), 'src/app/tokens.css'), 'utf8');
+    const root = block(tokensCss, ':root {');
+    const derivationHex = tokenValue(root, usedToken![1]);
+    const panelHex = tokenValue(root, 'panel');
+
+    // WCAG AA for normal-size text. This is the actual risk plan 01 poses:
+    // it can move --ink-3 itself, not just swap the token name here.
+    expect(contrastRatio(derivationHex, panelHex)).toBeGreaterThanOrEqual(4.5);
   });
 });

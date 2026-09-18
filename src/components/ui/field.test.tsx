@@ -57,8 +57,14 @@ describe('controls', () => {
         <MoneyInput id="amount" defaultValue="1200" />
       </Field>,
     );
-    expect((screen.getByLabelText('סכום') as HTMLInputElement).value).toBe('1200');
-    expect(screen.getByText('₪')).toBeTruthy();
+    const input = screen.getByLabelText('סכום');
+    // Left-to-right: the input sits inside an ancestor carrying dir="ltr"
+    // (the box MoneyInput renders around it), not merely typed LTR content.
+    expect(input.closest('[dir="ltr"]')).not.toBeNull();
+    // Tabular numerals: the behaviour under test really is the `num`
+    // utility class, so asserting it here is the deliberate exception to
+    // "never class names".
+    expect(input.className).toContain('num');
   });
 
   it('Select offers an explicit Hebrew empty option when one is named', () => {

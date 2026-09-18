@@ -24,8 +24,18 @@ describe('BulkBar', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('names itself and announces the count politely', () => {
-    render(<BulkBar count={2} label="פעולות על הנבחרים" actions={actions} onClear={vi.fn()} />);
+  it('keeps the live region mounted before the first selection, so it is announced', () => {
+    // A screen reader only announces a *change* to a live region that was
+    // already present in the DOM — a region created at the same moment as
+    // its content is not reliably announced. So the count's aria-live
+    // element must exist even at count={0}, before there is a selection to
+    // announce, not just once the bar has something to say.
+    const { container, rerender } = render(
+      <BulkBar count={0} label="פעולות על הנבחרים" actions={actions} onClear={vi.fn()} />,
+    );
+    expect(container.querySelector('[aria-live]')).not.toBeNull();
+
+    rerender(<BulkBar count={2} label="פעולות על הנבחרים" actions={actions} onClear={vi.fn()} />);
     const region = screen.getByRole('region', { name: 'פעולות על הנבחרים' });
     expect(region).toBeTruthy();
     const live = screen.getByText(/נבחרו/);

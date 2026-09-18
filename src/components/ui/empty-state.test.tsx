@@ -25,15 +25,25 @@ describe('EmptyState', () => {
     expect(Object.keys(EMPTY_TITLES)).toHaveLength(5);
   });
 
+  // The `emptyStateBody` suite above already pins the exact sentence for
+  // every kind. Re-typing those same Hebrew sentences here would duplicate
+  // that check rather than add one, so these assert wiring instead — that
+  // whatever `emptyStateBody` computes for the given props is what actually
+  // reaches the screen — and get the expected string from the function
+  // under test above, not from a second hand-typed copy.
   it('renders the title as a heading and the body beneath it', () => {
     render(<EmptyState kind="nothing-yet" noun="קבצים" />);
     expect(screen.getByRole('heading', { name: 'אין כאן כלום עדיין' })).toBeTruthy();
-    expect(screen.getByText('כאן יופיעו קבצים. עדיין לא נוספו.')).toBeTruthy();
+    expect(screen.getByText(emptyStateBody({ kind: 'nothing-yet', noun: 'קבצים' }))).toBeTruthy();
   });
 
   it('names the season it is empty for', () => {
     render(<EmptyState kind="nothing-this-season" noun="תשלומים" seasonName="ברן 26" />);
-    expect(screen.getByText('אין תשלומים בברן 26. בשנים אחרות ייתכן שיש.')).toBeTruthy();
+    expect(
+      screen.getByText(
+        emptyStateBody({ kind: 'nothing-this-season', noun: 'תשלומים', seasonName: 'ברן 26' }),
+      ),
+    ).toBeTruthy();
   });
 
   it('invites an action when the screen offers one', () => {
