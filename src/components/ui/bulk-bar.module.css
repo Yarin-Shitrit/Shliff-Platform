@@ -1,0 +1,88 @@
+/**
+ * Every value here comes from tokens.css except three, which are inverted-
+ * surface literals transcribed verbatim from the mock's own bulk bar
+ * (`docs/superpowers/mock/shared.css:325-331`) — the same exception
+ * `popover.module.css`'s `.bulk` tone already takes, for the same reason:
+ * this is the kit's one dark surface, and nothing in tokens.css names "white
+ * at 10% opacity". No CSS Module declares a colour of its own beyond that.
+ */
+.bar {
+  position: absolute;
+  z-index: var(--z-bulk);
+  inset-block-end: 20px;
+  inset-inline-start: 50%;
+  /* Centring is direction-neutral: `inset-inline-start: 50%` anchors the
+     edge that sits at the page's horizontal centre regardless of direction
+     (the "right" edge under this app's fixed RTL), and shifting by *positive*
+     half the bar's own width brings the opposite edge to meet it. The mock's
+     own (LTR-authored) version anchors via physical `left` and shifts by
+     `-50%` — the same trick, mirrored for this app's fixed RTL direction. */
+  transform: translateX(50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-block: 6px;
+  padding-inline: 10px 6px;
+  border-radius: 12px;
+  background: var(--ink);
+  color: var(--canvas);
+  box-shadow: 0 12px 32px rgb(28 25 23 / 28%);
+}
+
+.count {
+  padding-inline-end: 10px;
+  margin-inline-end: 4px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  border-inline-end: 1px solid rgb(255 255 255 / 18%);
+}
+
+/* Styles `Button`'s rendered element, not `Button`'s own module — the one
+   place the kit's "no component reaches into another's styles" rule takes an
+   exception, because this bar is a dark surface and its buttons must invert.
+   `>` on purpose: this must reach only the bar's own direct-child actions
+   (the action buttons and the clear button), never the `עוד` popover's
+   trigger (already styled by its own `triggerTone="bulk"`) or the menu items
+   in its panel, which sit on the ordinary light `--panel` surface and would
+   otherwise inherit this dark surface's `color` through the DOM tree. If this
+   grows past these two rules, `Button` gains an `inverted` tone instead. */
+.bar > button {
+  background: transparent;
+  border-color: transparent;
+  color: inherit;
+}
+.bar > button:hover {
+  background: rgb(255 255 255 / 10%);
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  block-size: 36px;
+  padding-inline: 12px;
+  border: 0;
+  background: none;
+  /* `font: inherit` is not repeated here — `globals.css` already applies it
+     to every `button`; only the size differs from that default. */
+  font-size: 13.5px;
+  color: var(--ink);
+  text-align: start;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.menuItem:hover {
+  background: var(--sunken);
+}
+.menuItem:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .bar {
+    inset-inline: 8px;
+    transform: none;
+    overflow-x: auto;
+  }
+}
