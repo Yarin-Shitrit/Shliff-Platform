@@ -1212,3 +1212,36 @@ tables would have reported zero open decisions and read as finished.** That is
 the platform's first rule inverted: what the system cannot resolve was being
 presented as nothing to decide. Corrected and pinned by two new tests, with every
 original assertion still passing.
+
+### A33 — `?season=all` is permitted (RULING), and a report correction
+
+**Ruling: `?season=all` is a legitimate value of the season parameter and does
+not violate R5.** R5 requires that the chosen season survive a drawer, a filter
+and a navigation; it does not require that the choice always be a single season.
+R4 is the reason: a season is a **hand-set label on a continuous ledger**, so a
+running balance is only *true* when computed across that continuum. A column that
+can only be correct unfiltered, on a page that always resolves one season, is a
+column that can never appear — and shipping an unreachable figure is worse than
+shipping none. The lane added a visible affordance on the season chip and a test
+pinning it; both are required, because an all-seasons view that does not say so
+on screen is exactly the silent state the platform forbids.
+
+**The A20 defect class is now closed in `src/lib/`.** All three uuid-interpolating
+refusals are `HebrewRefusal`, each with a comment saying why, and a sweep for
+`throw new Error(\`…${…}\`)` containing a Hebrew letter returns **zero**. The
+remaining bare-Hebrew library throws carry static strings, contain no Latin, and
+are correctly served by the passthrough.
+
+**Correction — "grep cannot match Hebrew in this environment" does not
+reproduce.** Plan 09 reported it after a real zero-match against a file provably
+containing the string. Tested three ways against a `node` oracle: literal `grep`,
+`grep -F` and an `[֐-׿]` range class all match correctly, and a real repo string
+(`עונה לא נמצאה` in `summary.ts:62`) greps fine. Unicode normalization is not the
+cause either — NFC and NFD are identical for unpointed Hebrew.
+
+**So the general claim is false and the specific observation was real, and the
+cause is undetermined.** Most likely the shell hook's output filtering, which has
+now been caught eliding source lines and truncating `grep` match counts — but
+that is a hypothesis, not a measurement, and this document does not record
+hypotheses as causes. Verifying Hebrew with `Read` or `node` costs little and is
+robust against every candidate; do that when it matters.
