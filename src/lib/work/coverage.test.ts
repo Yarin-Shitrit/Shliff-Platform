@@ -3,10 +3,12 @@ import { createTestDb, type TestDb } from '@/test/db';
 import { createSeason } from '@/lib/members/roster';
 import { createPerson } from '@/lib/members/link';
 import { createEvent } from '@/lib/work/events';
-import { createTask, listTasks } from '@/lib/work/tasks';
+import { createTask, listTasks, setTaskStatus } from '@/lib/work/tasks';
+import { createBudgetLine } from '@/lib/money/budget';
 import {
   assignPerson, setAssignmentStatus, removeAssignment,
   coverageFor, uncoveredTasks, responsibilitiesOf,
+  covers, summarize, seasonCoverageTotals,
 } from '@/lib/work/coverage';
 
 const LEAD = 'lead@shliff.camp';
@@ -222,5 +224,98 @@ describe('coverage', () => {
     expect(owned.map((r) => r.title).sort()).toEqual(['הובלה', 'חשמל', 'כניסה']);
     expect(owned.find((r) => r.title === 'חשמל')?.budgetAgorot).toBe(1295000);
     expect(owned.find((r) => r.title === 'כניסה')?.eventName).toBe('מסיבת פקאנים');
+  });
+
+  it('carries the deliverable\'s budget line on the coverage row', async () => {
+    const lineId = await createBudgetLine(db, {
+      seasonId, label: 'גנרטור וחשמל', total: 41300, category: 'camp',
+    });
+    await createTask(db, {
+      seasonId, kind: 'deliverable', title: 'גנרטור וחשמל', budgetLineId: lineId,
+    });
+    const row = (await coverageFor(db, seasonId))
+      .find((task) => task.title === 'גנרטור וחשמל')!;
+    expect(row.budgetLineId).toBe(lineId);
+    expect(row.budgetLineLabel).toBe('גנרטור וחשמל');
+    expect(row.budgetLineTotalAgorot).toBe(4_130_000);
+  });
+
+  it('carries the event date, so an event task has a when', async () => {
+    const event = await createEvent(db, {
+      seasonId, name: 'מסיבת אוקטובר', kind: 'fundraiser',
+      heldOn: new Date('2026-10-04T20:00:00Z'),
+    });
+    await createTask(db, {
+      seasonId, kind: 'event_task', title: 'דלת', eventId: event.id,
+    });
+    const row = (await coverageFor(db, seasonId)).find((t) => t.title === 'דלת')!;
+    expect(row.eventHeldOn).toEqual(new Date('2026-10-04T20:00:00Z'));
+  });
+
+  it('counts accepted and done as covering, and nothing else', () => {
+    expect(covers('accepted')).toBe(true);
+    expect(covers('done')).toBe(true);
+    expect(covers('proposed')).toBe(false);
+    expect(covers('dropped')).toBe(false);
+  });
+
+  describe('summarize', () => {
+    it('reports the season in one sentence: filled out of needed', async () => {
+      const barId = await shift('משמרת בר', 4);
+      const quietId = await shift('משמרת שקט', 2);
+      for (const name of ['נועה', 'איתי']) {
+        const personId = await createPerson(db, name, LEAD);
+        const assignmentId = await assignPerson(db, barId, personId, LEAD);
+        await setAssignmentStatus(db, assignmentId, 'accepted');
+      }
+      const totals = summarize(await coverageFor(db, seasonId));
+      expect(totals.tasks).toBe(2);
+      expect(totals.placesNeeded).toBe(6);
+      expect(totals.placesFilled).toBe(2);
+      expect(totals.uncoveredTasks).toBe(2);
+      expect(quietId).toBeDefined();
+    });
+
+    it('caps a task at the places it needs, so the season cannot overfill', async () => {
+      const taskId = await shift('משמרת בר', 1);
+      for (const name of ['נועה', 'איתי', 'רוני']) {
+        const personId = await createPerson(db, name, LEAD);
+        const assignmentId = await assignPerson(db, taskId, personId, LEAD);
+        await setAssignmentStatus(db, assignmentId, 'accepted');
+      }
+      const totals = summarize(await coverageFor(db, seasonId));
+      expect(totals.placesNeeded).toBe(1);
+      expect(totals.placesFilled).toBe(1);
+    });
+
+    it('leaves a closed task out of the places figures', async () => {
+      const taskId = await shift('משמרת בר', 4);
+      await setTaskStatus(db, taskId, 'done');
+      const totals = summarize(await coverageFor(db, seasonId));
+      expect(totals.tasks).toBe(1);
+      expect(totals.openTasks).toBe(0);
+      expect(totals.placesNeeded).toBe(0);
+    });
+
+    it('counts the tasks with no date at all', async () => {
+      await createTask(db, { seasonId, kind: 'deliverable', title: 'סאונד רחבה' });
+      await shift('משמרת בר', 1);
+      expect(summarize(await coverageFor(db, seasonId)).datelessTasks).toBe(1);
+    });
+
+    it('counts a shared budget line once', async () => {
+      const lineId = await createBudgetLine(db, {
+        seasonId, label: 'גנרטור וחשמל', total: 41300, category: 'camp',
+      });
+      await createTask(db, { seasonId, kind: 'deliverable', title: 'גנרטור', budgetLineId: lineId });
+      await createTask(db, { seasonId, kind: 'deliverable', title: 'חשמל', budgetLineId: lineId });
+      expect(summarize(await coverageFor(db, seasonId)).linkedBudgetAgorot).toBe(4_130_000);
+    });
+
+    it('is what seasonCoverageTotals returns, from the same rows', async () => {
+      await shift('משמרת בר', 4);
+      expect(await seasonCoverageTotals(db, seasonId))
+        .toEqual(summarize(await coverageFor(db, seasonId)));
+    });
   });
 });

@@ -4,12 +4,21 @@ import {
   tasks, taskAssignments, persons, seasons, campEvents,
 } from '@/db/schema/camp';
 import type { AssignmentStatus, TaskKind, TaskStatus } from '@/db/schema/camp';
+import { budgetLines } from '@/db/schema/money';
 import { toAgorot } from '@/lib/money';
+import { taskWhen } from '@/lib/work/gate';
 
 /** Only these count toward `peopleNeeded`. A `proposed` assignment is a lead's
  *  intention, not a commitment — counting it would report a shift as staffed
  *  when nobody has agreed to work it. */
 const COUNTS_AS_COVERED: AssignmentStatus[] = ['accepted', 'done'];
+
+/** The one place that decides whether an assignment counts. The avatar
+ *  stack on `/tasks` asks this rather than re-listing the statuses, so the
+ *  chips and the `5/8` can never disagree. */
+export function covers(status: AssignmentStatus): boolean {
+  return COUNTS_AS_COVERED.includes(status);
+}
 
 export interface Assignee {
   assignmentId: string;
@@ -39,6 +48,16 @@ export interface TaskCoverage {
   endsAt: Date | null;
   dueOn: Date | null;
   assignees: Assignee[];
+  /** When the event this task hangs off is held — an event task's only
+   *  date. Carried here for the same reason the kind-specific columns
+   *  above are: otherwise the board queries the events a second time. */
+  eventHeldOn: Date | null;
+  /** The `budget_lines` row a deliverable spends against. `budgetAgorot`
+   *  above is the deprecated per-task figure, kept for rows written before
+   *  budget lines existed; the screen prefers these three. */
+  budgetLineId: string | null;
+  budgetLineLabel: string | null;
+  budgetLineTotalAgorot: number | null;
 }
 
 export interface Responsibility {
@@ -103,13 +122,18 @@ export async function coverageFor(db: AnyDb, seasonId: string): Promise<TaskCove
       status: tasks.status,
       peopleNeeded: tasks.peopleNeeded,
       eventName: campEvents.name,
+      eventHeldOn: campEvents.heldOn,
       budgetAmount: tasks.budgetAmount,
+      budgetLineId: tasks.budgetLineId,
+      budgetLineLabel: budgetLines.label,
+      budgetLineTotal: budgetLines.total,
       startsAt: tasks.startsAt,
       endsAt: tasks.endsAt,
       dueOn: tasks.dueOn,
     })
     .from(tasks)
     .leftJoin(campEvents, eq(campEvents.id, tasks.eventId))
+    .leftJoin(budgetLines, eq(budgetLines.id, tasks.budgetLineId))
     .where(eq(tasks.seasonId, seasonId))
     // `tasks.id` breaks ties: title is not unique, and recurring shifts share
     // one. Without it Postgres may reorder equal keys between calls.
@@ -141,13 +165,13 @@ export async function coverageFor(db: AnyDb, seasonId: string): Promise<TaskCove
     byTask.set(row.taskId, list);
   }
 
-  return taskRows.map(({ budgetAmount, ...task }) => {
+  return taskRows.map(({ budgetAmount, budgetLineTotal, ...task }) => {
     const assignees = byTask.get(task.taskId) ?? [];
-    const accepted = assignees
-      .filter((a) => COUNTS_AS_COVERED.includes(a.status)).length;
+    const accepted = assignees.filter((a) => covers(a.status)).length;
     return {
       ...task,
       budgetAgorot: budgetAmount === null ? null : toAgorot(budgetAmount),
+      budgetLineTotalAgorot: budgetLineTotal === null ? null : toAgorot(budgetLineTotal),
       accepted,
       uncovered: task.status === 'open' && accepted < task.peopleNeeded,
       assignees,
@@ -205,4 +229,58 @@ export async function responsibilitiesOf(
     dueOn: row.dueOn,
     status: row.status,
   }));
+}
+
+export interface SeasonCoverage {
+  /** Every task in the season, whatever its status. */
+  tasks: number;
+  openTasks: number;
+  uncoveredTasks: number;
+  placesNeeded: number;
+  placesFilled: number;
+  datelessTasks: number;
+  linkedBudgetAgorot: number;
+}
+
+/**
+ * The season's staffing in one sentence — `16 מתוך 32 מקומות`.
+ *
+ * Pure, and derived from the rows `coverageFor` already returned, so the
+ * tasks screen pays for one round trip and the home screen's coverage tile
+ * (spec D1) and the sidebar's משימות count (B2) reuse this arithmetic
+ * rather than re-deriving it. Only `open` tasks contribute places, which is
+ * the rule `uncovered` already applies.
+ */
+export function summarize(rows: TaskCoverage[]): SeasonCoverage {
+  const open = rows.filter((row) => row.status === 'open');
+  // Distinct lines: two deliverables owning `גנרטור וחשמל` are one budget,
+  // not two.
+  const lines = new Map<string, number>();
+  for (const row of rows) {
+    if (row.budgetLineId && row.budgetLineTotalAgorot !== null) {
+      lines.set(row.budgetLineId, row.budgetLineTotalAgorot);
+    }
+  }
+  return {
+    tasks: rows.length,
+    openTasks: open.length,
+    uncoveredTasks: open.filter((row) => row.uncovered).length,
+    placesNeeded: open.reduce((sum, row) => sum + row.peopleNeeded, 0),
+    // Capped per task: six people on a task needing three is a full task,
+    // not three spare places in the season. Uncapped, `16 מתוך 32` could
+    // read `34 מתוך 32`.
+    placesFilled: open.reduce(
+      (sum, row) => sum + Math.min(row.accepted, row.peopleNeeded), 0,
+    ),
+    datelessTasks: open.filter((row) => taskWhen(row).kind === 'none').length,
+    linkedBudgetAgorot: [...lines.values()].reduce((sum, total) => sum + total, 0),
+  };
+}
+
+/** For callers that want the figures and not the rows — the home screen's
+ *  coverage tile and the sidebar count. */
+export async function seasonCoverageTotals(
+  db: AnyDb, seasonId: string,
+): Promise<SeasonCoverage> {
+  return summarize(await coverageFor(db, seasonId));
 }
