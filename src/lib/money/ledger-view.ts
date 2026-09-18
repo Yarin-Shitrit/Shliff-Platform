@@ -1,6 +1,7 @@
 import { eq, inArray } from 'drizzle-orm';
 import type { AnyDb } from '@/lib/db-types';
 import { formatDateFull } from '@/lib/dates';
+import { toAgorot } from '@/lib/money';
 import { accounts, budgetLines, ledgerEntries } from '@/db/schema/money';
 import type { LedgerDirection } from '@/db/schema/money';
 import { dues, payments, persons } from '@/db/schema/camp';
@@ -228,4 +229,74 @@ export function groupByMonth(rows: LedgerRow[], sort: LedgerSort): MonthGroup[] 
   const keys = [...groups.keys()].sort();
   if (sort === 'date-desc') keys.reverse();
   return keys.map((key) => groups.get(key)!);
+}
+
+export type RunningBalance =
+  | { shown: true; openingAgorot: number; balancesAgorot: number[] }
+  | { shown: false; reason: string };
+
+/**
+ * A running balance is a claim about one account: this is what it held after
+ * this movement. The claim is true only when the rows on screen are all of
+ * that account's movements, in the order they happened.
+ *
+ * The season filter is in the list of things that break it. A season is a
+ * label a lead sets by hand, not a period — `חוב לירון סלע על ברן 25` is
+ * dated June 2026 — so a season view hides movements that really did change
+ * this account's cash, and a balance computed over what is left would be a
+ * number that was never true on any day.
+ *
+ * The old `/money` version had neither guard: it reduced from zero over one
+ * season's movements across every account at once.
+ */
+export function runningBalanceAvailable(
+  scope: LedgerScope, query: LedgerQuery,
+): { ok: true } | { ok: false; reason: string } {
+  if (!scope.accountId) {
+    return {
+      ok: false,
+      reason: 'יתרה רצה מוצגת רק כשבוחרים חשבון אחד. בתצוגה הזו יש כמה חשבונות.',
+    };
+  }
+  if (query.sort !== 'date-asc') {
+    return { ok: false, reason: 'יתרה רצה מוצגת רק לפי סדר תאריכים עולה.' };
+  }
+  const hides = scope.seasonId !== undefined || scope.eventId !== undefined
+    || query.view !== 'all' || query.budgetLineId !== undefined
+    || (query.text !== undefined && query.text.trim() !== '');
+  if (hides) {
+    return {
+      ok: false,
+      reason: 'הסינון הפעיל מסתיר חלק מהתנועות של החשבון, ולכן יתרה רצה תהיה שגויה.',
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * Opening balance plus every movement, in order — the same arithmetic
+ * `accountBalances` does, arrived at row by row. Starting from
+ * `opening_balance` rather than from zero is what makes the last value equal
+ * the figure on the account card: the opening is the carry-forward the ledger
+ * cannot derive, and dropping it made every balance on the old page short by
+ * `44,647`.
+ */
+export async function runningBalanceFor(
+  db: AnyDb, rows: LedgerRow[], scope: LedgerScope, query: LedgerQuery,
+): Promise<RunningBalance> {
+  const available = runningBalanceAvailable(scope, query);
+  if (!available.ok) return { shown: false, reason: available.reason };
+
+  const [account] = await db
+    .select({ openingBalance: accounts.openingBalance })
+    .from(accounts)
+    .where(eq(accounts.id, scope.accountId!));
+  const openingAgorot = account ? toAgorot(account.openingBalance) : 0;
+
+  let balance = openingAgorot;
+  const balancesAgorot = rows.map((row) => {
+    balance += row.direction === 'in' ? row.amountAgorot : -row.amountAgorot;
+    return balance;
+  });
+  return { shown: true, openingAgorot, balancesAgorot };
 }

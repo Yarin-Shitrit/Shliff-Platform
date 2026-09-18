@@ -8,13 +8,14 @@ import { issueFlatDues } from '@/lib/fees/dues';
 import { recordPayment } from '@/lib/fees/payments';
 import { listSeasonFees } from '@/lib/fees/season-fees';
 import { uploads, sheets, blocks } from '@/db/schema/source';
-import { createAccount } from './accounts';
+import { createAccount, accountBalances } from './accounts';
 import { recordEntry, recordTransfer } from './ledger';
 import { createBudgetLine } from './budget';
 import { traceRow } from './trace';
 import type { SourceCell } from './trace';
 import {
   listLedgerRows, applyLedgerView, viewCounts, ledgerStrip, groupByMonth,
+  runningBalanceAvailable, runningBalanceFor,
 } from './ledger-view';
 import type { LedgerRow } from './ledger-view';
 
@@ -259,5 +260,86 @@ describe('month group headers', () => {
     expect(formatDateShort(lateAugustInUtc)).toBe('01/09/26');
     const groups = groupByMonth([row({ id: '1', occurredOn: lateAugustInUtc })], 'date-asc');
     expect(groups.map((g) => g.label)).toEqual(['ספטמבר 2026']);
+  });
+});
+
+describe('the running balance', () => {
+  it('is shown for one account in date order, and closes on that account\'s balance', async () => {
+    const account = await createAccount(db, {
+      name: 'קופה מזומן', kind: 'cash', openingBalance: 44647,
+    });
+    for (const [direction, amount, on] of [
+      ['out', 200, '2025-06-02'], ['in', 34646.55, '2025-07-11'], ['out', 400, '2025-08-05'],
+    ] as const) {
+      await recordEntry(db, {
+        occurredOn: new Date(`${on}T00:00:00Z`), direction, amount,
+        description: 'תנועה', accountId: account.id, recordedBy: LEAD,
+      });
+    }
+    const scope = { accountId: account.id };
+    const query = { view: 'all', sort: 'date-asc' } as const;
+    expect(runningBalanceAvailable(scope, query)).toEqual({ ok: true });
+
+    const rows = applyLedgerView(await listLedgerRows(db, scope), query);
+    const balance = await runningBalanceFor(db, rows, scope, query);
+    expect(balance.shown).toBe(true);
+    if (!balance.shown) throw new Error('unreachable');
+    expect(balance.openingAgorot).toBe(4464700);
+    expect(balance.balancesAgorot).toEqual([4444700, 7909355, 7869355]);
+
+    const derived = (await accountBalances(db))
+      .find((row) => row.accountId === account.id)!;
+    expect(balance.balancesAgorot.at(-1)).toBe(derived.balanceAgorot);
+  });
+
+  it('is hidden across several accounts, and says so', () => {
+    const result = runningBalanceAvailable({}, { view: 'all', sort: 'date-asc' });
+    expect(result).toEqual({
+      ok: false,
+      reason: 'יתרה רצה מוצגת רק כשבוחרים חשבון אחד. בתצוגה הזו יש כמה חשבונות.',
+    });
+  });
+
+  it('is hidden when the season filter is on, because a season is a label and not a period', () => {
+    const result = runningBalanceAvailable(
+      { accountId: 'a1', seasonId: 's1' }, { view: 'all', sort: 'date-asc' },
+    );
+    expect(result).toEqual({
+      ok: false,
+      reason: 'הסינון הפעיל מסתיר חלק מהתנועות של החשבון, ולכן יתרה רצה תהיה שגויה.',
+    });
+  });
+
+  it('is hidden on a direction view and on the newest-first sort', () => {
+    expect(runningBalanceAvailable({ accountId: 'a1' }, { view: 'out', sort: 'date-asc' }).ok)
+      .toBe(false);
+    expect(runningBalanceAvailable({ accountId: 'a1' }, { view: 'all', sort: 'date-desc' }))
+      .toEqual({
+        ok: false,
+        reason: 'יתרה רצה מוצגת רק לפי סדר תאריכים עולה.',
+      });
+  });
+
+  it('is hidden by a text search and by a budget-line filter, which also remove rows', () => {
+    expect(runningBalanceAvailable(
+      { accountId: 'a1' }, { view: 'all', text: 'משאית', sort: 'date-asc' },
+    ).ok).toBe(false);
+    expect(runningBalanceAvailable(
+      { accountId: 'a1' }, { view: 'all', budgetLineId: 'bl1', sort: 'date-asc' },
+    ).ok).toBe(false);
+    // A search param that is present but empty removes nothing, so it does
+    // not disqualify the column — otherwise every visit from a search form
+    // would lose it.
+    expect(runningBalanceAvailable(
+      { accountId: 'a1' }, { view: 'all', text: '  ', sort: 'date-asc' },
+    )).toEqual({ ok: true });
+  });
+
+  it('returns the reason rather than a column when it cannot be true', async () => {
+    const balance = await runningBalanceFor(db, [], {}, { view: 'all', sort: 'date-asc' });
+    expect(balance).toEqual({
+      shown: false,
+      reason: 'יתרה רצה מוצגת רק כשבוחרים חשבון אחד. בתצוגה הזו יש כמה חשבונות.',
+    });
   });
 });
