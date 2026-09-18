@@ -18,6 +18,27 @@ const nextConfig: NextConfig = {
   outputFileTracingExcludes: {
     '/*': ['./docs/reference-data/**/*'],
   },
+
+  /**
+   * /data was the register before the redesign. It is gone: the unresolved
+   * items live at /inbox, and the budget derivation it used to compute from
+   * three workbooks on disk lives on /money, from the database (W23).
+   *
+   * The redirect lives here rather than in a stub page. A stub under
+   * `(admin)` would have to call `requireAdmin()` to satisfy the static guard
+   * net, which means a page existing only to redirect would also be a page
+   * that can 404 — and every old bookmark would break for a signed-in
+   * non-admin instead of landing somewhere that explains itself.
+   *
+   * `permanent: true` is a 308, not a 301: Next uses 307/308 so the request
+   * method survives the redirect. Checked against
+   * node_modules/next/dist/docs/01-app/03-api-reference/05-config/01-next-config-js/redirects.md,
+   * which also confirms `redirects` may be sync or async and that query
+   * values are carried through to the destination.
+   */
+  async redirects() {
+    return [{ source: '/data', destination: '/inbox', permanent: true }];
+  },
 };
 
 export default nextConfig;

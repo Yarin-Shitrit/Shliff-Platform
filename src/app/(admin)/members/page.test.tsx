@@ -239,23 +239,42 @@ describe('/members — the empty states', () => {
 
 describe('/members — the names waiting to be attributed', () => {
   /*
-   * D3 sends this queue to /inbox, which plan 05 builds in wave 3. Until it
-   * exists the queue stays here rather than being deleted: an unresolved name
-   * that is on no screen at all is exactly the silent decision the platform
-   * forbids, and a banner pointing at a route that 404s is worse than both.
+   * Changed deliberately, not worked around. This test pinned the queue's
+   * presence and the ABSENCE of any /inbox link, because when it was written
+   * /inbox did not exist and a banner pointing at a 404 would have been worse
+   * than the queue. /inbox exists now, so W24 applies as written: the names
+   * are surfaced by a link, not by a second implementation, and this screen
+   * carries the count.
    */
-  it('keeps the queue on this screen and links nowhere that does not exist', async () => {
-    listUnlinkedNames.mockResolvedValue([{ aliasId: 'al1', alias: 'רוני' }]);
-    resolveName.mockResolvedValue({
-      personId: null,
-      candidates: [{ personId: 'a', displayName: 'רוני אדלר', exact: false }],
-    });
+  it('hands the queue to the register and keeps only the count', async () => {
+    listUnlinkedNames.mockResolvedValue([
+      { aliasId: 'al1', alias: 'רוני' },
+      { aliasId: 'al2', alias: 'גיל' },
+    ]);
     listPeopleForSeason.mockResolvedValue([row({ personId: 'a', displayName: 'רוני אדלר' })]);
-    const { container } = await renderPage();
+    await renderPage();
 
-    expect(screen.getByText('שמות שממתינים לשיוך')).toBeTruthy();
-    expect(screen.getByRole('button', { name: /קשר לרוני אדלר/ })).toBeTruthy();
+    expect(screen.queryByText('שמות שממתינים לשיוך')).toBeNull();
+    expect(screen.getByText(/2 שמות מהקבצים עדיין לא שויכו/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'טיפול בשמות' }).getAttribute('href'))
+      .toBe('/inbox?tab=decide&kind=names');
+  });
+
+  it('says nothing at all when every name has been attributed', async () => {
+    listUnlinkedNames.mockResolvedValue([]);
+    listPeopleForSeason.mockResolvedValue([row()]);
+    const { container } = await renderPage();
     expect(container.querySelector('a[href^="/inbox"]')).toBeNull();
+  });
+
+  // The page used to resolve a candidate per queued name to build the queue.
+  // That work belongs to the register now, and leaving it here would be a
+  // query per name on a screen that renders none of it.
+  it('resolves no candidates of its own any more', async () => {
+    listUnlinkedNames.mockResolvedValue([{ aliasId: 'al1', alias: 'רוני' }]);
+    listPeopleForSeason.mockResolvedValue([row()]);
+    await renderPage();
+    expect(resolveName).not.toHaveBeenCalled();
   });
 });
 

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
-import { listUnlinkedNames, resolveName } from '@/lib/members/identity';
+import { listUnlinkedNames } from '@/lib/members/identity';
 import { listSeasons } from '@/lib/members/roster';
 import { listPeopleForSeason } from '@/lib/members/people-list';
 import { previewMerge } from '@/lib/members/link';
@@ -14,11 +14,11 @@ import {
 import { SavedViews, type SavedView } from '@/components/ui/saved-views';
 import { FilterBar, type FilterOption } from '@/components/ui/filter-bar';
 import { EmptyState, type EmptyStateProps } from '@/components/ui/empty-state';
+import { Banner } from '@/components/ui/banner';
 import { AddMember } from './add-member';
 import { PeopleTable, DUES_STATE_LABELS } from './people-table';
 import { PeekDrawer } from './peek-drawer';
 import { MergePanel } from './merge-panel';
-import { UnlinkedQueue, type QueuedName } from './unlinked-queue';
 import styles from './people.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -87,20 +87,10 @@ export default async function MembersPage(
       href: listHref(params, { view }),
     }));
 
+  // The count, and only the count. Resolving a candidate per queued name was
+  // this page doing the register's work; /inbox now shows each name with its
+  // evidence, its candidates and their reasons (W24, D3).
   const unlinked = await listUnlinkedNames(db);
-  const queue: QueuedName[] = [];
-  for (const name of unlinked) {
-    const resolution = await resolveName(db, name.alias);
-    queue.push({
-      aliasId: name.aliasId,
-      alias: name.alias,
-      candidates: resolution.candidates.map((candidate) => ({
-        personId: candidate.personId,
-        displayName: candidate.displayName,
-        exact: candidate.exact,
-      })),
-    });
-  }
 
   /*
    * C10/E1's five kinds, chosen from the data rather than from the view alone.
@@ -241,20 +231,22 @@ export default async function MembersPage(
       />
 
       {/*
-        D3 sends this queue to /inbox, which plan 05 builds in wave 3. Until
-        that screen exists the queue stays here: a name the importer could not
-        attribute is an unresolved decision, and the platform's rule is that an
-        unresolved thing is visible somewhere rather than nowhere. A banner
-        pointing at a route that 404s would satisfy neither.
+        D3's destination exists now, so the queue itself has moved: /inbox
+        shows each unattributed name beside the workbook rows it came from and
+        the candidates with their reasons. W24 says this is surfaced by a link
+        and not by a second implementation, and the count is what a banner is
+        for. Plan 06 kept the queue here with a note saying it would go when
+        the register existed; this is that.
       */}
-      <section className={styles.section}>
-        <h2>שמות שממתינים לשיוך</h2>
-        <p className="muted">
-          שמות שהמערכת מצאה בקבצים ולא ידעה לשייך בוודאות. היא לא מנחשת — מיזוג
-          של שני אנשים אינו הפיך, ולכן ההחלטה כאן שלכם.
-        </p>
-        <UnlinkedQueue names={queue} />
-      </section>
+      {unlinked.length === 0 ? null : (
+        <Banner
+          tone="info"
+          label="שמות שלא שויכו"
+          headline={<bdi>{unlinked.length} שמות מהקבצים עדיין לא שויכו לאף אחד.</bdi>}
+          detail="המערכת לא מנחשת — מיזוג של שני אנשים אינו הפיך, ולכן ההחלטה שלכם."
+          action={{ label: 'טיפול בשמות', href: '/inbox?tab=decide&kind=names' }}
+        />
+      )}
 
       {/*
         Resolved against the unfiltered roster, never against `shown`. A peek
