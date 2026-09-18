@@ -24,9 +24,12 @@ export type RefusalReason =
    *  name already specifies the direction, so a negative sign cannot be
    *  resolved without guessing at intent. Refuse rather than flip. */
   | 'negative-amount'
-  /** A value the target column cannot hold: money beyond `numeric(12,2)`,
-   *  or a count beyond Postgres `integer`. Refused before the dry-run branch,
-   *  so a dry run never reports a row that a commit would fail on. */
+  /** A value the target column cannot hold: money beyond `numeric(12,2)`, a
+   *  count beyond Postgres `integer`, or a count that is not a whole number
+   *  at all — `ticket_rounds.quantity` is `integer`, so `0.3333333333` is as
+   *  unstorable as `3000000000` and is refused rather than rounded to 0.
+   *  Refused before the dry-run branch, so a dry run never reports a row that
+   *  a commit would fail on. */
   | 'out-of-range';
 
 export interface Refusal {
