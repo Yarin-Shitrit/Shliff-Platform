@@ -1,0 +1,25 @@
+.banner {
+  display: flex; align-items: center; gap: 12px;
+  padding-block: 10px; padding-inline: 14px; border-radius: 10px;
+  border: 1px solid transparent; color: var(--ink); font-size: 13.5px;
+}
+.icon { display: inline-flex; flex-shrink: 0; }
+.text { flex: 1; min-inline-size: 0; }
+.headline { font-weight: 600; }
+
+.neutral { background: var(--sunken); }
+.neutral .icon { color: var(--ink-3); }
+
+.info { background: var(--info-soft); }
+.info .icon { color: var(--info); }
+
+.warn { background: var(--warn-soft); border-color: var(--warn-line); }
+.warn .icon { color: var(--warn); }
+
+.danger { background: var(--bad-soft); }
+.danger .icon { color: var(--bad); }
+
+@media (max-width: 768px) {
+  .banner { flex-wrap: wrap; }
+  .text { flex-basis: 100%; }
+}
