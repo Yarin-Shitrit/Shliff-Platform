@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { createTestDb, type TestDb } from '@/test/db';
 import { uploads, sheets, blocks, blockMappings } from '@/db/schema/source';
 import { seasons } from '@/db/schema/camp';
-import { listUploads, uploadStatusLabel } from './uploads';
+import { listUploads, uploadStatusLabel, findUpload } from './uploads';
 
 const LEAD = 'lead@shliff.test';
 
@@ -112,5 +112,36 @@ describe('listUploads', () => {
     expect(row.confirmedCount).toBe(1);
     expect(row.firstOpenBlockId).toBe(open.id);
     expect(row.openDecisions).toBe(1);
+  });
+});
+
+/**
+ * The review screen's own header row. It exists so that `imports/[id]/page.tsx`
+ * spells no query of its own: every other admin page in this repo reaches the
+ * database through a library function, which is what lets the page be tested
+ * against a `db` that is an empty object.
+ */
+describe('findUpload', () => {
+  let db: TestDb;
+  beforeEach(async () => { db = await createTestDb(); });
+
+  it('answers with the file it was asked for', async () => {
+    const [wanted] = await db.insert(uploads).values({
+      filename: 'קופת קאמפ 2026.xlsx', sha256: 'a'.repeat(64), storageKey: 'k1',
+      sizeBytes: 1, uploadedBy: 'שירה',
+    }).returning();
+    await db.insert(uploads).values({
+      filename: 'אחר.xlsx', sha256: 'b'.repeat(64), storageKey: 'k2',
+      sizeBytes: 1, uploadedBy: LEAD,
+    });
+
+    const row = await findUpload(db, wanted.id);
+    expect(row?.filename).toBe('קופת קאמפ 2026.xlsx');
+    expect(row?.uploadedBy).toBe('שירה');
+    expect(row?.status).toBe('pending');
+  });
+
+  it('answers null for an id no file carries, rather than throwing', async () => {
+    expect(await findUpload(db, '00000000-0000-4000-8000-000000000000')).toBeNull();
   });
 });

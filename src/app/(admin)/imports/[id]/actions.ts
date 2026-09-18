@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { db } from '@/db';
 import { applyConfirmation } from '@/lib/import/confirm';
+import { setSheetSeason, setSheetAuthority } from '@/lib/import/sheets';
+import { refusalMessage, type ActionResult } from '@/lib/import/sheet-labels';
 import type { ColumnMapping } from '@/lib/classify/map-columns';
 import type { BlockArchetype } from '@/lib/classify/types';
 import type { BudgetCategory } from '@/db/schema/money';
@@ -42,4 +44,64 @@ export async function confirmBlock(
   // revalidates the page type for every upload id, since the confirming
   // request doesn't know which upload this block belongs to.
   revalidatePath('/imports/[id]', 'page');
+}
+
+const NO_SHEET_PERMISSION = 'אין לך הרשאה לשנות את פרטי הגיליון.';
+
+/**
+ * Both sheet actions take `(prevState, formData)` rather than the bare
+ * `FormData` the plan drew, because both of them can be refused and a refusal
+ * has to reach the screen.
+ *
+ * The plan left the signature open and said to decide it with a test. The test
+ * settles it: `conflicts()` in `sheets.ts` treats a season-less sheet as
+ * colliding with its namesake, so an unlabelled sheet reads `undecided` and the
+ * rail shows it the `זה העותק הקובע` button — which `setSheetAuthority` refuses,
+ * in Hebrew, for exactly that reason. Returning void and logging would leave a
+ * lead pressing a button that changes nothing and says nothing, which is the
+ * silent answer the platform forbids. The shape is `useActionState`'s, so the
+ * forms still submit and still work with JavaScript disabled.
+ */
+export async function setSeasonAction(
+  _prev: ActionResult | null, form: FormData,
+): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, message: NO_SHEET_PERMISSION };
+
+  const sheetId = String(form.get('sheetId') ?? '');
+  const raw = String(form.get('seasonId') ?? '');
+  try {
+    // W10: the season is always set by hand. Nothing here infers one.
+    await setSheetSeason(db, sheetId, raw === '' ? null : raw);
+    revalidatePath('/imports/[id]', 'page');
+    revalidatePath('/imports');
+    return { ok: true };
+  } catch (error) {
+    console.error('setSeasonAction', error);
+    return { ok: false, message: refusalMessage(error) };
+  }
+}
+
+/**
+ * W13: exactly one copy of a colliding group is authoritative, chosen by hand.
+ * `authoritative=false` is the way out of an `ambiguous` group — two chosen
+ * copies otherwise leave a decision with no move that resolves it.
+ */
+export async function setAuthorityAction(
+  _prev: ActionResult | null, form: FormData,
+): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, message: NO_SHEET_PERMISSION };
+
+  const sheetId = String(form.get('sheetId') ?? '');
+  const authoritative = form.get('authoritative') === 'true';
+  try {
+    await setSheetAuthority(db, sheetId, authoritative);
+    revalidatePath('/imports/[id]', 'page');
+    revalidatePath('/imports');
+    return { ok: true };
+  } catch (error) {
+    console.error('setAuthorityAction', error);
+    return { ok: false, message: refusalMessage(error) };
+  }
 }

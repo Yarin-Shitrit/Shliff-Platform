@@ -1,7 +1,40 @@
-import { desc } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import type { AnyDb } from '@/lib/db-types';
 import { uploads } from '@/db/schema/source';
 import { blockStates, sheetLabels } from './register';
+
+/** One file's own row: the filename, who brought it and what became of it. */
+export interface UploadHeader {
+  id: string;
+  filename: string;
+  uploadedBy: string;
+  createdAt: Date;
+  status: string;
+  error: string | null;
+}
+
+/**
+ * The review screen's header, and the reason `imports/[id]/page.tsx` spells no
+ * query of its own. Every other admin page here reaches the database through a
+ * library function; a page that reaches for `db.select` is a page that can only
+ * be tested against a real database.
+ *
+ * Answers `null` rather than throwing, because "no such file" is a 404 the page
+ * renders, not a failure.
+ */
+export async function findUpload(
+  db: AnyDb, uploadId: string,
+): Promise<UploadHeader | null> {
+  const [row] = await db.select({
+    id: uploads.id,
+    filename: uploads.filename,
+    uploadedBy: uploads.uploadedBy,
+    createdAt: uploads.createdAt,
+    status: uploads.status,
+    error: uploads.error,
+  }).from(uploads).where(eq(uploads.id, uploadId));
+  return row ?? null;
+}
 
 export interface UploadRow {
   id: string;

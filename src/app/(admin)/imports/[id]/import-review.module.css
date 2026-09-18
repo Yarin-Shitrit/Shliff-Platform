@@ -1,120 +1,309 @@
 /*
- * Page shell for the import-review screen. The black field and the 100vh it
- * fills belong to the shared `(admin)` ground, not to this page; repeating
- * them here stacked a second viewport height inside the first.
+ * The import review, as master–detail: a stepper across the top, a rail of
+ * sheets and their tables down one side, and one block open beside it.
+ *
+ * Logical properties throughout. The rail is a fixed 244px column at desk
+ * width and stacks above the detail on a phone, so the whole screen is one
+ * flow rather than two scrolling areas fighting each other.
  */
-.shell {
-  color: var(--sand);
-  padding-block-end: 5rem;
+
+.page {
+  padding-block: var(--space-6);
+  padding-inline: var(--space-4);
+  /* Wider than the global `main` cap: a raw grid beside a rail needs it. */
+  max-inline-size: 84rem;
 }
 
-.page { max-inline-size: 74rem; margin-inline: auto; padding-inline: 2rem; }
-
-.hero { padding-block: 2.5rem 1.5rem; }
-.title {
-  font-family: var(--font-display), Georgia, serif;
-  font-size: clamp(1.6rem, 3.4vw, 2.4rem);
-  font-weight: 500;
-  line-height: 1.2;
-  margin: 0 0 0.6rem;
-}
-.summary { color: var(--dust); margin: 0; }
-.summary strong { color: var(--sand); font-weight: 600; }
-
-.list { display: flex; flex-direction: column; gap: 1.25rem; margin-block-start: 1.5rem; }
-
-.card {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--raised);
-  padding: 1.25rem 1.4rem;
-}
-
-.cardHead {
+.head {
   display: flex;
-  align-items: baseline;
-  gap: 0.75rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
   flex-wrap: wrap;
-  margin-block-end: 0.6rem;
+  margin-block-end: var(--space-5);
 }
-.sheetName {
-  font-family: var(--font-display), Georgia, serif;
-  font-size: 1.15rem;
-  font-weight: 500;
-  margin: 0;
+
+.title {
+  font: var(--text-display);
+  color: var(--ink);
 }
-.range { color: var(--dust); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 
-.meta { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-block-end: 0.9rem; }
-.archetypeLabel { color: var(--sand); }
+.lead {
+  font: var(--text-lead);
+  color: var(--ink-2);
+  margin-block-start: var(--space-2);
+}
 
-.badge {
+.secondary {
   display: inline-flex;
   align-items: center;
-  border-radius: 999px;
-  padding: 0.2rem 0.7rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.badgeOk { color: var(--ground); background: var(--flare); }
-.badgeWarn { color: var(--flare); background: color-mix(in srgb, var(--flare) 18%, transparent); border: 1px solid color-mix(in srgb, var(--flare) 55%, transparent); }
-
-.tableWrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; margin-block-end: 0.9rem; }
-.tableWrap table { border-collapse: collapse; inline-size: 100%; font-size: 0.85rem; }
-.tableWrap th, .tableWrap td {
-  padding: 0.4rem 0.7rem;
-  text-align: start;
-  border-block-end: 1px solid var(--line);
-  border-inline-end: 1px solid var(--line);
-  white-space: nowrap;
-}
-.tableWrap tr:last-child td { border-block-end: none; }
-.tableWrap td:last-child, .tableWrap th:last-child { border-inline-end: none; }
-
-.moreRows { color: var(--dust); font-size: 0.8rem; margin: -0.4rem 0 0.9rem; }
-
-.mapping { color: var(--dust); font-size: 0.88rem; margin: 0 0 0.9rem; line-height: 1.6; }
-
-.form { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; padding-block-start: 0.9rem; border-block-start: 1px solid var(--line); }
-.formLabel { color: var(--dust); font-size: 0.88rem; }
-
-.select {
-  background: var(--ground);
+  gap: var(--space-2);
+  min-block-size: var(--control-h);
+  padding-inline: var(--space-4);
   border: 1px solid var(--line);
-  color: var(--sand);
-  font: inherit;
-  font-size: 0.9rem;
-  padding: 0.4rem 0.7rem;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  font: var(--text-label);
+  white-space: nowrap;
 }
-.select:focus-visible { outline: 2px solid var(--flare); outline-offset: 1px; }
 
-.confirmButton {
-  appearance: none;
-  border: 1px solid var(--flare);
-  background: var(--flare);
-  color: var(--ground);
-  font: inherit;
-  font-size: 0.9rem;
-  font-weight: 600;
-  padding: 0.45rem 1.1rem;
-  border-radius: 6px;
+.secondary:hover {
+  background: var(--sunken);
+}
+
+.secondary:focus-visible,
+.sheetSubmit:focus-visible,
+.sheetSelect:focus-visible,
+.railItem:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.muted {
+  color: var(--ink-3);
+}
+
+/* ---------------------------------------------------------------- stepper */
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  padding-block: var(--space-3);
+  border-block: 1px solid var(--line);
+  margin-block-end: var(--space-5);
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: var(--text-meta);
+  color: var(--ink-3);
+}
+
+.stepMark,
+.stepDone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 22px;
+  block-size: 22px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-strong);
+  font: var(--text-meta);
+}
+
+.stepDone {
+  background: var(--ok-soft);
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.stepName {
+  color: var(--ink-3);
+}
+
+.stepNow {
+  color: var(--ink);
+  font: var(--text-label);
+}
+
+.stepProgress {
+  margin-inline-start: auto;
+  font: var(--text-meta);
+  color: var(--ink-2);
+}
+
+/* ------------------------------------------------------------------- rail */
+
+.split {
+  display: grid;
+  grid-template-columns: 244px minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+@media (max-width: 60rem) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  position: sticky;
+  inset-block-start: var(--space-4);
+}
+
+.railGroup {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  padding: var(--space-3);
+}
+
+.railHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-block-end: var(--space-2);
+}
+
+.railSheetName {
+  font: var(--text-label);
+  color: var(--ink);
+}
+
+.railDims {
+  font: var(--text-meta);
+  color: var(--ink-3);
+}
+
+.sheetControls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-block-end: var(--space-3);
+}
+
+.sheetForm {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/*
+ * A26/A28: the kit has no select control, so this is a native `<select>`
+ * carrying the kit's own tokens — the same workaround three other screens
+ * reached for independently.
+ */
+.sheetSelect {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  min-block-size: var(--control-h);
+  padding-inline: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--canvas);
+  color: var(--ink);
+  font: var(--text-body);
+}
+
+.sheetSubmit {
+  min-block-size: var(--control-h);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--canvas);
+  color: var(--ink);
+  font: var(--text-label);
   cursor: pointer;
+  white-space: nowrap;
 }
-.confirmButton:hover { background: color-mix(in srgb, var(--flare) 88%, var(--ground)); }
-.confirmButton:disabled { cursor: progress; opacity: 0.6; }
-.confirmButton:focus-visible { outline: 2px solid var(--sand); outline-offset: 2px; }
 
-.confirmedNote { color: var(--flare); font-size: 0.85rem; margin-inline-start: auto; }
+.sheetSubmit:hover {
+  background: var(--sunken);
+}
+
+.sheetSubmit:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.railList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.railItem {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-control);
+  color: var(--ink);
+}
+
+.railItem:hover {
+  background: var(--hover);
+}
+
+.railItemOpen {
+  background: var(--selected);
+  box-shadow: inset 2px 0 0 var(--brand);
+}
+
+.railItemBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.railItemName {
+  font: var(--text-cell);
+  color: var(--ink);
+}
+
+.railItemMeta {
+  font: var(--text-meta);
+  color: var(--ink-3);
+}
+
+.railInbox {
+  display: block;
+  padding-inline: var(--space-2);
+  padding-block-end: var(--space-2);
+  font: var(--text-meta);
+  color: var(--brand-text);
+}
+
+/* ----------------------------------------------------------------- detail */
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-inline-size: 0;
+}
+
+.detailHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.detailTitle {
+  font: var(--text-title);
+  color: var(--ink);
+}
+
+.source {
+  font: var(--text-meta);
+  color: var(--ink-3);
+}
+
 .errorNote {
-  flex-basis: 100%;
-  color: var(--flare);
-  font-size: 0.85rem;
-  border: 1px solid color-mix(in srgb, var(--flare) 55%, transparent);
-  background: color-mix(in srgb, var(--flare) 12%, transparent);
-  border-radius: 6px;
-  padding: 0.4rem 0.7rem;
+  color: var(--bad);
+  background: var(--bad-soft);
+  border-radius: var(--radius-control);
+  padding: var(--space-2);
+  font: var(--text-meta);
 }
 
-.empty { color: var(--dust); padding: 2rem 0; }
+/* The steps themselves; the progress line sits beside the list, not in it. */
+.steps {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
