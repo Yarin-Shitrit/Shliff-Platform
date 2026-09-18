@@ -6,7 +6,7 @@ import { requireAdmin } from '@/lib/auth/guard';
 import { listSeasons } from '@/lib/members/roster';
 import { moneyOverview } from '@/lib/money/overview';
 import type { ObligationRow } from '@/lib/money/obligations';
-import { formatILS } from '@/lib/money';
+import { formatILS, formatShekels } from '@/lib/money';
 import { Money } from '@/components/format';
 import { Banner } from '@/components/ui/banner';
 import { StatTile } from '@/components/ui/stat-tile';
@@ -176,14 +176,65 @@ export default async function MoneyPage(
         </div>
       </section>
 
-      <section className={styles.tiles}>
-        <StatTile label="יתרה בכל החשבונות" valueAgorot={summary.totalBalanceAgorot}
-                  derivation={`${summary.accounts.length} חשבונות`} />
-        <StatTile label="נכנס בשנה הזו" valueAgorot={summary.ledger.inAgorot}
-                  derivation={`${summary.ledger.count} תנועות`} />
-        <StatTile label="יצא בשנה הזו" valueAgorot={summary.ledger.outAgorot} />
-        <StatTile label="אנחנו חייבים" valueAgorot={summary.campOwesAgorot} />
-      </section>
+      {/*
+        * Wave 1's `אנחנו חייבים` tile is gone: band 4 below carries both
+        * directions' totals in its own headings, and a tile that repeats the
+        * heading under it is a figure, not an argument.
+        *
+        * Every tile links onward and every link carries the season, so the
+        * shell's switcher stays in step (R5). `נכנס`/`יצא` link to the route
+        * rather than to a direction filter — D7's filter vocabulary is plan
+        * 09's to define, and a link to a param that never ships is worse than
+        * a link to the route.
+        */}
+      <ul className={styles.tiles} aria-label="סיכום כספי">
+        <li>
+          <StatTile
+            label="יתרה בכל החשבונות"
+            valueAgorot={summary.totalBalanceAgorot}
+            derivation={`${summary.accounts.length} חשבונות · לא תלוי בשנה`}
+            href={`/money/ledger${scope}`}
+          />
+        </li>
+        <li>
+          <StatTile
+            label="נכנס בשנה הזו"
+            valueAgorot={summary.ledger.inAgorot}
+            derivation={`${summary.ledger.count} תנועות`}
+            href={`/money/ledger${scope}`}
+          />
+        </li>
+        <li>
+          <StatTile
+            label="יצא בשנה הזו"
+            valueAgorot={summary.ledger.outAgorot}
+            href={`/money/ledger${scope}`}
+          />
+        </li>
+        <li>
+          <StatTile
+            label="נותר לגייס"
+            valueAgorot={view.fundraising.remainingAgorot}
+            /* The one figure on this page whose definition is a choice — the
+             * season's ledger inflow, dues excluded — so the choice is printed
+             * where a reader can check it rather than left to be inferred. */
+            derivation={view.fundraising.targetAgorot > 0
+              ? `גויסו ${formatShekels(view.fundraising.raisedAgorot)} מתוך ${formatShekels(view.fundraising.targetAgorot)}`
+              : `לא נרשם יעד גיוס ל${season.name}`}
+            href={`/money/ledger${scope}`}
+          />
+        </li>
+        <li>
+          <StatTile
+            label="דורש הכרעה"
+            value={<bdi>{view.decisions.total}</bdi>}
+            derivation={view.decisions.total === 0
+              ? 'הכל מטופל'
+              : `${view.decisions.unnamedCount} חובות בלי שם · ${view.decisions.arithmeticCount} סעיפים שלא מסתדרים`}
+            href={`/inbox${scope}`}
+          />
+        </li>
+      </ul>
 
       <section className="card">
         <h2>איפה הכסף</h2>

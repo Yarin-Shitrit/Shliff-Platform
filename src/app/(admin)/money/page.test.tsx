@@ -6,6 +6,7 @@ import { render, screen, within } from '@testing-library/react';
 import type { SeasonMoneySummary } from '@/lib/money/summary';
 import type { DuesFundingIdentity } from '@/lib/money/funding';
 import type { ObligationRow } from '@/lib/money/obligations';
+import type { AccountBalance } from '@/lib/money/accounts';
 import type { BudgetGroup, BudgetLineActuals } from '@/lib/money/budget';
 import type { Movement } from '@/lib/money/ledger';
 import type { MoneyOverview } from '@/lib/money/overview';
@@ -72,6 +73,14 @@ function summary(overrides: Partial<SeasonMoneySummary> = {}): SeasonMoneySummar
     campOwesAgorot: 0,
     owedToCampAgorot: 0,
     unnamed: [],
+    ...overrides,
+  };
+}
+
+function account(overrides: Partial<AccountBalance> = {}): AccountBalance {
+  return {
+    accountId: 'a1', name: 'קופת מזומן', kind: 'cash',
+    holderPersonId: null, holderName: null, balanceAgorot: 412000,
     ...overrides,
   };
 }
@@ -524,5 +533,61 @@ describe('MoneyPage', () => {
     // No account named on the second movement — shown as its own admission,
     // not folded into a guessed account.
     expect(within(outRow).getByText('לא צוין')).toBeTruthy();
+  });
+  describe('the tile row', () => {
+    it('shows five tiles, and every one of them is a link onward', async () => {
+      render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+      const tiles = screen.getByRole('list', { name: 'סיכום כספי' });
+      const links = within(tiles).getAllByRole('link');
+      expect(links).toHaveLength(5);
+      for (const link of links) {
+        expect(link.getAttribute('href')).toMatch(/season=s1/);
+      }
+    });
+
+    it('says the balance is camp-wide rather than implying it belongs to the season', async () => {
+      moneyOverview.mockResolvedValue(overview({
+        summary: summary({
+          totalBalanceAgorot: 6091255,
+          accounts: [account(), account({ accountId: 'a2' }), account({ accountId: 'a3' })],
+        }),
+      }));
+      render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+      const tile = screen.getByText('יתרה בכל החשבונות').closest('li')!;
+      expect(tile.textContent).toContain('60,912.55');
+      expect(tile.textContent).toContain('3 חשבונות · לא תלוי בשנה');
+    });
+
+    it('prints how the fundraising remainder was reached, on the tile itself', async () => {
+      render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+      const tile = screen.getByText('נותר לגייס').closest('li')!;
+      expect(tile.textContent).toContain('3,875.30');
+      expect(tile.textContent).toContain('גויסו 18,500 ₪ מתוך 22,375.30 ₪');
+    });
+
+    it('says a fundraising target was never recorded instead of showing a zero remainder', async () => {
+      moneyOverview.mockResolvedValue(overview({
+        fundraising: { targetAgorot: 0, raisedAgorot: 0, remainingAgorot: 0 },
+      }));
+      render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+      const tile = screen.getByText('נותר לגייס').closest('li')!;
+      expect(tile.textContent).toContain('לא נרשם יעד גיוס לברן 26');
+    });
+
+    it('counts the decisions this screen cannot make and sends them to לטיפול', async () => {
+      moneyOverview.mockResolvedValue(overview({
+        decisions: { unnamedCount: 2, arithmeticCount: 2, total: 4 },
+      }));
+      render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+      const tile = screen.getByText('דורש הכרעה').closest('li')!;
+      expect(tile.textContent).toContain('2 חובות בלי שם · 2 סעיפים שלא מסתדרים');
+      expect(within(tile).getByRole('link').getAttribute('href')).toBe('/inbox?season=s1');
+    });
+
+    it('shows the all-clear rather than a zero when nothing needs a decision', async () => {
+      render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+      const tile = screen.getByText('דורש הכרעה').closest('li')!;
+      expect(tile.textContent).toContain('הכל מטופל');
+    });
   });
 });
