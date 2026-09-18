@@ -9,6 +9,17 @@
   background: var(--canvas);
   color: var(--ink);
 }
+/*
+ * B7: the column beside the rail, holding the panel and (below 767.98px)
+ * the tab bar. It exists so the tab bar can sit under the panel without
+ * itself being the flex row's second cell.
+ */
+.column {
+  flex: 1;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+}
 /* The panel is inset from the canvas and drawn with one border (B6). */
 .main {
   flex: 1;
@@ -21,4 +32,35 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+/*
+ * B7: below 768px the panel loses its inset and radius — it *is* the
+ * screen — and gains room at the block-end for the fixed tab bar. The
+ * padding is the bar's own rendered block-size, the same calc tab-bar
+ * .module.css uses for its sheet, so the two never drift apart.
+ */
+@media (max-width: 767.98px) {
+  .main {
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    padding-block-end: calc(var(--tap-min) + var(--space-2) * 2);
+  }
+}
+/* B9's not-found boundary: an access message or a plain "not found", centred
+   in the same panel every page renders into. */
+.message {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--ink-2);
+}
+.message h1 {
+  color: var(--ink);
+  margin: 0;
 }

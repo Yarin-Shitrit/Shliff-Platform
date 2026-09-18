@@ -1,0 +1,88 @@
+/*
+ * B7's chrome, not an overlay. tokens.css's own z-index header names six
+ * plans whose surfaces needed an order — B5's palette, B7's tab bar, C6's
+ * drawer, C7's confirm dialog, C8's bulk bar, E2's toasts — and gives five
+ * of them a rung. This bar is the sixth, and its answer is not a number:
+ * `position: fixed` with no `z-index` paints it above ordinary in-flow
+ * content (so content scrolls under it, per this plan's own constraint)
+ * without joining the ladder. An element with no z-index sits in the
+ * z-index:0 bucket for stacking purposes, and every token here — starting
+ * at `--z-bulk`'s 15 — is positive, so a selection's bulk bar, a popover, a
+ * dialog or a toast always wins the stacking fight over this permanent nav
+ * chrome, never the other way round.
+ */
+.bar {
+  display: none;
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: 0;
+  border-block-start: 1px solid var(--line);
+  background: var(--panel);
+  padding-block: var(--space-2);
+  padding-inline: var(--space-1);
+}
+
+.tab {
+  flex: 1;
+  min-block-size: var(--tap-min);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: var(--ink-3);
+  font-size: var(--text-label);
+  text-decoration: none;
+  border: 0;
+  background: transparent;
+}
+.tab[aria-current='page'] { color: var(--brand-text); font-weight: 600; }
+.tab[aria-disabled='true'] { color: var(--ink-4); }
+.tab:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+/*
+ * The sheet sits directly above the bar. `--tap-min + 2 * --space-2` is the
+ * bar's own rendered block-size (a 44px tab plus its 8px top/bottom
+ * padding) — derived from the same two tokens the bar uses, not a second,
+ * independent guess at its height.
+ */
+.sheet {
+  display: none;
+  flex-direction: column;
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: calc(var(--tap-min) + var(--space-2) * 2);
+  border-block-start: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: var(--shadow-pop);
+}
+.sheetItem, .sheetPlanned {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-block-size: var(--tap-min);
+  padding-inline: var(--space-4);
+  color: var(--ink);
+  text-decoration: none;
+}
+.sheetItem:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.sheetPlanned { color: var(--ink-4); }
+.soon {
+  margin-inline-start: auto;
+  font-size: 10.5px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  padding-inline: 5px;
+}
+
+/* B7: the phone layout. */
+@media (max-width: 767.98px) {
+  .bar { display: flex; }
+  .sheet { display: flex; }
+}

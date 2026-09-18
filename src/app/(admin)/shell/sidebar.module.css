@@ -199,3 +199,116 @@
   padding-block-start: 8px;
 }
 .groupgap { display: none; }
+.userrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-block: 6px;
+  padding-inline: 6px;
+}
+.avatar {
+  inline-size: 26px;
+  block-size: 26px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--sunken);
+  color: var(--ink-2);
+}
+.usermail {
+  flex: 1;
+  min-inline-size: 0;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.userActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+/*
+ * B7: below 1024px the rail leaves the flow and becomes a drawer — a fixed
+ * panel with its own scrim, using this plan's `--z-drawer`/`--z-scrim`
+ * tokens exactly as the ladder names them for that pair. At 1024px and
+ * above `.rail` renders as `contents`, so `.side` (the rail's own aside)
+ * is the flex item `.ground` actually sees, unchanged from before this
+ * task.
+ *
+ * `translateX` is physical because CSS transforms have no logical axis; in
+ * this RTL app the inline-start edge is the right edge, so sliding fully
+ * past it is `translateX(100%)`, not `-100%`.
+ *
+ * 180ms/ease is a *local* duration: no duration/easing tokens exist in
+ * tokens.css by design (see its own header comment), and it matches the
+ * only other transitions already in the kit (`data.module.css`'s `.chev`
+ * and `drawer.module.css`'s entrance animation, both 180ms). The global
+ * `prefers-reduced-motion` rule in `globals.css` already forces every
+ * transition duration to .01ms, so no local override is needed here.
+ */
+.rail { display: contents; }
+.menubutton { display: none; }
+.railScrim { display: none; }
+
+@media (max-width: 1023.98px) {
+  .rail {
+    display: block;
+    position: fixed;
+    z-index: var(--z-drawer);
+    inset-block: 0;
+    inset-inline-start: 0;
+    background: var(--canvas);
+    border-inline-end: 1px solid var(--line);
+    transform: translateX(100%);
+    transition: transform 180ms ease;
+  }
+  .rail[data-open='true'] { transform: none; }
+
+  .railScrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-scrim);
+    border: 0;
+    padding: 0;
+    background: rgb(28 25 23 / 18%);
+    cursor: default;
+  }
+
+  .menubutton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    inset-block-start: 14px;
+    inset-inline-start: 14px;
+    inline-size: var(--tap-min);
+    block-size: var(--tap-min);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel);
+    color: var(--ink-2);
+  }
+  .menubutton:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+}
+:root[data-theme='dark'] .railScrim { background: rgb(0 0 0 / 50%); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .railScrim { background: rgb(0 0 0 / 50%); }
+}
+
+/* B7: below 767.98px the drawer fills the screen — no inset to preserve. */
+@media (max-width: 767.98px) {
+  .rail { inline-size: 100vw; }
+  .side { inline-size: 100%; }
+}
