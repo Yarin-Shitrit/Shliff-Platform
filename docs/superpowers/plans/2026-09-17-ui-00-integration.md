@@ -1406,3 +1406,40 @@ fail on a `splitAlias` export that was in fact present — it had read a peer la
 between that test and its implementation. Correctly diagnosed as a moving
 referent rather than filed as a defect. The 15 current `tsc` errors are the inbox
 lane mid-RED (`Cannot find module './items'`) and will clear.
+
+### A34a — The mirror rule, and why the per-file button is already safe
+
+A peer landing the dancefloor table re-points four `tasks.budget_line_id`
+references from the seeded rows onto the promoted ones — it must, or the
+references dangle. **That makes those four promoted rows referenced rows**, so
+block `fa78b9be` becomes an instance of A34's hazard by construction: a
+re-promotion would retain them and write a second set beside them, taking the
+dancefloor 93,370 → 186,740 by the same arithmetic as 64,375.30 → 119,375.30.
+
+**Verified that this branch's per-file promote cannot do that**, end to end rather
+than by assurance:
+
+1. `promoteUpload` filters `state === 'confirmed'` (A34).
+2. `blockState` returns `'promoted'` whenever `promotedRows > 0`, and
+   `'confirmed'` only otherwise (`register.ts:87-88`).
+3. `promotedRows` is a real `count(*)` over the four provenance tables keyed on
+   `source_block_id` — rows that exist, never rows a dry run predicts.
+
+So `confirmed` ⟺ **the block owns zero rows**, and the button already skips every
+block that owns any. That is the same guarantee as `promoteAllGated`'s explicit
+row count, arrived at through the state rather than through a second check — and
+the dialog already names what it is skipping and points at the per-block path.
+
+**The mirror rule, which belongs beside A37's:**
+
+> Before making any state turn a block into a **refusal**, ask what the sweep
+> does with the rows that block already wrote.
+> Before making any path **re-promote** a block, ask whether anything references
+> its rows.
+
+**And the sharpening that makes both necessary: the sweep's two failure modes are
+selected by whether anything points at the row, and nothing in the caller's
+request says which it will get.** Released → a refusal deletes. Retained → a
+re-promotion duplicates. A caller asking "promote this block" is unknowingly also
+asking "and do you happen to be referenced?" — a question it has no way to ask
+and no reason to know it is asking.
