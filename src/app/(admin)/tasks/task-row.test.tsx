@@ -10,7 +10,8 @@ vi.mock('./actions', () => ({
   setTaskBudgetLineAction: vi.fn(),
 }));
 
-import { TaskRow } from './task-row';
+import { Table } from '@/components/ui/table';
+import { taskColumns, taskRowActions } from './task-row';
 
 const GATE = new Date('2026-10-22T00:00:00+03:00');
 
@@ -26,14 +27,18 @@ function row(over: Partial<TaskCoverage> = {}): TaskCoverage {
   };
 }
 
-function draw(over: Partial<TaskCoverage> = {}) {
+/** Driven through the kit's real `Table`, not a bare `<tr>`: the cells only
+ *  exist as that component's columns, so anything else would test a shape the
+ *  screen never renders. */
+function draw(over: Partial<TaskCoverage> = {}, gate: Date | null = GATE) {
+  const ctx = { seasonName: 'ברן 26', gate, candidates: [], budgetLines: [] };
   render(
-    <table><tbody>
-      <TaskRow
-        row={row(over)} seasonName="ברן 26" gate={GATE}
-        candidates={[]} budgetLines={[]}
-      />
-    </tbody></table>,
+    <Table
+      caption="משימות"
+      columns={taskColumns(ctx)}
+      rowActions={taskRowActions(ctx)}
+      rows={[{ id: 't1', data: row(over) }]}
+    />,
   );
 }
 
@@ -78,14 +83,7 @@ describe('TaskRow', () => {
   });
 
   it('drops the gate line when the season has no gate', () => {
-    render(
-      <table><tbody>
-        <TaskRow
-          row={row({ dueOn: new Date('2026-10-20T09:00:00+03:00') })}
-          seasonName="ברן 26" gate={null} candidates={[]} budgetLines={[]}
-        />
-      </tbody></table>,
-    );
+    draw({ dueOn: new Date('2026-10-20T09:00:00+03:00') }, null);
     expect(screen.getByText('20/10/26')).toBeDefined();
     expect(screen.queryByText(/השער/)).toBeNull();
   });
