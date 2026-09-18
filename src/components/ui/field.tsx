@@ -18,6 +18,7 @@ import {
   type ReactElement, type ReactNode,
 } from 'react';
 import { Icon, type IconName } from '@/components/ui/icon';
+import { SHEKEL } from '@/lib/money';
 import { cx } from './cx';
 import styles from './field.module.css';
 
@@ -134,7 +135,7 @@ export type MoneyInputProps = ControlShared & {
 export function MoneyInput({ onChange, ...props }: MoneyInputProps): ReactElement {
   const { id, name, disabled, required, value, defaultValue } = props;
   return (
-    <span className={cx(styles.box, styles.money)} dir="ltr">
+    <span className={styles.box} dir="ltr">
       <input
         className={cx(styles.input, 'num')}
         type="text" inputMode="decimal"
@@ -143,7 +144,7 @@ export function MoneyInput({ onChange, ...props }: MoneyInputProps): ReactElemen
         onChange={onChange ? (event) => onChange(event.target.value) : undefined}
         {...ariaOf(props)}
       />
-      <span className={styles.adornment}>₪</span>
+      <span className={styles.adornment}>{SHEKEL}</span>
     </span>
   );
 }
