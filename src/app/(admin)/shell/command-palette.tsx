@@ -84,13 +84,23 @@ export function CommandPalette() {
     wasOpen.current = open;
   }, [open]);
 
+  // Debounced ~150ms so a fast typist does not fire a server action per
+  // keystroke. `requestSeq` — not the old unmount-only `live` flag — is what
+  // actually protects against out-of-order results: a slow early query and a
+  // fast later one can both be in flight at once (they land in separate
+  // debounce windows), and only the response matching the *latest* request
+  // is allowed to update state, so a late-arriving answer for a prefix the
+  // user has already moved past can never overwrite a newer one.
+  const requestSeq = useRef(0);
   useEffect(() => {
     if (!open) return;
-    let live = true;
-    searchCommandPalette(query, season).then((next) => {
-      if (live) { setHits(next); setCursor(0); }
-    });
-    return () => { live = false; };
+    const timer = window.setTimeout(() => {
+      const id = ++requestSeq.current;
+      searchCommandPalette(query, season).then((next) => {
+        if (id === requestSeq.current) { setHits(next); setCursor(0); }
+      });
+    }, 150);
+    return () => window.clearTimeout(timer);
   }, [open, query, season]);
 
   const needle = query.trim();
