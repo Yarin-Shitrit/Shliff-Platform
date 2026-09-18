@@ -3,8 +3,10 @@ import type { AnyDb } from '@/lib/db-types';
 import {
   persons, personAliases, memberships, dues, payments, seasons, taskAssignments,
 } from '@/db/schema/camp';
-import { normalizeHebrew } from '@/lib/text/normalize';
+import { normalizeHebrew, isBlank } from '@/lib/text/normalize';
 import { toAgorot } from '@/lib/money';
+import { HebrewRefusal } from '@/lib/errors/hebrew';
+import { recordUnlinkedName, ignoreName } from './identity';
 
 /**
  * Every id in this schema is a uuid column, so a malformed one does not come
@@ -358,4 +360,29 @@ export async function previewMerge(
       href: COUNTS[conflict]?.href ?? null,
     })),
   };
+}
+
+export interface SplitResult { aliasIds: string[] }
+
+/**
+ * One workbook cell holding two names — `רוני ו-גיל` — becomes two queued
+ * names, each waiting for its own decision.
+ *
+ * It does not re-attribute the rows the original name was promoted onto. A
+ * promoted row carries the raw string the workbook wrote, and rewriting it
+ * belongs to the promoter, which this phase leaves alone. The screen says so
+ * rather than implying the money moved.
+ */
+export async function splitAlias(
+  db: AnyDb, aliasId: string, parts: string[], email: string,
+): Promise<SplitResult> {
+  if (parts.length < 2) throw new HebrewRefusal('פיצול דורש שני שמות לפחות');
+  if (parts.some((part) => isBlank(part))) throw new HebrewRefusal('שם ריק');
+
+  const aliasIds: string[] = [];
+  for (const part of parts) {
+    aliasIds.push(await recordUnlinkedName(db, part, 'manual'));
+  }
+  await ignoreName(db, aliasId, email);
+  return { aliasIds };
 }

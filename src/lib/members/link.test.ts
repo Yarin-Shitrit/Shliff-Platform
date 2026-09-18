@@ -4,10 +4,13 @@ import { createTestDb, type TestDb } from '@/test/db';
 import {
   persons, personAliases, seasons, memberships, dues, payments, tasks, taskAssignments,
 } from '@/db/schema/camp';
-import { recordUnlinkedName, resolveName, listUnlinkedNames } from '@/lib/members/identity';
+import {
+  recordUnlinkedName, resolveName, listUnlinkedNames, listIgnoredNames,
+} from '@/lib/members/identity';
 import {
   createPerson, createPersonFromAlias, linkAlias, unlinkAlias,
   mergePersons, unmergePerson, mergeConflicts, previewMerge, aliasUnlinkTarget,
+  splitAlias,
 } from '@/lib/members/link';
 
 const LEAD = 'lead@shliff.camp';
@@ -402,5 +405,45 @@ describe('aliasUnlinkTarget', () => {
   it('answers null for an alias that names nothing, malformed id included', async () => {
     expect(await aliasUnlinkTarget(db, 'not-a-uuid')).toBeNull();
     expect(await aliasUnlinkTarget(db, '00000000-0000-4000-8000-000000000000')).toBeNull();
+  });
+});
+
+describe('splitAlias', () => {
+  it('queues each part and sets the original aside, attributed', async () => {
+    const db = await createTestDb();
+    const aliasId = await recordUnlinkedName(db, 'רוני ו-גיל', 'import');
+
+    const { aliasIds } = await splitAlias(db, aliasId, ['רוני', 'גיל'], 'lead@shliff.test');
+
+    expect(aliasIds).toHaveLength(2);
+    expect((await listUnlinkedNames(db)).map((n) => n.alias).sort())
+      .toEqual(['גיל', 'רוני']);
+    const [original] = await listIgnoredNames(db);
+    expect(original.alias).toBe('רוני ו-גיל');
+    expect(original.ignoredBy).toBe('lead@shliff.test');
+  });
+
+  it('refuses fewer than two parts, so a split cannot quietly become a rename', async () => {
+    const db = await createTestDb();
+    const aliasId = await recordUnlinkedName(db, 'רוני ו-גיל', 'import');
+    await expect(splitAlias(db, aliasId, ['רוני'], 'lead@shliff.test'))
+      .rejects.toThrow('פיצול דורש שני שמות לפחות');
+  });
+
+  it('refuses a blank part rather than queueing an empty name', async () => {
+    const db = await createTestDb();
+    const aliasId = await recordUnlinkedName(db, 'רוני ו-גיל', 'import');
+    await expect(splitAlias(db, aliasId, ['רוני', '‏ ‎'], 'lead@shliff.test'))
+      .rejects.toThrow('שם ריק');
+  });
+
+  // Ruling 8b, pinned: the split queues names, it does not move money. A test
+  // that only counted the new aliases would pass just as happily against an
+  // implementation that rewrote the promoted rows underneath a lead.
+  it('leaves the original name queued for nothing and writes no person', async () => {
+    const db = await createTestDb();
+    const aliasId = await recordUnlinkedName(db, 'רוני ו-גיל', 'import');
+    await splitAlias(db, aliasId, ['רוני', 'גיל'], 'lead@shliff.test');
+    expect(await db.select().from(persons)).toEqual([]);
   });
 });

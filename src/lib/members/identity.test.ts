@@ -4,7 +4,10 @@ import { createTestDb, type TestDb } from '@/test/db';
 import { persons, personAliases } from '@/db/schema/camp';
 import {
   resolveName, recordUnlinkedName, listUnlinkedNames,
+  ignoreName, unignoreName, listIgnoredNames,
 } from '@/lib/members/identity';
+import { createPerson, linkAlias, unlinkAlias } from '@/lib/members/link';
+import { isHebrewRefusal } from '@/lib/errors/hebrew';
 
 describe('resolveName', () => {
   let db: TestDb;
@@ -121,5 +124,77 @@ describe('unlinked names', () => {
     await recordUnlinkedName(db, 'עמירם דהן', 'import');
     await recordUnlinkedName(db, ' עמירם דהן ', 'import');
     expect(await listUnlinkedNames(db)).toHaveLength(1);
+  });
+});
+
+describe('ignoring a name', () => {
+  it('is unreachable by any existing writer, which is what makes the state free', async () => {
+    const db = await createTestDb();
+    const personId = await createPerson(db, 'נועה לוי', 'lead@shliff.test');
+    const aliasId = await recordUnlinkedName(db, 'נועה ל.', 'import');
+    await linkAlias(db, aliasId, personId, 'lead@shliff.test');
+    await unlinkAlias(db, aliasId);
+
+    const rows = await db.select().from(personAliases);
+    const stray = rows.filter((r) => r.personId === null && r.confirmedBy !== null);
+    expect(stray).toEqual([]);
+  });
+
+  it('takes the name out of the queue and records who set it aside', async () => {
+    const db = await createTestDb();
+    const aliasId = await recordUnlinkedName(db, 'סה"כ', 'import');
+    await ignoreName(db, aliasId, 'lead@shliff.test');
+
+    expect(await listUnlinkedNames(db)).toEqual([]);
+    const [ignored] = await listIgnoredNames(db);
+    expect(ignored.alias).toBe('סה"כ');
+    expect(ignored.ignoredBy).toBe('lead@shliff.test');
+    expect(ignored.ignoredAt).toBeInstanceOf(Date);
+  });
+
+  it('returns an ignored name to the queue, with no author left claiming it', async () => {
+    const db = await createTestDb();
+    const aliasId = await recordUnlinkedName(db, 'סה"כ', 'import');
+    await ignoreName(db, aliasId, 'lead@shliff.test');
+    await unignoreName(db, aliasId);
+
+    const [queued] = await listUnlinkedNames(db);
+    expect(queued.alias).toBe('סה"כ');
+    expect(queued.ignoredBy).toBeNull();
+    expect(await listIgnoredNames(db)).toEqual([]);
+  });
+
+  it('survives re-promotion: recordUnlinkedName finds the ignored row rather than queueing a second', async () => {
+    const db = await createTestDb();
+    const aliasId = await recordUnlinkedName(db, 'סה"כ', 'import');
+    await ignoreName(db, aliasId, 'lead@shliff.test');
+
+    const again = await recordUnlinkedName(db, 'סה"כ', 'import');
+    expect(again).toBe(aliasId);
+    expect(await listUnlinkedNames(db)).toEqual([]);
+  });
+
+  it('refuses to ignore a name that is already linked to a person', async () => {
+    const db = await createTestDb();
+    const personId = await createPerson(db, 'נועה לוי', 'lead@shliff.test');
+    const aliasId = await recordUnlinkedName(db, 'נועה ל.', 'import');
+    await linkAlias(db, aliasId, personId, 'lead@shliff.test');
+
+    await expect(ignoreName(db, aliasId, 'lead@shliff.test'))
+      .rejects.toThrow('כינוי שמשויך לאדם — יש לנתק אותו לפני שמסמנים אותו כלא-אדם');
+  });
+
+  // A20: the refusal says it is one, rather than being guessed at by alphabet.
+  // Without the marker it survives only because it happens to carry no Latin
+  // letter, and the first interpolated id or account name would silently
+  // replace it with the generic fallback.
+  it('marks its refusal as Hebrew rather than leaving it to be sniffed', async () => {
+    const db = await createTestDb();
+    const personId = await createPerson(db, 'נועה לוי', 'lead@shliff.test');
+    const aliasId = await recordUnlinkedName(db, 'נועה ל.', 'import');
+    await linkAlias(db, aliasId, personId, 'lead@shliff.test');
+
+    await expect(ignoreName(db, aliasId, 'lead@shliff.test'))
+      .rejects.toSatisfy(isHebrewRefusal);
   });
 });

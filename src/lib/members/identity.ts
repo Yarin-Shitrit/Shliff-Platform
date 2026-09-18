@@ -2,6 +2,7 @@ import { and, asc, eq, isNull, isNotNull } from 'drizzle-orm';
 import type { AnyDb } from '@/lib/db-types';
 import { persons, personAliases } from '@/db/schema/camp';
 import { normalizeHebrew } from '@/lib/text/normalize';
+import { HebrewRefusal } from '@/lib/errors/hebrew';
 
 export interface NameCandidate {
   personId: string;
@@ -28,6 +29,10 @@ export interface UnlinkedName {
   alias: string;
   normalized: string;
   source: string;
+  /** Who set this name aside as "not a person", and when. Null while it is
+   *  still queued for a decision. */
+  ignoredBy: string | null;
+  ignoredAt: Date | null;
 }
 
 /**
@@ -101,16 +106,64 @@ export async function recordUnlinkedName(
   return row.id;
 }
 
+const UNLINKED_COLUMNS = {
+  aliasId: personAliases.id,
+  alias: personAliases.alias,
+  normalized: personAliases.normalized,
+  source: personAliases.source,
+  ignoredBy: personAliases.confirmedBy,
+  ignoredAt: personAliases.confirmedAt,
+};
+
+/**
+ * Names still waiting for a decision.
+ *
+ * An alias with no person and a `confirmed_by` is not waiting: someone looked
+ * at it and said it is not a person. That pair of columns is the whole storage
+ * for the ignore state — every existing writer sets `person_id` whenever it
+ * stamps `confirmed_by`, and `unlinkAlias` clears the two together, so the
+ * combination is unreachable by anything else and needs no new column.
+ * `identity.test.ts` pins that invariant.
+ */
 export async function listUnlinkedNames(db: AnyDb): Promise<UnlinkedName[]> {
-  const rows = await db
-    .select({
-      aliasId: personAliases.id,
-      alias: personAliases.alias,
-      normalized: personAliases.normalized,
-      source: personAliases.source,
-    })
-    .from(personAliases)
-    .where(isNull(personAliases.personId))
+  return db.select(UNLINKED_COLUMNS).from(personAliases)
+    .where(and(isNull(personAliases.personId), isNull(personAliases.confirmedBy)))
     .orderBy(asc(personAliases.normalized));
-  return rows;
+}
+
+/** Names a lead has set aside as not-a-person. Reversible, and attributed. */
+export async function listIgnoredNames(db: AnyDb): Promise<UnlinkedName[]> {
+  return db.select(UNLINKED_COLUMNS).from(personAliases)
+    .where(and(isNull(personAliases.personId), isNotNull(personAliases.confirmedBy)))
+    .orderBy(asc(personAliases.normalized));
+}
+
+/**
+ * Sets a name aside as "not a person" — a `סה״כ` cell, a supplier, a column
+ * header the block detector swept in.
+ *
+ * Camp-wide and attributed, unlike a snooze: the next lead should not be asked
+ * the same question, and the decision names who made it. Reversible through
+ * `unignoreName`, which is why the toast on this action offers undo.
+ */
+export async function ignoreName(db: AnyDb, aliasId: string, email: string): Promise<void> {
+  const [alias] = await db.select({ personId: personAliases.personId })
+    .from(personAliases).where(eq(personAliases.id, aliasId));
+  if (!alias) throw new Error(`unknown alias ${aliasId}`);
+  if (alias.personId !== null) {
+    // A20: marked as a refusal rather than left to the alphabet passthrough.
+    // The passthrough would serve this string correctly today only because it
+    // happens to carry no Latin letter.
+    throw new HebrewRefusal('כינוי שמשויך לאדם — יש לנתק אותו לפני שמסמנים אותו כלא-אדם');
+  }
+  await db.update(personAliases)
+    .set({ confirmedBy: email, confirmedAt: new Date() })
+    .where(eq(personAliases.id, aliasId));
+}
+
+/** Returns an ignored name to the queue, clearing the decision with it. */
+export async function unignoreName(db: AnyDb, aliasId: string): Promise<void> {
+  await db.update(personAliases)
+    .set({ confirmedBy: null, confirmedAt: null })
+    .where(eq(personAliases.id, aliasId));
 }
