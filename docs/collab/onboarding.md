@@ -187,6 +187,20 @@ Ask the camp lead for access if it does not open. Do not use
 `docs/superpowers/mock/` instead — that copy does not work standalone, its pages
 cross-link to filenames that are not on disk.
 
+To **add** a screen to the canvas rather than just look at it, the sources are in
+`docs/superpowers/mock/` and the build is `node build.mjs`. It will not run
+against the directory as committed — the files were copied in flat, and the
+script expects them under `src/`. In a scratch copy, not in the repo:
+
+```sh
+cp -R docs/superpowers/mock /tmp/mock && cd /tmp/mock
+mkdir -p src/pages && cp shared.css layout.json src/ && cp *.html src/pages/
+node build.mjs      # → built 13 boards
+```
+
+The canvas is a **shared surface** — adding boards is fine, changing existing
+ones or `shared.css` needs surfacing. `kickoff-logistics.md` §4 has the detail.
+
 Three things the mock gets wrong, where the plans are right: gendered Hebrew
 (`טרם שילמה`) the schema cannot express; a phone and email on the person page,
 which `persons` does not have; and an event task filed inside the shifts group.

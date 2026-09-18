@@ -13,7 +13,7 @@ from this table, see `protocol.md`.
 
 | Area | Owner | Owns outright |
 |---|---|---|
-| **Phase 4 — UI redesign** | @Yarin-Shitrit | `src/app/(admin)/{members,fees,money,tasks,imports,upload,data}/**`, `src/components/**`, `src/lib/{members,fees,money,work,import,inbox,blocks}/**`, `docs/superpowers/**` |
+| **Phase 4 — UI redesign** | @Yarin-Shitrit | `src/app/(admin)/{members,fees,money,tasks,imports,upload,data}/**`, `src/components/**`, `src/lib/{members,fees,money,work,import,inbox,blocks}/**`, `docs/superpowers/{plans,specs,kickoffs}/**` |
 | **Logistics** | `@<teammate-handle>` | `src/app/(admin)/logistics/**`, `src/lib/logistics/**`, `src/db/schema/logistics.ts` |
 | **Collaboration harness** | @Yarin-Shitrit | `docs/collab/**`, `CLAUDE.md` |
 
@@ -50,6 +50,7 @@ against `main` (`45fa275`) and `origin/feat/ui-01-foundation`.
 | `package.json` | **Ruling R1: no new dependencies.** Not a component library, not icons, not charts, not a test helper | Ask the camp lead first; it is not negotiable by PR |
 | `vitest.config.ts`, `next.config.ts`, `tsconfig.json` | Build and test for everyone | A config change that only fixes your lane |
 | `CLAUDE.md`, `AGENTS.md` | Injected into every session and subagent | Instructions changing under a running agent — invisible in the diff |
+| `docs/superpowers/mock/**` | The shared design canvas. Twelve UI plans are written against these artboards | A logistics screen designed off-canvas that does not match the product, or a change to `shared.css` that moves every existing board |
 
 > **A correction, and the reason it matters.** Until `7a1e71c` (2026-09-18), §3
 > named the Icon component `src/components/icon.tsx`. Ruling A1, in the same

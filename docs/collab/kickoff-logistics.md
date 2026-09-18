@@ -80,7 +80,62 @@ Whatever the design turns out to be, it has to answer three things explicitly:
   `src/db/schema/logistics.ts` for everything else.
 - What it will need from the camp lead, so I can ask once rather than five times.
 
-Stop at the approved design. The implementation plan is a separate session.
+Stop at the approved design, then take it to the canvas in Step 4. The
+implementation plan is a separate session.
+
+## Step 4 — put the screens on the canvas
+
+The UI redesign was not designed in prose. It was designed as thirteen artboards
+on a shared canvas, and the twelve implementation plans were written against
+them. Logistics gets the same treatment, on the **same** canvas, so it comes out
+looking like the product rather than like a bolt-on.
+
+The source is `docs/superpowers/mock/`:
+
+| File | What it is |
+|---|---|
+| `main.html`, `people.html`, … | one page source per artboard; each builds to a `*.dc.html` board |
+| `shared.css` | the design language — tokens, both themes, RTL |
+| `icons.mjs` | `[[i:name]]` macros; the build fails on an unresolved one |
+| `layout.json` | where each board sits on the canvas, plus the Hebrew section titles |
+| `build.mjs` | composes the sidebar and head into every page, writes `out/project/` and `canvas.json` |
+
+**The build does not run against the directory as committed.** The files were
+copied in flat and `build.mjs` expects them under `src/`. Restore that layout in
+a scratch copy — not in the repo:
+
+```sh
+cp -R docs/superpowers/mock /tmp/mock && cd /tmp/mock
+mkdir -p src/pages && cp shared.css layout.json src/ && cp *.html src/pages/
+node build.mjs      # → built 13 boards: Main.dc.html, Debts.dc.html, …
+```
+
+Verified 2026-09-18: as committed it fails with `ENOENT … src/shared.css`; with
+the layout restored, all thirteen boards build.
+
+What I want out of this step:
+
+- **One artboard per logistics screen.** Copy the nearest existing page and
+  change its content — never start from a blank file. The sidebar, the season
+  switcher and the search come from `build.mjs`'s partials, so a hand-built page
+  will silently not match.
+- **A nav entry** for logistics in `build.mjs`'s sidebar list.
+- **Coordinates in `layout.json`**, in a new titled section of the canvas rather
+  than wedged into an existing one.
+- **Both themes, Hebrew and RTL throughout.** No English strings anywhere.
+- The product's rules visible in the design, not just in the prose: every figure
+  links to the screen that can change it, and an empty state invites.
+
+Use only tokens that exist in `shared.css` and icons that exist in `icons.mjs`.
+If logistics genuinely needs a new one, that is a shared-surface change — raise
+it, do not add it quietly. Sample data only, never real member names.
+
+`docs/superpowers/mock/**` is a **shared surface**: the camp lead's twelve plans
+are written against it. Adding boards is fine. Changing an existing board, the
+shared CSS, or the sidebar structure needs surfacing per `protocol.md` §3.
+
+Show me the built canvas before anything is implemented. The logistics plans get
+written against the artboards, exactly the way the twelve UI plans were.
 
 ## Rules I am not allowed to break, and neither are you
 
