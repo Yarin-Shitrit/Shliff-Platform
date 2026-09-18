@@ -62,24 +62,31 @@ Reported by the session executing it on 2026-09-18, **not independently verified
 
 - **Wave 2 complete and merged** — plans 06 (אנשים), 07 (דמי קאמפ), 08 (כספים),
   10 (משימות). Gate reported at 150 files, 1760 tests, 0 failures.
-- **Wave 3 in flight**, three lanes at once:
+- **Wave 3 in flight**, two lanes:
   - plan 09 → `src/app/(admin)/money/ledger`, `.../debts`, `src/lib/money/**`
   - plan 11 → `src/app/(admin)/imports/**`, `src/app/(admin)/upload/**`, `src/lib/import/**`
-  - a shared-module consolidation → `src/lib/errors/hebrew.ts`,
-    `src/app/(admin)/tasks/failure-messages.ts`, `src/app/(admin)/shell/actions.ts`
+- The shared-module consolidation **finished** — `src/lib/errors/hebrew.ts`,
+  `tasks/failure-messages.ts` and `shell/actions.ts` have settled and are no
+  longer in flight.
 - Still ahead: wave 4 (plan 04 בית), wave 5 (plan 12 mobile and polish, which
   deletes wave 0's token aliases).
 
 **If you are starting logistics while wave 3 is live**, the collision risk is
-`src/lib/errors/hebrew.ts` and the shell — both are mid-consolidation. Add your
-Hebrew error strings *after* that lands, or coordinate first.
+`src/lib/money/**` and the import surface. `src/lib/errors/hebrew.ts` has
+settled, so Hebrew error strings are safe to add — add to that map, never start
+a second one.
 
 ### Environment, as of 2026-09-18
 
-- `shliff-pg` is **up**, on port **5433**. It is stopped from time to time on
-  purpose to relieve memory pressure on the dev box — connection errors from a
-  DB-backed page mean check `docker ps -a --filter name=shliff` before you debug
-  code. Ask the camp lead before restarting it.
+- **Container state is a property of right now, not of the repo.** Any document
+  asserting it is stale the moment it is written — this one included. Run
+  `docker ps -a --filter name=shliff` and believe that instead.
+  `shliff-pg` serves port **5433**, and it is stopped deliberately from time to
+  time to relieve memory pressure on the dev box, so connection errors from a
+  DB-backed page are the first thing to check and the last thing to blame on
+  code. Starting or stopping it is the camp lead's call. On 2026-09-18 it was
+  stopped and then restarted, with the lead's approval, inside an hour — that is
+  the cadence you are documenting against.
 - `origin` carries `main` (`45fa275`) and `feat/ui-01-foundation`. Both were
   pushed on 2026-09-18 after nine days during which the remote held nothing newer
   than 2026-09-09.

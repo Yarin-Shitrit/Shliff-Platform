@@ -68,7 +68,25 @@ the work is blocked, write down the decision you would make and *why* in the PR,
 and take the reversible option — the one that leaves the other person able to change
 their mind cheaply.
 
-## 4. Starting and finishing
+## 4. A correction goes where the wrong thing is
+
+When you reverse something a table, a contract or a header comment states,
+**change that statement in the same commit.** Appending the correction elsewhere
+— a ruling further down the file, a note in the PR, a message to the other
+person — only fixes it for people who read both. The ones who trust the contract
+and stop reading are exactly the ones who will be wrong, and they will be wrong
+confidently.
+
+This is not hypothetical. The UI integration document's §3 ownership table gave
+the Icon component's path. Ruling A1, in the same file further down, had reversed
+that path long before, and the table was never updated. It stayed wrong and was
+read as authoritative, because a table headed "Who owns what" does not advertise
+that something below supersedes it. Fixed in `7a1e71c`.
+
+The same applies to `docs/collab/`: if a PR changes who owns something, the table
+in `ownership.md` changes in that PR — not in a comment, and not next time.
+
+## 5. Starting and finishing
 
 **Before you start:**
 
@@ -77,8 +95,8 @@ their mind cheaply.
 cat docs/collab/claims.md          # and check its `updated:` stamp
 ```
 
-If `claims.md` is more than a day or two old, do not trust it — §5 of that file
-tells you how to check live, and who to ask.
+If `claims.md` is more than a day or two old, do not trust it — its §1 gives the
+commands to check live state, and its §2 says who to ask.
 
 **Before you open the PR:**
 
@@ -94,7 +112,7 @@ Put the real numbers in the PR body. "Tests pass" is not evidence; `1760 passed,
 outlives the work is worse than no claim, because the next person routes around a
 file nobody is holding.
 
-## 5. Agents, and why this document is strict
+## 6. Agents, and why this document is strict
 
 Both of us run multiple Claude sessions, and this repo has already produced every
 one of these:
@@ -119,7 +137,7 @@ pgrep -fl claude          # sessions on this machine
 /usr/bin/git status       # someone else's staged work is someone else's commit
 ```
 
-## 6. What never goes in a commit
+## 7. What never goes in a commit
 
 - `docs/reference-data/` already holds real names and real amounts. It is in the
   repo and on the remote, and the repo is **private**. Keep it that way: no forks,

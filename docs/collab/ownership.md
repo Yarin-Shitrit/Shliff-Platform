@@ -51,10 +51,16 @@ against `main` (`45fa275`) and `origin/feat/ui-01-foundation`.
 | `vitest.config.ts`, `next.config.ts`, `tsconfig.json` | Build and test for everyone | A config change that only fixes your lane |
 | `CLAUDE.md`, `AGENTS.md` | Injected into every session and subagent | Instructions changing under a running agent — invisible in the diff |
 
-> **A correction to carry forward:** the integration document's §3 lists the Icon
-> component at `src/components/icon.tsx`. It is actually at
-> `src/components/ui/icon.tsx`. Verified 2026-09-18. Treat §3's paths as
-> intent, and confirm against the branch before you edit.
+> **A correction, and the reason it matters.** Until `7a1e71c` (2026-09-18), §3
+> named the Icon component `src/components/icon.tsx`. Ruling A1, in the same
+> file further down, had reversed that long before — the spec's §C puts every
+> kit component under `src/components/ui/` — but **the table itself was never
+> updated**. A reader who trusted the contract and did not scroll to the addenda
+> got the wrong path with complete confidence. §3 now names
+> `src/components/ui/icon.tsx` and points at A1.
+>
+> The general form is in `protocol.md` §4: an addendum does not fix a wrong
+> contract, it only fixes it for whoever reads both.
 
 ## Inside Phase 4
 
