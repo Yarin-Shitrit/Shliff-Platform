@@ -1,6 +1,8 @@
-import { and, asc, eq, sql } from 'drizzle-orm';
+import {
+  and, asc, eq, inArray, sql,
+} from 'drizzle-orm';
 import type { AnyDb } from '@/lib/db-types';
-import { budgetLines } from '@/db/schema/money';
+import { budgetLines, ledgerEntries } from '@/db/schema/money';
 import type { BudgetCategory } from '@/db/schema/money';
 import { toAgorot, fromAgorot } from '@/lib/money';
 import { isBlank, normalizeHebrew } from '@/lib/text/normalize';
@@ -31,6 +33,9 @@ export interface BudgetLineRow {
   category: BudgetCategory;
   /** `quantity × unit ≠ total`. Flagged, never blocked. */
   arithmeticOff: boolean;
+  /** R11: every number keeps its provenance. Null on a line a lead typed. */
+  sourceBlockId: string | null;
+  sourceRow: number | null;
 }
 
 export interface DerivationRow {
@@ -81,6 +86,8 @@ export async function listBudgetLines(
       rationale: row.rationale,
       category: row.category,
       arithmeticOff: isArithmeticOff(row.quantityNum === null ? null : row.quantityNum, row.unitCost === null ? null : row.unitCost, totalAgorot),
+      sourceBlockId: row.sourceBlockId,
+      sourceRow: row.sourceRow,
     };
   });
 }
@@ -148,4 +155,65 @@ export async function budgetDerivation(
   }
 
   return rows;
+}
+
+export interface BudgetLineActuals extends BudgetLineRow {
+  /** `out` minus `in` over every ledger entry pointing at this line. Not
+   *  clamped: a line that took back more than it spent is a fact, and zeroing
+   *  it would hide a mis-pointed entry. */
+  spentAgorot: number;
+  /** `total − spent`, floored at 0. The overshoot lives in `overAgorot`, so a
+   *  column of remainders never carries a minus sign a reader must decode. */
+  remainingAgorot: number;
+  /** `spent − total`, floored at 0. Non-zero is exactly "חריגה". */
+  overAgorot: number;
+}
+
+/**
+ * Every budget line for a season with what the ledger has actually spent
+ * against it.
+ *
+ * Spend is deliberately **not** filtered by the entry's own `season_id`. The
+ * budget line already belongs to a season, and R4 makes a season a hand-set
+ * label on a continuous ledger — `חוב לירון סלע על ברן 25` is dated June 2026.
+ * An entry that points at this line is spend against this line by
+ * construction; dropping it because a lead labelled it another year would
+ * report a line as untouched while the money is gone.
+ *
+ * `in` entries are netted against `out` rather than ignored: money that came
+ * back to a line is money that line did not spend, and netting is the only
+ * reading under which spent + remaining equals the plan.
+ */
+export async function listBudgetLinesWithActuals(
+  db: AnyDb, seasonId: string,
+): Promise<BudgetLineActuals[]> {
+  const lines = await listBudgetLines(db, seasonId);
+  if (lines.length === 0) return [];
+
+  const spend = await db
+    .select({
+      budgetLineId: ledgerEntries.budgetLineId,
+      direction: ledgerEntries.direction,
+      total: sql<string>`coalesce(sum(${ledgerEntries.amount}), 0)`,
+    })
+    .from(ledgerEntries)
+    .where(inArray(ledgerEntries.budgetLineId, lines.map((line) => line.id)))
+    .groupBy(ledgerEntries.budgetLineId, ledgerEntries.direction);
+
+  const spentByLine = new Map<string, number>();
+  for (const row of spend) {
+    if (!row.budgetLineId) continue;
+    const signed = row.direction === 'out' ? toAgorot(row.total) : -toAgorot(row.total);
+    spentByLine.set(row.budgetLineId, (spentByLine.get(row.budgetLineId) ?? 0) + signed);
+  }
+
+  return lines.map((line) => {
+    const spentAgorot = spentByLine.get(line.id) ?? 0;
+    return {
+      ...line,
+      spentAgorot,
+      remainingAgorot: Math.max(0, line.totalAgorot - spentAgorot),
+      overAgorot: Math.max(0, spentAgorot - line.totalAgorot),
+    };
+  });
 }

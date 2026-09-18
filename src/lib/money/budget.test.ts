@@ -2,7 +2,11 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import type { TestDb } from '@/test/db';
 import { createTestDb } from '@/test/db';
 import { createSeason } from '@/lib/members/roster';
-import { createBudgetLine, listBudgetLines, budgetTotalAgorot, budgetDerivation } from './budget';
+import {
+  createBudgetLine, listBudgetLines, budgetTotalAgorot, budgetDerivation,
+  listBudgetLinesWithActuals,
+} from './budget';
+import { recordEntry } from './ledger';
 
 let db: TestDb;
 let s25: string;
@@ -124,5 +128,93 @@ describe('budget lines', () => {
     expect(await budgetTotalAgorot(db, s26)).toBe(140000);
     expect(await budgetTotalAgorot(db, s26, 'camp')).toBe(100000);
     expect(await budgetTotalAgorot(db, s26, 'dancefloor')).toBe(40000);
+  });
+});
+
+describe('budget lines with actuals', () => {
+  it('sums what the ledger has spent against each line, and what is left', async () => {
+    const generator = await createBudgetLine(db, {
+      seasonId: s26, label: 'שכירות גנרטור', quantityText: '1', quantityNum: 1,
+      unitCost: 41300, total: 41300, category: 'camp',
+    });
+    const water = await createBudgetLine(db, {
+      seasonId: s26, label: 'מים וקרח', total: 6200, category: 'camp',
+    });
+    await recordEntry(db, {
+      occurredOn: new Date('2026-09-09T00:00:00Z'), direction: 'out', amount: 41300,
+      description: 'מקדמה לגנרטור', budgetLineId: generator, seasonId: s26,
+      recordedBy: 'lead@shliff.camp',
+    });
+    await recordEntry(db, {
+      occurredOn: new Date('2026-09-02T00:00:00Z'), direction: 'out', amount: 1740,
+      description: 'משלוח ראשון', budgetLineId: water, seasonId: s26,
+      recordedBy: 'lead@shliff.camp',
+    });
+
+    const rows = await listBudgetLinesWithActuals(db, s26);
+    const byLabel = new Map(rows.map((row) => [row.label, row]));
+    expect(byLabel.get('שכירות גנרטור')!.spentAgorot).toBe(4130000);
+    expect(byLabel.get('שכירות גנרטור')!.remainingAgorot).toBe(0);
+    expect(byLabel.get('מים וקרח')!.spentAgorot).toBe(174000);
+    expect(byLabel.get('מים וקרח')!.remainingAgorot).toBe(446000);
+  });
+
+  it('reports a line spent past its plan as over, never as negative remaining alone', async () => {
+    const kitchen = await createBudgetLine(db, {
+      seasonId: s26, label: 'מטבח ואוכל', total: 8400, category: 'camp',
+    });
+    await recordEntry(db, {
+      occurredOn: new Date('2026-08-30T00:00:00Z'), direction: 'out', amount: 8720,
+      description: 'קניות', budgetLineId: kitchen, recordedBy: 'lead@shliff.camp',
+    });
+
+    const [row] = await listBudgetLinesWithActuals(db, s26);
+    expect(row.spentAgorot).toBe(872000);
+    expect(row.overAgorot).toBe(32000);
+    expect(row.remainingAgorot).toBe(0);
+  });
+
+  // R4: a season is a hand-set label on a continuous ledger. `חוב לירון סלע על
+  // ברן 25` is dated June 2026. An entry pointing at this line is spend against
+  // this line whatever year the lead labelled it.
+  it('counts an entry against the line even when the entry carries another season', async () => {
+    const shade = await createBudgetLine(db, {
+      seasonId: s26, label: 'צל ומבנה', total: 18600, category: 'camp',
+    });
+    await recordEntry(db, {
+      occurredOn: new Date('2026-06-01T00:00:00Z'), direction: 'out', amount: 11500,
+      description: 'מבנה שני', budgetLineId: shade, seasonId: s25,
+      recordedBy: 'lead@shliff.camp',
+    });
+
+    const [row] = await listBudgetLinesWithActuals(db, s26);
+    expect(row.spentAgorot).toBe(1150000);
+  });
+
+  it('nets a refund back against the line it came from', async () => {
+    const sound = await createBudgetLine(db, {
+      seasonId: s26, label: 'סאונד רחבה', total: 12000, category: 'dancefloor',
+    });
+    await recordEntry(db, {
+      occurredOn: new Date('2026-07-01T00:00:00Z'), direction: 'out', amount: 6000,
+      description: 'מקדמה', budgetLineId: sound, recordedBy: 'lead@shliff.camp',
+    });
+    await recordEntry(db, {
+      occurredOn: new Date('2026-07-20T00:00:00Z'), direction: 'in', amount: 1000,
+      description: 'זיכוי על רמקול שלא סופק', budgetLineId: sound,
+      recordedBy: 'lead@shliff.camp',
+    });
+
+    const [row] = await listBudgetLinesWithActuals(db, s26);
+    expect(row.spentAgorot).toBe(500000);
+  });
+
+  it('carries the source cell columns through, so a row can be traced', async () => {
+    await createBudgetLine(db, {
+      seasonId: s26, label: 'ביטוח ואישורים', total: 3875, category: 'camp',
+    });
+    const [row] = await listBudgetLinesWithActuals(db, s26);
+    expect(row.sourceBlockId).toBeNull();
+    expect(row.sourceRow).toBeNull();
   });
 });
