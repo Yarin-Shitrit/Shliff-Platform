@@ -8,8 +8,9 @@ import { BLOCK_ARCHETYPES } from '@/lib/classify/types';
 import { promoteBlock } from '@/lib/import/promote/promote';
 import {
   needsReview, blockState, PROMOTABLE_ARCHETYPES,
-  blockStates, sheetLabels, promotedRowCounts,
+  blockStates, sheetLabels, promotedRowCounts, promoteUpload,
 } from './register';
+import { summarise } from './review';
 
 const LEAD = 'lead@shliff.test';
 
@@ -233,5 +234,67 @@ describe('sheetLabels', () => {
     expect(label.state).toBe('undecided');
     expect(label.contestedWith).toEqual([b.id]);
     expect(a.id).not.toBe(b.id);
+  });
+});
+
+describe('promoteUpload', () => {
+  let db: TestDb;
+  beforeEach(async () => { db = await createTestDb(); });
+
+  it('writes nothing on a dry run and reports what a commit would write', async () => {
+    const upload = await makeUpload(db, 'קופת קאמפ 2026.xlsx', 'k');
+    const sheet = await makeSheet(db, upload.id, 'תנועות קופה');
+    await makeBlock(db, sheet.id, {
+      top: 1, bottom: 3, left: 1, right: 4, headerRow: 1,
+      confirmedBy: LEAD, confirmedAt: new Date(), confidence: '1.0000',
+      rawGrid: [
+        ['תאריך', 'פירוט', 'הוצאות', 'הכנסות'],
+        ['05/07/2026', 'תשלום גנרטור', '4200', ''],
+        ['', 'סה"כ', '4200', ''],
+      ],
+    });
+    await db.update(blockMappings).set({
+      source: 'admin',
+      columnMap: [
+        { column: 1, field: 'date', confidence: 1 },
+        { column: 2, field: 'description', confidence: 1 },
+        { column: 3, field: 'outflow', confidence: 1 },
+        { column: 4, field: 'inflow', confidence: 1 },
+      ],
+    });
+
+    const dry = await promoteUpload(db, upload.id, { dryRun: true, recordedBy: LEAD });
+    const counts = summarise(dry);
+    expect(counts.blocks).toBe(1);
+    expect(counts.written).toBe(1);
+    expect(counts.refused).toBe(1);
+    expect(await promotedRowCounts(db)).toEqual(new Map());
+  });
+
+  it('skips a block nobody has confirmed rather than reporting it refused', async () => {
+    const upload = await makeUpload(db, 'x.xlsx', 'l');
+    const sheet = await makeSheet(db, upload.id, 'א');
+    await makeBlock(db, sheet.id);
+
+    expect(await promoteUpload(db, upload.id, { dryRun: true, recordedBy: LEAD }))
+      .toEqual([]);
+  });
+
+  it('never reaches another file’s blocks', async () => {
+    const mine = await makeUpload(db, 'שלי.xlsx', 'm');
+    const theirs = await makeUpload(db, 'שלהם.xlsx', 'n');
+    const mySheet = await makeSheet(db, mine.id, 'א');
+    const theirSheet = await makeSheet(db, theirs.id, 'ב');
+    await makeBlock(db, mySheet.id, {
+      confirmedBy: LEAD, confirmedAt: new Date(), confidence: '1.0000',
+    });
+    await makeBlock(db, theirSheet.id, {
+      confirmedBy: LEAD, confirmedAt: new Date(), confidence: '1.0000',
+    });
+
+    const results = await promoteUpload(db, mine.id, { dryRun: true, recordedBy: LEAD });
+    const mineBlocks = await blockStates(db, mine.id);
+    expect(results).toHaveLength(1);
+    expect(results[0].blockId).toBe(mineBlocks[0].blockId);
   });
 });

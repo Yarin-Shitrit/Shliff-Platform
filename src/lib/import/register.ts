@@ -9,6 +9,8 @@ import {
   type BudgetCategory,
 } from '@/db/schema/money';
 import { sheetEligibility, type SheetState } from '@/lib/import/sheets';
+import { promoteBlock } from '@/lib/import/promote/promote';
+import type { PromotionResult } from '@/lib/import/promote/types';
 import { colLabel } from '@/lib/xlsx/col-label';
 
 /** The four archetypes Wave 2's promoter dispatches on (W6). The rest are
@@ -237,4 +239,44 @@ export async function blockStates(
       };
     })
     .sort((a, b) => a.sheetName.localeCompare(b.sheetName, 'he') || a.top - b.top);
+}
+
+/**
+ * Promotes one upload's eligible blocks, in turn.
+ *
+ * **This screen promotes one file, never the database.** Wave 2's
+ * `promoteAll` (W15) is the right call for לטיפול, where bulk promotion
+ * belongs per D2 — but on a file's own review it would silently write another
+ * file's blocks, and a lead pressing "קידום 3 טבלאות מאושרות" beside a
+ * filename has consented to three tables in that file. Integration A23 is the
+ * sharper version of the same point: re-promoting one known block doubles
+ * ברן 26's budget, unrepairably, so nothing outside לטיפול may reach for a
+ * whole-database promotion. `promoteUpload` is composition only — it calls
+ * `promoteBlock` and touches nothing under `src/lib/import/promote/`.
+ *
+ * Sequential rather than `Promise.all`: each `promoteBlock` opens its own
+ * transaction, and a burst of concurrent transactions on one connection is
+ * not a shape this pipeline has ever been built for. A file holds a dozen
+ * blocks; the ordering costs nothing and the failure mode it avoids is the
+ * expensive kind.
+ *
+ * The blocks it acts on are those in state `confirmed` or `promoted` —
+ * confirmed because they are ready, already-promoted because W4 and W5 make a
+ * re-run the way a lead fixes a column map. The rest are skipped:
+ * `promoteBlock` would refuse each of them anyway, and calling it only to
+ * collect a refusal turns a clean "3 tables" into a report about eight.
+ */
+export async function promoteUpload(
+  db: AnyDb, uploadId: string, opts: { dryRun: boolean; recordedBy: string },
+): Promise<PromotionResult[]> {
+  const states = await blockStates(db, uploadId);
+  const eligible = states.filter(
+    (b) => b.state === 'confirmed' || b.state === 'promoted',
+  );
+
+  const results: PromotionResult[] = [];
+  for (const block of eligible) {
+    results.push(await promoteBlock(db, block.blockId, opts));
+  }
+  return results;
 }
