@@ -40,10 +40,39 @@
  *     check is the only thing standing between the lead and a task silently
  *     pointing at nothing.
  *  5. Both totals are asserted at the end, inside the transaction: ברן 25's
- *     `dancefloor` budget must still be 89,060.00 counted ONCE, and its `camp`
- *     budget must be unchanged at 59,587.00. Either one moving rolls everything
- *     back — a moved total is the signature of a double count or of a row
- *     landing in the wrong budget.
+ *     `dancefloor` budget must land on exactly 93,370.00 and its `camp` budget
+ *     must be unchanged at 59,587.00. Either one moving off its target rolls
+ *     everything back — a wrong total is the signature of a double count, of a
+ *     row landing in the wrong budget, or of the junk row surviving.
+ *
+ * ## Why 93,370 and not 89,060 — the lead's ruling, 2026-09-19
+ *
+ * The first rehearsal of this script refused, correctly, against an earlier
+ * target of 89,060.00 — the four seeded rows' total. The block promotes eleven
+ * rows, not four, and the seven that replace nothing are two different things:
+ *
+ *  - **r7-r12, six real dancefloor expenses worth 4,310.00** that the seed never
+ *    captured (שידאפו 1,440, בדים 570, פנסי שטיפה 800, שתייה קלה 140, אלכוהול
+ *    אומנים 950, גיפטינג אומנים 410). The lead ruled for the workbook's own
+ *    figure: the sheet records them and nobody had transcribed them, so the
+ *    dancefloor's budget is 89,060 + 4,310 = **93,370.00**.
+ *  - **r20 `צפי להחזרי מע״מ` 5,550.00, which is junk** — the head of the
+ *    VAT-reclaim sub-table that this block's bottom bound swept in. An
+ *    expectation of a refund is not dancefloor spend. It is deleted, not kept.
+ *
+ * `JUNK` below handles r20 exactly as `cutover.ts`'s own `JUNK` list handles the
+ * two bound-overrun rows of `66ad3b61`: **promoted first, then deleted in the
+ * same transaction**, gated on `(source_block_id, source_row)` plus label plus
+ * amount to the agora. Filtering it out before promotion would be easier and
+ * worse — the promoter has no per-row veto (`confirmBlock` takes an archetype, a
+ * column map and a budget category, and block bounds are not editable anywhere),
+ * so a run that never promotes the row proves nothing about what the promoter
+ * will write the next time a lead confirms this block from the UI. Promoting and
+ * then deleting keeps the gate meaningful and the promoter's output honest.
+ *
+ * That also means **r20 comes back on every re-promotion of this block** and has
+ * to be deleted again. It is a standing consequence of defect 3, not something
+ * this script closes.
  *
  * ## What it does NOT do
  *
@@ -127,9 +156,44 @@ const SEEDED: readonly SeededLine[] = [
   { id: '2f8b932f-08d6-47cb-80d2-aca95d2b581f', label: 'הובלה', amount: '4000.00', expectedRow: 6 },
 ];
 
-/** ברן 25's dancefloor budget, counted once. Unchanged by this operation or it
- *  rolls back. */
-const EXPECTED_DANCEFLOOR = '89060.00';
+/**
+ * Rows this block promotes that are not budget lines at all: promoted because
+ * the promoter has no per-row veto, then deleted in the same transaction.
+ *
+ * Enumerated, with the label and the amount a reviewer read off the row, so
+ * that a block whose rows have shifted cannot have a different row deleted
+ * under this entry's name.
+ */
+interface JunkRow {
+  sourceRow: number;
+  label: string;
+  amount: string;
+  why: string;
+}
+
+const JUNK: readonly JunkRow[] = [
+  {
+    sourceRow: 20,
+    label: 'צפי להחזרי מע״מ',
+    amount: '5550.00',
+    why: 'the head of the VAT-reclaim sub-table this block\'s bottom bound swept in — '
+      + 'an expectation of a refund, not dancefloor spend. Its own sub-table\'s rows are '
+      + 'r21-r25, which refuse `no-label` because the amount is in c2 and the label in c3.',
+  },
+];
+
+/** ברן 25's dancefloor budget BEFORE the run: the four seeded rows, and nothing
+ *  else in that category. A different figure here means this script was written
+ *  against a different database state. */
+const DANCEFLOOR_BEFORE = '89060.00';
+
+/**
+ * ברן 25's dancefloor budget AFTER the run, per the lead's ruling of
+ * 2026-09-19: the four replacements counted once (89,060.00) plus the six real
+ * expenses at r7-r12 (4,310.00) that the seed never captured. The junk row at
+ * r20 is promoted and then deleted, so its 5,550.00 is not in this figure.
+ */
+const DANCEFLOOR_AFTER = '93370.00';
 
 /** ברן 25's camp budget. This operation must not touch it: every row this
  *  block produces belongs to the dancefloor, so a camp total that moves means a
@@ -321,6 +385,45 @@ function mapReplacements(
   return { mapped, problems };
 }
 
+/**
+ * Locates each junk row by the promoter's own key and checks it against BOTH
+ * the label and the amount the evidence recorded — exactly as a replacement is
+ * checked, and for the same reason: the row itself is what gets deleted.
+ *
+ * `cutover.ts`'s `verifyJunk` in miniature. A block whose rows have moved
+ * produces a mismatch here rather than a quiet deletion of whatever now sits at
+ * r20.
+ */
+function verifyJunk(
+  junk: readonly JunkRow[], promoted: BudgetRow[],
+): { rows: BudgetRow[]; problems: string[] } {
+  const rows: BudgetRow[] = [];
+  const problems: string[] = [];
+
+  for (const entry of junk) {
+    const candidates = promoted.filter((row) => row.sourceRow === entry.sourceRow);
+    if (candidates.length !== 1) {
+      problems.push(`${candidates.length} promoted rows at r${entry.sourceRow}; expected `
+        + `exactly the junk row "${entry.label}"`);
+      continue;
+    }
+    const [row] = candidates;
+    if (!sameLabel(row.label, entry.label)) {
+      problems.push(`r${entry.sourceRow} reads "${row.label}", not "${entry.label}" — the `
+        + 'block\'s rows have moved, so this is not the junk row');
+      continue;
+    }
+    if (!sameMoney(row.total, entry.amount)) {
+      problems.push(`r${entry.sourceRow} ("${entry.label}") holds ${row.total}, not `
+        + `${entry.amount} — a row with a different number is not the row that was reviewed`);
+      continue;
+    }
+    rows.push(row);
+  }
+
+  return { rows, problems };
+}
+
 // ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
@@ -459,9 +562,9 @@ async function main(): Promise<void> {
       say(`${SEASON_NAME} camp:       ${formatILS(campBefore.agorot)} `
         + `over ${campBefore.rows} rows`);
       say();
-      if (dancefloorBefore.agorot !== toAgorot(EXPECTED_DANCEFLOOR)) {
+      if (dancefloorBefore.agorot !== toAgorot(DANCEFLOOR_BEFORE)) {
         throw new Refusal(`${SEASON_NAME}'s dancefloor budget is `
-          + `${formatILS(dancefloorBefore.agorot)}, not ${EXPECTED_DANCEFLOOR}, before this run `
+          + `${formatILS(dancefloorBefore.agorot)}, not ${DANCEFLOOR_BEFORE}, before this run `
           + 'even starts. This script was written against a different database state.');
       }
       if (campBefore.agorot !== toAgorot(EXPECTED_CAMP)) {
@@ -565,13 +668,30 @@ async function main(): Promise<void> {
       for (const problem of problems) say(`  !!  ${problem}`);
       say();
 
-      // Rows this block promotes that replace nothing. Not a refusal in
-      // itself — six of them are the dancefloor's own expenses, which the seed
-      // never held — but they are what moves the dancefloor total, so they are
-      // named here in full rather than left to be inferred from the arithmetic.
+      // The junk row, located and checked before anything is deleted. Kept
+      // separate from the "new rows" below so the dancefloor total decomposes
+      // into three named parts rather than one residual.
+      say('## Junk this block promotes, identified and removed');
+      say();
+      const { rows: junkRows, problems: junkProblems } = verifyJunk(JUNK, promoted);
+      for (const row of junkRows) {
+        const entry = JUNK.find((candidate) => candidate.sourceRow === row.sourceRow);
+        say(`  ok  r${row.sourceRow}  ${row.label}  ${row.total}  ${row.id}`);
+        say(`      ${entry?.why ?? ''}`);
+      }
+      for (const problem of junkProblems) say(`  !!  ${problem}`);
+      if (JUNK.length === 0) say('  (none enumerated)');
+      say();
+
+      // Rows this block promotes that replace nothing and are not junk: the six
+      // real dancefloor expenses the seed never captured. They are what takes
+      // the dancefloor total from 89,060 to 93,370, so they are named here in
+      // full rather than left to be inferred from the arithmetic.
       const replacements = new Set(mapped.map((pair) => pair.promoted.id));
-      const newRows = promoted.filter((row) => !replacements.has(row.id));
-      say(`rows this block promotes that replace no seeded row: ${newRows.length}`);
+      const junkIds = new Set(junkRows.map((row) => row.id));
+      const newRows = promoted.filter((row) => !replacements.has(row.id)
+        && !junkIds.has(row.id));
+      say(`rows this block promotes that replace no seeded row and are kept: ${newRows.length}`);
       for (const row of [...newRows].sort((a, b) => (a.sourceRow ?? 0) - (b.sourceRow ?? 0))) {
         say(`  r${String(row.sourceRow).padStart(2)}  ${row.total.padStart(10)}  ${row.label}`);
       }
@@ -587,6 +707,14 @@ async function main(): Promise<void> {
       }
       if (mapped.length !== SEEDED.length) {
         throw new Refusal(`mapped ${mapped.length} of ${SEEDED.length} seeded rows`);
+      }
+      if (junkProblems.length > 0) {
+        throw new Refusal(`${junkProblems.length} of the ${JUNK.length} enumerated junk rows is `
+          + 'not the row that was reviewed. Deleting whatever now sits at that source row '
+          + 'would be deleting something nobody has looked at, so the whole run rolls back.');
+      }
+      if (junkRows.length !== JUNK.length) {
+        throw new Refusal(`located ${junkRows.length} of ${JUNK.length} junk rows`);
       }
 
       // -- 6. Move the task references, before their rows are deleted --------
@@ -625,11 +753,33 @@ async function main(): Promise<void> {
       const deleted = await tx.delete(budgetLines)
         .where(inArray(budgetLines.id, ids))
         .returning();
-      for (const row of deleted) say(`  deleted  ${row.id}  ${row.label}  ${row.total}`);
+      for (const row of deleted) say(`  seeded  ${row.id}  ${row.label}  ${row.total}`);
       say();
       if (deleted.length !== ids.length) {
         throw new Refusal(`expected to delete ${ids.length} seeded rows, deleted `
           + `${deleted.length}`);
+      }
+
+      // The junk row goes in the SAME transaction, after its gate passed above.
+      // Nothing may reference it: it was written seconds ago, but a task pointed
+      // at a row about to be deleted is the exact hazard this script exists for,
+      // so it is checked rather than assumed.
+      const junkReferenced = (await readTaskRefs(tx)).filter(
+        (task) => task.budgetLineId !== null && junkIds.has(task.budgetLineId),
+      );
+      if (junkReferenced.length > 0) {
+        throw new Refusal(`${junkReferenced.length} tasks reference a row this run is about to `
+          + 'delete as junk. Deleting it would leave those references pointing at nothing, and '
+          + 'no foreign key would stop it.');
+      }
+      const junkDeleted = await tx.delete(budgetLines)
+        .where(inArray(budgetLines.id, [...junkIds]))
+        .returning();
+      for (const row of junkDeleted) say(`  junk    ${row.id}  ${row.label}  ${row.total}`);
+      say();
+      if (junkDeleted.length !== junkIds.size) {
+        throw new Refusal(`expected to delete ${junkIds.size} junk rows, deleted `
+          + `${junkDeleted.length}`);
       }
 
       // -- 8. The check no foreign key performs -----------------------------
@@ -637,7 +787,12 @@ async function main(): Promise<void> {
       say();
       const refsAfter = await readTaskRefs(tx);
       const expectedRef = new Map(mapped.map((pair) => [pair.seeded.id, pair.promoted.id]));
-      const promotedIds = new Set(promoted.map((row) => row.id));
+      // The rows that SURVIVE this transaction: promoted, minus the junk just
+      // deleted. A task reading "ok" against a row that has been deleted would
+      // be exactly the false reassurance this section exists to prevent.
+      const promotedIds = new Set(promoted
+        .filter((row) => !junkIds.has(row.id))
+        .map((row) => row.id));
       for (const task of refsAfter) {
         const ok = task.budgetLineId !== null && promotedIds.has(task.budgetLineId);
         say(`  ${ok ? 'ok' : '!!'}  ${task.id}  "${task.title}"  -> ${task.budgetLineId}`);
@@ -674,9 +829,11 @@ async function main(): Promise<void> {
       say();
       say('the dancefloor total, decomposed:');
       const replacedAgorot = mapped.reduce((sum, pair) => sum + toAgorot(pair.promoted.total), 0);
-      say(`  the four replacements:        ${formatILS(replacedAgorot)}`);
-      say(`  rows replacing nothing:       ${formatILS(newAgorot)}`);
-      say(`  together:                     ${formatILS(replacedAgorot + newAgorot)}`);
+      const junkAgorot = junkRows.reduce((sum, row) => sum + toAgorot(row.total), 0);
+      say(`  the ${mapped.length} replacements:           ${formatILS(replacedAgorot)}`);
+      say(`  new rows kept (r7-r12):       ${formatILS(newAgorot)}`);
+      say(`  junk promoted then deleted:   ${formatILS(junkAgorot)} (not in the total)`);
+      say(`  target:                       ${formatILS(replacedAgorot + newAgorot)}`);
       say();
 
       if (campAfter.agorot !== toAgorot(EXPECTED_CAMP)) {
@@ -685,15 +842,14 @@ async function main(): Promise<void> {
           + 'dancefloor, so a camp total that moves means a row landed in the wrong budget. '
           + 'Rolling back.');
       }
-      if (dancefloorAfter.agorot !== toAgorot(EXPECTED_DANCEFLOOR)) {
-        throw new Refusal(`${SEASON_NAME}'s dancefloor budget moved from `
-          + `${EXPECTED_DANCEFLOOR} to ${formatILS(dancefloorAfter.agorot)}. The four seeded `
-          + `rows are replaced exactly (${formatILS(replacedAgorot)}, counted once, not `
-          + `${formatILS(replacedAgorot * 2)}), but this block also promotes ${newRows.length} `
-          + `rows that replace nothing, worth ${formatILS(newAgorot)} — see the list above. `
-          + 'R49 says the dancefloor total must be unchanged, so this run refuses: whether '
-          + 'those rows belong in the dancefloor budget is the lead\'s decision, not this '
-          + 'script\'s. Rolling back.');
+      if (dancefloorAfter.agorot !== toAgorot(DANCEFLOOR_AFTER)) {
+        throw new Refusal(`${SEASON_NAME}'s dancefloor budget is `
+          + `${formatILS(dancefloorAfter.agorot)}, not the ${DANCEFLOOR_AFTER} the lead ruled `
+          + `for. The ${mapped.length} replacements are ${formatILS(replacedAgorot)}, counted `
+          + `once and not ${formatILS(replacedAgorot * 2)}; the rows kept beside them are `
+          + `${formatILS(newAgorot)}; the junk deleted is ${formatILS(junkAgorot)}. A total `
+          + 'that does not land on the target means a row was double counted, landed in the '
+          + 'wrong budget, or was not the row this script thought it was. Rolling back.');
       }
 
       if (!commit) throw new DryRunRollback();
