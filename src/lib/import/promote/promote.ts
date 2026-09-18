@@ -19,7 +19,7 @@ import { budgetRow } from './budget';
 import { ticketRow } from './tickets';
 import { obligationRow } from './obligations';
 import type {
-  PromotionResult, PromotedRow, Refusal, RetainedRow, PromoteContext,
+  PromotionResult, PromotedRow, Refusal, RetainedRow, PromoteContext, SkippedBlock,
 } from './types';
 
 type TargetTable = PromotedRow['table'];
@@ -66,6 +66,10 @@ const MESSAGES = {
    *  system is built. */
   alreadyPromoted: 'לבלוק הזה כבר יש שורות בטבלה, וקידום חוזר עלול לשכפל אותן — '
     + 'עדכון של שורות קיימות נעשה בתהליך נפרד ומבוקר, לא דרך הכפתור הזה',
+  /** `promoteBlock`'s skip reason for a block whose sheet is retired (R43).
+   *  Says plainly that nothing was touched — a lead reading this must not
+   *  come away thinking rows the sheet already produced were removed. */
+  retired: 'הגיליון הזה סומן כהיסטוריה וקידומו מדולג — שורות שכבר נכתבו ממנו נשארות בדיוק כפי שהן',
 } as const;
 
 function hasPromoter(a: BlockArchetype): a is PromotableArchetype {
@@ -370,6 +374,13 @@ async function runInTransaction<T>(
   return (db as Db).transaction((tx) => fn(tx as unknown as AnyDb));
 }
 
+/**
+ * Deliberately unchanged in shape by this task (R43 adds a skip, not a field
+ * here): `scripts/cutover.ts`'s `promoteScoped` builds one of these by hand,
+ * independently of `promoteAll`, and is out of scope for this task to touch.
+ * The skip-reporting fields a bulk run needs now live on `SkippingBulkResult`
+ * below, which extends this rather than widening it in place.
+ */
 export interface BulkResult {
   results: PromotionResult[];
   writtenCount: number;
@@ -395,10 +406,40 @@ export interface BulkResult {
 }
 
 /**
+ * `BulkResult` plus the confirmed blocks this run skipped rather than
+ * promoted, and why (see `SkippedBlock`). Both `promoteAll` and
+ * `promoteAllGated` return this now: a retired sheet's blocks (R43) can be
+ * skipped by either one, bubbled straight up from `promoteBlock`;
+ * `promoteAllGated` additionally skips an already-owns-rows block, via its
+ * own gate, before `promoteBlock` is ever called for it.
+ */
+export interface SkippingBulkResult extends BulkResult {
+  skipped: SkippedBlock[];
+  /** `skipped.length`, for a caller that only wants the count — symmetric
+   *  with `failedCount`. */
+  skippedCount: number;
+}
+
+/** The name `promoteAllGated`'s existing callers already import (e.g.
+ *  `src/app/(admin)/data/actions.ts`) — kept as an alias rather than
+ *  renamed, so that import does not have to change. */
+export type GatedPromoteResult = SkippingBulkResult;
+
+/** Routes a `promoteBlock` outcome into `results` or `skipped`, sharing the
+ *  same one-line branch `promoteAll` and `promoteAllGated` both need. */
+function collect(
+  outcome: PromotionResult, results: PromotionResult[], skipped: SkippedBlock[],
+): void {
+  if (outcome.skip) skipped.push(outcome.skip); else results.push(outcome);
+}
+
+/**
  * Promotes every confirmed block, in a stable order (`sheets.name`, then
  * `blocks.top`) so two runs produce comparable output. Refusals are kept in
  * `results`: the register is a list of what could not be settled, so a
- * refused block is the point, not noise.
+ * refused block is the point, not noise. A block whose sheet is retired is
+ * neither promoted nor refused — it is skipped and reported in `skipped`
+ * (R43); see `promoteWithin` for why a refusal would have been wrong there.
  *
  * The whole run is ONE outer transaction. Each `promoteBlock` call nests
  * inside it as a savepoint — both drivers support this (drizzle's PGlite
@@ -410,13 +451,15 @@ export interface BulkResult {
  * complete `BulkResult` and always persists whatever succeeded — a lead can
  * tell "18 of 20 promoted, block 19 failed, block 20 was fine" from the
  * result, rather than the caller seeing nothing at all because one block
- * out of many hit a bug. `promoteBlock` itself is unchanged for callers
- * that promote a single block directly: it still opens its own top-level
- * transaction and still throws on a genuine database error.
+ * out of many hit a bug. `promoteBlock`'s own return type is unchanged for
+ * callers that promote a single block directly: it still opens its own
+ * top-level transaction, still throws on a genuine database error, and still
+ * returns a `PromotionResult` — a retired sheet's block sets that result's
+ * optional `skip` field rather than changing its shape (see `promoteWithin`).
  */
 export async function promoteAll(
   db: AnyDb, opts: { dryRun: boolean; recordedBy: string },
-): Promise<BulkResult> {
+): Promise<SkippingBulkResult> {
   return runInTransaction(db, async (tx) => {
     const confirmed = await tx.select({ id: blocks.id })
       .from(blocks)
@@ -425,6 +468,7 @@ export async function promoteAll(
       .orderBy(sheets.name, blocks.top);
 
     const results: PromotionResult[] = [];
+    const skipped: SkippedBlock[] = [];
     const failures: { blockId: string; message: string }[] = [];
     for (const { id } of confirmed) {
       try {
@@ -432,7 +476,7 @@ export async function promoteAll(
         // failure, roll back to its own savepoint) before the next one
         // starts. Running them concurrently would interleave writes and
         // sweeps against the same shared transaction.
-        results.push(await promoteBlock(tx, id, opts));
+        collect(await promoteBlock(tx, id, opts), results, skipped);
       } catch (error) {
         failures.push({
           blockId: id,
@@ -449,6 +493,8 @@ export async function promoteAll(
       retainedCount: results.reduce((n, r) => n + r.retained.length, 0),
       failures,
       failedCount: failures.length,
+      skipped,
+      skippedCount: skipped.length,
     };
   });
 }
@@ -456,30 +502,6 @@ export async function promoteAll(
 // ---------------------------------------------------------------------------
 // promoteAllGated
 // ---------------------------------------------------------------------------
-
-/** A confirmed block `promoteAllGated` did not promote this run, and why. */
-export interface SkippedBlock {
-  blockId: string;
-  /** Machine-readable, so a caller can branch without string-matching the
-   *  Hebrew `reason` — today there is exactly one reason a block is
-   *  skipped, but the field names what kind of skip this is rather than
-   *  leaving "skipped" to mean only one thing forever. */
-  code: 'already-promoted';
-  /** How many rows `promotedRowCounts` found for this block — the same
-   *  number that decided the skip, not recomputed. */
-  rowCount: number;
-  /** Hebrew, shown to a lead in the register. */
-  reason: string;
-}
-
-/** `BulkResult` plus the confirmed blocks a gated run skipped rather than
- *  promoted. */
-export interface GatedPromoteResult extends BulkResult {
-  skipped: SkippedBlock[];
-  /** `skipped.length`, for a caller that only wants the count — symmetric
-   *  with `failedCount`. */
-  skippedCount: number;
-}
 
 /**
  * `promoteAll`, but a confirmed block that already owns rows in one of the
@@ -546,7 +568,7 @@ export async function promoteAllGated(
       // Sequential, as `promoteAll` and `promoteScoped` both are: each
       // block finishes — or rolls back its own transaction — before the
       // next one starts.
-      results.push(await promoteBlock(db, id, opts));
+      collect(await promoteBlock(db, id, opts), results, skipped);
     } catch (error) {
       failures.push({
         blockId: id,
@@ -569,7 +591,8 @@ export async function promoteAllGated(
 }
 
 /**
- * Turns one confirmed block into domain rows, or says why not.
+ * Turns one confirmed block into domain rows, or says why not — or, if its
+ * sheet is retired, skips it (R43; see the retirement check below).
  *
  * All of it — the writes, the name queue, the W5 sweep — runs in one
  * transaction: a row that fails in the database leaves the block exactly as
@@ -588,6 +611,42 @@ async function promoteWithin(
   if (!block) throw new Error(`unknown block ${blockId}`);
 
   const base = { blockId, archetype: block.archetype, dryRun: opts.dryRun };
+
+  // Fetched once, up front, rather than where the old code fetched it
+  // (after the eligibility check, for `ctx.seasonId` alone) — the retirement
+  // check below needs it before anything else runs.
+  const [sheet] = await db.select().from(sheets).where(eq(sheets.id, block.sheetId));
+  // Every block belongs to a sheet via a NOT NULL foreign key; a missing row
+  // here is a broken database, not a state to promote through.
+  if (!sheet) throw new Error(`unknown sheet ${block.sheetId}`);
+
+  // R43: a retired sheet's blocks are SKIPPED, never refused — checked
+  // before every other rejection reason, including `confirmedAt`, so a
+  // retired block never reaches `reject()` below by any path. A whole-block
+  // refusal runs the W5 sweep with an empty produced set (see `reject`),
+  // which deletes whatever the block wrote before — that is correct for an
+  // actual refusal (W13/W14: releasing a superseded copy's rows), but
+  // retiring a sheet is not a refusal. It means "this is history, stop
+  // asking me", and a lead can retire a sheet whose blocks were promoted
+  // long ago. If retirement ran through `reject()`, retiring that sheet
+  // would silently delete real money rows the moment anyone next pressed
+  // promote. So this returns before `reject` exists as an option: `written`,
+  // `refused`, `deleted`, and `retained` all stay at their empty/zero
+  // defaults, and the only thing set is `skip` — the same shape
+  // `promoteAllGated` already reports for an already-promoted block.
+  if (sheet.retiredAt !== null) {
+    const owned = await promotedRowCounts(db, [blockId]);
+    return {
+      ...base,
+      written: [],
+      refused: [],
+      deleted: 0,
+      retained: [],
+      skip: {
+        blockId, code: 'sheet-retired', rowCount: owned.get(blockId) ?? 0, reason: MESSAGES.retired,
+      },
+    };
+  }
 
   // A block refused as a whole produces nothing, so it keeps nothing: rows
   // it wrote while it was eligible go too. Otherwise moving authority to the
@@ -616,7 +675,6 @@ async function promoteWithin(
       MESSAGES.sheet[eligibility.state]));
   }
 
-  const [sheet] = await db.select().from(sheets).where(eq(sheets.id, block.sheetId));
   const [mapping] = await db.select().from(blockMappings)
     .where(eq(blockMappings.blockId, blockId));
   if (!mapping) {
@@ -624,7 +682,8 @@ async function promoteWithin(
   }
 
   const ctx: PromoteContext = {
-    seasonId: sheet?.seasonId ?? null,
+    // `sheet` is guaranteed non-null above; the column itself is nullable.
+    seasonId: sheet.seasonId,
     recordedBy: opts.recordedBy,
     blockId,
     // Only meaningful to budgetRow; every other branch ignores it.

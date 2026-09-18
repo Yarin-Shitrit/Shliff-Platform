@@ -15,7 +15,7 @@ import { listBudgetLines, budgetTotalAgorot } from '@/lib/money/budget';
 import { listObligations, createObligation, settleObligation } from '@/lib/money/obligations';
 import { createTask } from '@/lib/work/tasks';
 import { listUnlinkedNames } from '@/lib/members/identity';
-import { setSheetSeason, setSheetAuthority } from '@/lib/import/sheets';
+import { setSheetSeason, setSheetAuthority, retireSheet } from '@/lib/import/sheets';
 import { applyConfirmation } from '@/lib/import/confirm';
 import type { ColumnMapping } from '@/lib/classify/map-columns';
 import type { BlockArchetype } from '@/lib/classify/types';
@@ -1358,5 +1358,73 @@ describe('promoteAllGated', () => {
       .where(eq(ledgerEntries.sourceBlockId, owning))
       .orderBy(asc(ledgerEntries.sourceRow));
     expect(after).toEqual(before);
+  });
+
+  it('skips a retired sheet\'s blocks and reports them, without touching anything', async () => {
+    const blockId = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
+    await retireSheet(db, sheetId, 'lead@shliff.test');
+
+    const result = await promoteAllGated(db, { dryRun: false, recordedBy: 'lead@shliff.test' });
+
+    expect(result.results).toEqual([]);
+    expect(result.writtenCount).toBe(0);
+    expect(result.skipped).toEqual([{
+      blockId, code: 'sheet-retired', rowCount: 0, reason: expect.any(String),
+    }]);
+    expect(result.skipped[0].reason).toMatch(/[֐-׿]/);
+    expect(await db.select().from(ledgerEntries)).toHaveLength(0);
+  });
+});
+
+describe('promoteBlock — a retired sheet is skipped, never refused', () => {
+  it('writes nothing, refuses nothing, and deletes nothing for a block on a retired sheet', async () => {
+    const blockId = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
+    await retireSheet(db, sheetId, 'lead@shliff.test');
+
+    const result = await promoteBlock(db, blockId, LEAD);
+
+    expect(result.written).toEqual([]);
+    expect(result.refused).toEqual([]);
+    expect(result.deleted).toBe(0);
+    expect(result.retained).toEqual([]);
+    expect(result.skip).toBeDefined();
+    expect(result.skip?.code).toBe('sheet-retired');
+    expect(result.skip?.blockId).toBe(blockId);
+    expect(result.skip?.reason.length).toBeGreaterThan(0);
+    expect(await db.select().from(ledgerEntries)).toHaveLength(0);
+  });
+
+  /**
+   * The load-bearing test (R43): a whole-block refusal runs the W5 sweep
+   * with an empty produced set, deleting whatever the block wrote before —
+   * see `promoteBlock — a refused block releases its rows` above. If
+   * retirement were modelled as a refusal instead of a skip, retiring a
+   * sheet whose blocks had already promoted would silently delete real
+   * money rows. It must not: the rows a block wrote before its sheet was
+   * retired stay exactly as they were, byte for byte, after retiring and
+   * promoting again.
+   */
+  it('promote, then retire the sheet, then promote again — the rows already written survive untouched', async () => {
+    const blockId = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
+    const first = await promoteBlock(db, blockId, LEAD);
+    expect(first.skip).toBeUndefined();
+    expect(first.written).toHaveLength(2);
+
+    const before = await db.select().from(ledgerEntries).orderBy(asc(ledgerEntries.sourceRow));
+    expect(before).toHaveLength(2);
+
+    await retireSheet(db, sheetId, 'lead@shliff.test');
+    const second = await promoteBlock(db, blockId, LEAD);
+    expect(second.skip?.code).toBe('sheet-retired');
+    expect(second.written).toEqual([]);
+    expect(second.deleted).toBe(0);
+    expect(second.retained).toEqual([]);
+
+    // Read the rows back and compare every stored column, not just a count —
+    // exactly the assertion the brief calls for.
+    const after = await db.select().from(ledgerEntries).orderBy(asc(ledgerEntries.sourceRow));
+    expect(after).toEqual(before);
+    expect(after.map((r) => r.description)).toEqual(['מקדמה מייצג', 'מסיבת פקאנים']);
+    expect(after.map((r) => r.amount)).toEqual(['4000.00', '57000.00']);
   });
 });
