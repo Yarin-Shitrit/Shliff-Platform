@@ -452,11 +452,13 @@ describe('MoneyPage', () => {
         id: 'm1', source: 'ledger', occurredOn: new Date('2026-01-05'), direction: 'in',
         amountAgorot: 70000, description: 'תרומה', accountId: 'a1', accountName: 'קופה',
         seasonId: 's1', eventId: null, transferGroupId: null,
+        sourceBlockId: null, sourceRow: null,
       },
       {
         id: 'm2', source: 'ledger', occurredOn: new Date('2026-01-06'), direction: 'out',
         amountAgorot: 30000, description: 'ציוד', accountId: null, accountName: null,
         seasonId: 's1', eventId: null, transferGroupId: null,
+        sourceBlockId: null, sourceRow: null,
       },
     ];
     listMovements.mockResolvedValue(moves);
@@ -494,11 +496,13 @@ describe('MoneyPage', () => {
         id: 'm1', source: 'ledger', occurredOn: new Date('2026-01-05'), direction: 'in',
         amountAgorot: 70000, description: 'תרומה', accountId: 'a1', accountName: 'קופה',
         seasonId: 's1', eventId: null, transferGroupId: null,
+        sourceBlockId: null, sourceRow: null,
       },
       {
         id: 'm2', source: 'ledger', occurredOn: new Date('2026-01-06'), direction: 'out',
         amountAgorot: 30000, description: 'ציוד', accountId: null, accountName: null,
         seasonId: 's1', eventId: null, transferGroupId: null,
+        sourceBlockId: null, sourceRow: null,
       },
     ];
     listMovements.mockResolvedValue(moves);
