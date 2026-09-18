@@ -64,6 +64,60 @@ describe('every admin entry point calls requireAdmin', () => {
 });
 
 /**
+ * The check above asks whether the FILE mentions the guard. It cannot see an
+ * unguarded action beside a guarded one — a file with five entry points and one
+ * `requireAdmin(` passes it. Removing a single action's guard was tried and the
+ * suite stayed green, which makes it a net that cannot fail for the thing it
+ * claims: every admin entry point is guarded, not every file knows the word.
+ *
+ * So: each exported action carries its own assertion. A `'use server'` file has
+ * no private exports — every `export async function` in one is reachable by
+ * anybody who can POST to it, whatever the UI shows.
+ *
+ * Exemptions are named here with their reason rather than loosening the rule,
+ * because an unguarded entry point is either a defect or a decision, and the
+ * difference has to be written down by whoever made it.
+ */
+const GUARD_EXEMPT: Readonly<Record<string, string>> = {
+  // Requiring admin to sign out would strand a non-admin holding a session:
+  // they could neither use the app nor leave it. Sign-out ends a session and
+  // grants nothing, so it is safe for anyone who has one.
+  signOutAction: 'ends a session and grants nothing; a non-admin must be able to leave',
+};
+
+function exportedActions(source: string): Array<{ name: string; body: string }> {
+  // Split on the boundary rather than matching a body: a brace-counting parse
+  // would have to understand strings, comments and nested functions, and this
+  // only needs "the text belonging to this export".
+  return source
+    .split(/(?=^export async function )/m)
+    .map((part) => ({ match: part.match(/^export async function (\w+)/), body: part }))
+    .filter((x): x is { match: RegExpMatchArray; body: string } => x.match !== null)
+    .map((x) => ({ name: x.match[1], body: x.body }));
+}
+
+describe('every exported action calls requireAdmin, not just every file', () => {
+  const cases = guardedFiles.flatMap((file) =>
+    exportedActions(readFileSync(file, 'utf8'))
+      .map((action) => [`${relative(process.cwd(), file)} → ${action.name}`, action] as const),
+  );
+
+  // Without this, a regex that stopped matching would make every case below
+  // vacuously pass — the same hole this whole block exists to close.
+  it('found exported actions to check', () => {
+    expect(cases.length).toBeGreaterThan(10);
+  });
+
+  it.each(cases)('%s', (_label, action) => {
+    if (action.name in GUARD_EXEMPT) {
+      expect(GUARD_EXEMPT[action.name].length).toBeGreaterThan(20);
+      return;
+    }
+    expect(action.body).toContain('requireAdmin(');
+  });
+});
+
+/**
  * Ruling 1 of the promotion-blockers hardening pass: production code never
  * imports from `src/test/`. `src/test/` reads real files off disk (the
  * camp's actual workbooks, by way of `src/test/fixtures.ts`) and exists only
