@@ -1,0 +1,167 @@
+/* A10: logical properties throughout. Numeric columns take their physical
+ * right alignment from the global `.num` utility that `Table` composes. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.title {
+  margin-block: 0;
+  font-size: var(--text-title);
+  line-height: var(--leading-title);
+}
+
+.lead {
+  margin-block: 0;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+  max-inline-size: 48rem;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--space-3);
+  list-style: none;
+  margin-block: 0;
+  padding-inline-start: 0;
+}
+
+.views {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.viewLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: var(--control-h);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  color: var(--ink-2);
+  text-decoration: none;
+  font-size: var(--text-dense);
+}
+
+.viewLink[aria-pressed='true'] {
+  background: var(--selected);
+  border-color: var(--line-strong);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.viewCount {
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.direction {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.directionHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.directionTitle {
+  margin-block: 0;
+  font-size: var(--text-lead);
+}
+
+.directionSum {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.party {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: inherit;
+  text-decoration: none;
+}
+
+.party:hover {
+  text-decoration: underline;
+}
+
+/* The workbook did not say. Said in words, not left blank — an empty cell
+ * reads as a value nobody filled in, and this is a fact about the sheet. */
+.dateless {
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.progress {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.progressText {
+  font-size: var(--text-meta);
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.settle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.settleButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: var(--control-h);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-dense);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.settleButton:disabled {
+  color: var(--ink-4);
+  background: var(--sunken);
+  cursor: not-allowed;
+}
+
+.settleButton:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+/* Visible, not sr-only: the reason a control is dead belongs on the screen
+ * for everyone, not only for a screen reader. */
+.refusal {
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+  max-inline-size: 18rem;
+}
+
+.none {
+  color: var(--ink-4);
+}
