@@ -29,11 +29,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <ShellCountsProvider>
       <div className={styles.ground}>
+        {/*
+          E4. The first thing Tab reaches on every screen, before the rail's
+          fifteen links. It is first in the DOM because tab order follows the
+          DOM and nothing here uses a positive tabIndex to pretend otherwise.
+
+          It targets the panel rather than a `<main>` of its own: each page
+          renders its own `<main>` (that is where the landmark lives), so a
+          second one here would nest two landmarks inside each other. The panel
+          carries `tabIndex={-1}` because a skip link pointing at something
+          that cannot take focus scrolls the page and leaves the caret in the
+          rail — the next Tab carries on through the nav, which is the exact
+          failure the link exists to prevent, hidden behind a page that
+          appeared to do the right thing.
+        */}
+        <a className={styles.skip} href="#main">דילוג לתוכן</a>
         <SidebarFrame>
           <Sidebar />
         </SidebarFrame>
         <div className={styles.column}>
-          <div className={styles.main}>
+          <div className={styles.main} id="main" tabIndex={-1}>
             <ToastProvider>{children}</ToastProvider>
           </div>
           <TabBar />
