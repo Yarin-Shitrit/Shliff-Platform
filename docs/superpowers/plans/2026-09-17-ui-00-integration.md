@@ -926,3 +926,57 @@ platform's rule against guessing applies to arithmetic exactly as it applies to
 name matching: what cannot be resolved becomes a visible decision, not a silent
 one. Neither figure replaces the other; do not label either "actual" or
 "expected" as though the schema supported the distinction. It does not.
+
+### A25 — A13's gate command is incomplete, and two ways a lane's own tools lied
+
+**The command every plan's gate must use is now:**
+
+```
+npx vitest run --maxWorkers=4 --hookTimeout 60000 --testTimeout 60000 \
+  --reporter=json --outputFile=<unique path per run>
+```
+
+Three separate defects made the shorter form untrustworthy, all found on
+2026-09-18 while wave 2 ran four lanes concurrently.
+
+**1. `--hookTimeout` does not raise `testTimeout`.** `vitest.config.ts:8` sets
+`testTimeout: 20_000`; they are separate options. A suite that builds its PGlite
+database *inside the test body* rather than in a `beforeEach` blows the 20s test
+cap while every hook sits inside its raised 60s one. The symptom is
+`Test timed out in 20000ms` — **Test**, not Hook — so it does not match A13's
+stated phantom-failure signature and is a real timeout rather than a fabricated
+one. Load-conditional: measured at **28,913 ms** under four lanes, passing inside
+20s with two drained. The measurement to trust held concurrent load constant and
+varied only the timeout; a re-run under different load varies two things.
+
+**2. `.vitest/json/output.json` is one shared path.** Every concurrent lane
+overwrites it, so it reports whoever wrote last. Caught reporting `0 tests,
+success: false` for a run whose console said `3 passed` — the file was 42 minutes
+stale and held another lane's failed RED step. The false green is the dangerous
+direction: a peer's passing run read as your own lets a RED look GREEN and a
+commit land on code nobody watched pass. Every run needs its own `--outputFile`.
+Note the trap's shape: reading this file is the *correct* workaround for the rtk
+hook mangling vitest's console output, so the fix for one broken instrument lands
+squarely on a second one, and three separate agents reached for it independently.
+
+**3. `git rm` leaks into other lanes' commits at the staging step.** Two commits
+this wave swept another lane's deletions (`c8be2fd`, `4b1ff9a`). `git rm` stages
+the deletion immediately into the shared index, where any concurrent `git add -A`
+or bare `git commit` carries it off under a message describing neither change.
+**Deletions use plain `rm <path>` then `git commit -- <path>`.** Never `git rm`,
+and never `git add -A`, while another lane is running. Content always landed
+correctly; only the labels were wrong, and rewriting shared history under
+concurrent writers is worse than a mislabelled commit.
+
+**Plus a twelfth unfailable test, and the best-disguised one yet.** Plan 07's
+Task 6 asserted a delete confirmation by querying `getByRole('dialog')` — but the
+kit's `ConfirmDialog` is an `alertdialog`, and the `Drawer` behind it is the
+`dialog`. The query matched the drawer, whose own text already carries the
+amount, channel, date, name and every account option. **Every assertion passed
+against a build with no confirmation step at all.** Fixed in Tasks 6 and 7.
+
+### A26 — Kit gap: a totals row cannot be named
+
+`Table`'s `<tfoot>` has no accessible name, so a totals row cannot be queried or
+announced as `סיכום`. Reported by plan 07 rather than patched, since the kit is
+read-only to screen lanes. Decide it when a plan needs a named footer.
