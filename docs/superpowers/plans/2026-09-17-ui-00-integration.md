@@ -1037,3 +1037,39 @@ and asked for a second opinion: **affirmed** — a multi-select that closes on e
 pick is unusable, and the kit's rule is right for the menus it was written for.
 The kit should eventually take a dismissal policy rather than hard-coding one;
 until then, hand-rolling with the same keyboard and focus behaviour is correct.
+
+### A29 — The gate command, fourth and final correction
+
+```
+npx vitest run --maxWorkers=4 --hookTimeout 60000 --testTimeout 60000 \
+  --reporter=default --reporter=json --outputFile=<unique path per run>
+```
+
+**`--reporter=json` alone REPLACES the default reporter.** The run then loses the
+console summary *and* the `Unhandled Errors` block. On this machine the real
+failure mode is a worker `SIGKILL` under memory pressure — which is an unhandled
+error — so the process exits 1 while the JSON reports `numFailedTests: 0` and
+nothing on screen says why. One such run printed seven `Some tests are still
+running when generating the JSON report` warnings and claimed
+`total 1662, passed 1614, failed 0`: **48 tests unaccounted for.**
+
+**Always cross-check the exit code against the failure count. A non-zero exit
+with zero failed tests means workers died, not that the suite is green.**
+
+**And a killed worker's un-run tests are reported `pending`, not failed.** 32
+tests across four files came back skipped during the four-lane wave
+(`budget.test.ts` 17, `link.test.ts` 6, `roster.test.ts` 5, `worklist.test.ts`
+4); re-run alone they were 74/74 with zero pending, and **no `.skip` existed in
+any of the four files**. Verify that before believing a skip. This is the
+nastiest disguise of the four, because a failure demands investigation while a
+skip reads as somebody's deliberate choice — the suite stays green and the
+missing coverage is invisible.
+
+**Worth stating plainly: this command has now been wrong four times, and each
+fix introduced the next fault.** Uncapped workers fabricated ~110 hook timeouts →
+capping exposed a `testTimeout` the hook flag does not raise → reading the JSON
+to dodge the rtk console mangling landed on a path every lane overwrites →
+isolating the JSON with `--reporter=json` silently dropped the unhandled-error
+block. Every one of the four looked like the fix for the last. **The lesson is
+not the flags; it is that a measurement instrument needs its own oracle, and the
+cheapest one here is a second reporter that fails differently.**
