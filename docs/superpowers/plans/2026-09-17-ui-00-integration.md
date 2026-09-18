@@ -1367,3 +1367,42 @@ not know it was asking.
 Also landing: ברן 25's dancefloor total becomes the workbook's own figure
 **93,370** (89,060 plus six real expenses the seed never captured, with a VAT row
 deleted as junk). Any screen showing that total changes.
+
+### A38 — Two gaps that could not close additively, and one is a silent failure
+
+All eight reported kit gaps are closed (`9dcbbd3`, `3905cf3`, `8640b8a`,
+`4841a85`, `b93cacf`, `1bcd5ca`, `6526434`, `e1186c4`), strictly additively, each
+with a guarantee snapshot taken against the pre-change implementation. Two things
+underneath them could not be, and were reported rather than forced.
+
+**1. `ConfirmDialog.action` cannot accept this codebase's own Server Actions.**
+It is typed `(formData: FormData) => void | Promise<void>`; every action here
+returns `ActionResult`, so `unlinkAliasAction.bind(null, id)` fails with TS2322.
+Widening it changes an existing prop's type, which was forbidden while a lane was
+building against the kit. **Every server-rendered dialog therefore needs an inline
+`'use server'` wrapper** — the pattern at `src/app/signin/page.tsx:36`. Fix the
+type deliberately, when no lane is mid-flight.
+
+**2. A refusal returned by a bound Server Action is silent, and that is the
+platform's first rule broken.** A plain `<form action>` has nowhere to put an
+`ActionResult`. On the alias-unlink dialog every clickable path returns
+`{ ok: true }` because the screen withholds the control for the last-alias case —
+but a hand-typed `?unlink=` carrying a foreign alias id **fails with no feedback
+at all.** Not an English message on a Hebrew screen; *no* message.
+
+**Ruling: a server-rendered dialog may not swallow a refusal.** Until the kit has
+somewhere to put one, a screen that renders a `ConfirmDialog` against a Server
+Action must either (a) prove every reachable path returns `ok`, and say in a
+comment which guard makes that true, or (b) redirect back with the refusal in the
+URL for the page to render — the mechanism `/signin` already uses. **Option (a) is
+a claim about the screen's guards, so it expires the moment a new entry point is
+added; prefer (b) for anything a URL can reach directly.**
+
+This is the same shape as everything else in this document: the failure is not a
+wrong answer, it is the absence of one, and nothing goes red.
+
+**A note on the tsc red this lane reported:** it saw `src/lib/members/link.test.ts`
+fail on a `splitAlias` export that was in fact present — it had read a peer lane
+between that test and its implementation. Correctly diagnosed as a moving
+referent rather than filed as a defect. The 15 current `tsc` errors are the inbox
+lane mid-RED (`Cannot find module './items'`) and will clear.
