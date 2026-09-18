@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createTestDb, type TestDb } from '@/test/db';
-import { createSeason } from '@/lib/members/roster';
-import { createPerson } from '@/lib/members/link';
+import { createSeason, addMember } from '@/lib/members/roster';
+import { createPerson, mergePersons } from '@/lib/members/link';
 import { createEvent } from '@/lib/work/events';
 import { createTask, listTasks, setTaskStatus } from '@/lib/work/tasks';
 import { createBudgetLine } from '@/lib/money/budget';
 import {
   assignPerson, setAssignmentStatus, removeAssignment,
   coverageFor, uncoveredTasks, responsibilitiesOf,
-  covers, summarize, seasonCoverageTotals,
+  covers, summarize, seasonCoverageTotals, rosterWorkload,
 } from '@/lib/work/coverage';
 
 const LEAD = 'lead@shliff.camp';
@@ -316,6 +316,78 @@ describe('coverage', () => {
       await shift('משמרת בר', 4);
       expect(await seasonCoverageTotals(db, seasonId))
         .toEqual(summarize(await coverageFor(db, seasonId)));
+    });
+  });
+
+  describe('rosterWorkload', () => {
+    it('offers the season\'s members, not everyone in the database', async () => {
+      const inside = await createPerson(db, 'נועה לוי', LEAD);
+      await createPerson(db, 'מישהו משנה אחרת', LEAD);
+      await addMember(db, inside, seasonId);
+      expect((await rosterWorkload(db, seasonId)).map((c) => c.displayName))
+        .toEqual(['נועה לוי']);
+    });
+
+    it('counts how many of the season\'s tasks each candidate is already on', async () => {
+      const roni = await createPerson(db, 'רוני אדלר', LEAD);
+      await addMember(db, roni, seasonId);
+      await assignPerson(db, await shift('משמרת בר', 4), roni, LEAD);
+      await assignPerson(db, await shift('משמרת שקט', 2), roni, LEAD);
+      const [candidate] = await rosterWorkload(db, seasonId);
+      expect(candidate.taskCount).toBe(2);
+    });
+
+    it('puts the unassigned first — the popover\'s "מומלצים" is this order', async () => {
+      const loaded = await createPerson(db, 'אאא', LEAD);
+      const free = await createPerson(db, 'ננן', LEAD);
+      await addMember(db, loaded, seasonId);
+      await addMember(db, free, seasonId);
+      await assignPerson(db, await shift('משמרת בר', 4), loaded, LEAD);
+      expect((await rosterWorkload(db, seasonId)).map((c) => c.taskCount)).toEqual([0, 1]);
+    });
+
+    it('does not count a dropped assignment as load', async () => {
+      const person = await createPerson(db, 'נועה לוי', LEAD);
+      await addMember(db, person, seasonId);
+      const assignmentId = await assignPerson(db, await shift('משמרת בר', 4), person, LEAD);
+      await setAssignmentStatus(db, assignmentId, 'dropped');
+      expect((await rosterWorkload(db, seasonId))[0].taskCount).toBe(0);
+    });
+
+    it('does not count another season\'s tasks as this season\'s load', async () => {
+      const other = (await createSeason(db, { name: 'ברן 24', year: 2024, flatRate: 1200 })).id;
+      const person = await createPerson(db, 'נועה לוי', LEAD);
+      await addMember(db, person, seasonId);
+      await createTask(db, {
+        seasonId: other, kind: 'build', title: 'הובלה',
+      });
+      const otherTaskId = (await listTasks(db, other))[0].taskId;
+      await assignPerson(db, otherTaskId, person, LEAD);
+      expect((await rosterWorkload(db, seasonId))[0].taskCount).toBe(0);
+    });
+
+    /**
+     * The membership is added AFTER the merge, and that inversion is the only
+     * way this row can exist: `mergePersons` refuses a source that already
+     * carries a membership (`link.ts`, conflict `חברות במחנה`), so a
+     * merged-away member can only be made by writing the membership second —
+     * which nothing prevents, since `addMember` does not ask whether the
+     * person still exists in their own right. Written the other way round the
+     * merge is refused, both people stay unmerged, and the assertion passes
+     * for the wrong reason.
+     */
+    it('never offers a person who was merged away', async () => {
+      const survivor = await createPerson(db, 'אופק כהן', LEAD);
+      const merged = await createPerson(db, 'אופק', LEAD);
+      await addMember(db, survivor, seasonId);
+      expect((await mergePersons(db, merged, survivor, LEAD)).ok).toBe(true);
+      await addMember(db, merged, seasonId);
+      expect((await rosterWorkload(db, seasonId)).map((c) => c.displayName))
+        .toEqual(['אופק כהן']);
+    });
+
+    it('returns nothing for a season nobody has joined', async () => {
+      expect(await rosterWorkload(db, seasonId)).toEqual([]);
     });
   });
 });

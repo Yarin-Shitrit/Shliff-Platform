@@ -1,7 +1,7 @@
-import { and, asc, eq, ne } from 'drizzle-orm';
+import { and, asc, countDistinct, eq, isNull, ne } from 'drizzle-orm';
 import type { AnyDb } from '@/lib/db-types';
 import {
-  tasks, taskAssignments, persons, seasons, campEvents,
+  tasks, taskAssignments, persons, seasons, campEvents, memberships,
 } from '@/db/schema/camp';
 import type { AssignmentStatus, TaskKind, TaskStatus } from '@/db/schema/camp';
 import { budgetLines } from '@/db/schema/money';
@@ -283,4 +283,59 @@ export async function seasonCoverageTotals(
   db: AnyDb, seasonId: string,
 ): Promise<SeasonCoverage> {
   return summarize(await coverageFor(db, seasonId));
+}
+
+export interface RosterCandidate {
+  personId: string;
+  displayName: string;
+  /** Tasks in this season this person holds a non-dropped assignment on. */
+  taskCount: number;
+}
+
+/**
+ * Who may be assigned, and how loaded they already are.
+ *
+ * `/tasks` used to hand its assign control `listPeople(db)` — every
+ * unmerged person in the database, including people who never joined this
+ * season, each one costing a dues settlement the popover then threw away.
+ * Staffing ברן 26 means picking from ברן 26's roster. The load count is
+ * what turns "who is free" from a memory exercise into a sorted list, and
+ * the popover's "מומלצים — לא משובצים לשום משימה" is simply this ordering's
+ * `taskCount === 0` head, not a second query.
+ */
+export async function rosterWorkload(
+  db: AnyDb, seasonId: string,
+): Promise<RosterCandidate[]> {
+  const rows = await db
+    .select({
+      personId: persons.id,
+      displayName: persons.displayName,
+      taskCount: countDistinct(tasks.id),
+    })
+    .from(memberships)
+    .innerJoin(persons, eq(persons.id, memberships.personId))
+    .leftJoin(taskAssignments, and(
+      eq(taskAssignments.personId, persons.id),
+      ne(taskAssignments.status, 'dropped'),
+    ))
+    // The season lives on the join, not in the where: a member with no
+    // assignment at all must still come back, with a count of zero.
+    .leftJoin(tasks, and(
+      eq(tasks.id, taskAssignments.taskId),
+      eq(tasks.seasonId, seasonId),
+    ))
+    .where(and(
+      eq(memberships.seasonId, seasonId),
+      // A merged-away person is invisible everywhere else (`listPeople`,
+      // `resolveName`) and `assignPerson` refuses them — offering them here
+      // would be offering a refusal.
+      isNull(persons.mergedIntoId),
+    ))
+    .groupBy(persons.id, persons.displayName)
+    .orderBy(asc(persons.displayName));
+
+  // Sorted in JS rather than by the aggregate: the SQL order is the stable
+  // tie-break, and `Array.prototype.sort` is stable, so equal loads stay in
+  // name order.
+  return [...rows].sort((a, b) => a.taskCount - b.taskCount);
 }
