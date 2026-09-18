@@ -10,9 +10,12 @@ vi.mock('next/navigation', () => ({
 
 const { createTaskAction } = vi.hoisted(() => ({
   /** Typed with its argument so `mock.calls[0][0]` is readable: the point of
-   *  the budgetAmount test is what the call carried, not that it happened. */
-  createTaskAction: vi.fn(
-    async (_input: Record<string, unknown>): Promise<ActionResult> => ({ ok: true }),
+   *  the budgetAmount test is what the call carried, not that it happened.
+   *  The signature goes on `vi.fn`'s type parameter rather than on an unused
+   *  implementation argument, which would be a lint error this repo has no
+   *  convention for silencing. */
+  createTaskAction: vi.fn<(input: Record<string, unknown>) => Promise<ActionResult>>(
+    async () => ({ ok: true }),
   ),
 }));
 vi.mock('./actions', () => ({ createTaskAction }));
