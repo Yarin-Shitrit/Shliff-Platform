@@ -70,6 +70,13 @@ export type TableProps<Row> = {
   rowActions?: (row: Row) => ReactNode;
   /** A `<tfoot>` of cells in visual order; they may span. */
   totals?: ReadonlyArray<TableTotalsCell>;
+  /**
+   * A26. A `<tfoot>` is a `rowgroup` with no name of its own, so a totals row
+   * cannot be queried or announced as anything — it reads as one more group of
+   * rows. This names it (`סיכום`), for the same reason `caption` names the
+   * table. Omitted, the footer stays unnamed and renders exactly as before.
+   */
+  totalsLabel?: string;
   /** Rendered instead of the body when `rows` is empty — usually an `<EmptyState>`. */
   empty?: ReactNode;
   /** A8: 44px comfortable, 36px compact. Default 'comfortable'. */
@@ -99,6 +106,7 @@ export function Table<Row>({
   selection,
   rowActions,
   totals,
+  totalsLabel,
   empty,
   density = 'comfortable',
 }: TableProps<Row>): ReactElement {
@@ -196,7 +204,7 @@ export function Table<Row>({
         </tbody>
 
         {totals ? (
-          <tfoot>
+          <tfoot aria-label={totalsLabel}>
             <tr>
               {totals.map((cell) => (
                 <td
