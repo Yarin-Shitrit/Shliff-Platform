@@ -15,7 +15,9 @@ import { listBudgetLines, budgetTotalAgorot } from '@/lib/money/budget';
 import { listObligations, createObligation, settleObligation } from '@/lib/money/obligations';
 import { createTask } from '@/lib/work/tasks';
 import { listUnlinkedNames } from '@/lib/members/identity';
-import { setSheetSeason, setSheetAuthority, retireSheet } from '@/lib/import/sheets';
+import {
+  setSheetSeason, setSheetAuthority, retireSheet, sheetEligibility,
+} from '@/lib/import/sheets';
 import { applyConfirmation } from '@/lib/import/confirm';
 import type { ColumnMapping } from '@/lib/classify/map-columns';
 import type { BlockArchetype } from '@/lib/classify/types';
@@ -1360,7 +1362,18 @@ describe('promoteAllGated', () => {
     expect(after).toEqual(before);
   });
 
-  it('skips a retired sheet\'s blocks and reports them, without touching anything', async () => {
+  it('skips a retired sheet\'s confirmed block via the gate, and writes nothing for it', async () => {
+    // A block that already owns rows cannot be used here to prove
+    // "untouched": `promoteAllGated`'s already-owns-rows gate (below) checks
+    // `promotedRowCounts` BEFORE `promoteBlock` is ever called, so a block
+    // that is both already-promoted and retired is intercepted by that gate
+    // first and reported as `already-promoted`, never reaching the
+    // `sheet-retired` code this test targets — see the dedicated test for
+    // that ordering right after this one. The byte-level "nothing is
+    // touched" proof for a retired block that DOES own rows lives in
+    // `promoteBlock — a retired sheet is skipped, never refused` below,
+    // which calls `promoteBlock` directly and so is not subject to this
+    // gate at all.
     const blockId = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
     await retireSheet(db, sheetId, 'lead@shliff.test');
 
@@ -1372,13 +1385,41 @@ describe('promoteAllGated', () => {
       blockId, code: 'sheet-retired', rowCount: 0, reason: expect.any(String),
     }]);
     expect(result.skipped[0].reason).toMatch(/[֐-׿]/);
+    expect(result.skipped[0].reason).not.toMatch(/[a-zA-Z]/);
     expect(await db.select().from(ledgerEntries)).toHaveLength(0);
+  });
+
+  /**
+   * `promoteAllGated`'s already-owns-rows gate runs before `promoteBlock` is
+   * ever called (see `promoteAllGated` above) — so for a block that is BOTH
+   * already promoted AND on a retired sheet, the gate's own check wins and
+   * the skip is reported as `already-promoted`, never `sheet-retired`.
+   * Either skip satisfies R43 (nothing is touched either way — see the
+   * byte-level proof in `promoteBlock — a retired sheet is skipped, never
+   * refused` below), but the CODE a caller sees depends on which check ran
+   * first, and that is worth pinning rather than leaving as an accident of
+   * ordering nobody decided on purpose.
+   */
+  it('a block that is both already-promoted and retired reports already-promoted, not sheet-retired', async () => {
+    const blockId = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
+    await promoteBlock(db, blockId, LEAD);
+    await retireSheet(db, sheetId, 'lead@shliff.test');
+
+    const result = await promoteAllGated(db, { dryRun: false, recordedBy: 'lead@shliff.test' });
+
+    expect(result.skipped).toEqual([{
+      blockId, code: 'already-promoted', rowCount: 2, reason: expect.any(String),
+    }]);
   });
 });
 
 describe('promoteBlock — a retired sheet is skipped, never refused', () => {
-  it('writes nothing, refuses nothing, and deletes nothing for a block on a retired sheet', async () => {
+  it('writes nothing, refuses nothing, and deletes nothing for a block that already owns rows on a retired sheet', async () => {
     const blockId = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
+    await promoteBlock(db, blockId, LEAD);
+    const before = await db.select().from(ledgerEntries).orderBy(asc(ledgerEntries.sourceRow));
+    expect(before).toHaveLength(2);
+
     await retireSheet(db, sheetId, 'lead@shliff.test');
 
     const result = await promoteBlock(db, blockId, LEAD);
@@ -1390,8 +1431,12 @@ describe('promoteBlock — a retired sheet is skipped, never refused', () => {
     expect(result.skip).toBeDefined();
     expect(result.skip?.code).toBe('sheet-retired');
     expect(result.skip?.blockId).toBe(blockId);
+    expect(result.skip?.rowCount).toBe(2);
     expect(result.skip?.reason.length).toBeGreaterThan(0);
-    expect(await db.select().from(ledgerEntries)).toHaveLength(0);
+    expect(result.skip?.reason).not.toMatch(/[a-zA-Z]/);
+
+    const after = await db.select().from(ledgerEntries).orderBy(asc(ledgerEntries.sourceRow));
+    expect(after).toEqual(before);
   });
 
   /**
@@ -1426,5 +1471,58 @@ describe('promoteBlock — a retired sheet is skipped, never refused', () => {
     expect(after).toEqual(before);
     expect(after.map((r) => r.description)).toEqual(['מקדמה מייצג', 'מסיבת פקאנים']);
     expect(after.map((r) => r.amount)).toEqual(['4000.00', '57000.00']);
+  });
+});
+
+describe('promoteBlock — retiring an authoritative copy does not transfer authority', () => {
+  /**
+   * Reachable from the fixture `promoteBlock — a refused block releases its
+   * rows` already uses (above): two same-named, same-season copies, `a`
+   * marked authoritative and promoted. Retire `a`. Before this fix,
+   * `conflicts()` stopped pairing a retired sheet with anything at all, so
+   * `b` read `contestedWith: []` — uncontested, `'eligible'` — and promoting
+   * it wrote a second copy of the same budget line nobody chose. That is a
+   * silent default answering "which copy is real", which the product's
+   * rules forbid: what the system cannot resolve must become a visible
+   * decision. So a retired sheet's stale `authoritative: true` must not
+   * count as the group's chosen one (`sheetEligibility`'s `chosen` filter),
+   * and an EXPLICIT same-season contest must survive retirement
+   * (`conflicts()`) — together, retiring the chosen copy of a contest
+   * leaves the group `'undecided'`, not `'eligible'`, so `b` still needs a
+   * lead's decision rather than inheriting `a`'s old one.
+   */
+  it('retiring the chosen copy leaves the other undecided, not eligible — the season total does not double', async () => {
+    const a = await addSheet('25.xlsx', 'תקציב קאמפ ברן 26');
+    const b = await addSheet('2026.xlsx', 'תקציב קאמפ ברן 26');
+    await setSheetSeason(db, a, s26);
+    await setSheetSeason(db, b, s26);
+    const ba = await addBlock(a, 'budget_lines', BUDGET_GRID, BUDGET_MAP);
+    const bb = await addBlock(b, 'budget_lines', BUDGET_GRID, BUDGET_MAP);
+
+    await setSheetAuthority(db, a, true);
+    expect((await promoteBlock(db, ba, LEAD)).written).toHaveLength(1);
+    expect(await budgetTotalAgorot(db, s26)).toBe(5852300);
+
+    await retireSheet(db, a, 'lead@shliff.test');
+
+    const eligibility = await sheetEligibility(db);
+    expect(eligibility.get(b)?.state).toBe('undecided');
+
+    // b is still contested — nobody chose it — so it refuses rather than
+    // silently promoting a second copy of a's row.
+    const rb = await promoteBlock(db, bb, LEAD);
+    expect(rb.written).toEqual([]);
+    expect(rb.refused[0]?.reason).toBe('sheet-undecided');
+
+    // a's own block, on its now-retired sheet, is a skip (R43) — its row
+    // survives untouched, it is not released the way an actual refusal
+    // would release it.
+    const ra = await promoteBlock(db, ba, LEAD);
+    expect(ra.skip?.code).toBe('sheet-retired');
+
+    // The total is exactly a's one row — not doubled by b, not zeroed by a's
+    // retirement.
+    expect(await budgetTotalAgorot(db, s26)).toBe(5852300);
+    expect(await db.select().from(budgetLines)).toHaveLength(1);
   });
 });

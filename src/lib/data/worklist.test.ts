@@ -557,6 +557,11 @@ describe('retirement (R44)', () => {
 
     const cells = coverage(await worklist(db, LEAD));
     expect(cells.find((c) => c.seasonName === 'ברן 26' && c.archetype === 'ledger')).toBeUndefined();
+    // Self-guarding: with only one block in this test (on the now-retired
+    // sheet), a `.find` returning undefined for the wrong reason — a typo'd
+    // key, say — would still pass the assertion above. Nothing should be in
+    // the list at all.
+    expect(cells).toEqual([]);
   });
 
   it('collisionGroups excludes a retired sheet — a retired copy cannot contest a live one', async () => {

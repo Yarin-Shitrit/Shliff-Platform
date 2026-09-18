@@ -3,7 +3,9 @@ import type { AnyDb } from '@/lib/db-types';
 import { blocks } from '@/db/schema/source';
 import type { BlockArchetype } from '@/lib/classify/types';
 import { promoteBlock, promotedRowCounts } from '@/lib/import/promote/promote';
-import type { Refusal, RefusalReason, RetainedRow } from '@/lib/import/promote/types';
+import type {
+  Refusal, RefusalReason, RetainedRow, SkippedBlock,
+} from '@/lib/import/promote/types';
 import { listSheets, sheetEligibility } from '@/lib/import/sheets';
 import type { SheetRow, SheetState } from '@/lib/import/sheets';
 import { listSeasons } from '@/lib/members/roster';
@@ -158,7 +160,23 @@ const WHOLE_BLOCK_REASONS: ReadonlySet<RefusalReason> = new Set<RefusalReason>([
   'no-promoter', 'sheet-undecided', 'sheet-ambiguous', 'sheet-superseded', 'unmapped-column',
 ]);
 
-function stateOfConfirmed(written: number, refused: Refusal[], existingRows: number): BlockState {
+/**
+ * `skip` is checked first and unconditionally, even though `worklist()`
+ * below already short-circuits a retired sheet's block before ever calling
+ * `promoteBlock` (so today `skip` is always undefined here in practice).
+ * That short-circuit is a separate piece of code from this function, and
+ * nothing enforces that the two stay in sync: without this check, if the
+ * short-circuit were ever removed or bypassed, `stateOfConfirmed(0, [], n)`
+ * for a retired-but-already-promoted block (`n > 0`) would read `'promoted'`
+ * — a retired block reported as ready to promote — and the optional `skip`
+ * field on `PromotionResult` means the compiler cannot catch that mistake.
+ * Checking it here makes the function correct on its own, independent of
+ * the caller's short-circuit.
+ */
+function stateOfConfirmed(
+  written: number, refused: Refusal[], existingRows: number, skip: SkippedBlock | undefined,
+): BlockState {
+  if (skip) return 'retired';
   const wholeBlock = written === 0 && refused.length === 1 && WHOLE_BLOCK_REASONS.has(refused[0].reason);
   if (wholeBlock) {
     const [only] = refused;
@@ -253,7 +271,7 @@ export async function worklist(db: AnyDb, recordedBy: string): Promise<WorklistR
     const dry = await promoteBlock(db, block.id, { dryRun: true, recordedBy });
     rows.push({
       ...base,
-      state: stateOfConfirmed(dry.written.length, dry.refused, existingRows),
+      state: stateOfConfirmed(dry.written.length, dry.refused, existingRows, dry.skip),
       rowCount: existingRows,
       wouldWrite: dry.written.length,
       refusals: dry.refused,
@@ -305,12 +323,21 @@ export function coverage(rows: WorklistRow[]): CoverageCell[] {
  *
  * A sheet with no contest at all (an ordinary `eligible` sheet, or a sheet
  * sharing a name with nothing else) never appears here — this is a list of
- * contests, not a list of every sheet. A retired sheet is the same case by
- * construction (R44): `conflicts()` treats a retired sheet as contesting
- * nothing — a retired copy cannot contest a live one, and two retired copies
- * have nothing left to resolve between them — so it always has an empty
- * `contestedWith` and never enters a group here, without this function
- * needing its own check for it.
+ * contests, not a list of every sheet.
+ *
+ * A retired sheet is filtered out HERE, explicitly, rather than relying on
+ * `conflicts()` in sheets.ts to keep it out of every `contestedWith` edge
+ * (R44). It cannot: an explicit same-season contest deliberately survives
+ * retirement there (see `conflicts()`'s own comment) — if sheet `a` was
+ * promoted as the chosen copy of season S and is later retired, sheet `b`
+ * (same name, same season, never chosen) must stay contested, or `b` would
+ * read as uncontested and promote on its own, silently doubling the money
+ * `a` already wrote. So `sheetEligibility` still returns a retired sheet's
+ * `contestedWith` in that case, and this display function is where the
+ * retired sheet itself is dropped: it never seeds a group of its own, and
+ * it is filtered out of any group it is reached as a member of. A group
+ * left with fewer than two live members afterward is not a collision any
+ * more — retiring the only other copy resolves it — so it is not emitted.
  *
  * `sheetEligibility` computes every member of a resolved group's state from
  * the same chosen set, so within one group the states are uniform except
@@ -332,6 +359,9 @@ export async function collisionGroups(db: AnyDb): Promise<CollisionGroup[]> {
 
   for (const sheet of sheetRows) {
     if (visited.has(sheet.id)) continue;
+    // Never a seed: a retired sheet is history, not a decision waiting, so
+    // a group is never built starting from it (R44).
+    if (sheet.retiredAt !== null) continue;
     visited.add(sheet.id);
     const info = eligibility.get(sheet.id);
     if (!info || info.contestedWith.length === 0) continue;
@@ -350,8 +380,16 @@ export async function collisionGroups(db: AnyDb): Promise<CollisionGroup[]> {
 
     const members = [...component]
       .map((id) => byId.get(id))
-      .filter((s): s is SheetRow => s !== undefined)
+      // A retired member is dropped from the group entirely, not merely
+      // hidden — it is display, and `sheetEligibility`'s state for it (if
+      // it even reaches this filter) describes a decision nobody can act
+      // on any more.
+      .filter((s): s is SheetRow => s !== undefined && s.retiredAt === null)
       .sort((a, b) => a.filename.localeCompare(b.filename));
+    // Retirement can leave a "group" of one live sheet with nothing left to
+    // contest it — not a collision any more, so it is not reported as one.
+    if (members.length < 2) continue;
+
     const states = members.map((member) => eligibility.get(member.id)!.state);
     const state: SheetState = states.includes('undecided')
       ? 'undecided'

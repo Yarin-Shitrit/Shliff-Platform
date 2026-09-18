@@ -136,21 +136,37 @@ export async function listSheets(db: AnyDb): Promise<SheetRow[]> {
 
 /**
  * Two sheets conflict when they share a name and either share a season or
- * either one's season is unset — and neither one is retired (R44). A
- * retired sheet is history: it cannot contest a live sheet's copy, and two
- * retired sheets have nothing left to resolve between them either. Checked
- * ahead of the season comparison so the null-season wildcard below never
- * pulls a retired, season-less sheet into a live sheet's collision — which
- * matters in practice, because the sheets this exists for (closed seasons,
- * no season set) are exactly the ones the wildcard would otherwise catch.
+ * either one's season is unset — with one narrowing for retirement (R44),
+ * and it is narrower than "a retired sheet conflicts with nothing":
  *
- * The unset case is deliberate: until a lead says which season a sheet
- * belongs to, the system genuinely cannot tell a second revision of one
- * season's budget from a different year's. Refusing is correct, and it
+ * - Two retired sheets have nothing left to resolve between them: skip.
+ * - An EXPLICIT contest — both sides name the same season — survives
+ *   retirement. This is the case that matters: if sheet `a` was marked
+ *   authoritative for season S, its block promoted, and `a` is later
+ *   retired, sheet `b` (same name, same season S, never chosen) must NOT
+ *   read as uncontested just because its only rival went away. `b` was
+ *   never chosen either — retiring `a` answers "should we keep asking about
+ *   `a`", not "is `b` now the real copy" — so the contest, and the
+ *   requirement that a lead choose, must survive. (`sheetEligibility`
+ *   below additionally never lets a retired sheet's stale `authoritative`
+ *   flag count as the chosen one, so retiring the chosen copy of a contest
+ *   does not silently crown the other side either — see `chosen` there.)
+ * - Only the WILDCARD case — a season-less sheet conflicting with every
+ *   same-named sheet regardless of year, because neither side has said
+ *   which year it is — is suppressed by retirement. This is what the
+ *   eight closed-season sheets need: they have no season (that is why
+ *   they are retired), and without this line the wildcard would still pull
+ *   each of them into every live, same-named sheet's collision forever.
+ *
+ * The unset case itself is deliberate: until a lead says which season a
+ * sheet belongs to, the system genuinely cannot tell a second revision of
+ * one season's budget from a different year's. Refusing is correct, and it
  * resolves the moment the season is set.
  */
 function conflicts(a: SheetRow, b: SheetRow): boolean {
   if (a.id === b.id || a.name !== b.name) return false;
+  if (a.retiredAt !== null && b.retiredAt !== null) return false;
+  if (a.seasonId !== null && a.seasonId === b.seasonId) return true;
   if (a.retiredAt !== null || b.retiredAt !== null) return false;
   return a.seasonId === b.seasonId || a.seasonId === null || b.seasonId === null;
 }
@@ -167,7 +183,16 @@ export async function sheetEligibility(db: AnyDb): Promise<Map<string, SheetElig
     }
 
     const group = [sheet, ...contested];
-    const chosen = group.filter((s) => s.authoritative === true);
+    // A retired sheet never counts as the chosen one, even if it still
+    // carries `authoritative: true` from before it was retired (R45:
+    // retiring does not clear authority). Retiring a sheet must never
+    // TRANSFER its authority to the sheet it used to contest — that would
+    // answer "which copy is real" with a choice nobody made, the exact
+    // silent default the product's rules forbid. So a contest whose only
+    // `true` is on a now-retired sheet reads as `chosen.length === 0`,
+    // i.e. `undecided`: retiring the chosen copy of a contest puts the
+    // decision back in front of a lead rather than crowning the survivor.
+    const chosen = group.filter((s) => s.authoritative === true && s.retiredAt === null);
     const contestedWith = contested.map((s) => s.id);
 
     let state: SheetState;

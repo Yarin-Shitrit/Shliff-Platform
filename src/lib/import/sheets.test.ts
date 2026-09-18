@@ -123,14 +123,51 @@ describe('eligibility', () => {
     expect(map.get(b)?.state).toBe('ambiguous');
   });
 
-  it('a retired sheet never conflicts with a live one, even sharing name and season (R44)', async () => {
+  /**
+   * The wildcard case — a season-less sheet, which conflicts with every
+   * same-named sheet regardless of year because neither side has said which
+   * year it is — is what retirement suppresses. This is what the eight
+   * closed-season sheets need: they have no season (that is why they are
+   * retired), and without this a retired one would still pull every live,
+   * same-named sheet into a permanent collision.
+   */
+  it('a retired, season-less sheet never conflicts with a live one via the wildcard (R44)', async () => {
     const a = await addSheet('23.xlsx', 'סיכום כללי');
+    const b = await addSheet('2026.xlsx', 'סיכום כללי');
+    await setSheetSeason(db, b, s26);
+    // a stays season-less — retired precisely because no season exists.
+    await retireSheet(db, a, 'lead@shliff.test');
+    const map = await sheetEligibility(db);
+    expect(map.get(b)?.state).toBe('eligible');
+    expect(map.get(b)?.contestedWith).toEqual([]);
+  });
+
+  /**
+   * An EXPLICIT contest — both sides name the same season — is different
+   * from the wildcard case above, and must NOT be suppressed by retirement.
+   * If it were, retiring the chosen copy of a real, resolved contest would
+   * leave the loser reading `'eligible'` on nobody's decision — see
+   * `promoteBlock — retiring an authoritative copy does not transfer
+   * authority` in promote.test.ts for the money-doubling this prevents.
+   */
+  it('an explicit same-season contest survives retirement — a lead must still choose (R44)', async () => {
+    const a = await addSheet('25.xlsx', 'סיכום כללי');
     const b = await addSheet('2026.xlsx', 'סיכום כללי');
     await setSheetSeason(db, a, s26);
     await setSheetSeason(db, b, s26);
     await retireSheet(db, a, 'lead@shliff.test');
     const map = await sheetEligibility(db);
-    expect(map.get(b)?.state).toBe('eligible');
+    expect(map.get(b)?.state).toBe('undecided');
+    expect(map.get(b)?.contestedWith).toEqual([a]);
+  });
+
+  it('two retired copies of the same sheet do not conflict with each other', async () => {
+    const a = await addSheet('23.xlsx', 'תקציב קאמפ ברן 23');
+    const b = await addSheet('24.xlsx', 'תקציב קאמפ ברן 23');
+    await retireSheet(db, a, 'lead@shliff.test');
+    await retireSheet(db, b, 'lead@shliff.test');
+    const map = await sheetEligibility(db);
+    expect(map.get(a)?.contestedWith).toEqual([]);
     expect(map.get(b)?.contestedWith).toEqual([]);
   });
 
