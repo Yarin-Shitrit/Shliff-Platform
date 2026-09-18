@@ -195,9 +195,12 @@ export function openDecisionCount(items: readonly InboxItem[]): number {
  * promoted while one name sat in it.
  *
  * **This predicate is not a safety control, and integration A23 is why.** It
- * answers "is anyone still deciding", and re-promoting a confirmed, eligible
- * block with nothing open duplicates any row something else references. No
- * screen may offer bulk promotion on the strength of this returning false.
+ * answers "is anyone still deciding", which is a different question from
+ * "would doing this again duplicate rows". A block can be confirmed, eligible
+ * and entirely undisputed while a re-import has shifted a `source_row`
+ * underneath it — and then the promoter's sweep keeps the referenced old rows
+ * and writes the new ones beside them. No screen may offer bulk promotion on
+ * the strength of this returning false.
  */
 export function blocksPromotion(item: InboxItem): boolean {
   switch (item.kind) {

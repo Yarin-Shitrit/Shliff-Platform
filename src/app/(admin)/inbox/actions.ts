@@ -14,13 +14,18 @@ import { snoozeItem, unsnoozeItem } from './snooze';
  * **There is deliberately no bulk-promotion action in this file.**
  *
  * Integration A23, confirmed by the camp lead, forbids the register from
- * offering promotion in bulk: re-promoting one real block re-inserts two rows
- * its bounds swept in from a summary sub-table, which sum to ברן 26's entire
- * budget and double it unrepairably. A23a's own remedy is to make the
- * violation unexpressible rather than merely undone, and the cheapest
- * complete form of that, here, is for the register's action file to export no
- * such function: a control cannot call what does not exist. `actions.test.ts`
- * scans this source and holds the line.
+ * offering promotion in bulk. A plain repeated press is in fact safe — the
+ * sweep skips the rows the run itself produced and the upsert refreshes them
+ * in place. The damage needs the produced set to stop matching what is
+ * stored, which a re-detection or a re-import shifting a `source_row` does:
+ * the old rows something else references are retained rather than deleted,
+ * and the new ones land beside them. **The register cannot know whether a
+ * file was re-imported**, so it cannot know which press is the safe one.
+ *
+ * A23a's remedy is to make the violation unexpressible rather than merely
+ * undone, and the cheapest complete form of that here is for the register's
+ * action file to export no such function: a control cannot call what does not
+ * exist. `actions.test.ts` scans this source and holds the line.
  *
  * `promoteAllAction` therefore does **not** move here from `/data` with its
  * two siblings; it goes away with that route. `promoteAll` and

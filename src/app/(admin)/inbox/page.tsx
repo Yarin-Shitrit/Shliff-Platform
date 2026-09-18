@@ -12,12 +12,17 @@ import { readSnoozes } from './snooze';
 import { ItemRail } from './item-rail';
 import { ItemDetail } from './item-detail';
 import { evidenceFor } from './evidence-grid';
+import { promotionPreview } from '@/lib/inbox/promotion';
+import { PromotionPreviewPanel } from './promotion-preview';
 import styles from './inbox.module.css';
 
 export const dynamic = 'force-dynamic';
 
-/** B8: every page sets its own title; today every page is "פלטפורמת שליף". */
-export const metadata = { title: 'לטיפול · קופת שליף' };
+/**
+ * B8. The leaf name only: the root layout's `template: '%s · קופת שליף'`
+ * appends the suffix, and spelling it here rendered it twice.
+ */
+export const metadata = { title: 'לטיפול' };
 
 const TABS: Array<{ id: 'decide' | 'notice' | 'done'; label: string }> = [
   { id: 'decide', label: 'ממתין להחלטה' },
@@ -49,10 +54,10 @@ function formatDate(date: Date): string {
  *
  * **There is deliberately no promote-everything control here.** The plan's
  * file table put one in this header; integration A23, confirmed by the camp
- * lead, forbids it, because re-promoting one real block re-inserts rows its
- * bounds swept in from a summary sub-table and doubles ברן 26's budget
- * unrepairably. What the register may do is *render what promotion would do*,
- * which is Task 11. `page.test.tsx` scans this file and holds the line.
+ * lead, forbids it. The header carries the read-only preview instead — what
+ * promotion *would* write, and a link per table to the screen that can
+ * promote it and show what it keeps. `page.test.tsx` scans this file and
+ * holds the line.
  */
 export default async function InboxPage({
   searchParams,
@@ -85,6 +90,8 @@ export default async function InboxPage({
     includeRefusals: true,
   });
   const resolved = await resolvedItems(db);
+  // A23: what promotion WOULD do. Read-only, and it runs no dry run.
+  const preview = await promotionPreview(db);
 
   const decideCount = openDecisionCount(items);
   const noticeCount = items.length - decideCount;
@@ -123,6 +130,7 @@ export default async function InboxPage({
           <span className={styles.cleared}>
             <bdi>נוקו היום: {clearedToday(resolved, now)}</bdi>
           </span>
+          <PromotionPreviewPanel preview={preview} />
         </div>
       </header>
 

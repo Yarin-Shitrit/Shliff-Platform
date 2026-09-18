@@ -8,10 +8,11 @@ import type { InboxItem } from '@/lib/inbox/items';
 
 const {
   requireAdmin, inboxItems, resolvedItems, readSnoozes, notFound, push, blockEvidence,
+  promotionPreview,
 } = vi.hoisted(() => ({
   requireAdmin: vi.fn(), inboxItems: vi.fn(), resolvedItems: vi.fn(),
   readSnoozes: vi.fn(), notFound: vi.fn(() => { throw new Error('NEXT_NOT_FOUND'); }),
-  push: vi.fn(), blockEvidence: vi.fn(),
+  push: vi.fn(), blockEvidence: vi.fn(), promotionPreview: vi.fn(),
 }));
 
 vi.mock('@/db', () => ({ db: {} }));
@@ -29,6 +30,7 @@ vi.mock('./snooze', () => ({ readSnoozes }));
 vi.mock('next/navigation', () => ({
   notFound, useRouter: () => ({ push, refresh: vi.fn(), replace: vi.fn() }),
 }));
+vi.mock('@/lib/inbox/promotion', () => ({ promotionPreview }));
 vi.mock('@/lib/data/evidence', async (original) => ({
   ...(await original<typeof import('@/lib/data/evidence')>()),
   blockEvidence,
@@ -68,6 +70,10 @@ beforeEach(() => {
   inboxItems.mockResolvedValue([]);
   resolvedItems.mockResolvedValue([]);
   blockEvidence.mockResolvedValue(null);
+  promotionPreview.mockResolvedValue({
+    ready: [], readyCount: 0, alreadyPromoted: 0,
+    awaitingReview: 0, heldBySheet: 0, noPromoter: 0,
+  });
 });
 
 describe('InboxPage', () => {
@@ -166,9 +172,12 @@ describe('InboxPage', () => {
     expect(screen.getAllByText(/התאריך לא נשמר/).length).toBeGreaterThan(0);
   });
 
-  it('sets its own title (B8)', async () => {
+  it('sets its own title as the leaf name only (B8)', async () => {
     const { metadata } = await import('./page');
-    expect(metadata.title).toBe('לטיפול · קופת שליף');
+    // The root layout's template appends `· קופת שליף`; naming it here made
+    // the tab read it twice.
+    expect(metadata.title).toBe('לטיפול');
+    expect(metadata.title).not.toContain('קופת שליף');
   });
 
   // The register renders refused rows, so it is the one caller that asks for
