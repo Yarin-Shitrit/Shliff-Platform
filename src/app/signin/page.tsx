@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import { redirect, unstable_rethrow } from 'next/navigation';
+import { CredentialsSignin } from 'next-auth';
 import { signIn } from '@/lib/auth/config';
 import { HEBREW_FALLBACK } from '@/lib/errors/hebrew';
 import styles from './signin.module.css';
@@ -19,13 +20,19 @@ export const metadata: Metadata = { title: 'התחברות' };
  */
 const SIGNIN_ERRORS: Record<string, string> = {
   bad: 'האימייל או הסיסמה אינם נכונים',
+  unknown: 'משהו השתבש. נסו שוב מאוחר יותר.',
 };
 
 function signinError(error: string | undefined): string {
   return SIGNIN_ERRORS[error ?? ''] ?? HEBREW_FALLBACK;
 }
 
-async function authenticate(formData: FormData) {
+/**
+ * Exported so the catch block below — which never returns a value, only
+ * redirects — can be driven directly from a test instead of through a DOM
+ * form submission.
+ */
+export async function authenticate(formData: FormData) {
   'use server';
   try {
     await signIn('credentials', {
@@ -37,7 +44,14 @@ async function authenticate(formData: FormData) {
     // A successful sign-in resolves by throwing Next's own redirect signal;
     // that must reach Next.js untouched, not be treated as a failed attempt.
     unstable_rethrow(error);
-    redirect('/signin?error=bad');
+
+    // Without this, a wrong password, a dead database and an argon2 failure
+    // were indistinguishable — to the person signing in AND to the operator,
+    // because nothing was logged. Log the error, never the submitted
+    // credentials: only `error` is passed here, not `formData`.
+    console.error('signin failed', error);
+
+    redirect(error instanceof CredentialsSignin ? '/signin?error=bad' : '/signin?error=unknown');
   }
 }
 
