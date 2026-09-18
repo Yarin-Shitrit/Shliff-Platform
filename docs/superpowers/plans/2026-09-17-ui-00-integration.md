@@ -810,3 +810,44 @@ and 10 are both consuming `src/lib/errors/hebrew.ts` right now. Editing a file
 two running lanes depend on is the shared-file collision that this session has
 already ruled must serialise — and the fix being additive does not make the merge
 safe, only the design.
+
+### A21 — The merge that unblocks plans 11 and 05, and how to know it worked
+
+`main` (`45fa275`) carries wave 2's register correction, plan 11's
+`confirmBlock(…, budgetCategory?)` lever, and **migration `0007`
+(`block_mappings.budget_category`)**. None of the three is reachable from
+`feat/ui-01-foundation`, which is +102/-21 against it. `grep -r budgetCategory
+src/ drizzle/` on this branch returns nothing at all.
+
+**Merge `main` in before starting plan 11. Not before the wave-2 lanes drain** —
+a tree-wide merge under four concurrent writers costs more than it saves.
+
+Verify the merged result by what the code does, never by what exists:
+
+| check | passing answer |
+|---|---|
+| `grep -c confirmed-not-promoted src/lib/data/worklist.ts` | non-zero |
+| `git diff HEAD main -- src/lib/data/worklist.ts` | empty |
+| `confirmBlock` in `imports/[id]/actions.ts` | accepts a 4th `budgetCategory?` arg |
+| `ls drizzle/ \| grep 0007` | present |
+| full suite, isolated | above **both** parents (this branch 1321, main 890) |
+
+**The migration is a trap with a misleading signature.** The PGlite harness
+applies everything in `drizzle/`, so tests that build their own database pick up
+`0007` automatically once merged and nothing looks wrong. But a `shliff`-backed
+scratch clone taken *before* the merge has no `budget_category` column, and code
+reading it against that clone fails as a missing column — which reads like a bug
+in the code that was just written, not like a stale fixture. **Any scratch clone
+made before the merge is void; take a fresh one after.**
+
+### A22 — Deleting the four dancefloor budget lines is the camp lead's call
+
+Not this session's, and not the peer's. They are real budget rows, four task
+references point at them, and no foreign key protects those references.
+
+"The confirm screen is built" is the **start** of the evidence chain, not the
+end. Before it is even put to the lead: the screen renders the category on a
+branch that actually contains the `confirmBlock` lever; a lead sets
+`תקציב רחבה ברן 25` to `dancefloor`; and a dry run on a clone taken *after* that
+shows the promoted rows landing as `dancefloor` and staying out of
+`budgetTotalAgorot(camp)`. Report the screen; never report the deletion as safe.
