@@ -2,20 +2,28 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import { redirect, unstable_rethrow } from 'next/navigation';
 import { signIn } from '@/lib/auth/config';
-import { toHebrewError, type HebrewErrors } from '@/lib/errors/hebrew';
+import { HEBREW_FALLBACK } from '@/lib/errors/hebrew';
 import styles from './signin.module.css';
 
 /** Ruling S1: this rewrite subsumes Task 8's title rather than duplicating it. */
 export const metadata: Metadata = { title: 'התחברות' };
 
 /**
- * R9's one Hebrew line for a failed credentials sign-in, consulted through
- * the shared boundary every other server action already uses
- * (`src/app/(admin)/fees/actions.ts`) rather than a second, page-local map.
+ * `error` is a public search param on an unauthenticated page — not a server
+ * error `toHebrewError` was written to translate — so it is matched here
+ * exactly, against a closed record, instead of being handed to that module's
+ * Hebrew-passthrough. Anything that isn't one of these exact keys (including
+ * a crafted string that merely starts with one, or contains Hebrew of its
+ * own) renders the same shared `HEBREW_FALLBACK` every other server action
+ * falls back to, never the attacker's text.
  */
-const SIGNIN_ERRORS: HebrewErrors = [
-  ['bad', 'האימייל או הסיסמה אינם נכונים'],
-];
+const SIGNIN_ERRORS: Record<string, string> = {
+  bad: 'האימייל או הסיסמה אינם נכונים',
+};
+
+function signinError(error: string | undefined): string {
+  return SIGNIN_ERRORS[error ?? ''] ?? HEBREW_FALLBACK;
+}
 
 async function authenticate(formData: FormData) {
   'use server';
@@ -49,7 +57,7 @@ export default async function SignInPage(
 
         {error !== undefined && (
           <p role="alert" className={styles.error}>
-            {toHebrewError(error, SIGNIN_ERRORS)}
+            {signinError(error)}
           </p>
         )}
 

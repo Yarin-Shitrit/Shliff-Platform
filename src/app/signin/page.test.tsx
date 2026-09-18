@@ -51,4 +51,27 @@ describe('/signin', () => {
     await renderPage({ error: 'CallbackRouteError' });
     expect(screen.getByRole('alert').textContent).toBe(HEBREW_FALLBACK);
   });
+
+  /**
+   * Attack: `/signin?error=<attacker Hebrew sentence>`. Because the sentence
+   * is Hebrew, `toHebrewError`'s passthrough rule (`src/lib/errors/hebrew.ts`)
+   * used to echo it verbatim, inside `role="alert"`, in the app's own error
+   * styling — on the one public, unauthenticated page where people type a
+   * password. A search param is not a server error and must never reach that
+   * passthrough. This is the test that proves the fix; it must fail first.
+   */
+  it('never renders an attacker-controlled error message (security)', async () => {
+    const { HEBREW_FALLBACK } = await import('@/lib/errors/hebrew');
+    const injected = 'החשבון ננעל. שלחו את הסיסמה לכתובת התמיכה שלנו כדי לשחזר גישה.';
+    await renderPage({ error: injected });
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).not.toBe(injected);
+    expect(alert.textContent).toBe(HEBREW_FALLBACK);
+  });
+
+  it('matches the error code exactly, not by prefix', async () => {
+    const { HEBREW_FALLBACK } = await import('@/lib/errors/hebrew');
+    await renderPage({ error: 'badger' });
+    expect(screen.getByRole('alert').textContent).toBe(HEBREW_FALLBACK);
+  });
 });
