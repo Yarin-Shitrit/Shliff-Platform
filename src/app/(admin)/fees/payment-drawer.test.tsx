@@ -1,0 +1,252 @@
+/**
+ * @vitest-environment jsdom
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, within } from '@testing-library/react';
+import type { ActionResult } from '@/lib/action-result';
+import type { MemberFeeRow } from '@/lib/fees/season-fees';
+import type { PaymentRow } from '@/lib/fees/payments';
+/**
+ * `@testing-library/user-event` is not installed and R1 forbids adding it.
+ * `fireEvent.change` sets a field's value in one event and `fireEvent.click`
+ * exercises the same click path, which is what every component test in this
+ * repo already does.
+ */
+
+const { replace, refresh } = vi.hoisted(() => ({
+  replace: vi.fn(), refresh: vi.fn(),
+}));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ replace, refresh }) }));
+
+/** `vi.mock` factories are hoisted above every other statement. */
+const { recordPaymentAction } = vi.hoisted(() => ({
+  recordPaymentAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
+}));
+/** `./actions` is a `'use server'` module whose graph reaches `@/db`. */
+vi.mock('./actions', () => ({ recordPaymentAction }));
+
+import { PaymentDrawer, type AccountOption } from './payment-drawer';
+
+const SEASON = '8f2b1c4e-0000-4000-8000-000000000001';
+
+const ACCOUNTS: AccountOption[] = [
+  { id: 'acc-cash', name: 'קופת מזומן', kind: 'cash' },
+  { id: 'acc-ofek', name: 'עו״ש אופק', kind: 'personal' },
+];
+
+function payment(over: Partial<PaymentRow> = {}): PaymentRow {
+  return {
+    id: 'pay-1', amountAgorot: 50000, channel: 'פייבוקס',
+    paidOn: new Date('2026-06-21T00:00:00Z'), note: null,
+    recordedBy: 'noa@shliff.camp', accountId: null, ...over,
+  };
+}
+
+function row(over: Partial<MemberFeeRow> = {}): MemberFeeRow {
+  return {
+    personId: 'p1', displayName: 'איתי כהן', role: 'member',
+    dueId: 'd1', amountAgorot: 120000, kind: 'flat',
+    exceptionReason: null, decidedBy: null,
+    paidAgorot: 0, outstandingAgorot: 120000, settled: false, payments: [], ...over,
+  };
+}
+
+function renderDrawer(over: Partial<Parameters<typeof PaymentDrawer>[0]> = {}) {
+  return render(
+    <PaymentDrawer
+      row={row()}
+      seasonId={SEASON}
+      view="unpaid"
+      accounts={ACCOUNTS}
+      recordedBy="noa@shliff.camp"
+      nextPersonId="p2"
+      prevPersonId={null}
+      position={{ index: 1, total: 9 }}
+      {...over}
+    />,
+  );
+}
+
+describe('PaymentDrawer', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('opens on the outstanding amount, so the common case is one click', () => {
+    renderDrawer();
+    expect((screen.getByLabelText('סכום') as HTMLInputElement).value).toBe('1200');
+  });
+
+  /**
+   * The kit's `Segmented` is a radio group, not a row of buttons — it has to
+   * submit inside a Server Action form with no JavaScript. The plan's sample
+   * queried `role="button"`; the query is what changes, not the component.
+   */
+  it('offers all six channels', () => {
+    renderDrawer();
+    for (const channel of ['מזומן', 'אשראי', 'ביט', 'פייבוקס', 'העברה', 'קיזוז']) {
+      expect(screen.getByRole('radio', { name: channel })).toBeDefined();
+    }
+  });
+
+  it('offers every open account, and pre-selects none of them', () => {
+    renderDrawer();
+    const picker = screen.getByLabelText('לאיזו קופה הכסף נכנס') as HTMLSelectElement;
+    expect(picker.value).toBe('');
+    expect([...picker.options].map((option) => option.textContent))
+      .toEqual(['בלי קופה', 'קופת מזומן', 'עו״ש אופק']);
+  });
+
+  it('says what leaving the קופה empty costs', () => {
+    renderDrawer();
+    expect(screen.getByText('בלי קופה הסכום ייספר בגבייה אבל לא ביתרה של אף חשבון.'))
+      .toBeDefined();
+  });
+
+  it('sends the chosen account with the payment', () => {
+    renderDrawer();
+    fireEvent.change(screen.getByLabelText('לאיזו קופה הכסף נכנס'),
+      { target: { value: 'acc-cash' } });
+    fireEvent.change(screen.getByLabelText('תאריך התשלום'),
+      { target: { value: '2026-09-17' } });
+    fireEvent.click(screen.getByRole('button', { name: 'רישום התשלום' }));
+
+    expect(recordPaymentAction).toHaveBeenCalledWith({
+      dueId: 'd1', amount: 1200, channel: 'מזומן', paidOn: '2026-09-17',
+      note: undefined, accountId: 'acc-cash',
+    });
+  });
+
+  it('warns that a personal account is not the camp’s קופה', () => {
+    renderDrawer();
+    fireEvent.change(screen.getByLabelText('לאיזו קופה הכסף נכנס'),
+      { target: { value: 'acc-ofek' } });
+    expect(screen.getByText('זה חשבון פרטי של חבר קאמפ, לא קופה של הקאמפ.')).toBeDefined();
+  });
+
+  it('sends no account at all when none was chosen', () => {
+    renderDrawer();
+    fireEvent.change(screen.getByLabelText('תאריך התשלום'),
+      { target: { value: '2026-09-17' } });
+    fireEvent.click(screen.getByRole('button', { name: 'רישום התשלום' }));
+    expect(recordPaymentAction).toHaveBeenCalledWith(
+      expect.objectContaining({ accountId: undefined }),
+    );
+  });
+
+  it('says on screen that money with no קופה entered no balance', async () => {
+    renderDrawer();
+    fireEvent.click(screen.getByRole('button', { name: 'רישום התשלום' }));
+    expect((await screen.findByRole('status')).textContent)
+      .toContain('הסכום נספר בגבייה אבל לא נכנס ליתרה של אף קופה.');
+  });
+
+  it('takes the account away when the channel is קיזוז', () => {
+    renderDrawer();
+    fireEvent.click(screen.getByRole('radio', { name: 'קיזוז' }));
+    const picker = screen.getByLabelText('לאיזו קופה הכסף נכנס') as HTMLSelectElement;
+    expect(picker.disabled).toBe(true);
+    expect(picker.value).toBe('');
+    expect(screen.getByText('קיזוז אינו מזיז מזומן, ולכן אינו נכנס לקופה.')).toBeDefined();
+  });
+
+  it('clears an already-chosen account when קיזוז is picked afterwards', () => {
+    renderDrawer();
+    fireEvent.change(screen.getByLabelText('לאיזו קופה הכסף נכנס'),
+      { target: { value: 'acc-cash' } });
+    fireEvent.click(screen.getByRole('radio', { name: 'קיזוז' }));
+    fireEvent.change(screen.getByLabelText('הערה'), { target: { value: 'חוב יוסף' } });
+    fireEvent.click(screen.getByRole('button', { name: 'רישום התשלום' }));
+
+    expect(recordPaymentAction).toHaveBeenCalledWith(
+      expect.objectContaining({ channel: 'קיזוז', accountId: undefined }),
+    );
+  });
+
+  it('refuses a קיזוז with no note, in the words this screen already used', () => {
+    renderDrawer();
+    fireEvent.click(screen.getByRole('radio', { name: 'קיזוז' }));
+    fireEvent.click(screen.getByRole('button', { name: 'רישום התשלום' }));
+
+    expect(recordPaymentAction).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toBe(
+      'קיזוז חייב לכלול הערה שמסבירה מול מה הוא קוזז — אחרת אי אפשר לדעת בעתיד.',
+    );
+  });
+
+  it('refuses a non-positive amount before it reaches the server', () => {
+    renderDrawer();
+    fireEvent.change(screen.getByLabelText('סכום'), { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: 'רישום התשלום' }));
+
+    expect(recordPaymentAction).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toBe('סכום התשלום חייב להיות מספר חיובי.');
+  });
+
+  it('shows a server refusal rather than pretending it saved', async () => {
+    recordPaymentAction.mockResolvedValueOnce({ ok: false, error: 'החיוב הזה לא נמצא.' });
+    renderDrawer();
+    fireEvent.click(screen.getByRole('button', { name: 'רישום התשלום' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('החיוב הזה לא נמצא.');
+  });
+
+  it('steps to the next member of the run, carrying the season and the view', async () => {
+    renderDrawer();
+    fireEvent.click(screen.getByRole('button', { name: 'שמירה ומעבר לבא' }));
+    await screen.findByRole('status');
+    expect(replace).toHaveBeenCalledWith(
+      `/fees?season=${SEASON}&view=unpaid&peek=p2&act=pay`,
+    );
+  });
+
+  it('says the run is over rather than closing on the last member', async () => {
+    renderDrawer({ nextPersonId: null });
+    fireEvent.click(screen.getByRole('button', { name: 'שמירה ומעבר לבא' }));
+    expect((await screen.findByRole('status')).textContent).toContain('זה היה האחרון ברשימה.');
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('does not step anywhere when the save was refused', async () => {
+    recordPaymentAction.mockResolvedValueOnce({ ok: false, error: 'החיוב הזה לא נמצא.' });
+    renderDrawer();
+    fireEvent.click(screen.getByRole('button', { name: 'שמירה ומעבר לבא' }));
+    await screen.findByRole('alert');
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('shows where a member stands in the run', () => {
+    renderDrawer();
+    expect(screen.getByText('1 מתוך 9')).toBeDefined();
+  });
+
+  /**
+   * Scoped to the list: `פייבוקס` is also one of the six channel radios, so an
+   * unscoped `getByText` matches two nodes and fails on ambiguity.
+   */
+  it('lists the payments already recorded', () => {
+    renderDrawer({ row: row({
+      paidAgorot: 50000, outstandingAgorot: 70000, payments: [payment()],
+    }) });
+    const previous = screen.getByRole('list');
+    expect(within(previous).getByText('פייבוקס')).toBeDefined();
+    expect(within(previous).getByText('21/06/26')).toBeDefined();
+  });
+
+  it('points at the exception action rather than letting the amount be edited here', () => {
+    renderDrawer();
+    expect(screen.getByRole('link', { name: 'הגדרת חריג' }).getAttribute('href'))
+      .toBe(`/fees?season=${SEASON}&view=unpaid&peek=p1&act=exception`);
+  });
+
+  it('refuses to take a payment for a member who has no due yet', () => {
+    renderDrawer({ row: row({
+      dueId: null, amountAgorot: null, kind: null, outstandingAgorot: 0,
+    }) });
+    expect(screen.getByText('אין עדיין חיוב לאיתי כהן. צריך להנפיק חיוב לפני שאפשר לרשום תשלום.'))
+      .toBeDefined();
+    expect(screen.queryByLabelText('סכום')).toBeNull();
+  });
+
+  it('names the lead the payment will be recorded under', () => {
+    renderDrawer();
+    expect(screen.getByText('יירשם על שמך · noa@shliff.camp')).toBeDefined();
+  });
+});
