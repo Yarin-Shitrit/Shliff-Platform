@@ -524,3 +524,34 @@ describe('HomePage — the two side panels', () => {
     expect(screen.queryByRole('heading', { name: 'טרם שילמו' })).toBeNull();
   });
 });
+
+describe('HomePage — reachability', () => {
+  it('labels every icon-only control with the person or page it acts on', async () => {
+    seasonOverview.mockResolvedValue(overview({
+      ...FULL,
+      dues: { ...FULL.dues, unpaid: [unpaidRow()] },
+      understaffed: [task()],
+      unlinkedCount: 3,
+    }));
+    const { container } = render(await HomePage({
+      searchParams: Promise.resolve({ season: 's26' }),
+    }));
+
+    const controls = container.querySelectorAll('a, button');
+    expect(controls.length).toBeGreaterThan(8);
+    for (const control of controls) {
+      const text = (control.textContent ?? '').trim();
+      const label = control.getAttribute('aria-label') ?? '';
+      // Either the control says what it does, or it says so to a screen reader.
+      expect({ html: control.outerHTML, named: text.length > 0 || label.length > 0 })
+        .toEqual({ html: control.outerHTML, named: true });
+    }
+  });
+
+  it('gives every panel a heading a reader can navigate by', async () => {
+    seasonOverview.mockResolvedValue(overview(FULL));
+    render(await HomePage({ searchParams: Promise.resolve({ season: 's26' }) }));
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+    expect(headings).toEqual(['לטיפול', 'חסרים אנשים', 'טרם שילמו']);
+  });
+});

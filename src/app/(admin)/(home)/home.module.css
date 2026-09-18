@@ -133,3 +133,30 @@
 @media (max-width: 768px) {
   .figures { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Skeletons. Shapes only — no figure is drawn before its data has arrived. */
+.skelLine {
+  display: block;
+  block-size: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--sunken);
+  animation: skelPulse 1.4s ease-in-out infinite;
+}
+.skelTitle { inline-size: 160px; block-size: 22px; }
+.skelSub { inline-size: 220px; margin-block-start: var(--space-2); }
+.skelLabel { inline-size: 110px; }
+.skelValue { inline-size: 140px; block-size: 26px; margin-block-start: var(--space-2); }
+.skelTile { padding-block: 14px; padding-inline: var(--space-4); }
+.skelPanel {
+  padding-block: 14px;
+  padding-inline: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.skelRow { inline-size: 100%; }
+
+@keyframes skelPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+/* The pulse is suppressed for a reader who asked for less motion. */
+@media (prefers-reduced-motion: reduce) { .skelLine { animation: none; } }
