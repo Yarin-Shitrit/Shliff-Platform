@@ -1,0 +1,68 @@
+.field { display: flex; flex-direction: column; gap: 6px; }
+.label { font-size: 13px; font-weight: 500; color: var(--ink-2); }
+.required { color: var(--bad); }
+.control { display: flex; }
+.control > * { flex: 1; min-inline-size: 0; }
+.hint { font-size: 12px; color: var(--ink-3); }
+.error { font-size: 12px; color: var(--bad); margin: 0; }
+
+.box {
+  block-size: 36px; inline-size: 100%;
+  display: flex; align-items: center; gap: 8px; padding-inline: 10px;
+  border: 1px solid var(--line-strong); border-radius: 8px;
+  background: var(--panel); color: var(--ink);
+}
+.box:focus-within { border-color: var(--focus); box-shadow: 0 0 0 3px var(--brand-soft); }
+.boxIcon { display: inline-flex; color: var(--ink-3); }
+
+/*
+ * `font: inherit` and `color: inherit` are not repeated here — `globals.css`
+ * already applies both to every `input`/`select`/`textarea`. `outline` is not
+ * touched at all: the native `:focus-visible` ring stays exactly as
+ * `globals.css` defines it, on top of the box's own focus-within glow above.
+ */
+.input {
+  flex: 1; min-inline-size: 0; border: 0; background: none; padding: 0;
+}
+.input::placeholder { color: var(--ink-4); }
+
+/* A11: an amount is read left to right with the symbol last — `dir="ltr"` on
+   the box (the same tool `Money`/`DateText` use), not a second physical
+   `direction` rule here. The digits reuse the global `.num` utility, the one
+   place A10 documents a physical `text-align`, instead of a second one. */
+.adornment { color: var(--ink-3); }
+
+.textarea {
+  block-size: auto; min-block-size: 64px; padding-block: 8px; resize: none;
+  display: block;
+}
+
+.segmented {
+  display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px;
+  border-radius: 9px; background: var(--sunken);
+}
+.segment { position: relative; display: inline-flex; }
+.segmentInput { position: absolute; opacity: 0; pointer-events: none; }
+.segmentFace {
+  display: inline-flex; align-items: center; gap: 6px;
+  block-size: 28px; padding-inline: 10px; border-radius: 7px;
+  color: var(--ink-2); font-size: 13px; cursor: pointer;
+}
+.segmentInput:checked + .segmentFace {
+  background: var(--panel); color: var(--ink); font-weight: 600;
+  box-shadow: 0 0 0 1px var(--line);
+}
+.segmentInput:focus-visible + .segmentFace { outline: 2px solid var(--focus); outline-offset: 2px; }
+.segmentInput:disabled + .segmentFace { opacity: 0.45; cursor: not-allowed; }
+
+.checkbox { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.checkboxInput { inline-size: 16px; block-size: 16px; accent-color: var(--brand); margin: 0; }
+.checkboxInput:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.checkboxLabel { font-size: 13.5px; color: var(--ink); }
+
+/* A8: a phone input is at least `--input-font-phone` (16px) so iOS does not
+   zoom on focus. */
+@media (pointer: coarse) {
+  .box { block-size: 44px; font-size: var(--input-font-phone); }
+  .segmentFace { block-size: 38px; }
+}
