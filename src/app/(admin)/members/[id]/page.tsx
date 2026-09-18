@@ -14,6 +14,9 @@ import { listPayments } from '@/lib/fees/payments';
 import { roleLabel, dueKindLabel } from '@/lib/members/labels';
 import { mergeHref, type RawParams } from '@/lib/members/people-views';
 import type { Responsibility } from '@/lib/work/coverage';
+/* A39: was a fourth local copy of these four words, typed Record<string,
+   string> so a fifth TaskKind would have rendered the raw enum value here. */
+import { TASK_KIND_LABELS } from '@/lib/work/labels';
 import { Avatar } from '@/components/ui/avatar';
 import { Pill } from '@/components/ui/pill';
 import { Popover } from '@/components/ui/popover';
@@ -29,13 +32,6 @@ import { unlinkAliasAndReturn, UNLINK_ERROR_PARAM } from '../actions';
 import styles from './person.module.css';
 
 export const dynamic = 'force-dynamic';
-
-const KIND_LABELS: Record<string, string> = {
-  deliverable: 'אחריות תקציבית',
-  shift: 'משמרת',
-  build: 'הקמה ולוגיסטיקה',
-  event_task: 'משימה באירוע',
-};
 
 /** he-IL, date and time together — a shift's "when" is never just a day. */
 function formatDateTime(date: Date): string {
@@ -461,7 +457,7 @@ export default async function PersonPage(
                     <li key={item.taskId}>
                       {item.title}
                       <span className="muted">
-                        {' — '}{KIND_LABELS[item.kind] ?? item.kind}, {item.seasonName}
+                        {' — '}{TASK_KIND_LABELS[item.kind] ?? item.kind}, {item.seasonName}
                         {item.eventName && <>, {item.eventName}</>}
                         {item.budgetAgorot !== null && (
                           <> — תקציב <Money agorot={item.budgetAgorot} /></>

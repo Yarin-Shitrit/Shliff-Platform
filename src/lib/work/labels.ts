@@ -1,24 +1,43 @@
 import type { TaskKind } from '@/db/schema/camp';
 
 /**
- * The singular Hebrew name of each kind — "משמרת", not "משמרות".
+ * The library home for task-kind labels (A39). Four maps of this idea used to
+ * exist across three files; they are all here now.
  *
- * A `Record<TaskKind, string>` makes tsc the exhaustiveness check, so a fifth
- * kind cannot be added without naming it here.
+ * They are three *registers*, not three copies — which is why the fix is three
+ * exports rather than one. A group heading counts things and is plural; a
+ * row's second line is written out at length; a kind named on its own is
+ * singular and short. Collapsing them into one map would have made some screen
+ * read `אחריות תקציבית` where it used to say `אחריות על סעיף תקציב`, which is
+ * a copy change dressed up as a refactor.
  *
- * **Consolidation debt, recorded rather than paid here.** Three other maps of
- * the same idea exist today: `src/app/(admin)/tasks/rows.ts` holds `KIND_LABELS`
- * (plural, for group headings) and `KIND_ROW_LABELS` (singular, in a different
- * register — `משימת הקמה`, `אחריות על סעיף תקציב`), and
- * `src/app/(admin)/members/[id]/page.tsx` holds a fourth, typed
- * `Record<string, string>` so it is not exhaustiveness-checked at all. The
- * spellings below match that last one. Both screens belong to other plans, so
- * folding them in is D9's to do when it rewrites the task board — this file is
- * the library home they should fold into, not a fourth dialect meant to stay.
+ * What was actually wrong was the distribution: one of the four lived in
+ * `members/[id]/page.tsx` typed `Record<string, string>`, so a fifth `TaskKind`
+ * could be added and that screen would silently render the raw enum value. Every
+ * map here is `Record<TaskKind, string>`, which makes tsc the exhaustiveness
+ * check. `labels.test.ts` nets the repo for a fifth copy appearing.
  */
+
+/** The kind on its own, singular: a person's responsibility list, a chip. */
 export const TASK_KIND_LABELS: Record<TaskKind, string> = {
   shift: 'משמרת',
   event_task: 'משימה באירוע',
   deliverable: 'אחריות תקציבית',
   build: 'הקמה ולוגיסטיקה',
+};
+
+/** A group heading over a list of them, so plural: D9's task board. */
+export const TASK_KIND_GROUP_LABELS: Record<TaskKind, string> = {
+  build: 'הקמה ולוגיסטיקה',
+  shift: 'משמרות',
+  event_task: 'משימות באירועים',
+  deliverable: 'אחריות תקציבית',
+};
+
+/** A task row's own second line, under its title — the longest register. */
+export const TASK_KIND_ROW_LABELS: Record<TaskKind, string> = {
+  build: 'משימת הקמה',
+  shift: 'משמרת',
+  event_task: 'משימה באירוע',
+  deliverable: 'אחריות על סעיף תקציב',
 };

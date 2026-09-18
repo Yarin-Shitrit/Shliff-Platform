@@ -2,25 +2,19 @@ import type { TaskKind, TaskStatus } from '@/db/schema/camp';
 import { covers, type Assignee, type TaskCoverage } from '@/lib/work/coverage';
 import { taskWhen, whenDate } from '@/lib/work/gate';
 import { openActHref } from '@/components/ui/drawer-url';
+import { TASK_KIND_GROUP_LABELS, TASK_KIND_ROW_LABELS } from '@/lib/work/labels';
 
 /** Groups run in the order the burn does: what is built, who staffs it,
  *  what happens at the parties, and who owns which budget. */
 export const KIND_ORDER: TaskKind[] = ['build', 'shift', 'event_task', 'deliverable'];
 
-export const KIND_LABELS: Record<TaskKind, string> = {
-  build: 'הקמה ולוגיסטיקה',
-  shift: 'משמרות',
-  event_task: 'משימות באירועים',
-  deliverable: 'אחריות תקציבית',
-};
-
-/** The row's own second line, under the title. */
-export const KIND_ROW_LABELS: Record<TaskKind, string> = {
-  build: 'משימת הקמה',
-  shift: 'משמרת',
-  event_task: 'משימה באירוע',
-  deliverable: 'אחריות על סעיף תקציב',
-};
+/**
+ * A39: the four task-kind label maps have collapsed into
+ * `src/lib/work/labels.ts`, which is the library home for them. These two
+ * names stay as the aliases this screen already imports under — the register
+ * each one is written in is the thing that differs, and it is documented there.
+ */
+export { TASK_KIND_GROUP_LABELS as KIND_LABELS, TASK_KIND_ROW_LABELS as KIND_ROW_LABELS };
 
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   open: 'פתוחה',
@@ -81,7 +75,7 @@ export function groupByKind(rows: TaskCoverage[]): TaskGroup[] {
   return KIND_ORDER
     .map((kind) => ({
       kind,
-      label: KIND_LABELS[kind],
+      label: TASK_KIND_GROUP_LABELS[kind],
       rows: rows.filter((row) => row.kind === kind).sort(compare),
     }))
     .filter((group) => group.rows.length > 0);
