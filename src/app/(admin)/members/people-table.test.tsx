@@ -12,13 +12,20 @@ import type { PersonListRow, PersonDues } from '@/lib/members/people-list';
  * need — the same reasoning `merge-control.test.tsx` recorded.
  */
 
-const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+const { push, addToSeasonBulkAction, issueDuesBulkAction } = vi.hoisted(() => ({
+  push: vi.fn(),
+  addToSeasonBulkAction: vi.fn(async () => ({ ok: true, added: 0 })),
+  issueDuesBulkAction: vi.fn(async () => ({ ok: true, issued: 0, already: 0, offRoster: [] })),
+}));
+/** `./actions` is a `'use server'` module whose graph reaches `@/db`. */
+vi.mock('./actions', () => ({ addToSeasonBulkAction, issueDuesBulkAction }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push, refresh: () => {} }),
   usePathname: () => '/members',
   useSearchParams: () => new URLSearchParams(),
 }));
 
+import { ToastProvider } from '@/components/ui/toaster';
 import { parsePeopleQuery } from '@/lib/members/people-views';
 import { PeopleTable, DUES_STATE_LABELS } from './people-table';
 
@@ -53,16 +60,18 @@ function row(overrides: Partial<PersonListRow> = {}): PersonListRow {
   };
 }
 
+/* The real tree gets its provider from `(admin)/layout.tsx`. */
 function renderTable(rows: PersonListRow[], params: Record<string, string> = {}) {
   return render(
-    <PeopleTable
+    <ToastProvider><PeopleTable
       rows={rows}
       seasonYears={[2025, 2026]}
       params={params}
       seasonId="s26"
+      seasonName="ברן 26"
       viewLabel="ברן 26"
       empty={<p>אין כאן כלום עדיין</p>}
-    />,
+    /></ToastProvider>,
   );
 }
 
@@ -208,6 +217,45 @@ describe('PeopleTable — selection', () => {
     expect(pushed.pathname).toBe('/members');
     expect(parsePeopleQuery(Object.fromEntries(pushed.searchParams), true).merge)
       .toEqual(['a', 'b']);
+  });
+
+  it('offers the two idempotent writes and the export, all named after the season', () => {
+    renderTable(two);
+    select('איתי כהן');
+    expect(screen.getByRole('button', { name: /שיוך לברן 26/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /הנפקת חיוב/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /ייצוא/ })).toBeTruthy();
+  });
+
+  /* The export is roster-driven and season-scoped, so with no season in scope
+     it would hand the lead an empty file. */
+  it('withholds ייצוא and both writes when no season is in scope', () => {
+    render(
+      <ToastProvider><PeopleTable
+        rows={two}
+        seasonYears={[2025, 2026]}
+        params={{}}
+        seasonId={null}
+        seasonName={null}
+        viewLabel="כולם"
+        empty={<p>אין כאן כלום עדיין</p>}
+      /></ToastProvider>,
+    );
+    select('איתי כהן');
+    expect(screen.queryByRole('button', { name: /ייצוא/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /הנפקת חיוב/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /מיזוג/ })).toBeTruthy();
+  });
+
+  /*
+   * C8's destructive slot. Every bulk action that could destroy anything was
+   * refused in actions.ts, so there is nothing to put behind `עוד` — and an
+   * empty `עוד` would promise a lead there is more here than there is.
+   */
+  it('renders no עוד control, because no bulk action on people is destructive', () => {
+    renderTable(two);
+    select('איתי כהן');
+    expect(screen.queryByRole('button', { name: 'עוד' })).toBeNull();
   });
 
   it('empties the selection when the bar is cleared', () => {

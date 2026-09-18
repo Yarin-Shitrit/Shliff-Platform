@@ -7,6 +7,8 @@ import type { ActionResult } from '@/lib/action-result';
 import { createPerson, createPersonFromAlias, linkAlias, mergePersons } from '@/lib/members/link';
 import { resolveName } from '@/lib/members/identity';
 import { addMember } from '@/lib/members/roster';
+import { issueFlatDueFor } from '@/lib/fees/dues';
+import { toHebrewError, type HebrewErrors } from '@/lib/errors/hebrew';
 import { isBlank } from '@/lib/text/normalize';
 
 export async function linkNameAction(
@@ -91,4 +93,78 @@ export async function addMemberAction(
   await addMember(db, personId, seasonId, role);
   revalidatePath('/members');
   return { ok: true };
+}
+
+/**
+ * C8's refusal, recorded here because the bar is where it will be questioned.
+ *
+ * Only two bulk actions write, and both are idempotent: `addMember` upserts on
+ * `(personId, seasonId)`, and `issueFlatDueFor` returns false and changes
+ * nothing when a due already exists. Running either twice is running it once.
+ *
+ * Bulk payment, bulk exception and bulk removal from a season were all refused:
+ * a payment needs an amount, a channel, a date and a קופה, and a bulk form
+ * would have to invent three of them; an exception needs a reason per person
+ * and `עמירם דהן 0` is exactly the failure that column exists to prevent; and
+ * removing someone from a season leaves their due and their payments pointing
+ * at a season they are no longer on, with nothing on the list showing it.
+ * So the bar's destructive slot is empty, and that is a finding rather than
+ * an omission.
+ */
+const BULK_ERRORS: HebrewErrors = [
+  ['that person is not on this season roster', 'אינו/ה ברשימת השנה.'],
+  ['unknown season', 'השנה המבוקשת לא נמצאה.'],
+];
+
+const NOTHING_SELECTED = 'לא נבחרו אנשים.';
+
+export async function addToSeasonBulkAction(
+  personIds: string[], seasonId: string, role: string,
+): Promise<ActionResult & { added?: number }> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+  if (personIds.length === 0) return { ok: false, error: NOTHING_SELECTED };
+
+  for (const personId of personIds) await addMember(db, personId, seasonId, role);
+
+  revalidatePath('/members');
+  return { ok: true, added: personIds.length };
+}
+
+/**
+ * Issues the season's flat rate to a selection.
+ *
+ * Each person is attempted on their own. `issueFlatDueFor` throws for someone
+ * who is not on the roster, and letting that abandon the other ten would make
+ * the bulk bar's result depend on the order the rows happened to be in.
+ * Everyone who could be billed is billed, and the ones who could not are named.
+ *
+ * Only that one refusal is survivable. Anything else — an unknown season, a
+ * driver fault — means the batch as a whole cannot be trusted, so it stops and
+ * reports in Hebrew rather than claiming a partial success it cannot describe.
+ */
+export async function issueDuesBulkAction(
+  personIds: string[], seasonId: string, names: Record<string, string> = {},
+): Promise<ActionResult & { issued?: number; already?: number; offRoster?: string[] }> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+  if (personIds.length === 0) return { ok: false, error: NOTHING_SELECTED };
+
+  let issued = 0;
+  let already = 0;
+  const offRoster: string[] = [];
+
+  for (const personId of personIds) {
+    try {
+      if (await issueFlatDueFor(db, personId, seasonId)) issued += 1;
+      else already += 1;
+    } catch (error) {
+      const hebrew = toHebrewError(error, BULK_ERRORS);
+      if (hebrew !== BULK_ERRORS[0][1]) return { ok: false, error: hebrew };
+      offRoster.push(names[personId] ?? personId);
+    }
+  }
+
+  revalidatePath('/members');
+  return { ok: true, issued, already, offRoster };
 }

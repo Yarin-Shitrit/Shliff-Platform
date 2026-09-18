@@ -38,6 +38,7 @@ vi.mock('./actions', () => ({
   createPersonAction: vi.fn(), addMemberAction: vi.fn(),
 }));
 
+import { ToastProvider } from '@/components/ui/toaster';
 import MembersPage from './page';
 
 const SEASON_26 = { id: 's26', name: 'ברן 26', year: 2026, flatRate: '1200.00', plannedSize: 35, startsOn: null };
@@ -68,8 +69,12 @@ function row(overrides: Partial<PersonListRow> = {}): PersonListRow {
   };
 }
 
+/* The real tree gets its provider from `(admin)/layout.tsx`; the bulk bar
+   reports its writes through it, and `useToast` throws without one on purpose. */
 async function renderPage(params: Record<string, string> = {}) {
-  return render(await MembersPage({ searchParams: Promise.resolve(params) }));
+  return render(
+    <ToastProvider>{await MembersPage({ searchParams: Promise.resolve(params) })}</ToastProvider>,
+  );
 }
 
 beforeEach(() => {

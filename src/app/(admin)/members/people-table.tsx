@@ -13,9 +13,7 @@
 
 import { useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { Table, type TableColumn } from '@/components/ui/table';
-import { BulkBar } from '@/components/ui/bulk-bar';
 import { Avatar } from '@/components/ui/avatar';
 import { Pill, type PillTone } from '@/components/ui/pill';
 import { Icon } from '@/components/ui/icon';
@@ -23,7 +21,8 @@ import { Money, DateText } from '@/components/format';
 import { formatShekels } from '@/lib/money';
 import { roleLabel } from '@/lib/members/labels';
 import type { DuesState, PersonListRow } from '@/lib/members/people-list';
-import { mergeHref, peekHref, type RawParams } from '@/lib/members/people-views';
+import { peekHref, type RawParams } from '@/lib/members/people-views';
+import { PeopleBulkBar } from './people-bulk-bar';
 import styles from './people.module.css';
 
 /**
@@ -57,6 +56,8 @@ export interface PeopleTableProps {
   /** The list's current URL params — every drawer href is built from these. */
   params: RawParams;
   seasonId: string | null;
+  /** The scope season's own name, so the bar can say שיוך לברן 26. */
+  seasonName: string | null;
   /** The name of the view being totalled, so the footer says what it counted. */
   viewLabel: string;
   /** C10's `EmptyState`, chosen by the page from the data rather than here. */
@@ -147,9 +148,8 @@ function DuesCell({ row }: { row: PersonListRow }): ReactElement {
 }
 
 export function PeopleTable({
-  rows, seasonYears, params, viewLabel, empty,
+  rows, seasonYears, params, seasonId, seasonName, viewLabel, empty,
 }: PeopleTableProps): ReactElement {
-  const router = useRouter();
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
 
   const byId = useMemo(
@@ -256,30 +256,12 @@ export function PeopleTable({
         )}
       />
 
-      <BulkBar
-        count={selected.size}
-        label="פעולות על הנבחרים"
-        actions={[
-          {
-            id: 'merge',
-            label: 'מיזוג',
-            icon: 'merge',
-            /*
-             * Pairwise and irreversible. Disabled rather than hidden with the
-             * wrong number selected: a control that appears and disappears
-             * teaches nothing about why it is unavailable.
-             *
-             * This navigates rather than merging. The comparison, the preview
-             * of what moves and the acknowledgement all live on the drawer
-             * this opens — nothing is folded away from a bulk bar.
-             */
-            disabled: selectedIds.length !== 2,
-            onSelect: () => {
-              if (selectedIds.length !== 2) return;
-              router.push(mergeHref(params, selectedIds[0], selectedIds[1]));
-            },
-          },
-        ]}
+      <PeopleBulkBar
+        selected={selectedIds}
+        names={Object.fromEntries(rows.map((row) => [row.personId, row.displayName]))}
+        seasonId={seasonId}
+        seasonName={seasonName}
+        params={params}
         onClear={() => { setSelected(new Set()); }}
       />
     </>

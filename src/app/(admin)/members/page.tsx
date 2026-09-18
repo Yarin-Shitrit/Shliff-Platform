@@ -196,6 +196,7 @@ export default async function MembersPage(
         seasonYears={seasons.map((season) => season.year).sort((a, b) => a - b)}
         params={params}
         seasonId={scope?.id ?? null}
+        seasonName={scope?.name ?? null}
         viewLabel={viewLabels[query.view]}
         empty={<EmptyState {...empty} />}
       />
