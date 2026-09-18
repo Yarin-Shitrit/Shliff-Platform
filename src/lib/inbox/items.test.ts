@@ -451,3 +451,37 @@ describe('inboxItems — order', () => {
     expect(items.map((i) => i.kind)).toEqual(['sheet-collision', 'unlinked-name', 'arithmetic-flag']);
   });
 });
+
+describe('the season-less sheet says which promoter is waiting', () => {
+  // `budgetRow` and `ticketRow` refuse in different words. A sheet holding
+  // only ticket rounds was being told its budget needs a season — the right
+  // refusal, about the wrong thing. The strings are the promoter's, byte for
+  // byte; only the choice between them is made here.
+  it('uses the budget wording for a budget table', async () => {
+    sheetsNeedingSeason.mockResolvedValue([sheet({ id: 's1', name: 'תקציב 26' })]);
+    blockStates.mockResolvedValue([
+      block({ sheetId: 's1', archetype: 'budget_lines', state: 'confirmed', promotedRows: 0 }),
+    ]);
+    const [item] = await inboxItems(db, FULL);
+    expect(item.detail).toBe('לגיליון לא נקבעה עונה, ותקציב חייב עונה');
+  });
+
+  it('uses the ticket wording for a ticket table', async () => {
+    sheetsNeedingSeason.mockResolvedValue([sheet({ id: 's1', name: 'כרטיסים' })]);
+    blockStates.mockResolvedValue([
+      block({ sheetId: 's1', archetype: 'ticket_rounds', state: 'confirmed', promotedRows: 0 }),
+    ]);
+    const [item] = await inboxItems(db, FULL);
+    expect(item.detail).toBe('לגיליון לא נקבעה עונה, וסבב כרטיסים חייב עונה');
+  });
+
+  it('names both when both are waiting', async () => {
+    sheetsNeedingSeason.mockResolvedValue([sheet({ id: 's1', name: 'הכול' })]);
+    blockStates.mockResolvedValue([
+      block({ blockId: 'b1', sheetId: 's1', archetype: 'budget_lines', state: 'confirmed', promotedRows: 0 }),
+      block({ blockId: 'b2', sheetId: 's1', archetype: 'ticket_rounds', state: 'confirmed', promotedRows: 0 }),
+    ]);
+    const [item] = await inboxItems(db, FULL);
+    expect(item.detail).toBe('לגיליון לא נקבעה עונה, ותקציב וסבב כרטיסים חייבים עונה');
+  });
+});

@@ -6,6 +6,7 @@ import {
 import { blockStates, type BlockStateRow } from '@/lib/import/register';
 import { SEASON_REQUIRED_ARCHETYPES } from '@/lib/import/promote/promote';
 import type { SheetRow } from '@/lib/import/sheets';
+import type { BlockArchetype } from '@/lib/classify/types';
 import type { Refusal, RefusalReason } from '@/lib/import/promote/types';
 import { traceRow, type SourceCell } from '@/lib/money/trace';
 import { unnamedObligations, type ObligationRow } from '@/lib/money/obligations';
@@ -279,6 +280,24 @@ function snoozeAction(itemId: string): Omit<InboxAction, 'digit'> {
   };
 }
 
+/**
+ * The promoter's own `no-season` wording, byte for byte, chosen by which
+ * archetype is actually waiting.
+ *
+ * `budgetRow` and `ticketRow` refuse in different words — ותקציב חייב עונה
+ * against וסבב כרטיסים חייב עונה — and a sheet holding only ticket rounds was
+ * being told its budget needs a season. E5 says the stored Hebrew is reused
+ * as stored; picking one of two stored strings is still reuse, picking the
+ * wrong one is not.
+ */
+function noSeasonMessage(archetypes: readonly BlockArchetype[]): string {
+  const budget = archetypes.includes('budget_lines');
+  const tickets = archetypes.includes('ticket_rounds');
+  if (budget && !tickets) return 'לגיליון לא נקבעה עונה, ותקציב חייב עונה';
+  if (tickets && !budget) return 'לגיליון לא נקבעה עונה, וסבב כרטיסים חייב עונה';
+  return 'לגיליון לא נקבעה עונה, ותקציב וסבב כרטיסים חייבים עונה';
+}
+
 function formatDate(date: Date): string {
   const dd = String(date.getUTCDate()).padStart(2, '0');
   const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
@@ -377,10 +396,11 @@ export async function inboxItems(db: AnyDb, input: InboxInput): Promise<InboxIte
     // precisely so a screen can say "this cannot write anything yet" without
     // running anything. An unconfirmed block is not counted — it would refuse
     // for being unconfirmed first, and `block-undecided` carries that.
-    const refuses = onSheet.some((block) => (
+    const refusing = onSheet.filter((block) => (
       block.confirmedAt !== null
       && SEASON_REQUIRED_ARCHETYPES.includes(block.archetype)
     ));
+    const refuses = refusing.length > 0;
     const waiting = onSheet.map((block) => ({
       blockId: block.blockId, archetype: block.archetype, rows: block.promotedRows,
     }));
@@ -390,7 +410,7 @@ export async function inboxItems(db: AnyDb, input: InboxInput): Promise<InboxIte
       id, kind: 'sheet-season',
       title: `לגיליון ״${sheet.name}״ אין שנה`,
       detail: refuses
-        ? 'לגיליון לא נקבעה עונה, ותקציב חייב עונה'
+        ? noSeasonMessage(refusing.map((block) => block.archetype))
         : `${pending} שורות נכתבו בלי שיוך לעונה`,
       source: null, blocking: true, snoozedUntil: null,
       sheet, waiting, refusesWithoutSeason: refuses,
