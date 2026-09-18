@@ -2,7 +2,7 @@
  * דמי קאמפ — the screen's own layout, and nothing else.
  *
  * Every colour is a plan-01 token. The old dark-only palette this file used to
- * be written in (`--sand`, `--dust`, `--ground`, `--raised`, `--flare`) went
+ * be written in (wave 0 aliased the pre-redesign palette onto the new tokens) went
  * with `member-fee-row.tsx` and `exception-form.tsx`; no class here survives
  * unreferenced.
  *

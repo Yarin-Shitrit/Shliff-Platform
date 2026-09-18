@@ -247,7 +247,7 @@
 }
 
 .popoverFoot button:disabled {
-  background: var(--dust);
+  background: var(--ink-3);
   color: var(--ink-4);
   cursor: default;
 }

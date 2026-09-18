@@ -162,19 +162,27 @@ describe('tokens.css', () => {
   });
 
   /**
-   * The nine CSS Modules written before the redesign read these six names.
-   * They are kept, pointing at the new tokens, so the redesign can land one
-   * screen at a time. `--flare` maps to `--brand-text` and not to `--brand`:
-   * it is read as text in thirty-odd places, and #EB7837 on white is 2.89:1.
+   * Wave 0 kept six pre-redesign names as aliases onto the new tokens, so the
+   * redesign could land one screen at a time. Every screen has now landed and
+   * the block is deleted — this is the net that keeps it deleted.
+   *
+   * It matches a *declaration* rather than a mention, so the sentences above
+   * explaining why the names are gone do not resurrect them. The one file that
+   * still spoke of them by name was dead: `members/members.module.css` held 26
+   * of the roughly 30 uses and had been imported by nobody since plan 06
+   * rewrote /members onto `people.module.css`. Deleting an unreferenced
+   * stylesheet is what made the rest of this a four-line migration.
    */
-  it('keeps the pre-redesign names as aliases onto the new tokens', () => {
+  it('no longer defines the pre-redesign aliases', () => {
     const root = block(tokens(), ':root {');
-    expect(tokenValue(root, 'ground')).toBe('var(--canvas)');
-    expect(tokenValue(root, 'raised')).toBe('var(--panel)');
-    expect(tokenValue(root, 'sand')).toBe('var(--ink)');
-    expect(tokenValue(root, 'dust')).toBe('var(--ink-3)');
-    expect(tokenValue(root, 'dust-dim')).toBe('var(--ink-4)');
-    expect(tokenValue(root, 'flare')).toBe('var(--brand-text)');
+    for (const alias of ['ground', 'raised', 'sand', 'dust', 'dust-dim', 'flare']) {
+      expect(root).not.toMatch(new RegExp(`--${alias}:`));
+    }
+    // A positive control: the tokens they pointed at are still there, so an
+    // empty or misparsed block cannot pass this off as a successful deletion.
+    expect(tokenValue(root, 'canvas')).toBeTruthy();
+    expect(tokenValue(root, 'ink-3')).toBeTruthy();
+    expect(tokenValue(root, 'brand-text')).toBeTruthy();
   });
 });
 
@@ -252,7 +260,6 @@ describe('charts.module.css', () => {
     expect(tokenValue(viz, 'series-3')).toBe('#199e70');
     // A4's standing rule: the accent may never colour a chart mark.
     expect(viz).not.toContain('--brand');
-    expect(viz).not.toContain('--flare');
   });
 
   it('themes the unfilled track', () => {

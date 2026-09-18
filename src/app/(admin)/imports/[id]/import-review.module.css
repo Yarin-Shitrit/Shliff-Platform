@@ -539,7 +539,7 @@
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
-  background: var(--raised);
+  background: var(--panel);
   position: sticky;
   inset-block-end: 0;
   z-index: var(--z-bulk);

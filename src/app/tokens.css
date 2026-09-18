@@ -160,25 +160,6 @@
   --av-5-bg: #F6E3B4; --av-5-ink: #6A4A00;
   --av-6-bg: #F5D5DA; --av-6-ink: #7A2433;
 
-  /* ── Aliases from the pre-redesign palette ────────────────────────
-     Every CSS Module written before this plan reads these six names. They
-     are kept, mapped onto the new tokens, so the redesign lands one screen
-     at a time: a screen nobody has rewritten yet renders in the new palette
-     on the day this file lands. `--line` is not in this list because the new
-     palette uses the same name for the same job.
-
-     `--flare` maps to `--brand-text` and not to `--brand`: it is read as
-     text — links, warnings, the active nav pill's background with the canvas
-     colour on top — and #EB7837 as text on white is 2.89:1.
-
-     A screen plan deletes the alias uses in the CSS Module it rewrites. The
-     last screen plan deletes this block. No new CSS may use these names. */
-  --ground: var(--canvas);
-  --raised: var(--panel);
-  --sand: var(--ink);
-  --dust: var(--ink-3);
-  --dust-dim: var(--ink-4);
-  --flare: var(--brand-text);
 }
 
 /* A8: the compact table row. Set on <html> by a later plan's density control. */

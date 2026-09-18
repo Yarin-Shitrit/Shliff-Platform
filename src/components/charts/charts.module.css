@@ -6,7 +6,7 @@
  * 3.88:1, 3.64:1 and 3.41:1 — all clear of the 3:1 floor for a graphical
  * object. On the dark panel they are the values they always were.
  *
- * --flare / --brand (#EB7837) is deliberately absent. It fails the dark
+ * --brand (#EB7837) is deliberately absent. It fails the dark
  * lightness band (OKLCH L 0.694 against a 0.67 ceiling) and drops the CVD
  * pair into the warn band, so it stays what it already is: the UI accent for
  * links and primary actions, never a chart mark.
@@ -37,9 +37,9 @@
   margin-block-end: 0.5rem;
 }
 
-.label { color: var(--sand); font-size: 0.875rem; }
-.value { color: var(--sand); font-size: 0.875rem; font-variant-numeric: tabular-nums; }
-.note { color: var(--dust); font-size: 0.8125rem; }
+.label { color: var(--ink); font-size: 0.875rem; }
+.value { color: var(--ink); font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+.note { color: var(--ink-3); font-size: 0.8125rem; }
 
 .track { fill: var(--track); }
 .mark1 { fill: var(--series-1); }
@@ -52,12 +52,12 @@
   gap: 1rem;
   margin-block-start: 0.5rem;
   font-size: 0.8125rem;
-  color: var(--dust);
+  color: var(--ink-3);
 }
 
 /* Its own element so the label is matchable on its own; text wears text
  * tokens, never the series colour — the swatch beside it carries identity. */
-.legendLabel { color: var(--dust); }
+.legendLabel { color: var(--ink-3); }
 
 .swatch {
   inline-size: 0.625rem;
