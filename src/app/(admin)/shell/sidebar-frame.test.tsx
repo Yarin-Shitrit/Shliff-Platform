@@ -47,4 +47,50 @@ describe('SidebarFrame', () => {
     render(<SidebarFrame><nav aria-label="הקאמפ">rail</nav></SidebarFrame>);
     expect(screen.getByRole('navigation', { name: 'הקאמפ' })).toBeTruthy();
   });
+
+  it('keeps the menu button mounted while the panel is open', () => {
+    render(<SidebarFrame><nav>rail</nav></SidebarFrame>);
+    const menuButton = screen.getByRole('button', { name: 'תפריט' });
+    fireEvent.click(menuButton);
+    // Still in the DOM — "closed" is a CSS state, not an unmount, or the
+    // focused element would be yanked out from under the reader (A9).
+    expect(screen.getByRole('button', { name: 'תפריט' })).toBe(menuButton);
+  });
+
+  it('moves focus into the panel when it opens', () => {
+    render(<SidebarFrame><nav>rail</nav></SidebarFrame>);
+    fireEvent.click(screen.getByRole('button', { name: 'תפריט' }));
+    const panel = screen.getByText('rail').parentElement;
+    expect(document.activeElement).toBe(panel);
+  });
+
+  it('returns focus to the menu button when the scrim closes the panel', () => {
+    render(<SidebarFrame><nav>rail</nav></SidebarFrame>);
+    const menuButton = screen.getByRole('button', { name: 'תפריט' });
+    fireEvent.click(menuButton);
+    fireEvent.click(screen.getByRole('button', { name: 'סגירה' }));
+    expect(document.activeElement).toBe(menuButton);
+  });
+
+  it('returns focus to the menu button when escape closes the panel', () => {
+    render(<SidebarFrame><nav>rail</nav></SidebarFrame>);
+    const menuButton = screen.getByRole('button', { name: 'תפריט' });
+    fireEvent.click(menuButton);
+    fireEvent.keyDown(window, { code: 'Escape' });
+    expect(document.activeElement).toBe(menuButton);
+  });
+
+  it('makes the page behind the panel inert while it is open', () => {
+    render(
+      <div>
+        <SidebarFrame><nav>rail</nav></SidebarFrame>
+        <div data-testid="column">page</div>
+      </div>,
+    );
+    const column = screen.getByTestId('column');
+    fireEvent.click(screen.getByRole('button', { name: 'תפריט' }));
+    expect(column.hasAttribute('inert')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'סגירה' }));
+    expect(column.hasAttribute('inert')).toBe(false);
+  });
 });

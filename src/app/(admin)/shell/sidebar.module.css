@@ -301,6 +301,13 @@
     outline: 2px solid var(--focus);
     outline-offset: 2px;
   }
+  /*
+   * A9: the button stays mounted while the panel is open — unmounting it
+   * would drop focus onto <body> whenever it was the focused element — so
+   * "closed" is a CSS state (`data-open`), not JSX conditionally rendering
+   * the element itself.
+   */
+  .menubutton[data-open='true'] { display: none; }
 }
 :root[data-theme='dark'] .railScrim { background: rgb(0 0 0 / 50%); }
 @media (prefers-color-scheme: dark) {
