@@ -31,6 +31,33 @@ const LATIN_LETTER = /[A-Za-z]/;
 export type HebrewErrors = ReadonlyArray<readonly [prefix: string, hebrew: string]>;
 
 /**
+ * The same idea keyed on `constraint` instead of on message text.
+ *
+ * A prefix is a guess about what a message will look like; `constraint` is
+ * the driver naming the refusal. The two differ most where it matters: every
+ * failed insert into a table shares the wrapper's SQL text to the character,
+ * so a prefix keyed on it cannot tell a duplicate name from a number out of
+ * range, and a screen that keys on it will name the wrong reason confidently
+ * (integration §5 A27).
+ *
+ * Matched exactly, never by prefix — these are identifiers, and
+ * `seasons_name_unique` starting with `seasons_name` is a coincidence of
+ * spelling, not a relationship.
+ *
+ * A separate array rather than a widened `HebrewErrors`, because the existing
+ * maps are destructured as tuples by their own screens' tests; a union
+ * element type would break files this task does not own.
+ */
+export type HebrewConstraints =
+  ReadonlyArray<readonly [constraint: string, hebrew: string]>;
+
+function constraintOf(error: unknown): string | undefined {
+  if (!(error instanceof Error)) return undefined;
+  const { constraint } = error as Error & { constraint?: unknown };
+  return typeof constraint === 'string' ? constraint : undefined;
+}
+
+/**
  * Looked up in the global symbol registry rather than held as a module-local
  * value, because `instanceof` is one bundle away from lying: Next may place
  * two copies of this module in different chunks, and then the class a server
@@ -94,7 +121,11 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function toHebrewError(error: unknown, map: HebrewErrors): string {
+export function toHebrewError(
+  error: unknown,
+  map: HebrewErrors,
+  constraints: HebrewConstraints = [],
+): string {
   const chain = causeChain(error);
 
   // Outermost first, and before the map. A refusal is a decision somebody
@@ -111,7 +142,17 @@ export function toHebrewError(error: unknown, map: HebrewErrors): string {
   // cause claimed from a generic symptom is a guess. The outer links are
   // still tried, because a hand-thrown wrapper may be what carries the
   // meaning — but they are tried second, as the weaker evidence.
-  const messages = chain.map(messageOf).reverse();
+  const innermostFirst = [...chain].reverse();
+  const messages = innermostFirst.map(messageOf);
+
+  // Before the prefix map: a constraint is the driver naming the refusal, a
+  // prefix is a guess about what its message will look like.
+  for (const link of innermostFirst) {
+    const constraint = constraintOf(link);
+    if (constraint === undefined) continue;
+    const hit = constraints.find(([name]) => name === constraint);
+    if (hit) return hit[1];
+  }
 
   for (const message of messages) {
     const hit = map.find(([prefix]) => message.startsWith(prefix));

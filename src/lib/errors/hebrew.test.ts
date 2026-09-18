@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach, beforeAll } from 'vitest';
 import {
-  toHebrewError, HebrewRefusal, isHebrewRefusal, HEBREW_FALLBACK, type HebrewErrors,
+  toHebrewError, HebrewRefusal, isHebrewRefusal, HEBREW_FALLBACK,
+  type HebrewErrors, type HebrewConstraints,
 } from './hebrew';
 import { createTestDb } from '@/test/db';
 import { createSeason } from '@/lib/members/roster';
@@ -243,5 +244,89 @@ describe('the alphabet passthrough is now visible', () => {
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
     toHebrewError(new Error('an exception must carry a reason'), MAP);
     expect(warned).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A27's third treatment. The season screen matched the prefix
+ * `Failed query: insert into "seasons"` — the wrapper's SQL text, which is
+ * identical for every failed insert into that table. Its author reasoned that
+ * `name` was the only constraint the insert could still violate and wrote the
+ * reasoning down, and that was true when they wrote it. But it is an
+ * invariant held by a comment: add a constrained column or let a validation
+ * check drift, and the screen names a duplicate for a failure that has
+ * nothing to do with the name — a wrong Hebrew message delivered
+ * confidently, which is worse than the fallback it replaced.
+ *
+ * `constraint` is the evidence the driver already reports. Keying on it says
+ * exactly which refusal this was, and says nothing when it was some other
+ * one. Like the prefix map this is a plain array passed as an argument: there
+ * is no registry (§5 A7), because global mutable state whose behaviour
+ * depends on import order works in tests and fails once Next code-splits.
+ */
+describe('toHebrewError — constraint-keyed entries', () => {
+  let duplicateName: unknown;
+  let yearOutOfRange: unknown;
+
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  beforeAll(async () => {
+    const db = await createTestDb();
+    await createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1200 });
+    duplicateName = await thrownBy(
+      () => createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1200 }),
+    );
+    // A second way for the same insert to fail, and the reason the SQL-text
+    // prefix was over-broad. Measured: `code` is 22003 and there is no
+    // `constraint` at all.
+    yearOutOfRange = await thrownBy(
+      () => createSeason(db, { name: 'ברן 28', year: 99_999_999_999, flatRate: 1200 }),
+    );
+  });
+
+  const SEASON: HebrewConstraints = [
+    ['seasons_name_unique', 'כבר קיימת שנה בשם הזה.'],
+  ];
+
+  it('matches the constraint name the driver reports on the cause', () => {
+    expect(toHebrewError(duplicateName, [], SEASON)).toBe('כבר קיימת שנה בשם הזה.');
+  });
+
+  /** The over-broad match, as a test. Both errors come out of the same
+   *  insert and share the wrapper's message to the character; only the
+   *  constraint tells them apart. */
+  it('stays silent for a different failure of the very same insert', () => {
+    expect(toHebrewError(yearOutOfRange, [], SEASON)).toBe(HEBREW_FALLBACK);
+  });
+
+  it('is exact, not a prefix, so one constraint never answers for another', () => {
+    const near: HebrewConstraints = [['seasons_name', 'לא אמור לפגוע.']];
+    expect(toHebrewError(duplicateName, [], near)).toBe(HEBREW_FALLBACK);
+  });
+
+  /** Constraint before prefix: `constraint` is the driver naming the refusal,
+   *  while a prefix is a string someone guessed would appear in a message. */
+  it('prefers the constraint over a prefix that also matches', () => {
+    const prefix: HebrewErrors = [
+      ['duplicate key value violates unique constraint', 'משהו כבר קיים.'],
+    ];
+    expect(toHebrewError(duplicateName, prefix, SEASON)).toBe('כבר קיימת שנה בשם הזה.');
+  });
+
+  it('leaves the prefix map working when no constraint entry matches', () => {
+    const prefix: HebrewErrors = [
+      ['value "99999999999" is out of range', 'השנה הקלנדרית גדולה מדי.'],
+    ];
+    expect(toHebrewError(yearOutOfRange, prefix, SEASON))
+      .toBe('השנה הקלנדרית גדולה מדי.');
+  });
+
+  it('ignores an error carrying no constraint at all', () => {
+    expect(toHebrewError(new Error('connection terminated unexpectedly'), [], SEASON))
+      .toBe(HEBREW_FALLBACK);
   });
 });
