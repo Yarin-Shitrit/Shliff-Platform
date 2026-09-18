@@ -13,6 +13,7 @@ function row(overrides: Partial<ObligationRow> = {}): ObligationRow {
     id: 'o1', direction: 'camp_owes', partyPersonId: 'p1', partyName: null,
     displayParty: 'אורי', description: 'החזר על קרח', amountAgorot: 30000,
     settledAgorot: 0, outstandingAgorot: 30000, settled: false, unnamed: false,
+    openedOn: null,
     seasonId: 's1', sourceBlockId: null, sourceRow: null, settlements: [],
     ...overrides,
   };

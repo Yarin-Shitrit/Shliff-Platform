@@ -193,3 +193,22 @@ describe('obligations', () => {
     expect(await listObligations(db, { direction: 'owed_to_camp' })).toHaveLength(1);
   });
 });
+
+describe('the date a debt opened', () => {
+  it('carries it, and null when the workbook does not say', async () => {
+    await createObligation(db, {
+      direction: 'camp_owes', partyName: 'אורי', description: 'החזר',
+      amount: 300, openedOn: new Date('2026-07-02T00:00:00Z'),
+    });
+    await createObligation(db, {
+      direction: 'camp_owes', partyName: 'תמר גולן', description: 'החזר על מקררים',
+      amount: 180, openedOn: null,
+    });
+    const rows = await listObligations(db, { direction: 'camp_owes' });
+    // `asc nulls last` is already the module's own ordering, so the dateless
+    // row is second — a screen can tell the two apart only if the field
+    // leaves the module at all, which before this it did not.
+    expect(rows[0].openedOn?.toISOString()).toBe('2026-07-02T00:00:00.000Z');
+    expect(rows[1].openedOn).toBeNull();
+  });
+});

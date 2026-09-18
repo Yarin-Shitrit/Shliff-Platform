@@ -90,6 +90,7 @@ function obligation(overrides: Partial<ObligationRow> = {}): ObligationRow {
     id: 'o1', direction: 'camp_owes', partyPersonId: 'p1', partyName: null,
     displayParty: 'אורי', description: 'החזר על קרח', amountAgorot: 30000,
     settledAgorot: 0, outstandingAgorot: 30000, settled: false, unnamed: false,
+    openedOn: null,
     seasonId: 's1', sourceBlockId: null, sourceRow: null, settlements: [],
     ...overrides,
   };
@@ -337,12 +338,14 @@ describe('MoneyPage', () => {
       id: 'o1', direction: 'camp_owes', partyPersonId: 'p1', partyName: null,
       displayParty: 'אופק', description: 'שכ״ט DJ', amountAgorot: 200000,
       settledAgorot: 0, outstandingAgorot: 200000, settled: false, unnamed: false,
+      openedOn: null,
       seasonId: 's1', sourceBlockId: null, sourceRow: null, settlements: [],
     };
     const unnamed: ObligationRow = {
       id: 'o2', direction: 'camp_owes', partyPersonId: null, partyName: null,
       displayParty: null, description: 'הובלה', amountAgorot: 50000,
       settledAgorot: 0, outstandingAgorot: 50000, settled: false, unnamed: true,
+      openedOn: null,
       seasonId: 's1', sourceBlockId: null, sourceRow: null, settlements: [],
     };
     moneyOverview.mockResolvedValue(overview({
@@ -476,12 +479,14 @@ describe('MoneyPage', () => {
       id: 'o1', direction: 'camp_owes', partyPersonId: null, partyName: 'דנה',
       displayParty: 'דנה', description: 'תיקון גנרטור', amountAgorot: 80000,
       settledAgorot: 0, outstandingAgorot: 80000, settled: false, unnamed: false,
+      openedOn: null,
       seasonId: 's1', sourceBlockId: null, sourceRow: null, settlements: [],
     };
     const owedToUsRow: ObligationRow = {
       id: 'o2', direction: 'owed_to_camp', partyPersonId: null, partyName: 'יוסי',
       displayParty: 'יוסי', description: 'מקדמה על אוהל', amountAgorot: 45000,
       settledAgorot: 0, outstandingAgorot: 45000, settled: false, unnamed: false,
+      openedOn: null,
       seasonId: 's1', sourceBlockId: null, sourceRow: null, settlements: [],
     };
     moneyOverview.mockResolvedValue(overview({
@@ -523,6 +528,7 @@ describe('MoneyPage', () => {
       id: 'o2', direction: 'owed_to_camp', partyPersonId: null, partyName: 'יוסי',
       displayParty: 'יוסי', description: 'מקדמה על אוהל', amountAgorot: 45000,
       settledAgorot: 0, outstandingAgorot: 45000, settled: false, unnamed: false,
+      openedOn: null,
       seasonId: 's1', sourceBlockId: null, sourceRow: null, settlements: [],
     };
     moneyOverview.mockResolvedValue(overview({
@@ -548,6 +554,7 @@ describe('MoneyPage', () => {
       id: 'o1', direction: 'camp_owes', partyPersonId: null, partyName: 'דנה',
       displayParty: 'דנה', description: 'תיקון גנרטור', amountAgorot: 80000,
       settledAgorot: 0, outstandingAgorot: 80000, settled: false, unnamed: false,
+      openedOn: null,
       seasonId: 's1', sourceBlockId: null, sourceRow: null, settlements: [],
     };
     moneyOverview.mockResolvedValue(overview({

@@ -60,6 +60,8 @@ export interface ObligationRow {
   settled: boolean;
   /** No linked person and no recorded name. Can never be settled. */
   unnamed: boolean;
+  /** `null` means the workbook does not say when this debt opened. */
+  openedOn: Date | null;
   seasonId: string | null;
   sourceBlockId: string | null;
   sourceRow: number | null;
@@ -151,6 +153,7 @@ export async function listObligations(
       // `partyName` of only invisible directional marks is truthy — a plain
       // `!obligation.partyName` check would call that row named.
       unnamed: !obligation.partyPersonId && isBlank(obligation.partyName),
+      openedOn: obligation.openedOn,
       seasonId: obligation.seasonId,
       sourceBlockId: obligation.sourceBlockId,
       sourceRow: obligation.sourceRow,
