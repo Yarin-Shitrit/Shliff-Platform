@@ -1325,3 +1325,45 @@ they must be changed deliberately, not worked around.
 **Third defect this browser pass has found that no test could.** The others: the
 sign-in logo broken by the auth guard matching `public/`, and the per-file
 promote re-promoting already-promoted blocks (A34).
+
+### A37 — The 96 `no-season` refusals are being retired, not fixed
+
+The camp lead chose to **retire (bookmark) the eight ברן 23/24 sheets** rather
+than invent a flat rate and camp size for two closed years. Inventing those
+figures would change what the dues and per-head numbers say about those years,
+which is the platform's first rule applied to history rather than to a name.
+
+Landing on `main` as `drizzle/0008` (two nullable columns, `sheets.retired_at`
+and `sheets.retired_by`). **This branch stops at `0007`, so a migration generated
+here before that merge must be `0009`.**
+
+Consequences for plan 05 and anything downstream:
+
+- `sheetsNeedingSeason` and `collisionGroups` exclude retired sheets; their blocks
+  drop out of `coverage`. The rail loses 96 items it could never resolve.
+- **A15's instruction not to calibrate copy against pre-correction numbers now has
+  a second edge.** `no-season` is 41% of all refusals today and is about to be
+  near-zero. Copy, empty states and any "most common refusal" phrasing must read
+  correctly at both ends, or derive the superlative instead of naming it.
+- `worklist` gains `BlockState = 'retired'`, deliberately, so a lead can see what
+  they retired and undo it. **The register needs a quiet place for retired blocks,
+  not silence** — a retirement that disappears is a decision made invisible.
+- `SkippedBlock.code` gains `'sheet-retired'` beside `'already-promoted'`.
+
+**The design decision is the part worth keeping, and it is not the obvious one: a
+retired sheet's blocks are skipped, not refused.** A whole-block refusal
+*releases* that block's rows — the sweep runs with an empty produced set and
+deletes whatever the block wrote before — so retirement-as-refusal would have
+silently destroyed money rows already derived from those sheets. Their test
+promotes a block, retires its sheet, promotes again, and asserts the rows survive.
+
+Generalise it: **before making any state turn a block into a refusal, ask what
+the sweep does with the rows that block already wrote.** This is the same shape as
+A34 — there, rows something references are *retained* rather than deleted, so
+re-promotion duplicates; here, rows are *released* rather than retained, so a
+refusal deletes. Both are the deletion path answering a question the caller did
+not know it was asking.
+
+Also landing: ברן 25's dancefloor total becomes the workbook's own figure
+**93,370** (89,060 plus six real expenses the seed never captured, with a VAT row
+deleted as junk). Any screen showing that total changes.
