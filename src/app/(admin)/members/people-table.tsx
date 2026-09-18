@@ -249,7 +249,11 @@ export function PeopleTable({
           <Link
             className={styles.rowact}
             href={peekHref(params, row.personId)}
-            aria-label="תצוגה מהירה"
+            /* Named after the row, the way the kit already requires of
+               `rowCheckboxLabel`: a screen reader tabbing a 38-row list would
+               otherwise hear `תצוגה מהירה` thirty-eight times with nothing to
+               tell the links apart. */
+            aria-label={`תצוגה מהירה: ${row.displayName}`}
           >
             <Icon name="eye" size={15} />
           </Link>

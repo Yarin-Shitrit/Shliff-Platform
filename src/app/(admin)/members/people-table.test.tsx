@@ -267,9 +267,11 @@ describe('PeopleTable — selection', () => {
 });
 
 describe('PeopleTable — the row action', () => {
+  /* One label per row, not one label repeated: 38 links all reading
+     `תצוגה מהירה` are indistinguishable to a screen reader. */
   it('offers a peek that is a URL, carrying whatever the list is already filtered to', () => {
     renderTable([row()], { season: 's26', view: 'unpaid' });
-    const peek = screen.getByRole('link', { name: 'תצוגה מהירה' });
+    const peek = screen.getByRole('link', { name: 'תצוגה מהירה: רוני אדלר' });
     expect(peek.getAttribute('href')).toContain('peek=p1');
     expect(peek.getAttribute('href')).toContain('view=unpaid');
     expect(peek.getAttribute('href')).toContain('season=s26');
