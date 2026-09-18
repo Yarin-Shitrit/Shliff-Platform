@@ -6,14 +6,15 @@ import { listUnlinkedNames, resolveName } from '@/lib/members/identity';
 import { listSeasons } from '@/lib/members/roster';
 import { listPeopleForSeason } from '@/lib/members/people-list';
 import {
-  PEOPLE_PATH, PEOPLE_SORTS, applyPeopleQuery, parsePeopleQuery, viewCounts,
-  type PeopleSort, type PeopleView, type RawParams,
+  PEOPLE_PATH, PEOPLE_SORTS, applyPeopleQuery, closeDrawerHref, parsePeopleQuery,
+  viewCounts, type PeopleSort, type PeopleView, type RawParams,
 } from '@/lib/members/people-views';
 import { SavedViews, type SavedView } from '@/components/ui/saved-views';
 import { FilterBar, type FilterOption } from '@/components/ui/filter-bar';
 import { EmptyState, type EmptyStateProps } from '@/components/ui/empty-state';
 import { AddMember } from './add-member';
 import { PeopleTable, DUES_STATE_LABELS } from './people-table';
+import { PeekDrawer } from './peek-drawer';
 import { UnlinkedQueue, type QueuedName } from './unlinked-queue';
 import styles from './people.module.css';
 
@@ -125,6 +126,24 @@ export default async function MembersPage(
     };
   }
 
+  const peeked = query.peek === null
+    ? null
+    : rows.find((candidate) => candidate.personId === query.peek) ?? null;
+
+  /*
+   * Awaited here rather than rendered as `<PeekDrawer />`: it is a Server
+   * Component that reads two more tables, and this page has no Suspense
+   * boundary to hand a pending element to. Awaiting keeps the whole screen —
+   * list and drawer — one server render, which is also what makes the drawer
+   * survive a refresh with no client fetch.
+   */
+  const drawer = peeked === null ? null : await PeekDrawer({
+    row: peeked,
+    seasonId: scope?.id ?? null,
+    seasonName: scope?.name ?? null,
+    closeHref: closeDrawerHref(params),
+  });
+
   const duesOptions: FilterOption[] = (Object.keys(DUES_STATE_LABELS) as Array<keyof typeof DUES_STATE_LABELS>)
     .map((state) => ({
       id: state,
@@ -216,6 +235,15 @@ export default async function MembersPage(
         </p>
         <UnlinkedQueue names={queue} />
       </section>
+
+      {/*
+        Resolved against the unfiltered roster, never against `shown`. A peek
+        link is meant to be pasted, and the person who opens it has whatever
+        filter the sender had — or none at all. A peek naming nobody renders
+        nothing rather than an error: a truncated URL out of a chat is not a
+        404, it is just a list.
+      */}
+      {drawer}
 
       <section className={styles.section} id="add-person">
         <h2>הוספת אדם</h2>

@@ -26,6 +26,8 @@ vi.mock('@/lib/auth/guard', () => ({ requireAdmin }));
 vi.mock('@/lib/members/roster', () => ({ listSeasons }));
 vi.mock('@/lib/members/people-list', () => ({ listPeopleForSeason }));
 vi.mock('@/lib/members/identity', () => ({ listUnlinkedNames, resolveName }));
+vi.mock('@/lib/work/coverage', () => ({ responsibilitiesOf: vi.fn(async () => []) }));
+vi.mock('@/lib/members/change-log', () => ({ personChangeLog: vi.fn(async () => []) }));
 vi.mock('next/navigation', () => ({
   notFound,
   useRouter: () => ({ push: vi.fn(), refresh: () => {} }),
@@ -249,6 +251,32 @@ describe('/members — the drawers', () => {
   it('renders no drawer when the URL names none', async () => {
     listPeopleForSeason.mockResolvedValue([row()]);
     const { container } = await renderPage();
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('opens a peek on the person the URL names', async () => {
+    listPeopleForSeason.mockResolvedValue([row({ personId: 'p1', displayName: 'רוני אדלר' })]);
+    await renderPage({ peek: 'p1' });
+    expect(screen.getByRole('dialog', { name: 'רוני אדלר' })).toBeTruthy();
+  });
+
+  /*
+   * A peek link is meant to be pasted. The person who opens it has whatever
+   * filter the sender had — or none — so the id is looked up against the
+   * unfiltered roster. Resolving it against the filtered rows would make a
+   * shared link open an empty list about half the time.
+   */
+  it('opens a peek pasted with a filter that hides the person it names', async () => {
+    listPeopleForSeason.mockResolvedValue([
+      row({ personId: 'p1', displayName: 'רוני אדלר', role: 'member' }),
+    ]);
+    await renderPage({ view: 'leads', peek: 'p1' });
+    expect(screen.getByRole('dialog', { name: 'רוני אדלר' })).toBeTruthy();
+  });
+
+  it('renders no drawer at all when the peek names nobody', async () => {
+    listPeopleForSeason.mockResolvedValue([row({ personId: 'p1' })]);
+    const { container } = await renderPage({ peek: 'ghost' });
     expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 });

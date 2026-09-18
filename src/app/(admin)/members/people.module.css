@@ -185,3 +185,52 @@
   outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
+
+/* ── The peek drawer ─────────────────────────────────────────── */
+
+.peekRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding-block: var(--space-2);
+  border-block-end: 1px solid var(--line);
+}
+
+.peekRow:last-of-type { border-block-end: none; }
+
+.peekLabel {
+  flex: 0 0 auto;
+  inline-size: 8rem;
+  color: var(--ink-3);
+  font-size: var(--text-label);
+}
+
+.peekValue {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  min-inline-size: 0;
+}
+
+.peekNote {
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.peekLog {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-meta);
+}
+
+.peekFooter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block-start: var(--space-4);
+}
