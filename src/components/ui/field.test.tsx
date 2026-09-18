@@ -3,6 +3,57 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Field, TextInput, MoneyInput, Select, Textarea, Segmented, Checkbox } from './field';
 
+/**
+ * A26/A28's shared shape: the kit's controls assume a form layout, where a
+ * label drawn above the control does the naming. In a table row the naming
+ * already exists — the column header names the cell — and a second copy of it
+ * in every row is noise. So the label is *carried* rather than printed.
+ */
+describe('Field — a label that is carried, not printed', () => {
+  it('keeps naming the control when the label is hidden', () => {
+    render(
+      <Field id="amount" label="סכום" labelHidden>
+        <MoneyInput id="amount" name="amount" defaultValue="1200" />
+      </Field>,
+    );
+    expect(screen.getByLabelText('סכום')).toBeTruthy();
+  });
+
+  it('stops drawing it, so a column header is not repeated in every row', () => {
+    const { container } = render(
+      <Field id="amount" label="סכום" labelHidden>
+        <MoneyInput id="amount" name="amount" />
+      </Field>,
+    );
+    const label = container.querySelector('label')!;
+    expect(label.className).toBe('sr-only');
+  });
+
+  it('hides a group\'s label the same way, and still names the group', () => {
+    const { container } = render(
+      <Field id="method" label="אמצעי תשלום" as="group" labelHidden>
+        <Segmented
+          id="method"
+          name="method"
+          defaultValue="cash"
+          options={[{ value: 'cash', label: 'מזומן' }, { value: 'bit', label: 'ביט' }]}
+        />
+      </Field>,
+    );
+    expect(screen.getByRole('radiogroup', { name: 'אמצעי תשלום' })).toBeTruthy();
+    expect(container.querySelector('span[id$="-label"]')!.className).toBe('sr-only');
+  });
+
+  it('draws the label by default, so no form written before this changes', () => {
+    const { container } = render(
+      <Field id="amount" label="סכום">
+        <MoneyInput id="amount" name="amount" />
+      </Field>,
+    );
+    expect(container.querySelector('label')!.className).not.toContain('sr-only');
+  });
+});
+
 describe('Field', () => {
   it('ties the label to the control', () => {
     render(

@@ -32,6 +32,16 @@ export type FieldProps = {
       `<span>` and `aria-labelledby`; a single control uses a real `<label for>`. */
   as?: 'label' | 'group';
   required?: boolean;
+  /**
+   * The label is carried, not printed. `Field` assumes a form layout, where a
+   * label drawn above the control does the naming; a control that sits in a
+   * table row is already named by its column header, and repeating that in
+   * every row is noise. The `<label>` (or the group's `<span>`) is still there
+   * and still ties to the control — it is only taken out of the visual layout,
+   * exactly as `Table` does with a `caption` that is not `captionVisible`.
+   * It is never a licence to ship a control with no label at all.
+   */
+  labelHidden?: boolean;
   children: ReactNode;
 };
 
@@ -59,8 +69,12 @@ export function errorId(id: string): string { return `${id}-error`; }
 export function labelId(id: string): string { return `${id}-label`; }
 
 export function Field({
-  id, label, hint, error, as = 'label', required, children,
+  id, label, hint, error, as = 'label', required, labelHidden, children,
 }: FieldProps): ReactElement {
+  /* Replaces the class rather than joining it: `sr-only` takes an element out
+     of the flow, and a `.label` rule alongside it would be a race between two
+     single-class selectors. `Table`'s caption does the same. */
+  const labelClass = labelHidden === true ? 'sr-only' : styles.label;
   const described = [
     hint !== undefined ? hintId(id) : null,
     error !== undefined ? errorId(id) : null,
@@ -78,11 +92,11 @@ export function Field({
   return (
     <div className={styles.field}>
       {as === 'label' ? (
-        <label className={styles.label} htmlFor={id}>
+        <label className={labelClass} htmlFor={id}>
           {label}{required ? <span className={styles.required} aria-hidden="true"> *</span> : null}
         </label>
       ) : (
-        <span className={styles.label} id={labelId(id)}>
+        <span className={labelClass} id={labelId(id)}>
           {label}{required ? <span className={styles.required} aria-hidden="true"> *</span> : null}
         </span>
       )}
