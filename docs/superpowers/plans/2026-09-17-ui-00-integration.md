@@ -640,3 +640,29 @@ Both are being fixed in the wave-2 lane. The instruction for plans 05 and 11 is
 narrow: **derive block state from the corrected projection when it lands, and do
 not calibrate any copy — counts, empty states, "most common refusal" — against
 numbers measured before it.**
+
+### A16 — The icon set is frozen at 65; two plans cite glyphs that do not exist
+
+`src/components/ui/icon.tsx` ships the whole set at once and **no screen plan
+edits it again** — an icon record every parallel lane appends to is a merge
+conflict with a schedule. The consequence nobody wrote down: **a plan citing a
+glyph outside those 65 has no recourse but substitution**, and the failure
+surfaces as a blank square rather than a compile error if the name reaches the
+component as a string.
+
+Audited every plan's `<Icon name="…">` references against the shipped record.
+Two real cases:
+
+| plan | glyph cited | exists? | substitute |
+|---|---|---|---|
+| 03 (EmptyState, `not-permitted`) | `lock` | no | **`ban`** — the nearest "no entry" glyph. Already applied. |
+| 11 (imports) | `file` | no | **`sheet`** — a document glyph is in the set under that name. |
+
+Everything else checks out: every other `<Icon name>` in every plan resolves.
+
+**Rule for any plan that finds a glyph missing:** substitute from the 65 and say
+so in the report. Do **not** add to `ICON_PATHS` — the record is frozen for a
+reason, and a sixty-sixth entry added by one lane is a conflict for every other.
+If no glyph in the set carries the meaning, that is worth escalating rather than
+approximating, because an icon that means nearly the right thing is worse than a
+word.
