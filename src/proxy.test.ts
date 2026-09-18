@@ -50,6 +50,20 @@ describe('proxy matcher (M15: whole-segment exclusions)', () => {
     ['/_next/static/chunk.js', false],
     ['/_next/image', false],
     ['/favicon.ico', false],
+    // `public/` assets. Gating these broke the sign-in page's logo in a way no
+    // test could see: the gate redirected `/logo.png` to `/signin`, and
+    // `/_next/image` — itself excluded — fetches that source URL and answered
+    // 400 for a redirect. The browser showed a broken image; the suite stayed
+    // green. Everything in `public/` is public by definition; private files go
+    // through the blob store.
+    ['/logo.png', false],
+    ['/logo-dark.png', false],
+    ['/next.svg', false],
+    // …and the exclusion is anchored to the END of the path, so a route that
+    // merely contains an image name is still gated. Same M15 discipline as the
+    // segment anchors above.
+    ['/logo.png/edit', true],
+    ['/reports/chart.png.json', true],
   ] as const)('%s → gated: %s', (url, expected) => {
     expect(unstable_doesMiddlewareMatch({ config, url })).toBe(expected);
   });
