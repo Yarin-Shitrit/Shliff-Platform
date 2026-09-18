@@ -1292,3 +1292,36 @@ vacuously. (The first reason was narrower: React dedupes its key warning per
 owner component.) Rebuilt in its own file with a positive control and
 mutation-verified. **Audit for this pattern when a test asserts on a spy it did
 not itself exercise.**
+
+### A36 — "מוכן לקידום" is claimed without checking the one thing that would refuse it
+
+Found in a browser, on live data, on a screen that had never been opened.
+
+`/imports` shows `קופת קאמפ 23'-24'.xlsx` as **מוכן לקידום**, 10 of 10 tables
+approved. **All eight of that file's sheets have `season_id IS NULL`** (verified
+in SQL). Promoting it would refuse every budget and ticket row with `no-season` —
+the largest single refusal category in the real data, 96 of 234, 41%.
+
+`uploadStatusLabel` (`src/lib/import/uploads.ts:68-81`) decides the word from
+`confirmedCount === blockCount` and nothing else. Confirmation is a statement
+about tables; a season is a statement about sheets. **The label answers the first
+question and is read as answering the second.**
+
+This is A15's shape at the file level: a status claiming readiness for an action
+that would refuse everything. The platform's rule is that what the system cannot
+resolve becomes a **visible decision**, not a silent one — and an undecided season
+is the decision, sitting one screen away, while the file says it is ready.
+
+**The fix is not to relabel this file "refused".** The camp lead has deliberately
+left ברן 23/24 unlabelled, so those 96 refusals are expected and permanent for
+now; a red status would be just as wrong in the other direction. The status must
+say what is actually true — that this file is waiting on a season decision before
+promotion can write anything — and it must be derived from the sheets' season
+state rather than assumed from the table count.
+
+Note the existing tests in `uploads.test.ts` **pin the current behaviour**, so
+they must be changed deliberately, not worked around.
+
+**Third defect this browser pass has found that no test could.** The others: the
+sign-in logo broken by the auth guard matching `public/`, and the per-file
+promote re-promoting already-promoted blocks (A34).
