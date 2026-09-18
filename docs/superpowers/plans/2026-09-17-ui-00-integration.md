@@ -1533,3 +1533,41 @@ moment CI runs a build rather than only a test.
 
 The failure mode to recognise: on a fresh clone it will not look like a
 dependency problem. It will look like vitest being broken.
+
+### A41 — Plan 04 is complete, and I2's cost is now visible on the landing page
+
+Task 9 landed (`e5f2e1d`): 51 tests, four mutations all caught — panel href losing
+the season, a row action pointed at the wrong route, `.filter(blocking)` dropped
+from the preview, and `total` counted from the six rows drawn rather than from
+the register.
+
+**How it handled an unreachable state is worth copying.** `InboxPreview` could
+render an empty list when `total > 0` and `items` is empty. Wiring does not make
+that reachable — `previewOf` derives both numbers from one `loadInboxItems` call,
+so `total > 0` implies at least one row by construction. Rather than delete a
+guard it could not reach, it made **the invariant** testable: the mutation that
+would make the state reachable is a `total` counting notices as decisions, and
+that mutation is now red. The guard stays, and the reasoning lives in the
+component and its test rather than only in a report.
+
+**The cost I2 implies is now real and should be measured before it is defended.**
+The home performs the register's entire read per request — block states,
+collisions, seasonless sheets, arithmetic flags, unnamed debts, unlinked names, a
+name suggestion per name, and a copy diff per collision. That is exactly what I2
+instructs (one `loadInboxItems` per request, derive the rest, no third query) and
+it runs **no** promoter dry run, which was the hazard I2 was written against. But
+it is now by far the heaviest read on the first screen a lead opens, and "it is
+what the ruling says" is not the same as "it is fast enough". Measure it against
+the live database before wave 5 closes; if it needs a cheaper path, that is a new
+ruling, not a quiet exception to I2.
+
+**Also in flight: plan 12 has made `Table`'s `card` slot required.** Its own
+comment gives the reason — "a missing `card` is a compile error, not a storm with
+one hand free" — which is this project's enforcement-by-subtraction principle
+applied to the phone layout: a column that forgot how it reflows cannot compile.
+It is a deliberate breaking change to the kit, correct for the last plan in the
+wave when no other lane depends on the old shape, and it leaves 55 errors across
+nine call sites until that task finishes. **A tree with 55 type errors mid-task
+is expected here and is not a defect** — but it is also the state that would be
+left behind if the lane died, so it is worth knowing it is recoverable with
+`git checkout -- src/components/ui/table.*`.
