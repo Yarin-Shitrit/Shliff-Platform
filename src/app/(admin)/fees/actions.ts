@@ -9,7 +9,7 @@ import {
 } from '@/lib/fees/dues';
 import { recordPayment, deletePayment } from '@/lib/fees/payments';
 import type { PaymentChannel } from '@/db/schema/camp';
-import { toHebrewError } from '@/lib/errors/hebrew';
+import { toHebrewError, HebrewRefusal } from '@/lib/errors/hebrew';
 import { listOpenAccounts } from '@/lib/money/accounts';
 import { FEE_ERRORS } from './error-messages';
 
@@ -126,7 +126,10 @@ export async function recordPaymentAction(input: {
     if (input.accountId) {
       const open = await listOpenAccounts(db);
       if (!open.some((account) => account.id === input.accountId)) {
-        throw new Error('הקופה שנבחרה לא קיימת או נסגרה.');
+        // A refusal, not a failure: marked so it reaches the screen because
+        // somebody meant it, rather than because it happens to contain no
+        // Latin letter (integration §5 A20).
+        throw new HebrewRefusal('הקופה שנבחרה לא קיימת או נסגרה.');
       }
     }
     await recordPayment(db, {
