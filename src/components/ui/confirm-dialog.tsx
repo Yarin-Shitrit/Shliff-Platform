@@ -2,8 +2,11 @@
 /**
  * Client component: it opens with focus on cancel and holds a verb disabled
  * behind an acknowledgement, which is DOM lifecycle. Trapping Tab, closing on
- * `esc` without disturbing an enclosing Drawer, and restoring the opener are
- * the shared `useFocusTrap` (also used by `Drawer`).
+ * `esc` without disturbing an enclosing Drawer, restoring the opener, and
+ * hiding everything else — including a Drawer it was raised over — from the
+ * accessibility tree while it is open are the shared `useFocusTrap` (also
+ * used by `Drawer`); `scrimRef` is what keeps this dialog's own scrim (a
+ * click-to-cancel target) out of what gets marked `inert`.
  */
 import { useId, useRef, type ReactElement, type ReactNode } from 'react';
 import { Button } from './button';
@@ -46,7 +49,7 @@ export function ConfirmDialog({
   const bodyId = useId();
   /** A wrapper, because `Button` does not forward a ref and does not need to. */
   const cancelRef = useRef<HTMLDivElement | null>(null);
-  const { rootRef, onKeyDown } = useFocusTrap<HTMLDivElement>({
+  const { rootRef, scrimRef, onKeyDown } = useFocusTrap<HTMLDivElement>({
     onEscape: onCancel,
     getInitialFocus: () => cancelRef.current?.querySelector('button') ?? null,
   });
@@ -66,7 +69,7 @@ export function ConfirmDialog({
 
   return (
     <>
-      <div className={styles.scrim} aria-hidden="true" onClick={onCancel} />
+      <div className={styles.scrim} ref={scrimRef} aria-hidden="true" onClick={onCancel} />
       <div
         className={styles.dialog}
         ref={rootRef}

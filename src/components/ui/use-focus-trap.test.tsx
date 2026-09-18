@@ -5,19 +5,24 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { useFocusTrap } from './use-focus-trap';
 
 /** A minimal stand-in for `Drawer`/`ConfirmDialog`: a heading-focused trap. */
-function Trap({ label, onEscape }: { label: string; onEscape: () => void }): ReactElement {
+function Trap(
+  { label, onEscape, hasScrim = false }: { label: string; onEscape: () => void; hasScrim?: boolean },
+): ReactElement {
   const headingRef = useRef<HTMLHeadingElement | null>(null);
-  const { rootRef, onKeyDown } = useFocusTrap<HTMLDivElement>({
+  const { rootRef, scrimRef, onKeyDown } = useFocusTrap<HTMLDivElement>({
     onEscape,
     getInitialFocus: () => headingRef.current,
     getExtraStart: () => headingRef.current,
   });
   return (
-    <div ref={rootRef} onKeyDown={onKeyDown} role="dialog" aria-label={label}>
-      <h2 ref={headingRef} tabIndex={-1}>{label}</h2>
-      <button type="button">ראשון</button>
-      <button type="button">אחרון</button>
-    </div>
+    <>
+      {hasScrim ? <div aria-hidden="true" ref={scrimRef} onClick={onEscape} /> : null}
+      <div ref={rootRef} onKeyDown={onKeyDown} role="dialog" aria-label={label}>
+        <h2 ref={headingRef} tabIndex={-1}>{label}</h2>
+        <button type="button">ראשון</button>
+        <button type="button">אחרון</button>
+      </div>
+    </>
   );
 }
 
@@ -110,5 +115,65 @@ describe('useFocusTrap', () => {
     fireEvent.keyDown(screen.getByRole('dialog', { name: 'חלון' }), { key: 'Escape' });
     expect(onEscape).toHaveBeenCalledTimes(1);
     expect(enclosingWouldClose).not.toHaveBeenCalled();
+  });
+
+  it('hides the rest of the page from the accessibility tree while open, and restores it on close', () => {
+    function Harness({ open }: { open: boolean }) {
+      return (
+        <>
+          <button type="button">שאר העמוד</button>
+          {open ? <Trap label="חלון" onEscape={vi.fn()} /> : null}
+        </>
+      );
+    }
+    const { rerender } = render(<Harness open={false} />);
+    const rest = screen.getByRole('button', { name: 'שאר העמוד' });
+    expect(rest.hasAttribute('inert')).toBe(false);
+
+    rerender(<Harness open />);
+    expect(rest.hasAttribute('inert')).toBe(true);
+
+    rerender(<Harness open={false} />);
+    expect(rest.hasAttribute('inert')).toBe(false);
+  });
+
+  it('never marks the trap itself, or a scrim it was handed, inert', () => {
+    render(
+      <>
+        <button type="button">שאר העמוד</button>
+        <Trap label="חלון" onEscape={vi.fn()} hasScrim />
+      </>,
+    );
+    expect(screen.getByRole('dialog', { name: 'חלון' }).hasAttribute('inert')).toBe(false);
+    const scrim = document.querySelector('[aria-hidden="true"]');
+    expect(scrim).not.toBeNull();
+    expect(scrim?.hasAttribute('inert')).toBe(false);
+  });
+
+  it('leaves a live region reachable even while the trap is open', () => {
+    render(
+      <>
+        <div role="status">נשמר</div>
+        <Trap label="חלון" onEscape={vi.fn()} />
+      </>,
+    );
+    expect(screen.getByRole('status').hasAttribute('inert')).toBe(false);
+  });
+
+  it('only the topmost of two open traps stays out of the hidden background', () => {
+    function Harness({ innerOpen }: { innerOpen: boolean }) {
+      return (
+        <>
+          <Trap label="חיצוני" onEscape={vi.fn()} />
+          {innerOpen ? <Trap label="פנימי" onEscape={vi.fn()} /> : null}
+        </>
+      );
+    }
+    const { rerender } = render(<Harness innerOpen />);
+    expect(screen.getByRole('dialog', { name: 'פנימי' }).hasAttribute('inert')).toBe(false);
+    expect(screen.getByRole('dialog', { name: 'חיצוני' }).hasAttribute('inert')).toBe(true);
+
+    rerender(<Harness innerOpen={false} />);
+    expect(screen.getByRole('dialog', { name: 'חיצוני' }).hasAttribute('inert')).toBe(false);
   });
 });

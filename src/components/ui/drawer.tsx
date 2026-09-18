@@ -1,8 +1,13 @@
 'use client';
 /**
  * Client component: it opens with focus on the title and hands the rest of
- * its DOM lifecycle — trapping Tab, closing on `esc`, restoring the opener —
- * to the shared `useFocusTrap` (also used by `ConfirmDialog`).
+ * its DOM lifecycle — trapping Tab, closing on `esc`, restoring the opener,
+ * and hiding everything else from the accessibility tree while it is open —
+ * to the shared `useFocusTrap` (also used by `ConfirmDialog`). `aria-modal`
+ * is a promise to a screen reader in browse mode, not just to Tab, so the
+ * hook also marks the rest of the page `inert`; handing the panel *and* the
+ * scrim (via `scrimRef`) is what keeps the scrim's own click-to-dismiss
+ * reachable while that happens.
  *
  * Everything the drawer *shows* is still server-rendered: the page reads
  * `?peek=` in its Server Component, loads the record, and passes it as
@@ -47,7 +52,7 @@ export function Drawer({
   const router = useRouter();
   const titleId = useId();
   const headingRef = useRef<HTMLHeadingElement | null>(null);
-  const { rootRef: panelRef, onKeyDown } = useFocusTrap<HTMLElement>({
+  const { rootRef: panelRef, scrimRef, onKeyDown } = useFocusTrap<HTMLElement>({
     onEscape: () => router.replace(closeHref),
     getInitialFocus: () => headingRef.current,
     getExtraStart: () => headingRef.current,
@@ -57,6 +62,7 @@ export function Drawer({
     <>
       <div
         className={styles.scrim}
+        ref={scrimRef}
         aria-hidden="true"
         onClick={() => { router.replace(closeHref); }}
       />

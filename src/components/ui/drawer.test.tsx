@@ -101,4 +101,43 @@ describe('Drawer', () => {
     expect(screen.getByRole('link', { name: 'פתיחה בעמוד מלא' }).getAttribute('href'))
       .toBe('/members/p-17');
   });
+
+  it('hides the rest of the page from the accessibility tree while open, and restores it on close', () => {
+    const { rerender } = render(<Harness open={false} />);
+    const opener = screen.getByRole('button', { name: 'תצוגה מהירה' });
+    expect(opener.hasAttribute('inert')).toBe(false);
+
+    rerender(<Harness open />);
+    expect(opener.hasAttribute('inert')).toBe(true);
+
+    rerender(<Harness open={false} />);
+    expect(opener.hasAttribute('inert')).toBe(false);
+  });
+
+  it('never marks its own panel or scrim inert — the scrim still needs its click-to-close', () => {
+    render(<Harness open />);
+    expect(
+      screen.getByRole('dialog', { name: 'רישום תשלום — איתי כהן' }).hasAttribute('inert'),
+    ).toBe(false);
+    const scrim = document.querySelector('[aria-hidden="true"]');
+    expect(scrim).not.toBeNull();
+    expect(scrim?.hasAttribute('inert')).toBe(false);
+  });
+
+  it('leaves a live region (a toast) reachable while it is open', () => {
+    function HarnessWithToaster({ open }: { open: boolean }) {
+      return (
+        <>
+          <div role="status">נרשם תשלום</div>
+          {open ? (
+            <Drawer title="רישום תשלום — איתי כהן" closeHref={CLOSE}>
+              <p>תוכן</p>
+            </Drawer>
+          ) : null}
+        </>
+      );
+    }
+    render(<HarnessWithToaster open />);
+    expect(screen.getByRole('status').hasAttribute('inert')).toBe(false);
+  });
 });
