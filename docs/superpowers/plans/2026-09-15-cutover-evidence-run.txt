@@ -1,5 +1,5 @@
 # Dry-run promotion evidence — database "shliff_evidence"
-generated 2026-09-17T19:45:51.251Z
+generated 2026-09-18T11:03:40.348Z
 
 ## 1. Sheet labelling
 
@@ -153,7 +153,7 @@ Unlabelled sheets: 8 (Shliff day2day spending, מסיבת חורשה, Shliff Gag
 - קופת קאמפ 2026.xlsx / תקציב קאמפ ברן 25 r1c1 [budget_lines] → written=0 refused=1 deleted=0 retained=0
 - קופת קאמפ 2026.xlsx / SuperNature 18.7 r1c1 [event_lines] → written=0 refused=1 deleted=0 retained=0
 - קופת קאמפ 2026.xlsx / SuperNature 3.10 r1c1 [event_lines] → written=0 refused=1 deleted=0 retained=0
-- קופת קאמפ 2026.xlsx / SuperNature 3.10 r1c6 [ticket_rounds] → written=5 refused=5 deleted=0 retained=0
+- קופת קאמפ 2026.xlsx / SuperNature 3.10 r1c6 [ticket_rounds] → written=4 refused=6 deleted=0 retained=0
 - קופת קאמפ 23'-24'.xlsx / Shliff day2day spending r1c1 [ledger] → written=5 refused=27 deleted=0 retained=0
 - קופת קאמפ 23'-24'.xlsx / Shliff day2day spending r38c2 [unknown] → written=0 refused=1 deleted=0 retained=0
 - קופת קאמפ 23'-24'.xlsx / מסיבת חורשה r1c1 [ledger] → written=0 refused=6 deleted=0 retained=0
@@ -581,7 +581,7 @@ rows the promoter would write that match no seeded row: 36
 
 ### ticket_rounds
 
-would write: 5 rows
+would write: 4 rows
   [קופת קאמפ 2026.xlsx / SuperNature 3.10] r3  מוקדמות  amount=7000  season=ברן 26  50 × 140
       cells: מוקדמות | 50 | 140 | 7000
   [קופת קאמפ 2026.xlsx / SuperNature 3.10] r4  ראשון  amount=18000  season=ברן 26  100 × 180
@@ -590,8 +590,6 @@ would write: 5 rows
       cells: שני | 175 | 220 | 38500
   [קופת קאמפ 2026.xlsx / SuperNature 3.10] r6  אחרון  amount=75625  season=ברן 26  275 × 275
       cells: אחרון | 275 | 275 | 75625
-  [קופת קאמפ 2026.xlsx / SuperNature 3.10] r11  אסף  amount=0.6666666667  season=ברן 26  0 × —
-      cells: אסף | 0.3333333333 | שליף | 0.6666666667
 
 seeded rows present with source_block_id IS NULL: 3
   acbcb4ca-cbbd-4735-805c-7a5272642d4e  כרטיסים עד כה  60000.00  season=ברן 26  — × —
@@ -607,12 +605,11 @@ seeded rows NO block re-creates: 3
   2c9a1d61-9530-4f18-8c9e-d4f00ff910a8  סבב ג׳  33000.00  season=ברן 26  165 × 200.00
   c5f4fe18-f52c-48a1-abe1-988e95c034fe  סבב ד׳  78000.00  season=ברן 26  195 × 400.00
 
-rows the promoter would write that match no seeded row: 5
+rows the promoter would write that match no seeded row: 4
   [SuperNature 3.10] r3  מוקדמות  amount=7000  season=ברן 26
   [SuperNature 3.10] r4  ראשון  amount=18000  season=ברן 26
   [SuperNature 3.10] r5  שני  amount=38500  season=ברן 26
   [SuperNature 3.10] r6  אחרון  amount=75625  season=ברן 26
-  [SuperNature 3.10] r11  אסף  amount=0.6666666667  season=ברן 26
 
 ### obligations
 
@@ -656,7 +653,7 @@ rows the promoter would write that match no seeded row: 0
 
 ## 5. Refusals, grouped by reason
 
-total refusals: 234
+total refusals: 235
 
 ### blank-row — 7
   [קופת קאמפ 2026.xlsx / סיכום כללי] r8  שורה ריקה
@@ -1100,6 +1097,10 @@ total refusals: 234
       cells: · | · | · | · | · | ·
   [קופת קאמפ 23'-24'.xlsx / Winter Rave #2] r15  לגיליון לא נקבעה עונה, וסבב כרטיסים חייב עונה
       cells: · | · | · | 13760 | רווח נטו | ·
+
+### out-of-range — 1
+  [קופת קאמפ 2026.xlsx / SuperNature 3.10] r11  הערך 0.3333333333 בעמודת כמות אינו מספר שלם, וכמות כרטיסים חייבת להיות שלמה. בדקו אם השורה היא בכלל סבב כרטיסים
+      cells: אסף | 0.3333333333 | שליף | 0.6666666667
 
 ### sheet-superseded — 3
   [קופת קאמפ 2026.xlsx / תקציב קאמפ ברן 25] r1  נבחר עותק אחר של הגיליון הזה
