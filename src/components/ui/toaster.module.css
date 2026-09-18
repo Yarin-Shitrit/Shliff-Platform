@@ -1,0 +1,59 @@
+/*
+  Derived, not copied: the mock has no toaster at all. The surface is `.pop`'s —
+  `--panel`, a 12px radius, `--shadow-pop` — because a toast is the same kind of
+  floating sheet as a popover, and the tone shows only in the icon's colour, as
+  `.banner` does. Nothing here moves: shared.css contains no transition and no
+  keyframes, so an animated toast would be the only motion in the app.
+*/
+.toaster {
+  /*
+    Fixed, not absolute: plan 02 owns the mount point (A4), so these regions
+    must not depend on which element it makes their offset parent. Bottom
+    inline-start is the one corner no other overlay claims — the drawer takes
+    the inline-end side, the bulk bar the bottom centre, the dialog the middle —
+    so a toast never covers the control that produced it. 70 is one step above
+    confirm-dialog's 60, so a failure is readable over a dialog; the fallback
+    keeps this correct both before and after the z-index ladder lands.
+  */
+  position: fixed; z-index: var(--z-toast, 70);
+  inset-block-end: 20px; inset-inline-start: 20px;
+  display: flex; flex-direction: column;
+  max-inline-size: 360px;
+}
+
+/*
+  Failures first in the DOM, so a reader walking the two regions finds the
+  failure before the results. Neither region is ever `display: none`, not even
+  when empty — a hidden live region is not in the accessibility tree, which
+  would put us back where a region announces nothing the first time it is used.
+*/
+.region { display: flex; flex-direction: column; }
+
+/*
+  The gap is a margin on every toast rather than a `gap` on the two regions,
+  because a `gap` between two flex items still applies when one of them is an
+  empty region. The 8px above the topmost toast is invisible: the container is
+  anchored at its bottom edge and grows upward.
+*/
+.toast {
+  margin-block-start: 8px;
+  display: flex; align-items: flex-start; gap: 10px;
+  padding-block: 10px; padding-inline: 14px 8px;
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--panel); box-shadow: var(--shadow-pop);
+  color: var(--ink); font-size: 13.5px;
+}
+
+.icon { display: inline-flex; flex-shrink: 0; margin-block-start: 2px; }
+.ok .icon { color: var(--ok); }
+.bad .icon { color: var(--bad); }
+
+.message { flex: 1; min-inline-size: 0; }
+.actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+
+/* B7/D11: on a phone a toast is the width of the screen, less the gutters. */
+@media (max-width: 768px) {
+  .toaster {
+    inset-inline: 8px; inset-block-end: 12px; max-inline-size: none;
+  }
+}
