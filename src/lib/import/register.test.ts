@@ -84,6 +84,23 @@ describe('blockState precedence', () => {
 
   it('calls an archetype with no promoter no-promoter, even when confirmed', () => {
     expect(blockState({ ...base, archetype: 'income_channels' })).toBe('no-promoter');
+    expect(blockState({ ...base, archetype: 'unknown' })).toBe('no-promoter');
+  });
+
+  it('calls an unreviewed block needs-review even when its archetype has no promoter', () => {
+    // The archetype is exactly what the review changes, so an unconfirmed
+    // `unknown` block is an open decision, not a dead end. Break this and a
+    // file whose tables all classified `unknown` reports zero open decisions,
+    // offers no block for המשך סקירה to open, and reviewStep calls it finished.
+    expect(blockState({
+      ...base, archetype: 'unknown', confirmedAt: null,
+      confidence: 0.2, mappingSource: 'rules', columnMap: [],
+    })).toBe('needs-review');
+  });
+
+  it('calls an unconfirmed, well-mapped block with no promoter recognised', () => {
+    expect(blockState({ ...base, archetype: 'income_channels', confirmedAt: null }))
+      .toBe('recognised');
   });
 
   it('calls a block with rows in the database promoted', () => {

@@ -53,6 +53,17 @@ export function needsReview(
  * no promoter can never promote, so saying so outranks saying it was
  * confirmed; an undecided sheet outranks both because it is the only one of
  * the three a lead can fix.
+ *
+ * `no-promoter` is the one that does NOT outrank an open review, and the
+ * exception is load-bearing. A block's archetype is exactly what the review
+ * changes: `unknown` is the classifier's way of saying it could not tell, and
+ * reporting that as "this archetype has no promoter" turns the single most
+ * reviewable block on the screen into a dead end. Downstream, `reviewStep`
+ * treats `no-promoter` as settled, so a file whose tables all classified
+ * `unknown` would report zero open decisions, offer nothing for המשך סקירה to
+ * open, and read as finished — a silent answer where the platform requires a
+ * visible decision. Once a lead HAS confirmed the block, `no-promoter` is the
+ * honest label and outranks everything but the sheet's own state.
  */
 export function blockState(input: {
   archetype: BlockArchetype;
@@ -65,13 +76,14 @@ export function blockState(input: {
 }): BlockState {
   if (input.sheetState === 'superseded') return 'superseded';
   if (input.sheetState !== 'eligible') return 'blocked';
+  if (input.confirmedAt === null && input.promotedRows === 0) {
+    return needsReview(input.confidence, input.mappingSource, input.columnMap)
+      ? 'needs-review'
+      : 'recognised';
+  }
   if (!PROMOTABLE_ARCHETYPES.includes(input.archetype)) return 'no-promoter';
   if (input.promotedRows > 0) return 'promoted';
-  if (input.confirmedAt !== null) return 'confirmed';
-  if (needsReview(input.confidence, input.mappingSource, input.columnMap)) {
-    return 'needs-review';
-  }
-  return 'recognised';
+  return 'confirmed';
 }
 
 const PROVENANCE_TABLES = [ledgerEntries, budgetLines, ticketRounds, obligations];
