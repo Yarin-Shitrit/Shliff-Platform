@@ -132,24 +132,108 @@ describe('worklist', () => {
     expect(row?.state).toBe('unconfirmed');
     expect(row?.refusals).toEqual([]);
     expect(row?.rowCount).toBe(0);
+    expect(row?.wouldWrite).toBe(0);
     expect(row?.retained).toEqual([]);
     expect(row?.deleted).toBe(0);
   });
 
-  it('reports a promoted block with its row count', async () => {
+  /**
+   * This test used to be called "reports a promoted block with its row count"
+   * and assert `state: 'promoted'`, `rowCount: 2` — on a block it never
+   * promotes. The dry run says two rows WOULD be written; nobody has pressed
+   * the button, and the ledger is empty. That is W17's
+   * `confirmed-not-promoted`, and it is the state the register has to show a
+   * lead who is deciding what still needs doing.
+   */
+  it('reports a confirmed block nobody has promoted as confirmed-not-promoted', async () => {
     const blockId = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
     const rows = await worklist(db, LEAD);
     const row = rows.find((r) => r.blockId === blockId);
 
     expect(row).toBeDefined();
-    expect(row?.state).toBe('promoted');
-    expect(row?.rowCount).toBe(2);
+    expect(row?.state).toBe('confirmed-not-promoted');
+    // Nothing exists; two rows would be written. The two numbers are separate
+    // fields precisely because reporting the second as the first was the bug.
+    expect(row?.rowCount).toBe(0);
+    expect(row?.wouldWrite).toBe(2);
+    expect(await db.select().from(ledgerEntries)).toHaveLength(0);
     expect(row?.sheetId).toBe(sheetId);
     expect(row?.sheetName).toBe('סיכום כללי');
     expect(row?.filename).toBe('2026.xlsx');
     expect(row?.seasonId).toBe(s26);
     expect(row?.seasonName).toBe('ברן 26');
     expect(row?.archetype).toBe('ledger');
+  });
+
+  it('reports a block that really was promoted as promoted, with the rows that exist', async () => {
+    const blockId = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
+    await promoteBlock(db, blockId, { dryRun: false, recordedBy: LEAD });
+
+    const rows = await worklist(db, LEAD);
+    const row = rows.find((r) => r.blockId === blockId);
+
+    expect(row?.state).toBe('promoted');
+    expect(row?.rowCount).toBe(2);
+    expect(row?.wouldWrite).toBe(2);
+    expect(await db.select().from(ledgerEntries)).toHaveLength(2);
+  });
+
+  /** The same block, promoted and not promoted, must not read the same. This
+   *  is the pair the old collapse made indistinguishable. */
+  it('gives a promoted and an unpromoted copy of one grid different states', async () => {
+    const other = await addSheet('2026b.xlsx', 'גיליון שני');
+    await setSheetSeason(db, other, s26);
+    const promoted = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
+    const untouched = await addBlock(other, 'ledger', LEDGER_GRID, LEDGER_MAP);
+    await promoteBlock(db, promoted, { dryRun: false, recordedBy: LEAD });
+
+    const rows = await worklist(db, LEAD);
+    expect(rows.find((r) => r.blockId === promoted)?.state).toBe('promoted');
+    expect(rows.find((r) => r.blockId === untouched)?.state).toBe('confirmed-not-promoted');
+    expect(rows.find((r) => r.blockId === promoted)?.rowCount).toBe(2);
+    expect(rows.find((r) => r.blockId === untouched)?.rowCount).toBe(0);
+  });
+
+  /**
+   * W11, and the third consequence of deciding the state from the dry run
+   * alone. A budget block on a season-less sheet emits one `no-season`
+   * refusal PER ROW, so `refused.length` is 2 rather than 1, so the
+   * whole-block branch is not taken — and the block used to read `promoted`
+   * with `rowCount: 0`: promoted, having written nothing, with a reason on
+   * every row. W11 says plainly that such a block is refused.
+   */
+  it('reports a season-less budget block as refused, not promoted with zero rows', async () => {
+    const orphan = await addSheet('orphan.xlsx', 'תקציב בלי עונה');
+    const blockId = await addBlock(orphan, 'budget_lines', [
+      ['סוג הוצאה', 'כמות', 'מחיר', 'עלות כוללת', 'למה'],
+      ['בסיס', '1', '58523', '58523', ''],
+      ['אוכל', '1', '5000', '5000', ''],
+    ], BUDGET_MAP);
+
+    const rows = await worklist(db, LEAD);
+    const row = rows.find((r) => r.blockId === blockId);
+
+    expect(row?.state).toBe('refused');
+    expect(row?.rowCount).toBe(0);
+    expect(row?.wouldWrite).toBe(0);
+    // One reason per row, which is why the whole-block branch cannot catch it.
+    expect(row?.refusals).toHaveLength(2);
+    expect(row?.refusals.map((r) => r.reason)).toEqual(['no-season', 'no-season']);
+  });
+
+  it('reports a season-less ticket block as refused too', async () => {
+    const orphan = await addSheet('orphan2.xlsx', 'כרטיסים בלי עונה');
+    const blockId = await addBlock(orphan, 'ticket_rounds', [
+      ['סבב', 'כמות', 'מחיר', 'לסבב'],
+      ['סבב א׳', '100', '150', '15000'],
+      ['סבב ב׳', '200', '150', '30000'],
+    ], TICKET_MAP);
+
+    const rows = await worklist(db, LEAD);
+    const row = rows.find((r) => r.blockId === blockId);
+
+    expect(row?.state).toBe('refused');
+    expect(row?.refusals.map((r) => r.reason)).toEqual(['no-season', 'no-season']);
   });
 
   it('reports a parked archetype as no-promoter', async () => {
@@ -159,6 +243,7 @@ describe('worklist', () => {
 
     expect(row?.state).toBe('no-promoter');
     expect(row?.rowCount).toBe(0);
+    expect(row?.wouldWrite).toBe(0);
     expect(row?.refusals).toHaveLength(1);
     expect(row?.refusals[0].reason).toBe('no-promoter');
   });
@@ -189,13 +274,22 @@ describe('worklist', () => {
     expect(row?.refusals[0].reason).toBe('sheet-undecided');
   });
 
+  /**
+   * A per-row refusal never overrides a block that would write something —
+   * `carry-forward` and `total-row` here sit beside two promotable rows. The
+   * block IS promoted, so it is really promoted first; the assertions on the
+   * unpromoted case live in `confirmed-not-promoted` above.
+   */
   it('carries each refusal reason through to the row', async () => {
     const blockId = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
+    await promoteBlock(db, blockId, { dryRun: false, recordedBy: LEAD });
+
     const rows = await worklist(db, LEAD);
     const row = rows.find((r) => r.blockId === blockId);
 
     expect(row?.state).toBe('promoted');
     expect(row?.rowCount).toBe(2);
+    expect(row?.wouldWrite).toBe(2);
     expect(row?.refusals.map((r) => r.reason).sort()).toEqual(['carry-forward', 'total-row']);
   });
 
@@ -239,7 +333,14 @@ describe('worklist', () => {
 });
 
 describe('coverage', () => {
-  it('counts promoted rows per season and archetype', async () => {
+  /**
+   * This test used to be called "counts promoted rows per season and
+   * archetype" and assert `promoted: 5` for two blocks it never promotes.
+   * W18's matrix would have told a lead the ברן 26 ledger was covered by five
+   * rows before the promote button had ever been pressed. Both blocks are
+   * counted (`blocks: 2`, Ruling R24) and neither contributes a promoted row.
+   */
+  it('counts no promoted rows for two blocks nobody has promoted', async () => {
     const other = await addSheet('2025b.xlsx', 'עוד גיליון');
     await setSheetSeason(db, other, s26);
     await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
@@ -250,8 +351,52 @@ describe('coverage', () => {
     const cell = cells.find((c) => c.seasonName === 'ברן 26' && c.archetype === 'ledger');
 
     expect(cell).toBeDefined();
+    expect(cell?.promoted).toBe(0);
+    expect(cell?.blocks).toBe(2);
+    expect(await db.select().from(ledgerEntries)).toHaveLength(0);
+    // The would-write total is still available, on the rows, under its own name.
+    expect(rows.reduce((n, r) => n + r.wouldWrite, 0)).toBe(5);
+  });
+
+  it('counts rows that exist once the blocks really are promoted', async () => {
+    const other = await addSheet('2025b.xlsx', 'עוד גיליון');
+    await setSheetSeason(db, other, s26);
+    const first = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
+    const second = await addBlock(other, 'ledger', LEDGER_GRID_3, LEDGER_MAP);
+    await promoteBlock(db, first, { dryRun: false, recordedBy: LEAD });
+    await promoteBlock(db, second, { dryRun: false, recordedBy: LEAD });
+
+    const cells = coverage(await worklist(db, LEAD));
+    const cell = cells.find((c) => c.seasonName === 'ברן 26' && c.archetype === 'ledger');
+
     expect(cell?.promoted).toBe(5);
     expect(cell?.blocks).toBe(2);
+    expect(await db.select().from(ledgerEntries)).toHaveLength(5);
+  });
+
+  it('counts only the block that was promoted when its neighbour was not', async () => {
+    const other = await addSheet('2025b.xlsx', 'עוד גיליון');
+    await setSheetSeason(db, other, s26);
+    const first = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
+    await addBlock(other, 'ledger', LEDGER_GRID_3, LEDGER_MAP);
+    await promoteBlock(db, first, { dryRun: false, recordedBy: LEAD });
+
+    const cells = coverage(await worklist(db, LEAD));
+    const cell = cells.find((c) => c.seasonName === 'ברן 26' && c.archetype === 'ledger');
+
+    expect(cell?.promoted).toBe(2);
+    expect(cell?.blocks).toBe(2);
+  });
+
+  it('counts rows of every target table, not only the ledger', async () => {
+    const budget = await addBlock(sheetId, 'budget_lines', BUDGET_GRID, BUDGET_MAP, { top: 20 });
+    const tickets = await addBlock(sheetId, 'ticket_rounds', TICKET_GRID, TICKET_MAP, { top: 30 });
+    await promoteBlock(db, budget, { dryRun: false, recordedBy: LEAD });
+    await promoteBlock(db, tickets, { dryRun: false, recordedBy: LEAD });
+
+    const cells = coverage(await worklist(db, LEAD));
+    expect(cells.find((c) => c.archetype === 'budget_lines')?.promoted).toBe(1);
+    expect(cells.find((c) => c.archetype === 'ticket_rounds')?.promoted).toBe(1);
   });
 
   it('shows a zero cell for a season with a confirmed but unpromoted block', async () => {
@@ -279,6 +424,27 @@ describe('coverage', () => {
     expect(cell).toBeDefined();
     expect(cell?.blocks).toBe(1);
     expect(cell?.promoted).toBe(0);
+  });
+
+  /**
+   * Rows that exist are counted whatever label this module puts on their
+   * block. A block promoted and then un-confirmed still has its rows in the
+   * season's money, and a matrix that read zero there would understate
+   * coverage as badly as the old code overstated it.
+   */
+  it('still counts the rows of a block that was promoted and then un-confirmed', async () => {
+    const blockId = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
+    await promoteBlock(db, blockId, { dryRun: false, recordedBy: LEAD });
+    await db.update(blocks).set({ confirmedAt: null, confirmedBy: null })
+      .where(eq(blocks.id, blockId));
+
+    const rows = await worklist(db, LEAD);
+    const row = rows.find((r) => r.blockId === blockId);
+    expect(row?.state).toBe('unconfirmed');
+    expect(row?.rowCount).toBe(2);
+
+    const cells = coverage(rows);
+    expect(cells.find((c) => c.archetype === 'ledger')?.promoted).toBe(2);
   });
 });
 
