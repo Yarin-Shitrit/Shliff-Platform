@@ -1151,3 +1151,64 @@ hypothetical and not future — it was already shipping in three places, and
 nothing was red.** Assigned to plan 09's lane, which owns all three files. The
 ~11 other bare-Hebrew library throws carry **static** strings, contain no Latin,
 and are safe; they are not to be changed opportunistically.
+
+### A22a — Correction: the dancefloor evidence chain has not started
+
+**A22 said plan 11's confirm screen rendering the budget category would unblock a
+decision about the four dancefloor lines. That screen did not exist when A22 was
+written, and still does not.** Plan 11's Tasks 1-11 built plumbing only:
+`BlockStateRow.budgetCategory` reads from the **mapping**, never from a promoted
+row; no control sets it and no screen shows it. The confirm screen is Tasks 13
+and 15, dispatched separately and later.
+
+**Nothing currently makes deleting those four rows safe, and no part of the
+evidence chain has begun.** The chain, restated so nobody shortens it again: the
+screen renders the category on a branch carrying the `confirmBlock` lever → a
+lead sets `תקציב רחבה ברן 25` to `dancefloor` → a dry run **on a clone taken after
+the cutover** shows those rows landing as `dancefloor` and staying out of
+`budgetTotalAgorot(camp)` → the camp lead decides. Four task references point at
+those rows with no foreign key protecting them.
+
+**How this was got wrong is worth more than the correction.** The controller's
+dispatch asserted the screen was in the lane because the controller believed the
+lane was the whole plan. It was not — see A31. An implementer inheriting that
+assertion would have had every reason to repeat it.
+
+### A31 — Plan 11 has 15 tasks; four of them were never dispatched
+
+The shell hook's filtered `grep` truncated a plan's task list to 11 rows **and
+reported the match count as 11**. The file has 15. `rtk proxy grep -c` and
+`grep … | wc -l` both say 15. Acting on that reading, Tasks 12-15 — the review
+master-detail, the column mapping, the raw grid, and the pre-flight with the
+promote button — were never assigned. They are now dispatched.
+
+A truncated list that announces itself costs nothing. One reporting a count that
+matches its own truncation is indistinguishable from a complete answer. **Take no
+count that decides scope from a hook-filtered `grep`**: use `| wc -l` or
+`rtk proxy grep -c`. Other plans were checked and none were affected — every
+other task list fell under the cap.
+
+### A32 — I13's guarantee is one projection, not one mechanism (RULING)
+
+I13 says `register.ts` **re-labels** `worklist` rather than re-deriving. Plan 11
+reports this is not literally implementable, and the reasons hold:
+`WorklistRow` carries no `confidence`, `mappingSource`, `columnMap` or
+`confirmedAt`, so `needs-review` versus `recognised` versus `blocked` cannot be
+recovered by relabelling. **And `worklist` dry-runs every confirmed block, which
+a file list must not do per page load** — that is precisely the hazard the
+project was warned about, a dry run firing on render.
+
+**Ruling: I13's guarantee is that exactly one block-state projection exists, that
+plan 11 owns it, and that it and `worklist` agree on what `promoted` means —
+rows counted in the four target tables, never rows a dry run predicts. The
+re-labelling mechanism is not binding.** Plan 05 consumes plan 11's projection
+and does not call `worklist` for file-list purposes. Plan 11's implementation as
+specified satisfies the guarantee and stands.
+
+**Also caught, and worth recording because the failure was silent:** the plan's
+`blockState` precedence was wrong — an unconfirmed `unknown` block read
+`no-promoter`, which `reviewStep` treats as settled, so **a file of unclassified
+tables would have reported zero open decisions and read as finished.** That is
+the platform's first rule inverted: what the system cannot resolve was being
+presented as nothing to decide. Corrected and pinned by two new tests, with every
+original assertion still passing.
