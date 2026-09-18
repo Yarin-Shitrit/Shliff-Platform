@@ -1,0 +1,131 @@
+/*
+ * The upload screen. Logical properties throughout — this is a Hebrew RTL
+ * screen and there is no numeric table column here to earn A10's exception.
+ */
+
+.page {
+  max-inline-size: 720px;
+  margin-inline: auto;
+  padding-block: var(--space-6);
+  padding-inline: var(--space-4);
+}
+
+.title {
+  font: var(--text-display);
+  color: var(--ink);
+  margin-block-end: var(--space-3);
+}
+
+.lead {
+  font: var(--text-lead);
+  color: var(--ink-2);
+  margin-block-end: var(--space-5);
+}
+
+.dropWrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/*
+ * A real <button>, not a div with handlers: the zone must be reachable by
+ * keyboard and announced (E4). Well past A8's 44px minimum.
+ */
+.drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+
+  inline-size: 100%;
+  min-block-size: 132px;
+  padding: var(--space-5);
+
+  border: 2px dashed var(--line-strong);
+  border-radius: var(--radius-panel);
+  background: var(--sunken);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: center;
+}
+
+.drop:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.drop:disabled {
+  cursor: progress;
+  color: var(--ink-3);
+}
+
+/* A9: the focus ring is never removed. */
+.drop:focus-visible,
+.devSummary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.dropOver {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.dropLead {
+  font: var(--text-title);
+}
+
+.dropRules {
+  font: var(--text-meta);
+  color: var(--ink-3);
+}
+
+/*
+ * Visually hidden but still focusable and still clickable — the button's
+ * onClick forwards to it. `display: none` would make it unclickable.
+ */
+.hiddenInput {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.error {
+  font: var(--text-body);
+  color: var(--bad);
+  background: var(--bad-soft);
+  border-radius: var(--radius-control);
+  padding-block: var(--space-2);
+  padding-inline: var(--space-3);
+}
+
+.duplicateNote {
+  font: var(--text-meta);
+  color: var(--ink-3);
+  margin-block-start: var(--space-4);
+}
+
+.devTools {
+  border-block-start: 1px solid var(--line);
+  margin-block-start: var(--space-8);
+  padding-block-start: var(--space-4);
+}
+
+.devSummary {
+  font: var(--text-label);
+  color: var(--ink-3);
+  cursor: pointer;
+  min-block-size: var(--tap-min);
+  display: flex;
+  align-items: center;
+}
+
+.devNote {
+  font: var(--text-meta);
+  color: var(--ink-3);
+  margin-block: var(--space-3);
+}
