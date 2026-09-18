@@ -1,0 +1,147 @@
+/*
+ * The file list. Logical properties throughout; the only physical alignment
+ * on this screen comes from the kit's global `.num`, which `Table` composes
+ * for a numeric column (A10's documented exception).
+ */
+
+.page {
+  padding-block: var(--space-6);
+  padding-inline: var(--space-4);
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-block-end: var(--space-5);
+}
+
+.title {
+  font: var(--text-display);
+  color: var(--ink);
+}
+
+.lead {
+  font: var(--text-lead);
+  color: var(--ink-2);
+  margin-block-start: var(--space-2);
+}
+
+.fileLink {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink);
+  font: var(--text-cell);
+}
+
+.fileLink:hover {
+  color: var(--brand-text);
+}
+
+.sub {
+  display: block;
+  font: var(--text-meta);
+  color: var(--ink-3);
+  margin-block-start: 2px;
+}
+
+.muted {
+  color: var(--ink-3);
+}
+
+/* The row menu. `<details>` needs the positioning context for its panel. */
+.menu {
+  position: relative;
+}
+
+.menuTrigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--tap-min);
+  block-size: var(--tap-min);
+  border-radius: var(--radius-control);
+  color: var(--ink-3);
+  cursor: pointer;
+  list-style: none;
+}
+
+/* Safari draws a disclosure triangle unless both are cleared. */
+.menuTrigger::-webkit-details-marker {
+  display: none;
+}
+
+.menuTrigger::marker {
+  content: '';
+}
+
+.menuTrigger:hover {
+  background: var(--sunken);
+  color: var(--ink);
+}
+
+/* A9: the focus ring is never removed. */
+.menuTrigger:focus-visible,
+.menuItem:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.menuPanel {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-start: 100%;
+  min-inline-size: 200px;
+  padding-block: var(--space-1);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-pop);
+  /* The ladder token, never a literal (A18). */
+  z-index: var(--z-pop);
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  min-block-size: 36px;
+  padding-inline: var(--space-3);
+  font: var(--text-body);
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.menuItem:hover {
+  background: var(--sunken);
+}
+
+/*
+ * The header's upload link. A plain link styled as the primary action rather
+ * than the kit's `ButtonLink`, because it sits in the page header beside the
+ * title where `ButtonLink`'s sizes are tuned for a form or an empty state —
+ * the empty state below does use `ButtonLink`, via `EmptyState`'s action.
+ */
+.primary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: var(--control-h);
+  padding-inline: var(--space-4);
+  border-radius: var(--radius-control);
+  background: var(--brand);
+  color: var(--brand-ink);
+  font: var(--text-label);
+  white-space: nowrap;
+}
+
+.primary:hover {
+  background: var(--brand-hover);
+}
+
+.primary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
