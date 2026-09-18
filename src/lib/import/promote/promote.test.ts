@@ -19,7 +19,9 @@ import { setSheetSeason, setSheetAuthority } from '@/lib/import/sheets';
 import { applyConfirmation } from '@/lib/import/confirm';
 import type { ColumnMapping } from '@/lib/classify/map-columns';
 import type { BlockArchetype } from '@/lib/classify/types';
-import { promoteBlock, promoteAll, promotedRowCounts } from './promote';
+import {
+  promoteBlock, promoteAll, promotedRowCounts, promoteAllGated,
+} from './promote';
 
 let db: TestDb;
 let s26: string;
@@ -1219,6 +1221,22 @@ describe('promotedRowCounts', () => {
     expect(counts.get(oblBlock)).toBe(2);
   });
 
+  it('still reports a block\'s old rows after it is re-decided to a different archetype, not zero', async () => {
+    // The exact shape of the mis-bounded ברן 26 block this gate exists for:
+    // promoted once under one archetype, then re-confirmed as another
+    // WITHOUT being re-promoted (no sweep has run to remove the old rows).
+    // A version of `promotedRowCounts` that only checked the table its
+    // CURRENT archetype writes to would see budget_lines, find nothing, and
+    // report this block as never-promoted — which is exactly what would let
+    // the gate wave it through and re-promote it.
+    const blockId = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
+    await promoteBlock(db, blockId, LEAD); // 2 real ledger_entries rows
+    await reconfirm(blockId, 'budget_lines', BUDGET_GRID, BUDGET_MAP); // re-decided, not re-promoted
+
+    const counts = await promotedRowCounts(db, [blockId]);
+    expect(counts.get(blockId)).toBe(2);
+  });
+
   it('is a read-only lookup: the rows it counts are byte-identical before and after', async () => {
     const blockId = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
     await promoteBlock(db, blockId, LEAD);
@@ -1243,5 +1261,102 @@ describe('promotedRowCounts', () => {
     const counts = await promotedRowCounts(db, [promoted, fresh]);
     expect(counts.get(promoted)).toBe(2);
     expect(counts.has(fresh)).toBe(false);
+  });
+});
+
+/**
+ * Against a real `TestDb`, not a mocked `db` — deliberately. A mocked
+ * `db.select().from().innerJoin().where().orderBy()` that ignores every
+ * argument makes every version of the confirmed-block query "pass": a wrong
+ * filter (`isNull` instead of `isNotNull`), a dropped join, or a reversed
+ * `orderBy` all still return whatever the mock was told to return. Only a
+ * real database can fail when the query itself is wrong, which is the
+ * point of every test below.
+ */
+describe('promoteAllGated', () => {
+  it('promotes a never-promoted confirmed block, same as promoteAll would', async () => {
+    const blockId = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
+    const result = await promoteAllGated(db, { dryRun: false, recordedBy: 'lead@shliff.test' });
+
+    expect(result.results.map((r) => r.blockId)).toEqual([blockId]);
+    expect(result.writtenCount).toBe(2);
+    expect(result.skipped).toEqual([]);
+    expect(result.skippedCount).toBe(0);
+    expect(await db.select().from(ledgerEntries)).toHaveLength(2);
+  });
+
+  it('excludes an unconfirmed block from the run entirely — neither promoted nor skipped', async () => {
+    const confirmed = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP, { top: 1 });
+    await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP, { top: 20, confirmed: false });
+
+    const result = await promoteAllGated(db, { dryRun: false, recordedBy: 'lead@shliff.test' });
+    expect(result.results.map((r) => r.blockId)).toEqual([confirmed]);
+    expect(result.skipped).toEqual([]);
+  });
+
+  it('orders promoted results by sheet name ahead of insertion order', async () => {
+    const sheetZ = await addSheet('z.xlsx', 'zz-sheet');
+    const sheetA = await addSheet('a.xlsx', 'aa-sheet');
+    // sheetZ (and its block) is created first — reversing or dropping the
+    // `orderBy` would put blockOnZ ahead of blockOnA.
+    const blockOnZ = await addBlock(sheetZ, 'ledger', LEDGER_GRID, LEDGER_MAP);
+    const blockOnA = await addBlock(sheetA, 'ledger', LEDGER_GRID, LEDGER_MAP);
+
+    const result = await promoteAllGated(db, { dryRun: false, recordedBy: 'lead@shliff.test' });
+    expect(result.results.map((r) => r.blockId)).toEqual([blockOnA, blockOnZ]);
+  });
+
+  it('orders promoted results by block top ascending within a sheet', async () => {
+    const later = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP, { top: 20 });
+    const earlier = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP, { top: 1 });
+
+    const result = await promoteAllGated(db, { dryRun: false, recordedBy: 'lead@shliff.test' });
+    expect(result.results.map((r) => r.blockId)).toEqual([earlier, later]);
+  });
+
+  it('skips a confirmed block that already owns rows, reports it, and leaves its rows byte-identical', async () => {
+    const blockId = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP);
+    await promoteBlock(db, blockId, LEAD); // rows already exist, as if promoted on an earlier run
+    const before = await db.select().from(ledgerEntries).orderBy(asc(ledgerEntries.sourceRow));
+
+    const result = await promoteAllGated(db, { dryRun: false, recordedBy: 'lead@shliff.test' });
+
+    expect(result.results).toEqual([]);
+    expect(result.writtenCount).toBe(0);
+    expect(result.skippedCount).toBe(1);
+    expect(result.skipped).toEqual([{
+      blockId, code: 'already-promoted', rowCount: 2, reason: expect.any(String),
+    }]);
+    // Hebrew, and no internal English term (the reason used to say
+    // "cutover" — plain Hebrew now, so this checks the property rather than
+    // pinning that one word).
+    expect(result.skipped[0].reason).toMatch(/[֐-׿]/);
+    expect(result.skipped[0].reason).not.toMatch(/[a-zA-Z]/);
+
+    // The point of this test: read the rows back and compare every column,
+    // not just that the count held steady.
+    const after = await db.select().from(ledgerEntries).orderBy(asc(ledgerEntries.sourceRow));
+    expect(after).toEqual(before);
+  });
+
+  it('promotes a mixed confirmed set: skips the owning block, promotes the fresh one, in one call', async () => {
+    const owning = await addBlock(sheetId, 'ledger', LEDGER_GRID, LEDGER_MAP, { top: 1 });
+    await promoteBlock(db, owning, LEAD);
+    const before = await db.select().from(ledgerEntries)
+      .where(eq(ledgerEntries.sourceBlockId, owning))
+      .orderBy(asc(ledgerEntries.sourceRow));
+
+    const fresh = await addBlock(sheetId, 'ledger', LEDGER_GRID_3, LEDGER_MAP, { top: 20 });
+
+    const result = await promoteAllGated(db, { dryRun: false, recordedBy: 'lead@shliff.test' });
+
+    expect(result.results.map((r) => r.blockId)).toEqual([fresh]);
+    expect(result.writtenCount).toBe(3); // LEDGER_GRID_3's three promotable rows
+    expect(result.skipped.map((s) => s.blockId)).toEqual([owning]);
+
+    const after = await db.select().from(ledgerEntries)
+      .where(eq(ledgerEntries.sourceBlockId, owning))
+      .orderBy(asc(ledgerEntries.sourceRow));
+    expect(after).toEqual(before);
   });
 });

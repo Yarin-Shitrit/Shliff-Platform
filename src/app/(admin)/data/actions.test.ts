@@ -1,81 +1,38 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { PromotionResult } from '@/lib/import/promote/types';
 
 /**
  * `./actions` is a `'use server'` module that imports `@/db` at module scope
  * (which throws at import time without `DATABASE_URL`), so `@/db` is
  * replaced before the module is imported — same convention as every other
- * `actions.test.ts` in this repo (e.g. `src/app/(admin)/upload/actions.test.ts`).
+ * `actions.test.ts` in this repo.
  *
- * `promoteAllAction` no longer delegates to `promoteAll`: it queries the
- * confirmed blocks itself (`db.select(...).from(blocks).innerJoin(sheets,
- * ...).where(...).orderBy(...)`), so the `db` stand-in has to answer that
- * chain. `dbMock` builds just enough of it — every link returns the next
- * link, and `.orderBy()` resolves through `confirmedBlocks`, a plain
- * `vi.fn()` each test configures. `promoteBlock` and `promotedRowCounts` are
- * mocked as themselves rather than simulated through `dbMock`, so a test can
- * assert on them directly (in particular: that `promoteBlock` is never
- * *called* for a block the gate skips — the proof that its rows are left
- * untouched, since nothing else in this action writes anywhere).
+ * `promoteAllAction` is a thin wrapper now: `requireAdmin`, delegate the
+ * whole gated run to `promoteAllGated`, revalidate in `finally`. The gate
+ * itself — the confirmed-block query, the skip decision, the per-block loop
+ * — is `promoteAllGated`'s, tested with a real `TestDb` in
+ * `src/lib/import/promote/promote.test.ts` (a mocked `db` here cannot catch
+ * a wrong query: `where`/`orderBy`/`innerJoin` calls that ignore their
+ * arguments make every query "pass"). This file only proves the wrapper
+ * wraps: admin gate first, correct delegation, revalidation in `finally`.
  */
-const mocks = vi.hoisted(() => {
-  const confirmedBlocks = vi.fn();
-  const dbMock = {
-    select: () => ({
-      from: () => ({
-        innerJoin: () => ({
-          where: () => ({
-            orderBy: () => confirmedBlocks(),
-          }),
-        }),
-      }),
-    }),
-  };
-  return {
-    requireAdmin: vi.fn(),
-    setSheetSeason: vi.fn(),
-    setSheetAuthority: vi.fn(),
-    promoteBlock: vi.fn(),
-    promotedRowCounts: vi.fn(),
-    revalidatePath: vi.fn(),
-    confirmedBlocks,
-    dbMock,
-  };
-});
+const mocks = vi.hoisted(() => ({
+  requireAdmin: vi.fn(),
+  setSheetSeason: vi.fn(),
+  setSheetAuthority: vi.fn(),
+  promoteAllGated: vi.fn(),
+  revalidatePath: vi.fn(),
+}));
 
-vi.mock('@/db', () => ({ db: mocks.dbMock }));
+vi.mock('@/db', () => ({ db: {} }));
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock('@/lib/auth/guard', () => ({ requireAdmin: mocks.requireAdmin }));
 vi.mock('@/lib/import/sheets', () => ({
   setSheetSeason: mocks.setSheetSeason,
   setSheetAuthority: mocks.setSheetAuthority,
 }));
-vi.mock('@/lib/import/promote/promote', () => ({
-  promoteBlock: mocks.promoteBlock,
-  promotedRowCounts: mocks.promotedRowCounts,
-}));
+vi.mock('@/lib/import/promote/promote', () => ({ promoteAllGated: mocks.promoteAllGated }));
 
-const ADMIN = { ok: true, email: 'lead@shliff.test' } as const;
-
-function result(blockId: string, writtenCount: number): PromotionResult {
-  return {
-    blockId,
-    archetype: 'ledger',
-    dryRun: false,
-    written: Array.from({ length: writtenCount }, (_, i) => ({
-      table: 'ledger_entries', sheetRow: i + 2, id: `row-${blockId}-${i}`, summary: 's', notes: [],
-    })),
-    refused: [],
-    deleted: 0,
-    retained: [],
-  };
-}
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  mocks.confirmedBlocks.mockResolvedValue([]);
-  mocks.promotedRowCounts.mockResolvedValue(new Map());
-});
+beforeEach(() => vi.clearAllMocks());
 
 describe('data server actions', () => {
   it('refuses a non-admin without touching the database', async () => {
@@ -88,94 +45,50 @@ describe('data server actions', () => {
 
     expect(mocks.setSheetSeason).not.toHaveBeenCalled();
     expect(mocks.setSheetAuthority).not.toHaveBeenCalled();
-    expect(mocks.confirmedBlocks).not.toHaveBeenCalled();
-    expect(mocks.promoteBlock).not.toHaveBeenCalled();
+    expect(mocks.promoteAllGated).not.toHaveBeenCalled();
   });
 
   it('sets a season as the signed-in admin', async () => {
-    mocks.requireAdmin.mockResolvedValue(ADMIN);
+    mocks.requireAdmin.mockResolvedValue({ ok: true, email: 'lead@shliff.test' });
     const { setSeasonAction } = await import('./actions');
 
     await setSeasonAction('sheet-1', 'season-1');
-    expect(mocks.setSheetSeason).toHaveBeenCalledWith(mocks.dbMock, 'sheet-1', 'season-1');
+    expect(mocks.setSheetSeason).toHaveBeenCalledWith({}, 'sheet-1', 'season-1');
   });
 
   it('sets authority as the signed-in admin', async () => {
-    mocks.requireAdmin.mockResolvedValue(ADMIN);
+    mocks.requireAdmin.mockResolvedValue({ ok: true, email: 'lead@shliff.test' });
     const { setAuthorityAction } = await import('./actions');
 
     await setAuthorityAction('sheet-1', false);
-    expect(mocks.setSheetAuthority).toHaveBeenCalledWith(mocks.dbMock, 'sheet-1', false);
+    expect(mocks.setSheetAuthority).toHaveBeenCalledWith({}, 'sheet-1', false);
   });
 
-  describe('promoteAllAction', () => {
-    it('promotes a never-promoted confirmed block normally', async () => {
-      mocks.requireAdmin.mockResolvedValue(ADMIN);
-      mocks.confirmedBlocks.mockResolvedValue([{ id: 'block-fresh' }]);
-      mocks.promotedRowCounts.mockResolvedValue(new Map());
-      mocks.promoteBlock.mockResolvedValue(result('block-fresh', 2));
-      const { promoteAllAction } = await import('./actions');
+  it('delegates to promoteAllGated as the signed-in admin and returns its result unchanged', async () => {
+    mocks.requireAdmin.mockResolvedValue({ ok: true, email: 'lead@shliff.test' });
+    const gated = {
+      results: [], writtenCount: 0, refusedCount: 0, deletedCount: 0, retainedCount: 0,
+      failures: [], failedCount: 0, skipped: [], skippedCount: 0,
+    };
+    mocks.promoteAllGated.mockResolvedValue(gated);
+    const { promoteAllAction } = await import('./actions');
 
-      const out = await promoteAllAction();
+    const result = await promoteAllAction();
 
-      expect(mocks.promotedRowCounts).toHaveBeenCalledWith(mocks.dbMock, ['block-fresh']);
-      expect(mocks.promoteBlock).toHaveBeenCalledWith(
-        mocks.dbMock, 'block-fresh', { dryRun: false, recordedBy: 'lead@shliff.test' },
-      );
-      expect(out.skipped).toEqual([]);
-      expect(out.writtenCount).toBe(2);
-      expect(out.results.map((r) => r.blockId)).toEqual(['block-fresh']);
+    expect(mocks.promoteAllGated).toHaveBeenCalledWith({}, {
+      dryRun: false, recordedBy: 'lead@shliff.test',
     });
+    expect(result).toBe(gated);
+  });
 
-    it('skips a confirmed block that already owns rows, reports it with a Hebrew reason, and never calls promoteBlock for it', async () => {
-      mocks.requireAdmin.mockResolvedValue(ADMIN);
-      mocks.confirmedBlocks.mockResolvedValue([{ id: 'block-owned' }]);
-      mocks.promotedRowCounts.mockResolvedValue(new Map([['block-owned', 2]]));
-      const { promoteAllAction } = await import('./actions');
+  it('revalidates both pages even when promoteAllGated itself rejects', async () => {
+    mocks.requireAdmin.mockResolvedValue({ ok: true, email: 'lead@shliff.test' });
+    mocks.promoteAllGated.mockRejectedValue(new Error('boom'));
+    const { promoteAllAction } = await import('./actions');
 
-      const out = await promoteAllAction();
+    await expect(promoteAllAction()).rejects.toThrow('boom');
 
-      // The proof the row values are untouched: `promoteBlock` is the only
-      // thing in this action that can write to a target table, and it is
-      // never invoked for this block at all.
-      expect(mocks.promoteBlock).not.toHaveBeenCalled();
-      expect(out.results).toEqual([]);
-      expect(out.writtenCount).toBe(0);
-      expect(out.skipped).toHaveLength(1);
-      expect(out.skipped[0].blockId).toBe('block-owned');
-      // Hebrew: every codepoint in the Hebrew block (U+0590-05FF) — proves
-      // this isn't an English/internal-only message leaking to a lead.
-      expect(out.skipped[0].reason).toMatch(/[֐-׿]/);
-      expect(out.skipped[0].reason).toContain('cutover');
-    });
-
-    it('promotes a mixed confirmed set: skips the owning block, promotes the fresh one, in the same call', async () => {
-      mocks.requireAdmin.mockResolvedValue(ADMIN);
-      mocks.confirmedBlocks.mockResolvedValue([{ id: 'block-owned' }, { id: 'block-fresh' }]);
-      mocks.promotedRowCounts.mockResolvedValue(new Map([['block-owned', 2]]));
-      mocks.promoteBlock.mockResolvedValue(result('block-fresh', 1));
-      const { promoteAllAction } = await import('./actions');
-
-      const out = await promoteAllAction();
-
-      expect(mocks.promoteBlock).toHaveBeenCalledTimes(1);
-      expect(mocks.promoteBlock).toHaveBeenCalledWith(
-        mocks.dbMock, 'block-fresh', { dryRun: false, recordedBy: 'lead@shliff.test' },
-      );
-      expect(out.results.map((r) => r.blockId)).toEqual(['block-fresh']);
-      expect(out.skipped.map((s) => s.blockId)).toEqual(['block-owned']);
-      expect(out.skipped[0].reason).toMatch(/[֐-׿]/);
-    });
-
-    it('revalidates both pages even when the confirmed-block query itself rejects', async () => {
-      mocks.requireAdmin.mockResolvedValue(ADMIN);
-      mocks.confirmedBlocks.mockRejectedValue(new Error('boom'));
-      const { promoteAllAction } = await import('./actions');
-
-      await expect(promoteAllAction()).rejects.toThrow('boom');
-
-      expect(mocks.revalidatePath).toHaveBeenCalledWith('/data');
-      expect(mocks.revalidatePath).toHaveBeenCalledWith('/money');
-    });
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/data');
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/money');
   });
 });

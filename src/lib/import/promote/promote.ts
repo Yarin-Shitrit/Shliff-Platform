@@ -61,6 +61,11 @@ const MESSAGES = {
     ambiguous: 'יותר מעותק אחד של הגיליון הזה סומן כנכון',
     superseded: 'נבחר עותק אחר של הגיליון הזה',
   },
+  /** `promoteAllGated`'s skip reason. No file name, no internal term — same
+   *  convention as every other message here: what is true, not how the
+   *  system is built. */
+  alreadyPromoted: 'לבלוק הזה כבר יש שורות בטבלה, וקידום חוזר עלול לשכפל אותן — '
+    + 'עדכון של שורות קיימות נעשה בתהליך נפרד ומבוקר, לא דרך הכפתור הזה',
 } as const;
 
 function hasPromoter(a: BlockArchetype): a is PromotableArchetype {
@@ -314,6 +319,17 @@ async function sweep(
  * grouped `count(*) … where source_block_id in (…)`, over `TABLES`. A block
  * appears in the result only if it has rows, so a count-reading caller uses
  * `?? 0` and a yes/no-reading caller uses `.has(blockId)`.
+ *
+ * Every archetype writes to exactly one of these four tables (W6), but all
+ * four are counted for every block regardless of its *current* archetype: a
+ * block whose archetype was re-decided after a promotion still reports the
+ * rows it really owns rather than zero. That is not incidental here — it is
+ * the property the skip gate depends on. A block promoted as `ledger` and
+ * later re-confirmed as `budget_lines` still owns real `ledger_entries`
+ * rows until something sweeps them; a query that only checked the table its
+ * *current* archetype writes to would report it as never-promoted and let
+ * `promoteAllGated` promote it again, silently re-opening the hazard this
+ * gate exists to close.
  */
 export async function promotedRowCounts(
   db: AnyDb, blockIds: string[],
@@ -435,6 +451,121 @@ export async function promoteAll(
       failedCount: failures.length,
     };
   });
+}
+
+// ---------------------------------------------------------------------------
+// promoteAllGated
+// ---------------------------------------------------------------------------
+
+/** A confirmed block `promoteAllGated` did not promote this run, and why. */
+export interface SkippedBlock {
+  blockId: string;
+  /** Machine-readable, so a caller can branch without string-matching the
+   *  Hebrew `reason` — today there is exactly one reason a block is
+   *  skipped, but the field names what kind of skip this is rather than
+   *  leaving "skipped" to mean only one thing forever. */
+  code: 'already-promoted';
+  /** How many rows `promotedRowCounts` found for this block — the same
+   *  number that decided the skip, not recomputed. */
+  rowCount: number;
+  /** Hebrew, shown to a lead in the register. */
+  reason: string;
+}
+
+/** `BulkResult` plus the confirmed blocks a gated run skipped rather than
+ *  promoted. */
+export interface GatedPromoteResult extends BulkResult {
+  skipped: SkippedBlock[];
+  /** `skipped.length`, for a caller that only wants the count — symmetric
+   *  with `failedCount`. */
+  skippedCount: number;
+}
+
+/**
+ * `promoteAll`, but a confirmed block that already owns rows in one of the
+ * four target tables is skipped and reported instead of promoted again.
+ *
+ * `promoteAll` re-promotes every confirmed block unconditionally, and at
+ * least one real block's bounds once overran into a summary sub-table,
+ * writing two rows that were not budget lines and had to be deleted by hand
+ * outside the promoter. Because every promoter upserts on
+ * `(source_block_id, source_row)`, and those two rows no longer exist,
+ * promoting that block again INSERTS them a second time rather than
+ * updating anything — silently doubling a real budget. Scoping by season or
+ * by block does not fix this: the junk lives inside that block's own
+ * confirmed rows, so a scoped run reinserts it too. The one fact that
+ * separates a safe re-run from an unsafe one is whether the block has
+ * already produced rows — never has: promotes normally; already has some:
+ * skipped here, every time, from every caller. Refreshing a block that
+ * already has rows still goes through `scripts/cutover.ts`, which is
+ * guarded and evidence-gated, never through this function or `promoteAll`.
+ *
+ * The confirmed-block query below is the same one `promoteAll` makes
+ * (confirmed blocks, ordered by `sheets.name` then `blocks.top`), written
+ * out here rather than shared with it — the same choice
+ * `scripts/cutover.ts`'s `promoteScoped` makes and for the same reason:
+ * `promoteAll` is the shared entry point `scripts/cutover.ts` and
+ * `scripts/dry-run-promote.ts` both depend on behaving exactly as it does
+ * today, so a parameter on it for one caller's gate is everyone's API to
+ * carry.
+ *
+ * Unlike `promoteAll`, this is not one outer transaction with per-block
+ * savepoints — each `promoteBlock` call opens and commits its own
+ * top-level transaction, exactly as `scripts/cutover.ts`'s `promoteScoped`
+ * already does. A run that fails partway through is not rolled back to
+ * where it started; it is left with whatever committed before the failure,
+ * which is safe rather than merely acceptable here — the gate re-reads
+ * `promotedRowCounts` on every call, so a later re-run of this same
+ * function skips exactly the blocks that already committed and only
+ * retries the rest.
+ */
+export async function promoteAllGated(
+  db: AnyDb, opts: { dryRun: boolean; recordedBy: string },
+): Promise<GatedPromoteResult> {
+  const confirmed = await db.select({ id: blocks.id })
+    .from(blocks)
+    .innerJoin(sheets, eq(sheets.id, blocks.sheetId))
+    .where(isNotNull(blocks.confirmedAt))
+    .orderBy(sheets.name, blocks.top);
+
+  const owned = await promotedRowCounts(db, confirmed.map((row) => row.id));
+
+  const skipped: SkippedBlock[] = [];
+  const results: PromotionResult[] = [];
+  const failures: { blockId: string; message: string }[] = [];
+
+  for (const { id } of confirmed) {
+    const rowCount = owned.get(id);
+    if (rowCount !== undefined) {
+      skipped.push({
+        blockId: id, code: 'already-promoted', rowCount, reason: MESSAGES.alreadyPromoted,
+      });
+      continue;
+    }
+    try {
+      // Sequential, as `promoteAll` and `promoteScoped` both are: each
+      // block finishes — or rolls back its own transaction — before the
+      // next one starts.
+      results.push(await promoteBlock(db, id, opts));
+    } catch (error) {
+      failures.push({
+        blockId: id,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return {
+    results,
+    writtenCount: results.reduce((n, r) => n + r.written.length, 0),
+    refusedCount: results.reduce((n, r) => n + r.refused.length, 0),
+    deletedCount: results.reduce((n, r) => n + r.deleted, 0),
+    retainedCount: results.reduce((n, r) => n + r.retained.length, 0),
+    failures,
+    failedCount: failures.length,
+    skipped,
+    skippedCount: skipped.length,
+  };
 }
 
 /**
