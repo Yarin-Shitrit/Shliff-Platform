@@ -37,7 +37,15 @@ jobs:
     name: build on linux · deploy prebuilt
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    # BUG FOUND BY RUNNING THIS WORKFLOW, FIXED HERE -- the original condition
+    # (workflow_dispatch OR a successful workflow_run) never matches the
+    # temporary `push` trigger above, so the very deployment that trigger
+    # exists to cause was silently skipped (0 steps ran; GitHub reported the
+    # job "skipped", not failed). Added the push arm so the comments above,
+    # which already promise "any push to this branch deploys production",
+    # are actually true. TEMPORARY, same as the push trigger: remove together
+    # in Task 8 Step 9.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event.workflow_run.conclusion == 'success' }}
 
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
