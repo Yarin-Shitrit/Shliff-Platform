@@ -19,6 +19,12 @@ out/
 !.env.example
 *.pem
 *.key
+# Deploy credentials dropped at the repo root. The index is shared between
+# sessions (CLAUDE.md), so an untracked secret here is one `git add -A` away
+# from the remote.
+/VERCEL_TOKEN
+/RAILWAY_TOKEN
+.vercel/
 
 # Editor / OS
 .DS_Store
