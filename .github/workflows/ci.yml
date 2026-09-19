@@ -47,29 +47,6 @@ jobs:
 
       - run: npm ci
 
-      # package-lock.json declares rolldown's 15 platform bindings but records a
-      # resolved entry for NONE of them (npm/cli#4828), so `npm ci` installs no
-      # native binding at all and vitest dies at startup with "Cannot find
-      # native binding" before it can write a report.
-      #
-      # This is invisible on the team's machines: an earlier `npm install` put
-      # the darwin binding into node_modules without writing it to the lock.
-      # Anyone not on an Apple-silicon Mac hits it -- see
-      # docs/collab/onboarding.md.
-      #
-      # Install just the binding this runner needs, at the version the lock pins
-      # for rolldown, so the two cannot drift apart. --no-save leaves the
-      # lockfile untouched.
-      #
-      # The real fix is regenerating the lockfile, which also moves 40 other
-      # versions (vitest, vite, rolldown itself). That is its own change with
-      # its own full test run, not a side effect of adding CI.
-      - name: Install the native binding the lockfile omits
-        run: |
-          V=$(node -p "require('./package-lock.json').packages['node_modules/rolldown'].version")
-          echo "lockfile pins rolldown at $V"
-          npm install --no-save --no-audit --no-fund "@rolldown/binding-linux-x64-gnu@$V"
-
       - name: Typecheck
         run: npx tsc --noEmit
 
