@@ -14,12 +14,8 @@ from this table, see `protocol.md`.
 | Area | Owner | Owns outright |
 |---|---|---|
 | **Phase 4 — UI redesign** | @Yarin-Shitrit | `src/app/(admin)/{members,fees,money,tasks,imports,upload,data}/**`, `src/components/**`, `src/lib/{members,fees,money,work,import,inbox,blocks}/**`, `docs/superpowers/{plans,specs,kickoffs}/**` |
-| **Logistics** | `@<teammate-handle>` | `src/app/(admin)/logistics/**`, `src/lib/logistics/**`, `src/db/schema/logistics.ts` |
+| **Logistics** | @josefcohen96 | `src/app/(admin)/logistics/**`, `src/lib/logistics/**`, `src/db/schema/logistics.ts` |
 | **Collaboration harness** | @Yarin-Shitrit | `docs/collab/**`, `CLAUDE.md` |
-
-> **Fill in the teammate's GitHub handle before sharing this file.** A placeholder
-> owner is an unowned area, and an unowned area is where the silent overwrite
-> happens.
 
 Logistics is new, so almost all of it is new files — which is the good case. The
 cost is concentrated in the handful of places a new feature has to reach into to
@@ -30,7 +26,12 @@ exist at all. Those are below.
 Nobody owns these alone. Editing one is allowed; editing one **silently** is not.
 See `protocol.md` §3 for what surfacing means.
 
-**Paths are qualified by branch, because the two branches disagree about what
+> **As of 2026-09-19 the *(ui)* markers below are historical.** Phase 4 merged
+> to `main`, so every path marked *(ui)* now exists there. The markers are kept
+> because the reasoning still applies the next time a long branch holds files
+> `main` has not seen.
+
+**Paths were qualified by branch, because the two branches disagreed about what
 exists.** A *(ui)* marker attaches to the path immediately before it, and means
 that path lives only on `feat/ui-01-foundation`: Phase 4 has not merged to `main`.
 So `layout.tsx`, `globals.css` and `money.ts` are on `main` today, while

@@ -38,10 +38,12 @@ what is written below.
 | Area | Ask | Reach them at |
 |---|---|---|
 | Phase 4 UI redesign, the money model, anything about the camp's real data | @Yarin-Shitrit (camp lead) | — |
-| Logistics | `@<teammate-handle>` | — |
+| Logistics | @josefcohen96 | — |
 
-> Fill in both contact columns. "Ask Yarin" is not actionable at 23:00 on a
-> Saturday unless it says *how*.
+> Both handles are real; the contact columns are not. A GitHub handle is enough
+> to tag someone on a PR, which is the path this harness actually depends on.
+> Add a faster channel if you have one — "ask Yarin" is not actionable at 23:00
+> on a Saturday unless it says how.
 
 Decisions that are **always** the camp lead's, never settled between sessions:
 adding a dependency (ruling R1), restarting or resetting the database, anything
@@ -51,9 +53,9 @@ touching `docs/reference-data/`, and pushing or force-pushing shared branches.
 
 | Who | Area | Branch | State | As of |
 |---|---|---|---|---|
-| @Yarin-Shitrit | Phase 4 UI redesign | `feat/ui-01-foundation` | **complete** — all twelve plans landed, 203 files / 2606 tests / 0 failed, 0 pending. Not yet merged to `main` | 2026-09-19 |
+| @Yarin-Shitrit | Phase 4 UI redesign | merged to `main` | **done** — all twelve plans landed; CI green on `main` at 2640 tests in 203 files, 17m21s | 2026-09-19 |
 | @Yarin-Shitrit | Promotion gate + sheet retirement | merged to `main`; migration `0008` pending | **active** | 2026-09-19 |
-| `@<teammate-handle>` | Logistics | — | onboarding, not yet started | 2026-09-19 |
+| @josefcohen96 | Logistics | — | onboarding, not yet started | 2026-09-19 |
 | @Yarin-Shitrit | Collaboration harness + CI | merged to `main` | done | 2026-09-19 |
 
 ### Phase 4, in more detail
@@ -63,10 +65,10 @@ Reported by the session executing it on 2026-09-18, **not independently verified
 
 - **Wave 2 complete and merged** — plans 06 (אנשים), 07 (דמי קאמפ), 08 (כספים),
   10 (משימות). Gate reported at 150 files, 1760 tests, 0 failures.
-- **All five waves are done.** Reported 2026-09-19: 203 files, 2606 tests, zero
-  failed, zero pending, all twelve plans landed. The branch is not yet merged to
-  `main`, so the shared surfaces marked *(ui)* in `ownership.md` still read as
-  absent from `main`.
+- **Merged to `main` on 2026-09-19** and verified there by CI: 203 files, 2640
+  tests, zero failed, zero pending, 17m21s. Every surface marked *(ui)* in
+  `ownership.md` is now on `main`, so that branch qualifier is history rather
+  than a live caveat.
 - One class of bug got through the whole gate and was caught in a browser: a
   `'use server'` file exporting a string constant beside its server actions
   makes Next reject the entire module, returning 500 on **every** route
@@ -102,10 +104,13 @@ work reads `sheets` or renders block state, both change what it sees.
 - **CI runs on every PR and every push to `main`**: typecheck, lint, and the
   suite with a guard that refuses a run which did not actually run. Measured at
   903 tests in 11m20s on `main`; Phase 4 roughly doubles that.
-- **`npm ci` cannot start the suite on a clean machine.** `package-lock.json`
-  resolves none of rolldown's fifteen platform bindings, so a fresh checkout has
-  no native binding and vitest dies at startup. Workaround in
-  `onboarding.md`; the real fix moves ~40 versions and is not mid-wave work.
+- **Fixed 2026-09-19: a fresh clone now runs its own tests.** `package-lock.json`
+  used to resolve none of rolldown's fifteen platform bindings, so `npm ci`
+  installed no native binding and vitest died at startup. The lockfile was
+  regenerated (delete first — an in-place regeneration is a no-op) and is green
+  at 2640 tests. Older plan documents under `docs/superpowers/` still say
+  **"never run `npm install`"**; that warning was correct when written and its
+  cause is gone. `npm ci` is still the right command, for reproducibility.
 - **Several sessions share this box.** `pgrep -fl vitest` before believing a mass
   red, and before assuming a running suite is yours — attributing one by repo
   rather than by measurement has already misdirected two sessions. Resolve the

@@ -26,39 +26,6 @@ cd Shliff-Platform
 npm install
 ```
 
-> **This whole section is due for deletion.** The lockfile was regenerated and
-> verified green on `feat/ui-01-foundation` at `724106e` — 203 files, 2606
-> tests, zero failed — so a fresh clone of that branch runs its own tests. It
-> is still true of `main` until Phase 4 merges. **When it does, delete this
-> section and the binding-install step in `.github/workflows/ci.yml`**; a
-> warning about a fixed problem costs the next person a search.
-
-**If `npm install` leaves vitest unable to start**, with `Cannot find native
-binding` and `Cannot find module '@rolldown/binding-...'`, the lockfile is at
-fault, not your machine. `package-lock.json` declares rolldown's fifteen
-platform bindings but records a resolved entry for none of them
-([npm/cli#4828](https://github.com/npm/cli/issues/4828)), so a clean `npm ci`
-installs no native binding. It is invisible on an Apple-silicon Mac, where an
-earlier `npm install` left the darwin binding in `node_modules` without writing
-it to the lock. Until the lockfile is regenerated, install the one your platform
-needs at the version the lock pins:
-
-```sh
-V=$(node -p "require('./package-lock.json').packages['node_modules/rolldown'].version")
-npm install --no-save "@rolldown/binding-<your-platform>@$V"   # e.g. linux-x64-gnu
-```
-
-CI does exactly this, in `.github/workflows/ci.yml`.
-
-**Regenerating the lockfile in place does nothing** — `npm install
---package-lock-only` over the existing file returns it byte-identical, same md5,
-still zero resolved bindings. The lockfile has to be **deleted** first:
-`rm package-lock.json && npm install --package-lock-only` produces all fifteen,
-resolved. That is the real fix, and it also moves about forty other versions
-(vitest 5.0.0→5.0.1, vite 8.2.2→8.3.0, rolldown→1.2.9), so it needs its own
-change and its own full test run. Measured 2026-09-19; do not conclude from an
-in-place regeneration that no fix exists.
-
 **The repository is private and contains the camp's real financial records** —
 `docs/reference-data/` holds three workbooks with real names and real amounts.
 Do not fork it, mirror it, or paste rows from it into an issue.
