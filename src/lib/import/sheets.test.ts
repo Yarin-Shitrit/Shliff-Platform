@@ -2,8 +2,11 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import type { TestDb } from '@/test/db';
 import { createTestDb } from '@/test/db';
 import { createSeason } from '@/lib/members/roster';
-import { uploads, sheets, blocks } from '@/db/schema/source';
+import { uploads, sheets, blocks, blockMappings } from '@/db/schema/source';
 import { ledgerEntries } from '@/db/schema/money';
+import { promoteBlock } from '@/lib/import/promote/promote';
+import { budgetTotalAgorot } from '@/lib/money/budget';
+import type { ColumnMapping } from '@/lib/classify/map-columns';
 import {
   setSheetSeason, setSheetAuthority, listSheets, sheetEligibility,
   retireSheet, unretireSheet,
@@ -22,6 +25,48 @@ async function addSheet(filename: string, name: string): Promise<string> {
     uploadId: up.id, name, index: 0, rowCount: 10, colCount: 5,
   }).returning();
   return sheet.id;
+}
+
+/** Gives `sheetId` one promoted `ledger_entries` row directly — a season-less
+ *  promoted row is real (a ledger block promotes with a `null` season), so
+ *  this deliberately does not go through `setSheetSeason` first. */
+async function addOwnedRow(sheetId: string): Promise<void> {
+  const [block] = await db.insert(blocks).values({
+    sheetId, top: 1, left: 1, bottom: 2, right: 4,
+    archetype: 'ledger', confidence: '1.0000', headerRow: 1, fingerprint: null,
+    pipelineVersion: 1, rawGrid: [['תאריך', 'פירוט']],
+  }).returning();
+  await db.insert(ledgerEntries).values({
+    occurredOn: new Date(), direction: 'out', amount: '100.00',
+    description: 'רשומה מקודמת', recordedBy: 'lead@shliff.test',
+    sourceBlockId: block.id, sourceRow: 1,
+  });
+}
+
+const BUDGET_MAP: ColumnMapping[] = [
+  { column: 1, field: 'item', confidence: 1 },
+  { column: 2, field: 'quantity', confidence: 1 },
+  { column: 3, field: 'unit_cost', confidence: 1 },
+  { column: 4, field: 'total', confidence: 1 },
+];
+
+/** A single confirmed `budget_lines` block on `onSheet`, ready to promote —
+ *  `total` in shekels (`'585.23'` → 58,523 agorot via `toAgorot`). */
+async function addBudgetBlock(onSheet: string, total: string): Promise<string> {
+  const grid = [
+    ['סוג הוצאה', 'כמות', 'מחיר', 'עלות כוללת'],
+    ['בסיס', '1', total, total],
+  ];
+  const [block] = await db.insert(blocks).values({
+    sheetId: onSheet, top: 1, left: 1, bottom: 2, right: 4,
+    archetype: 'budget_lines', confidence: '1.0000', headerRow: 1, fingerprint: null,
+    pipelineVersion: 1, rawGrid: grid,
+    confirmedBy: 'lead@shliff.test', confirmedAt: new Date(),
+  }).returning();
+  await db.insert(blockMappings).values({
+    blockId: block.id, columnMap: BUDGET_MAP, source: 'admin',
+  });
+  return block.id;
 }
 
 beforeEach(async () => {
@@ -349,5 +394,121 @@ describe('retirement', () => {
     await expect(setSheetAuthority(db, live, true)).resolves.toBeUndefined();
     const rows = await listSheets(db);
     expect(rows.find((r) => r.id === live)?.authoritative).toBe(true);
+  });
+});
+
+describe('season guard — a sheet that owns promoted rows refuses a season change (R54)', () => {
+  it('refuses a change to a different season, in Hebrew, and leaves the season unchanged', async () => {
+    const id = await addSheet('26.xlsx', 'תקציב קאמפ ברן 26');
+    await setSheetSeason(db, id, s26);
+    await addOwnedRow(id);
+
+    let message = '';
+    try {
+      await setSheetSeason(db, id, s25);
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toMatch(/[֐-׿]/);
+    expect(message).not.toMatch(/[a-zA-Z]/);
+
+    const [row] = await listSheets(db);
+    expect(row.seasonId).toBe(s26);
+  });
+
+  it('refuses clearing to null, and does not clear authority either', async () => {
+    const id = await addSheet('26.xlsx', 'תקציב קאמפ ברן 26');
+    await setSheetSeason(db, id, s26);
+    await setSheetAuthority(db, id, true);
+    await addOwnedRow(id);
+
+    await expect(setSheetSeason(db, id, null)).rejects.toThrow();
+
+    const [row] = await listSheets(db);
+    expect(row.seasonId).toBe(s26);
+    expect(row.authoritative).toBe(true);
+  });
+
+  it('allows a no-op — setting the same season it already has', async () => {
+    const id = await addSheet('26.xlsx', 'תקציב קאמפ ברן 26');
+    await setSheetSeason(db, id, s26);
+    await addOwnedRow(id);
+
+    await expect(setSheetSeason(db, id, s26)).resolves.toBeUndefined();
+    const [row] = await listSheets(db);
+    expect(row.seasonId).toBe(s26);
+  });
+
+  it('owning no rows: every change is still allowed, including clear-also-clears-authority', async () => {
+    const id = await addSheet('26.xlsx', 'תקציב קאמפ ברן 26');
+    await setSheetSeason(db, id, s26);
+    await setSheetAuthority(db, id, true);
+
+    await expect(setSheetSeason(db, id, s25)).resolves.toBeUndefined();
+    let [row] = await listSheets(db);
+    expect(row.seasonId).toBe(s25);
+
+    await expect(setSheetSeason(db, id, null)).resolves.toBeUndefined();
+    [row] = await listSheets(db);
+    expect(row.seasonId).toBeNull();
+    expect(row.authoritative).toBeNull();
+  });
+
+  it('refuses setting a season on a season-less sheet that already owns rows (the ledger case)', async () => {
+    const id = await addSheet('23.xlsx', 'תקציב קאמפ ברן 23');
+    // id stays season-less on purpose — a ledger block promotes with a null
+    // season, so "no season yet" does not mean "owns no rows".
+    await addOwnedRow(id);
+
+    await expect(setSheetSeason(db, id, s26)).rejects.toThrow();
+    const [row] = await listSheets(db);
+    expect(row.seasonId).toBeNull();
+  });
+
+  /**
+   * The original defect, reproduced end to end: `a` is chosen and promoted
+   * first (58,523 agorot). Without the guard, moving `a` to a different
+   * season stops `conflicts()` from seeing `b` as a rival, so `b` reads
+   * `eligible` and promoting it INSERTs a second copy of the same money
+   * (117,046 = 58,523 × 2). The throw alone does not pin this — a guard that
+   * only checked the wrong direction, or only checked clearing, would still
+   * let this double-count through, which is exactly what the money
+   * assertion below catches and the two "must fail" mutations confirm.
+   */
+  it('the money assertion: the guard prevents a double-counted budget line', async () => {
+    const a = await addSheet('25.xlsx', 'תקציב קאמפ ברן');
+    const b = await addSheet('26.xlsx', 'תקציב קאמפ ברן');
+    await setSheetSeason(db, a, s26);
+    await setSheetSeason(db, b, s26);
+    await setSheetAuthority(db, a, true);
+
+    const blockA = await addBudgetBlock(a, '585.23');
+    await promoteBlock(db, blockA, { dryRun: false, recordedBy: 'lead@shliff.test' });
+    expect(await budgetTotalAgorot(db, s26)).toBe(58523);
+
+    // The lead tries to move a's season now that it owns a promoted row.
+    // Swallowed, not `.rejects.toThrow()` — a version of this test that
+    // stops here the moment the guard fails to throw would never reach the
+    // total below, so a weakened guard could hide behind an aborted test.
+    // The walkthrough continues either way, and the final total is what
+    // actually catches a re-opened double-count.
+    try {
+      await setSheetSeason(db, a, s25);
+    } catch {
+      // expected with the guard in place — see the dedicated throw/message
+      // tests above for that assertion.
+    }
+
+    // Whether or not the move above actually landed, the lead now chooses b
+    // too and tries to promote it — the original defect's exact next step.
+    await setSheetAuthority(db, b, true);
+    const blockB = await addBudgetBlock(b, '585.23');
+    await promoteBlock(db, blockB, { dryRun: false, recordedBy: 'lead@shliff.test' });
+
+    // The assertion that matters: with the guard genuinely blocking a's
+    // season move, a and b still contest each other and b cannot land a
+    // second copy. Without it (mutation 1), a's move succeeds, b reads
+    // uncontested, and this becomes 117,046.
+    expect(await budgetTotalAgorot(db, s26)).toBe(58523);
   });
 });
