@@ -29,7 +29,7 @@ beforeEach(() => {
 describe('UploadDrop', () => {
   it('states the rules before anything is chosen', () => {
     render(<UploadDrop />);
-    expect(screen.getByText(/קובץ אקסל \(xlsx\) בלבד, עד 25 מגה־בייט/)).toBeTruthy();
+    expect(screen.getByText(/קובץ אקסל \(xlsx\) בלבד, עד 4 מגה־בייט/)).toBeTruthy();
   });
 
   it('refuses the wrong extension without reaching the server', () => {
@@ -44,7 +44,7 @@ describe('UploadDrop', () => {
     fireEvent.drop(dropZone(), {
       dataTransfer: { files: [fakeFile('ענק.xlsx', MAX_UPLOAD_BYTES + 1)] },
     });
-    expect(screen.getByText('הקובץ גדול מדי — עד 25 מגה־בייט.')).toBeTruthy();
+    expect(screen.getByText('הקובץ גדול מדי — עד 4 מגה־בייט.')).toBeTruthy();
     expect(fetch).not.toHaveBeenCalled();
   });
 
