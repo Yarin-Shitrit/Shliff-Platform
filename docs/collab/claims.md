@@ -1,6 +1,6 @@
 # What is in flight
 
-**updated: 2026-09-19** · if that date is more than a day or two old, **this file
+**updated: 2026-09-20** · if that date is more than a day or two old, **this file
 is fiction**. Read §1 before you act on §3.
 
 This is the only document in `docs/collab/` that goes stale, and it goes stale
@@ -55,7 +55,7 @@ touching `docs/reference-data/`, and pushing or force-pushing shared branches.
 |---|---|---|---|---|
 | @Yarin-Shitrit | Phase 4 UI redesign | merged to `main` | **done** — all twelve plans landed; CI green on `main` at 2640 tests in 203 files, 17m21s | 2026-09-19 |
 | @Yarin-Shitrit | Promotion gate + sheet retirement | merged to `main`; migration `0008` pending | **active** | 2026-09-19 |
-| @josefcohen96 | Logistics | — | onboarding, not yet started | 2026-09-19 |
+| @josefcohen96 | Logistics | `feat/logistics-schema`, `feat/logistics-mock-boards` | **active** — design + 3 artboards done; schema and migration `0009` pushed, both PRs awaiting review | 2026-09-20 |
 | @Yarin-Shitrit | Collaboration harness + CI | merged to `main` | done | 2026-09-19 |
 | @Yarin-Shitrit | Hosting on Vercel + Railway | merged to `main` | **live** at <https://shliff-platform.vercel.app>. Vercel project is deliberately **not** Git-connected — do not connect it. Railway Postgres 18 in `europe-west4` holds the real data. Runbook: `docs/deploy.md`. **`drizzle-kit push` is now forbidden alongside `migrate`** — see the runbook §6. Signed-in pages not yet verified by a human | 2026-09-19 |
 
