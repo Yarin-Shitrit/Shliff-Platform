@@ -707,29 +707,86 @@ railway init --name shliff-platform
 railway add --database postgres
 ```
 
-**Region:** if `railway add --help` shows no region flag, set the service's region to **europe-west4** in the Railway dashboard under the Postgres service → Settings → Region, and confirm it took before continuing. Do not skip this and do not silently accept a US region: the spec pairs fra1 with europe-west4 precisely so every page's several sequential queries stay inside Europe. If europe-west4 is unavailable on this account, record which region was used and tell the camp lead — the Vercel region in Task 6 must then match it.
-
-- [ ] **Step 4: Get the public URL, and prove it is the public one**
+**Region.** `railway add` has no region flag, but that does **not** mean the CLI cannot set a region — a claim this plan made earlier and which was wrong. `railway scale` / `railway service scale` take `[REGION=REPLICAS]` arguments and document `Regions: us-west, us-east, eu-west, southeast-asia, or region IDs`:
 
 ```sh
-railway variables --service Postgres
+railway service scale --help
+railway service scale --service Postgres eu-west=1 --json
 ```
 
-Copy **`DATABASE_PUBLIC_URL`** — the one whose host ends in `.proxy.rlwy.net`. Then assert that, rather than trusting the eye:
+**Try the CLI first**, while the database is still empty:
 
 ```sh
-railway variables --service Postgres --kv | grep '^DATABASE_PUBLIC_URL=' \
-  | sed 's/^DATABASE_PUBLIC_URL=//' > /dev/null && echo "present"
+railway status --json
+railway service scale --service Postgres eu-west=1 --json
 ```
 
-**`DATABASE_URL` is the wrong one.** It is `postgres.railway.internal`, which resolves only inside Railway's network; Vercel is outside it, and the failure is a DNS error that reads like an outage.
-
-Hold the value in a shell variable for the remaining steps, never in a file and never in a command's arguments:
+Then read the region back rather than trusting the command's exit code:
 
 ```sh
-read -rs RAILWAY_URL    # paste the DATABASE_PUBLIC_URL, press enter
-export RAILWAY_URL
+railway service list --json
 ```
+
+**The open question, which the CLI's help does not answer.** `scale` assigns *replica counts per region* — a horizontal-scaling primitive written for stateless services. A managed Postgres has a **volume**, and a volume lives in one region. So `eu-west=1` may relocate it, may be refused, or may appear to succeed while leaving the volume where it was. **Determine which, empirically, before restoring any data** — that is why this step runs on an empty database.
+
+If `scale` cannot place it, set the region in the dashboard under the Postgres service → Settings → Region instead. Either way, **confirm the region took before continuing**, and do not silently accept a US region: the spec pairs fra1 with `eu-west` precisely so every page's several sequential queries stay inside Europe. If `eu-west` is unavailable on this account, record which region was used and tell the camp lead — Task 6's Vercel region must then match it.
+
+`eu-west` is Railway's name for the Amsterdam region this plan elsewhere calls `europe-west4`; use whichever spelling the CLI accepts and note which you used.
+
+- [ ] **Step 4: Create the TCP proxy, then compose the public URL**
+
+**`DATABASE_PUBLIC_URL` does not exist**, and this plan was wrong to say it would. Railway's Postgres template injects only the internal `DATABASE_URL` (`postgres.railway.internal:5432`), which resolves **only inside Railway's private network**. Vercel is outside it, so a database with no proxy is unreachable from the app and the failure is a DNS error that reads like an outage.
+
+A **TCP proxy** is what makes it reachable, and it is not created by default:
+
+```sh
+railway variables --service Postgres --kv | sed 's/=.*//' | sort
+```
+
+If `RAILWAY_TCP_PROXY_DOMAIN` is absent, create the proxy. **CLI 4.57.1 has no command for this** — verified by enumerating every subcommand's help for `tcp|proxy|public`, which finds only `railway metrics --network` and `railway bucket create --region`. `railway domain` is HTTP-only and useless for the Postgres wire protocol. So it goes through GraphQL.
+
+The skill's bundled `scripts/railway-api.sh` **does not work on this CLI**: it reads `.user.token` from `~/.railway/config.json`, which on 4.57.1 is the literal string `"null"` — the real credential is `.user.accessToken`. Use a helper that reads the right key, keeping the bearer out of `argv`:
+
+```sh
+TOKEN=$(node -e "const j=require(process.env.HOME+'/.railway/config.json');
+  const t=(j.user&&(j.user.accessToken||j.user.token))||''; process.stdout.write(t==='null'?'':t)")
+
+printf '%s' '{"query":"mutation($input: TCPProxyCreateInput!){ tcpProxyCreate(input:$input){ id domain proxyPort applicationPort } }","variables":{"input":{"applicationPort":5432,"environmentId":"<ENV_ID>","serviceId":"<SERVICE_ID>"}}}' \
+  | curl -s https://backboard.railway.com/graphql/v2 \
+      -H "Content-Type: application/json" \
+      --config <(printf 'header = "Authorization: Bearer %s"\n' "$TOKEN") \
+      -d @-
+```
+
+`TCPProxyCreateInput` is exactly `{ applicationPort: Int!, environmentId: String!, serviceId: String! }` — introspected, not guessed. Get the IDs from `railway status --json`.
+
+The mutation returns `domain` (with a **trailing dot**, e.g. `thomas.proxy.rlwy.net.`) and `proxyPort`. Afterwards Railway injects `RAILWAY_TCP_PROXY_DOMAIN` and `RAILWAY_TCP_PROXY_PORT` into the service. Compose the URL from those plus `PGUSER`/`PGPASSWORD`/`PGDATABASE`, stripping the trailing dot, and write it to the **scratchpad** with mode 600 — never into the repository:
+
+```sh
+railway variables --service Postgres --kv > "$SCRATCH/rw.env"
+node -e "
+const fs=require('fs');
+const t=fs.readFileSync(process.argv[1],'utf8');
+const g=k=>{const m=t.match(new RegExp('^'+k+'=(.*)\$','m'));return m?m[1].replace(/^[\"']|[\"']\$/g,''):null};
+const host=(g('RAILWAY_TCP_PROXY_DOMAIN')||'').replace(/\.\$/,'');
+const url='postgresql://'+g('PGUSER')+':'+g('PGPASSWORD')+'@'+host+':'+g('RAILWAY_TCP_PROXY_PORT')+'/'+g('PGDATABASE');
+fs.writeFileSync(process.argv[2], url, {mode:0o600});
+console.log('composed: postgresql://<user>:<pass>@'+host+':'+g('RAILWAY_TCP_PROXY_PORT')+'/'+g('PGDATABASE'));
+" "$SCRATCH/rw.env" "$SCRATCH/railway_url"
+```
+
+**Then discharge Ruling 6 before using it anywhere** — assert the URL classifies as *remote* under `src/db/index.ts`'s own regex, because that regex is the only thing switching TLS on:
+
+```sh
+node -e "
+const u=require('fs').readFileSync(process.argv[1],'utf8');
+const isLocal=/@(localhost|127\.0\.0\.1|\[::1\])[:\/]/.test(u);
+console.log('isLocal='+isLocal+'  (MUST be false)');
+process.exit(isLocal?1:0);
+" "$SCRATCH/railway_url"
+```
+
+**A note on what this proxy is.** It exposes Postgres to the public internet, guarded by its password and TLS. That is inherent to the approved topology: Vercel's functions cannot join Railway's private network, so the only alternative would be hosting the app on Railway too. Spec §2 states this; it is a deliberate property, not an oversight.
 
 - [ ] **Step 5: Confirm you can reach it, and that it is empty**
 
@@ -741,21 +798,39 @@ docker exec -e U="$RAILWAY_URL" shliff-pg psql "$U" -tAc \
 
 Expected: PostgreSQL 16 or 17, and `0` tables. The container's own `psql` is used because it is version 16 and definitely present; the host may have no client at all.
 
-- [ ] **Step 6: Dump and restore**
+- [ ] **Step 6: Dump and restore — with the NEWER version's tools**
+
+**The versions differ by two majors.** `shliff-pg` is **PostgreSQL 16.13**; Railway's managed Postgres is **18.6** (image `ghcr.io/railwayapp-templates/postgres-ssl:18`). PostgreSQL's documented guidance is to dump with the **newer** version's `pg_dump` when the target is newer, so do not use the source container's pg16 client. Use a throwaway pg18 container that can reach both ends:
 
 ```sh
-docker exec shliff-pg sh -c \
-  'pg_dump -U shliff -Fc --no-owner --no-privileges shliff > /tmp/shliff.dump && ls -l /tmp/shliff.dump'
+docker pull postgres:18-alpine
+docker run --rm postgres:18-alpine pg_dump --version      # expect 18.6
 ```
 
-Expected: a file of roughly 1–9 MB (the database is 9127 kB uncompressed; `-Fc` compresses).
+The local database is reachable from inside a container at **`host.docker.internal:5433`** (Docker Desktop on macOS provides it). Build that URL from `.env.local` into the scratchpad, then prove both ends are reachable *before* moving anything:
 
 ```sh
-docker exec -e U="$RAILWAY_URL" shliff-pg sh -c \
-  'pg_restore --no-owner --no-privileges --no-comments -d "$U" /tmp/shliff.dump'
+docker run --rm postgres:18-alpine psql "$LOCAL_URL"   -tAc "select 'local ok, persons='||count(*) from persons"
+docker run --rm postgres:18-alpine psql "$RAILWAY_URL" -tAc "select count(*) from information_schema.tables where table_schema='public'"
 ```
 
-`--no-owner --no-privileges` because the Railway role differs from `shliff`; without them every `ALTER ... OWNER TO shliff` errors. Harmless warnings about the `public` schema already existing are expected. **Any error mentioning a table or a constraint is not harmless — stop and read it.**
+Then copy, keeping the dump **inside the container's ephemeral layer** so it never touches the host filesystem — it holds real names and real amounts, and `--rm` destroys it:
+
+```sh
+docker run --rm -e L="$LOCAL_URL" -e R="$RAILWAY_URL" postgres:18-alpine sh -euc '
+  pg_dump -Fc --no-owner --no-privileges "$L" > /tmp/d.dump
+  echo "dump bytes=$(wc -c < /tmp/d.dump)"
+  pg_restore --no-owner --no-privileges --single-transaction -d "$R" /tmp/d.dump
+  rm -f /tmp/d.dump
+'
+```
+
+`--no-owner --no-privileges` because the Railway role differs from `shliff`; without them every `ALTER ... OWNER TO shliff` errors. `--single-transaction` makes it atomic, so a mid-way failure cannot leave half the camp's ledger on a public host.
+
+**Two traps, both hit for real:**
+
+- **Do not use `PIPESTATUS` in the container.** Alpine's `sh` is busybox, where it is a bad substitution. Worse, busybox `sh -c` executes **line by line**, so a pipeline on line 1 *runs to completion* before a parse error on line 2 aborts the script — which looks exactly like "nothing ran". It reported `syntax error` and `docker exit: 0`, and the restore had in fact already succeeded. The second attempt then failed with `schema "drizzle" already exists`, which is the only reason it was noticed.
+- **`exit 0` proves nothing here, and neither does an error message.** The oracle is the row counts in Step 7. Check those before believing any claim about whether the copy happened.
 
 - [ ] **Step 7: Verify the restore against the numbers from Step 2**
 
@@ -766,24 +841,61 @@ docker exec -e U="$RAILWAY_URL" shliff-pg psql "$U" -tAc \
 
 Expected: `persons=25 users=1 tables=22`. The 22 is from the spec's schema check (snapshot 0008 and the four schema files agree on 22 tables). **If persons is not 25, the restore is incomplete — do not continue to Task 6.**
 
-- [ ] **Step 8: Delete the dump**
+- [ ] **Step 8: Confirm no dump survives anywhere**
+
+Step 6 keeps the dump inside a `--rm` container, so it is destroyed when the container exits and there is nothing on the host to delete. Confirm that rather than assume it — real names and real amounts must not linger:
 
 ```sh
-docker exec shliff-pg rm -f /tmp/shliff.dump
-docker exec shliff-pg sh -c 'ls /tmp/shliff.dump 2>&1 || echo "gone"'
+# No stray dump on the host, and none in the long-lived source container.
+ls -la "$SCRATCH" | grep -iE '\.dump|\.sql' || echo "scratchpad: no dump"
+docker exec shliff-pg sh -c 'ls /tmp/*.dump 2>/dev/null || echo "shliff-pg /tmp: no dump"'
+docker ps -a --filter ancestor=postgres:18-alpine --format '{{.Names}} {{.Status}}' || true
 ```
 
-Expected: `gone`. Real names and amounts do not linger in a container's `/tmp`.
+Expected: no dump in either place, and no surviving `postgres:18-alpine` container. If one is still listed, remove it — its filesystem layer holds the camp's data.
 
-- [ ] **Step 9: Reconcile the schema with `push`, not `migrate`**
+- [ ] **Step 9: Do NOT run `drizzle-kit push`. Verify parity read-only instead.**
 
-The dump reproduced the laptop's journal divergence exactly: 0002–0004 are applied but unrecorded, 0005–0006 were never applied, 0008 is pending. `drizzle-kit migrate` would try to re-run 0002–0004 and collide (`scripts/cutover.ts:24-31`).
+**This step previously instructed `drizzle-kit push`, and that instruction was dangerous.** Run against the restored database it proposed adding `budget_lines_source_key` — a constraint that **already exists** — and offered:
+
+> *"You're about to add budget_lines_source_key unique constraint to the table, which contains 61 items. … Do you want to **truncate budget_lines** table?"*
+
+Those 61 rows are the camp's real budget. Only the absence of a TTY stopped it; with a terminal attached, one careless keystroke would have truncated real financial data to resolve a diff that did not exist.
+
+**The cause:** `drizzle-kit` 0.31.10 predates PostgreSQL 18 by two majors and misreads its catalog. Established by comparing the constraints directly rather than trusting the tool — all five are byte-identical on both sides:
 
 ```sh
-DATABASE_URL="$RAILWAY_URL" npx drizzle-kit push
+Q="select c.conname||' :: '||pg_get_constraintdef(c.oid)||' nulls_not_distinct='||coalesce(i.indnullsnotdistinct::text,'?')
+   from pg_constraint c join pg_class t on t.oid=c.conrelid
+   left join pg_index i on i.indexrelid=c.conindid
+   where c.contype='u' and t.relname in
+     ('budget_lines','ledger_entries','obligations','ticket_rounds','funding_targets')
+   order by c.conname"
+
+docker exec shliff-pg psql -U shliff -d shliff -tAc "$Q"
+docker run --rm postgres:18-alpine psql "$RAILWAY_URL" -tAc "$Q"
 ```
 
-Review the diff it prints **before** confirming. Expected: additive changes only — the tables and columns from 0005, 0006 and 0008. **If it proposes to DROP a table or a column holding data, answer no and stop.** That means the schema files and the restored database disagree about something this plan has not accounted for, and dropping a column of the camp's ledger is not recoverable from here.
+Expected on **both**: five rows, each `UNIQUE (source_block_id, source_row) nulls_not_distinct=false`.
+
+These five constraints are **load-bearing, not cosmetic.** `src/lib/import/promote/promote.ts:720, 774, 818, 876` each call `onConflictDoUpdate` with `target: [<table>.sourceBlockId, <table>.sourceRow]`. Without the matching unique constraint Postgres raises `42P10: no unique or exclusion constraint matching the ON CONFLICT specification`, and **block promotion fails entirely**. So confirm they are present — just do not let a tool "add" them.
+
+Then prove the whole schema matches, which is the real requirement (the source is what the app runs against and works):
+
+```sh
+Q2="select table_name||'.'||column_name||' '||data_type||' null='||is_nullable||' def='||coalesce(column_default,'-')
+    from information_schema.columns where table_schema='public' order by 1"
+
+docker exec shliff-pg psql -U shliff -d shliff -tAc "$Q2" > "$SCRATCH/cols_local.txt"
+docker run --rm postgres:18-alpine psql "$RAILWAY_URL" -tAc "$Q2" > "$SCRATCH/cols_railway.txt"
+diff "$SCRATCH/cols_local.txt" "$SCRATCH/cols_railway.txt" && echo "IDENTICAL"
+```
+
+Expected: **187 columns on each side and an empty diff.** An empty diff is the whole reconciliation — the restore already carried the schema, so there is nothing for `push` to do and no reason to let it try.
+
+`drizzle-kit migrate` remains forbidden for the original reason (`scripts/cutover.ts:24-31`). `push` is now forbidden too, for this one.
+
+> **If the diff is ever non-empty**, do not reach for `push`. Read the difference, decide what the database should be, and apply the specific change by hand — the camp lead approves anything touching real data.
 
 - [ ] **Step 10: Confirm the data survived the push**
 

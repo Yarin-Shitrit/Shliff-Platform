@@ -43,7 +43,7 @@ Vercel — fra1 (Frankfurt)
       │  TCP + TLS, Railway public proxy
       ▼
 Railway — europe-west4 (Amsterdam)
-  Postgres 16
+  Postgres 18.6  (image ghcr.io/railwayapp-templates/postgres-ssl:18)
 
 Vercel Blob (private)  ← workbook bytes
 ```
@@ -52,9 +52,27 @@ Railway hosts **only** Postgres. There is no app service on Railway.
 
 **The database URL must be Railway's public proxy URL, not its internal one.**
 Railway injects `DATABASE_URL` as `postgres://…@postgres.railway.internal:5432/…`,
-which resolves only inside Railway's private network. Vercel is outside it. The
-value Vercel needs is `DATABASE_PUBLIC_URL` (`…@<host>.proxy.rlwy.net:<port>/…`).
-Using the internal one produces a DNS failure that reads like an outage.
+which resolves only inside Railway's private network. Vercel is outside it, so the
+internal URL produces a DNS failure that reads like an outage.
+
+**Corrected 2026-09-19, after provisioning:** there is no `DATABASE_PUBLIC_URL`.
+This document originally claimed Railway supplies one; it does not. A **TCP
+proxy** must be created explicitly — it does not exist by default — after which
+Railway injects `RAILWAY_TCP_PROXY_DOMAIN` and `RAILWAY_TCP_PROXY_PORT`, and the
+connection URL is composed from those plus `PGUSER`/`PGPASSWORD`/`PGDATABASE`.
+The domain arrives with a trailing dot that must be stripped. CLI 4.57.1 has no
+command for creating the proxy; it goes through the `tcpProxyCreate` GraphQL
+mutation. See the plan's Task 5 Step 4.
+
+**The version is 18, not 16.** The local container is 16.13, so the dump must be
+taken with **pg18's** `pg_dump` — PostgreSQL's documented direction when the
+target is newer. This also has a consequence for tooling: `drizzle-kit` 0.31.10
+predates Postgres 18 and misreads its catalog. See §5.
+
+**What the proxy means.** It exposes Postgres to the public internet, guarded by
+its password and TLS 1.3 (verified: `pg_stat_ssl` reports `ssl=true`). That is
+inherent to this topology — Vercel's functions cannot join Railway's private
+network — and is accepted deliberately, not overlooked.
 
 **Regions are paired deliberately.** Every admin page issues several sequential
 queries, so app-to-database latency multiplies per page load. fra1 ↔
@@ -169,12 +187,32 @@ rotate.
 records that migrations 0002–0004 were applied to the live database by
 `drizzle-kit push`, so the journal does not record them, and 0005–0006 were never
 applied at all. A `migrate` would try to re-run 0002–0004 and collide. The dump
-reproduces that exact divergence, journal included.
+reproduces the laptop's journal state exactly — 9 rows, matching the 9 files.
 
-The reconciliation is `drizzle-kit push` against Railway, which diffs the schema
-files against the live database and applies the difference. That is already how
-this repository applies schema (`docs/collab/onboarding.md:107`). It brings
-0005, 0006 and the pending 0008 in together.
+**`drizzle-kit push` must not be run against it either. Corrected 2026-09-19.**
+This document originally prescribed `push` as the reconciliation step. Run against
+the restored database, it proposed adding `budget_lines_source_key` — a constraint
+that **already exists** — and offered to *truncate `budget_lines`*, which holds 61
+rows of the camp's real budget. Only the absence of a TTY prevented it.
+
+The cause is a tooling gap, established by measurement rather than inferred:
+`drizzle-kit` 0.31.10 predates PostgreSQL 18 by two majors and misreads its
+catalog. Comparing `pg_get_constraintdef` directly shows all five
+`*_source_key` constraints byte-identical on both databases —
+`UNIQUE (source_block_id, source_row) nulls_not_distinct=false` — and a full
+column diff shows **187 columns identical on each side**.
+
+Those five constraints are load-bearing: `src/lib/import/promote/promote.ts:720,
+774, 818, 876` each `onConflictDoUpdate` with
+`target: [<table>.sourceBlockId, <table>.sourceRow]`, so without them Postgres
+raises `42P10` and block promotion fails outright. They must be *present* — but
+nothing should be allowed to "add" them.
+
+**So the reconciliation is a read-only parity check, not a write.** The restore
+carries the schema; an empty column diff is the entire reconciliation. If a
+future diff is ever non-empty, read it and apply the specific change by hand,
+with the camp lead's approval — never by handing a tool a truncate prompt over
+real financial data.
 
 > **Restarting or resetting the database is always the camp lead's call**
 > (`claims.md` §2), and so is anything touching real camp data. Copying the
@@ -188,7 +226,7 @@ Set on the Vercel project, Production scope only.
 
 | Variable | Value | If wrong |
 |---|---|---|
-| `DATABASE_URL` | Railway's **`DATABASE_PUBLIC_URL`**, with `?sslmode=require` | Internal host → DNS failure that reads like an outage |
+| `DATABASE_URL` | The URL composed from `RAILWAY_TCP_PROXY_DOMAIN` (trailing dot stripped), `RAILWAY_TCP_PROXY_PORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`. **No `sslmode` parameter** — `src/db/index.ts` sets `ssl: 'require'` for every non-local host, and a URL carrying its own TLS setting invites the two to drift | Internal host → DNS failure that reads like an outage. Assert the value classifies as *remote* under `src/db/index.ts`'s `isLocal` regex before setting it: that regex is the only thing switching TLS on |
 | `AUTH_SECRET` | **new** 32-byte value, `openssl rand -base64 32` — not the laptop's | next-auth `MissingSecret` at request time, not at build |
 | `STORAGE_DRIVER` | `blob` | Any other value silently writes to an ephemeral disk (change 3 turns this into a throw) |
 | `BLOB_READ_WRITE_TOKEN` | from the Vercel Blob store | Throws inside `@vercel/blob` on first upload |
