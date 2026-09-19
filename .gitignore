@@ -19,6 +19,12 @@ out/
 !.env.example
 *.pem
 *.key
+# Deploy credentials dropped at the repo root. The index is shared between
+# sessions (CLAUDE.md), so an untracked secret here is one `git add -A` away
+# from the remote.
+/VERCEL_TOKEN
+/RAILWAY_TOKEN
+.vercel/
 
 # Editor / OS
 .DS_Store
@@ -44,3 +50,17 @@ coverage/
 
 # Parallel task worktrees (scratch, never committed)
 /.worktrees/
+
+# Subagent-driven-development ledgers, briefs and review packages (scratch)
+/.superpowers/
+
+# `vercel link` appends `.vercel` and `.env*` here every time it runs. Both are
+# already covered above (`.vercel/` at line 27; `.env` and `.env.*` at 17-18),
+# and `.env*` is actively harmful: it sits AFTER `!.env.example`, and gitignore
+# lets the last matching pattern win, so it silently re-ignores the one env file
+# this repo deliberately tracks. Verified with
+# `git check-ignore -v --no-index .env.example` -- note the `--no-index`, since
+# plain `check-ignore` skips tracked paths and reports a reassuring nothing.
+#
+# If `vercel link` re-adds them, delete them again rather than reordering: the
+# negation belongs next to the patterns it negates.

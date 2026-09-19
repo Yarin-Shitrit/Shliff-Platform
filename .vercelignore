@@ -1,0 +1,51 @@
+# What must never be uploaded to Vercel.
+#
+# On the CI path this file changes nothing: `.github/workflows/deploy.yml` builds
+# on its own runner and ships only `.vercel/output` via
+# `vercel deploy --prebuilt`, so the working tree never leaves GitHub. This file
+# is the guard for the OTHER path — a plain `vercel deploy` run from a laptop
+# uploads the working tree, and at that moment it is the only thing standing
+# between the camp's real financial records and a third party.
+#
+# The Vercel project is also deliberately NOT connected to this Git repository,
+# for the same reason: the connection would clone everything below into Vercel's
+# build infrastructure. Do not connect it. See
+# docs/superpowers/specs/2026-09-19-deployment-vercel-railway-design.md §3.
+
+# docs/reference-data/ holds the camp's real members' names and the real amounts
+# they owe. docs/ goes wholesale rather than just that one folder, because
+# nothing under docs/ is read at runtime: reference-workbooks.ts is the only
+# reader, next.config.ts excludes it from every traced route, and
+# upload/actions.ts refuses it in production anyway.
+docs/
+
+# Uploaded workbooks (real financial records) and local test output.
+.uploads/
+.vitest/
+.playwright-mcp/
+
+# Scratch: parallel worktrees and subagent ledgers.
+.worktrees/
+.superpowers/
+
+# Rebuilt on the runner; uploading them would be slower and wrong.
+.next/
+node_modules/
+
+# Credentials. `.env*` is covered by Vercel's own defaults, but state it here
+# too — a deploy token uploaded anywhere is a deploy token to rotate.
+VERCEL_TOKEN
+RAILWAY_TOKEN
+.env
+.env.*
+# ...except .env.example: it is checked in, holds only placeholders (see the
+# file itself), and the prebuilt Next.js output traces it as a required file.
+# Excluding it isn't a security measure, it just breaks `vercel deploy
+# --prebuilt`: CLI warning "`.vercelignore` excludes 1 file the prebuilt
+# functions need" was followed by the deploy actually failing --
+# `Error: ENOENT: no such file or directory, readlink '/vercel/path0/.env.example'`.
+!.env.example
+
+# Tests never run on Vercel.
+**/*.test.ts
+**/*.test.tsx

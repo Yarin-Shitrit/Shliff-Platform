@@ -71,6 +71,10 @@ describe('POST /api/uploads', () => {
 
   afterEach(() => {
     rmSync(storageDir, { recursive: true, force: true });
+    // Only the one test below stubs NODE_ENV/STORAGE_DRIVER with vi.stubEnv;
+    // this always runs so a failed assertion there can't leak `production`
+    // into the next test.
+    vi.unstubAllEnvs();
   });
 
   it('refuses an unauthenticated request with 401 and writes nothing', async () => {
@@ -184,5 +188,23 @@ describe('POST /api/uploads', () => {
     expect(retry.status).toBe(422);
     expect((await retry.json()).uploadId).toBe(row.id);
     expect(await dbRef.current!.select().from(uploads)).toHaveLength(1);
+  });
+
+  /**
+   * `getStorage()` (src/lib/storage/index.ts) refuses to guess a driver in
+   * production. This route calls it unguarded on the new-upload path, and
+   * this file's own header comment forbids an unhandled throw here: it would
+   * escape as an HTML error page, and the client's `response.json()` would
+   * then throw too, leaving the submit button disabled forever. A storage
+   * failure must come back as a machine code instead.
+   */
+  it('returns a machine code instead of throwing when storage is unresolvable in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('STORAGE_DRIVER', '');
+
+    const response = await POST(postFile(FIXTURES.y26, fixtureBuffer(FIXTURES.y26)));
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: 'storage unavailable' });
   });
 });

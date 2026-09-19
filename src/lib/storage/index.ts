@@ -84,6 +84,40 @@ function blobStorage(): Storage {
   };
 }
 
+/**
+ * The driver is chosen explicitly or not at all.
+ *
+ * This used to be `=== 'blob' ? blobStorage() : localStorage()`, which meant
+ * every typo and every unset variable selected the *disk* driver. On Vercel
+ * the disk is ephemeral, so the camp's fee workbook would upload, report
+ * success, and vanish with the instance — the system guessing, and guessing
+ * wrong, about real financial records.
+ *
+ * Outside production the fallback stays: dev and tests should need no setup.
+ * The message is English because its only audience is whoever is holding a
+ * deploy log. This branch *is* reachable on the live upload path — it is not
+ * confined to a dev-only tool like `seed.ts`, which `actions.ts` already
+ * refuses to run in production before ever calling here. `route.ts` wraps its
+ * `getStorage().put(...)` call in a `try`/`catch` that turns this throw into
+ * the machine code `'storage unavailable'` (503). The upload form has no
+ * dedicated entry for that code, so it shows its generic Hebrew refusal — the
+ * same path any unanticipated code takes — and this English text stays in
+ * logs, never becoming user-facing copy. The guard belongs to the route rather
+ * than to this function: that is what lets `route.ts` honour the "nothing here
+ * may throw" contract in its own header.
+ */
 export function getStorage(): Storage {
-  return process.env.STORAGE_DRIVER === 'blob' ? blobStorage() : localStorage();
+  const driver = process.env.STORAGE_DRIVER;
+  if (driver === 'blob') return blobStorage();
+  if (driver === 'local') return localStorage();
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      `STORAGE_DRIVER must be "blob" or "local" in production; got ` +
+        `${driver ? `"${driver}"` : 'no value'}. Uploads would otherwise be ` +
+        `written to an ephemeral filesystem and silently lost.`,
+    );
+  }
+
+  return localStorage();
 }

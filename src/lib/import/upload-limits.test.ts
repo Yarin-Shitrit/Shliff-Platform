@@ -7,9 +7,19 @@ import {
 } from './upload-limits';
 
 describe('upload limits', () => {
-  it('keeps the 25 MB the route has always enforced', () => {
-    expect(MAX_UPLOAD_BYTES).toBe(25 * 1024 * 1024);
-    expect(MAX_UPLOAD_MB).toBe(25);
+  it('stays inside the 4.5 MB body limit Vercel enforces before the route runs', () => {
+    // Above Vercel's cap the platform refuses the request itself, with its own
+    // English error page -- on a Hebrew screen. Keeping the app's own limit
+    // below it means the Hebrew refusal in TOO_LARGE_HE is what a member sees.
+    // The largest real workbook in docs/reference-data/ is 0.07 MB, so this is
+    // ~57x the observed need.
+    expect(MAX_UPLOAD_BYTES).toBe(4 * 1024 * 1024);
+    expect(MAX_UPLOAD_MB).toBe(4);
+    expect(MAX_UPLOAD_BYTES).toBeLessThan(4.5 * 1024 * 1024);
+  });
+
+  it('states a whole number of megabytes, because the Hebrew interpolates it', () => {
+    expect(Number.isInteger(MAX_UPLOAD_MB)).toBe(true);
   });
 
   it('accepts one extension, in lower case', () => {

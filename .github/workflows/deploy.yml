@@ -1,0 +1,144 @@
+name: Deploy
+
+# Deploys only after CI has gone green on main, never merely because main
+# moved. A red main is exactly when a deploy is most expensive, and CI is the
+# only thing that runs the 2640-test suite.
+#
+# workflow_dispatch is the manual path: any redeploy that does not follow a
+# commit.
+#
+# A temporary `push` trigger on `feat/deploy-vercel-railway` lived here while
+# that branch was unmerged, because GitHub only offers workflow_dispatch for a
+# workflow already on the default branch, and this file was new -- so the first
+# deployment had no other way to run from a Linux runner. It has served its
+# purpose and is gone. Do not reintroduce it: with this file on `main`,
+# workflow_dispatch works normally.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# Never two production deploys at once, and never cancel one midway -- a
+# half-uploaded deployment is worse than a late one.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: build on linux · deploy prebuilt
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # A `workflow_run` event fires whether CI passed or failed, so this gates on
+    # the conclusion: a red `main` is exactly when a deploy costs most. The
+    # dispatch arm is what makes the manual path work, since a manual run has no
+    # `workflow_run` context and would otherwise be filtered out here.
+    #
+    # Worth knowing if you ever add a trigger: an earlier version of this line
+    # listed only those two arms while a third trigger existed, and the result
+    # was not an error -- GitHub reported the job "skipped" with 0 steps, which
+    # reads like success in the runs list. Add a trigger above, add its arm here.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      # For a workflow_run trigger, check out the commit CI actually tested --
+      # not whatever main points at now, which may have moved.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Pull the project's settings
+        run: npx vercel pull --yes --environment=production
+
+      # `vercel pull` writes the project's production environment to
+      # .vercel/.env.production.local, and `vercel build` loads it -- which
+      # would put the real database credentials into this runner for no
+      # benefit. The build needs DATABASE_URL only to *exist*, because
+      # src/db/index.ts:7 throws at import and every route reaches it through
+      # src/lib/auth/config.ts. Nothing connects: every admin page is dynamic
+      # behind requireAdmin(), and there are no NEXT_PUBLIC_* variables for a
+      # build to inline. Runtime env comes from the project's settings at
+      # invocation, so this substitution cannot reach production.
+      - name: Replace the real database url with an unroutable one
+        run: |
+          node -e "
+          const fs = require('fs');
+          const f = '.vercel/.env.production.local';
+          let s = fs.readFileSync(f, 'utf8');
+          if (!/^DATABASE_URL=/m.test(s)) {
+            console.error('DATABASE_URL absent from the pulled env — refusing to build blind');
+            process.exit(1);
+          }
+          s = s.replace(/^DATABASE_URL=.*\$/m, 'DATABASE_URL=\"postgres://build:build@127.0.0.1:5432/build\"');
+          fs.writeFileSync(f, s);
+          console.log('build will use an unroutable DATABASE_URL');
+          "
+
+      - name: Build
+        run: npx vercel build --prod
+
+      # THIS STEP MUST STAY ABOVE `Deploy`. It was below it once, which made it
+      # worthless: `vercel deploy --prebuilt --prod` is irreversible, so an
+      # `exit 1` after it cannot unpublish what was already uploaded -- the
+      # guard would only ever report a leak that had already happened. Both
+      # checks read artifacts that `vercel build` produces (`.next` and
+      # `.vercel/output`), so neither needs the deploy to have run.
+      - name: Prove the workbooks are not traced into the build
+        # `find .vercel/output -path '*reference-data*'` used to be the whole
+        # check. It could not fail: .vercel/output holds no trace manifests and
+        # never receives docs/reference-data/ whether the exclusion exists or
+        # not. Measured with a matched pair -- neutralising
+        # outputFileTracingExcludes and rebuilding leaves that find at 0, while
+        # the .next manifests below go from 0 hits to 1 (the /upload route). So
+        # this checks .next, which `vercel build` also produces, and which
+        # ci.yml already uses.
+        run: |
+          set -euo pipefail
+
+          manifests=$(find .next -name '*.nft.json' | wc -l | tr -d ' ')
+          echo "trace manifests found: $manifests"
+          if [ "$manifests" -eq 0 ]; then
+            echo "no .nft.json manifests -- this check proved nothing."
+            echo "Find what this Next version names its trace files before trusting a green result."
+            exit 1
+          fi
+
+          if grep -rl 'docs/reference-data' $(find .next -name '*.nft.json') 2>/dev/null | head -1 | grep -q .; then
+            echo "docs/reference-data/ is listed in a trace manifest -- it would ship in a function bundle"
+            grep -rl 'docs/reference-data' $(find .next -name '*.nft.json') | head -5
+            exit 1
+          fi
+          echo "no reference-data in any trace manifest"
+
+          # Kept, but honestly labelled: this one is belt-and-braces, not proof.
+          # It has never been observed to fail, including with the exclusion off.
+          if find .vercel/output -path '*reference-data*' -print -quit | grep -q .; then
+            echo "a reference-data path exists in .vercel/output"
+            exit 1
+          fi
+          echo "no reference-data paths in .vercel/output"
+
+      # Uploads .vercel/output and nothing else. This is what keeps
+      # docs/reference-data/ from ever reaching Vercel: the repository is not
+      # connected to the project, so this runner is the only thing that ever
+      # sees the working tree. Runs only after the step above has passed.
+      - name: Deploy
+        run: |
+          URL=$(npx vercel deploy --prebuilt --prod)
+          echo "deployed: $URL"
+          echo "### Deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "$URL" >> "$GITHUB_STEP_SUMMARY"
