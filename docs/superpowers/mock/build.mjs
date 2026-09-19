@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { icon } from './icons.mjs';
 
-const ROOT = path.dirname(new URL(import.meta.url).pathname);
+// `pathname` yields "/C:/..." on Windows, which path.join turns into "C:\C:\...".
+const ROOT = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
 const OUT = path.join(ROOT, 'out');
 const LOGO_L = '/_blob/abe46633bf64239605ece9df922f723b';
 const LOGO_D = '/_blob/e823c870e6b92f1a2fbcd010b91668e4';
@@ -174,7 +175,7 @@ fs.mkdirSync(path.join(OUT, 'project'), { recursive: true });
 
 for (const f of fs.readdirSync(pagesDir).filter((x) => x.endsWith('.html')).sort()) {
   let src = fs.readFileSync(path.join(pagesDir, f), 'utf8');
-  const m = src.match(/^<!--meta (\{.*?\}) -->\n/);
+  const m = src.match(/^<!--meta (\{.*?\}) -->\r?\n/);
   if (!m) throw new Error(`${f}: missing meta header`);
   const meta = JSON.parse(m[1]);
   src = src.slice(m[0].length);
