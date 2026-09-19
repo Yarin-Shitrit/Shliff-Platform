@@ -15,6 +15,20 @@ const nextConfig: NextConfig = {
   // in a production build, so `/data` finds nothing there once deployed.
   // `/data`'s move to a database-only page is owned by the UI refactor (W16).
   // Shipping the camp's names and debts is the worse failure.
+  /**
+   * `argon2` is a native module: `node-gyp-build` picks a `.node` binding out
+   * of its `prebuilds/` tree with a dynamic `require` that a bundler cannot
+   * follow. Bundled, it resolves to nothing and every sign-in 500s — while the
+   * build stays green, because nothing is missing until the call runs.
+   *
+   * Reached only from `src/lib/auth/password.ts`, which
+   * `src/lib/auth/config.ts` imports for the Credentials provider. Never from
+   * `src/lib/auth/edge-config.ts`, hence never from `src/proxy.ts` — the edge
+   * half has no provider and no database, which is what keeps this a Node-only
+   * concern.
+   */
+  serverExternalPackages: ['argon2'],
+
   outputFileTracingExcludes: {
     '/*': ['./docs/reference-data/**/*'],
   },
