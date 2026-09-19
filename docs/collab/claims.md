@@ -1,6 +1,6 @@
 # What is in flight
 
-**updated: 2026-09-18** · if that date is more than a day or two old, **this file
+**updated: 2026-09-19** · if that date is more than a day or two old, **this file
 is fiction**. Read §1 before you act on §3.
 
 This is the only document in `docs/collab/` that goes stale, and it goes stale
@@ -51,9 +51,10 @@ touching `docs/reference-data/`, and pushing or force-pushing shared branches.
 
 | Who | Area | Branch | State | As of |
 |---|---|---|---|---|
-| @Yarin-Shitrit | Phase 4 UI redesign | `feat/ui-01-foundation` | **active** — wave 3 | 2026-09-18 |
-| `@<teammate-handle>` | Logistics | — | onboarding, not yet started | 2026-09-18 |
-| @Yarin-Shitrit | Collaboration harness | `docs/collab-harness` | this document | 2026-09-18 |
+| @Yarin-Shitrit | Phase 4 UI redesign | `feat/ui-01-foundation` | **complete** — all twelve plans landed, 203 files / 2606 tests / 0 failed, 0 pending. Not yet merged to `main` | 2026-09-19 |
+| @Yarin-Shitrit | Promotion gate + sheet retirement | merged to `main`; migration `0008` pending | **active** | 2026-09-19 |
+| `@<teammate-handle>` | Logistics | — | onboarding, not yet started | 2026-09-19 |
+| @Yarin-Shitrit | Collaboration harness + CI | merged to `main` | done | 2026-09-19 |
 
 ### Phase 4, in more detail
 
@@ -62,12 +63,15 @@ Reported by the session executing it on 2026-09-18, **not independently verified
 
 - **Wave 2 complete and merged** — plans 06 (אנשים), 07 (דמי קאמפ), 08 (כספים),
   10 (משימות). Gate reported at 150 files, 1760 tests, 0 failures.
-- **Wave 3 in flight**, two lanes:
-  - plan 09 → `src/app/(admin)/money/ledger`, `.../debts`, `src/lib/money/**`
-  - plan 11 → `src/app/(admin)/imports/**`, `src/app/(admin)/upload/**`, `src/lib/import/**`
-- The shared-module consolidation **finished** — `src/lib/errors/hebrew.ts`,
-  `tasks/failure-messages.ts` and `shell/actions.ts` have settled and are no
-  longer in flight.
+- **All five waves are done.** Reported 2026-09-19: 203 files, 2606 tests, zero
+  failed, zero pending, all twelve plans landed. The branch is not yet merged to
+  `main`, so the shared surfaces marked *(ui)* in `ownership.md` still read as
+  absent from `main`.
+- One class of bug got through the whole gate and was caught in a browser: a
+  `'use server'` file exporting a string constant beside its server actions
+  makes Next reject the entire module, returning 500 on **every** route
+  including `/signin`, while `tsc`, `eslint`, `next build` and 868 unit tests
+  all passed. A static net for that rule has been added.
 - Still ahead: wave 4 (plan 04 בית), wave 5 (plan 12 mobile and polish, which
   deletes wave 0's token aliases).
 
@@ -76,7 +80,12 @@ Reported by the session executing it on 2026-09-18, **not independently verified
 settled, so Hebrew error strings are safe to add — add to that map, never start
 a second one.
 
-### Environment, as of 2026-09-18
+**Also in flight on the data side**, and easy to miss because it is not a UI
+plan: `main` now carries a promotion gate that skips any workbook table already
+owning rows, and a migration `0008` adding sheet retirement is coming. If your
+work reads `sheets` or renders block state, both change what it sees.
+
+### Environment, as of 2026-09-19
 
 - **Container state is a property of right now, not of the repo.** Any document
   asserting it is stale the moment it is written — this one included. Run
@@ -87,9 +96,20 @@ a second one.
   code. Starting or stopping it is the camp lead's call. On 2026-09-18 it was
   stopped and then restarted, with the lead's approval, inside an hour — that is
   the cadence you are documenting against.
-- `origin` carries `main` (`45fa275`) and `feat/ui-01-foundation`. Both were
-  pushed on 2026-09-18 after nine days during which the remote held nothing newer
-  than 2026-09-09.
+- `origin` carries `main` (`70a957c`) and `feat/ui-01-foundation`. Both were
+  pushed on 2026-09-18 after nine days in which the remote held nothing newer
+  than 2026-09-09. **Push early** — that gap put 334 commits on one laptop.
+- **CI runs on every PR and every push to `main`**: typecheck, lint, and the
+  suite with a guard that refuses a run which did not actually run. Measured at
+  903 tests in 11m20s on `main`; Phase 4 roughly doubles that.
+- **`npm ci` cannot start the suite on a clean machine.** `package-lock.json`
+  resolves none of rolldown's fifteen platform bindings, so a fresh checkout has
+  no native binding and vitest dies at startup. Workaround in
+  `onboarding.md`; the real fix moves ~40 versions and is not mid-wave work.
+- **Several sessions share this box.** `pgrep -fl vitest` before believing a mass
+  red, and before assuming a running suite is yours — attributing one by repo
+  rather than by measurement has already misdirected two sessions. Resolve the
+  owner from the process's own command line.
 
 ## 4. Updating this file
 

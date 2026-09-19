@@ -49,6 +49,30 @@ Keep your branch current with `git merge origin/main` rather than a rebase.
 Rebasing a branch someone has already fetched rewrites history under them, and
 with agents running on both sides that is expensive to untangle.
 
+**Catching a local ref up is not the same as merging into a tree.** If your
+local `main` is only behind — 0 ahead, N behind — move the ref without touching
+any working tree:
+
+```sh
+/usr/bin/git fetch origin
+/usr/bin/git branch -f main origin/main    # safe while agents are running
+```
+
+That changes no file on disk, so nothing an agent is mid-read of can shift under
+it. A `checkout` or a `merge` inside a tree an agent is working in is a different
+act entirely: it can swap `CLAUDE.md` and `AGENTS.md` underneath a running task,
+and the resulting misbehaviour is invisible in the diff. Do that between waves.
+
+Before merging `origin/main` into a live branch, check whether it even overlaps
+you:
+
+```sh
+/usr/bin/git diff --name-only <your-branch>...origin/main
+```
+
+No overlap with the files you are touching means the merge ahead is clean and
+can wait for a convenient moment rather than an urgent one.
+
 ## 3. Surfacing, concretely
 
 "Surface it" is not "mention it in Slack". It means all four of:
