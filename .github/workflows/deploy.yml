@@ -91,25 +91,21 @@ jobs:
       - name: Build
         run: npx vercel build --prod
 
-      # Uploads .vercel/output and nothing else. This is what keeps
-      # docs/reference-data/ from ever reaching Vercel: the repository is not
-      # connected to the project, so this runner is the only thing that ever
-      # sees the working tree.
-      - name: Deploy
-        run: |
-          URL=$(npx vercel deploy --prebuilt --prod)
-          echo "deployed: $URL"
-          echo "### Deployed" >> "$GITHUB_STEP_SUMMARY"
-          echo "$URL" >> "$GITHUB_STEP_SUMMARY"
-
+      # THIS STEP MUST STAY ABOVE `Deploy`. It was below it once, which made it
+      # worthless: `vercel deploy --prebuilt --prod` is irreversible, so an
+      # `exit 1` after it cannot unpublish what was already uploaded -- the
+      # guard would only ever report a leak that had already happened. Both
+      # checks read artifacts that `vercel build` produces (`.next` and
+      # `.vercel/output`), so neither needs the deploy to have run.
       - name: Prove the workbooks are not traced into the build
-        # `find .vercel/output -path '*reference-data*'` used to live here. It
-        # could not fail: .vercel/output holds no trace manifests and never
-        # receives docs/reference-data/ whether the exclusion exists or not.
-        # Measured with a matched pair -- neutralising outputFileTracingExcludes
-        # and rebuilding leaves that find at 0, while the .next manifests below
-        # go from 0 hits to 1 (the /upload route). So this checks .next, which
-        # `vercel build` also produces, and which ci.yml already uses.
+        # `find .vercel/output -path '*reference-data*'` used to be the whole
+        # check. It could not fail: .vercel/output holds no trace manifests and
+        # never receives docs/reference-data/ whether the exclusion exists or
+        # not. Measured with a matched pair -- neutralising
+        # outputFileTracingExcludes and rebuilding leaves that find at 0, while
+        # the .next manifests below go from 0 hits to 1 (the /upload route). So
+        # this checks .next, which `vercel build` also produces, and which
+        # ci.yml already uses.
         run: |
           set -euo pipefail
 
@@ -135,3 +131,14 @@ jobs:
             exit 1
           fi
           echo "no reference-data paths in .vercel/output"
+
+      # Uploads .vercel/output and nothing else. This is what keeps
+      # docs/reference-data/ from ever reaching Vercel: the repository is not
+      # connected to the project, so this runner is the only thing that ever
+      # sees the working tree. Runs only after the step above has passed.
+      - name: Deploy
+        run: |
+          URL=$(npx vercel deploy --prebuilt --prod)
+          echo "deployed: $URL"
+          echo "### Deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "$URL" >> "$GITHUB_STEP_SUMMARY"

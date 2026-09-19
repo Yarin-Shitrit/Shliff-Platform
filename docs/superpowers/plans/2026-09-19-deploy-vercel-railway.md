@@ -4,7 +4,7 @@
 
 **Goal:** Put the camp's admin platform on `https://shliff-platform.vercel.app`, backed by Railway Postgres holding the data that is on the camp lead's laptop today, without the camp's real workbooks ever reaching Vercel.
 
-**Architecture:** Vercel (fra1) runs the Next.js 16 app; Railway (europe-west4) runs Postgres 16 and nothing else; Vercel Blob holds uploaded workbooks. The Vercel project is **never linked to GitHub** — GitHub Actions builds on its own Linux runner and ships `.vercel/output` with `vercel deploy --prebuilt`, so `docs/reference-data/` is never transmitted to Vercel in any form. Four small hardening changes make the existing code correct on serverless.
+**Architecture:** Vercel (fra1) runs the Next.js 16 app; Railway (europe-west4) runs Postgres 18.6 and nothing else; Vercel Blob holds uploaded workbooks. The Vercel project is **never linked to GitHub** — GitHub Actions builds on its own Linux runner and ships `.vercel/output` with `vercel deploy --prebuilt`, so `docs/reference-data/` is never transmitted to Vercel in any form. Four small hardening changes make the existing code correct on serverless.
 
 **Tech Stack:** Next.js 16.3.4, next-auth v5 beta, drizzle-orm 0.45 + drizzle-kit 0.31 (postgres-js), postgres.js 3.4, argon2 (native), @vercel/blob 2.8, vitest 5, Vercel CLI 54, Railway CLI 4.57, gh CLI.
 
@@ -18,8 +18,8 @@ Every task's requirements implicitly include all of these.
 - **No English error text ever reaches a Hebrew screen.** A platform-generated English error page counts as a violation; this is why Task 4 exists.
 - **`docs/reference-data/` must never be transmitted to Vercel.** It holds real camp members' names and real amounts owed.
 - **The production build runs on Linux, never on macOS.** `argon2` is a native module; a Mac-built bundle ships `darwin-arm64` and every sign-in 500s on Vercel *with a green build*.
-- **`drizzle-kit push`, never `drizzle-kit migrate`.** `scripts/cutover.ts:24-31`: 0002–0004 were applied by `push` so the journal does not record them, and 0005–0006 were never applied. A `migrate` re-runs 0002–0004 and collides.
-- **The database URL Vercel uses is Railway's `DATABASE_PUBLIC_URL`**, not `DATABASE_URL`. The latter is `postgres.railway.internal`, which resolves only inside Railway's network.
+- **Neither `drizzle-kit migrate` NOR `drizzle-kit push`.** `migrate` collides: `scripts/cutover.ts:24-31` records that 0002–0004 were applied by `push` and never journalled, so a migrate re-runs them. **`push` is worse:** run against the restored database it proposed adding `budget_lines_source_key` — a constraint that *already exists* — and offered to **truncate `budget_lines`**, 61 rows of the camp's real budget. Only the absence of a TTY prevented it; `drizzle-kit` 0.31.10 predates Postgres 18 and misreads its catalog. The reconciliation is a **read-only parity check** — see Task 5 Step 9.
+- **There is no `DATABASE_PUBLIC_URL`** — this plan was wrong to say there is. Railway injects only the internal `DATABASE_URL` (`postgres.railway.internal`), which resolves solely inside Railway's network. A **TCP proxy must be created explicitly**; Railway then injects `RAILWAY_TCP_PROXY_DOMAIN` and `RAILWAY_TCP_PROXY_PORT`, and the URL is composed from those plus `PGUSER`/`PGPASSWORD`/`PGDATABASE`, stripping the domain's trailing dot. See Task 5 Step 4.
 - **Regions are fra1 (Vercel) and europe-west4 (Railway)**, paired so app-to-database latency stays intra-Europe.
 - **Never commit to `main`.** All work is on `feat/deploy-vercel-railway`. Shared surfaces are surfaced per `protocol.md` §3: a `## Shared surfaces touched` section in the PR body, review requested from @josefcohen96, and a `claims.md` row in the same PR.
 - **Never write a database dump into the repository tree.** The dump holds real names and amounts. It lives inside the container's `/tmp` and is deleted in the same task.
@@ -665,7 +665,7 @@ Provision Postgres in europe-west4, copy the laptop's database into it, and reco
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: a Railway Postgres service, and its `DATABASE_PUBLIC_URL`, which Task 6 sets on Vercel.
+- Produces: a Railway Postgres service, a TCP proxy, and the composed public URL (there is no `DATABASE_PUBLIC_URL` — see Step 4), which Task 6 sets on Vercel.
 
 - [ ] **Step 1: Confirm the source database is actually up**
 
@@ -969,7 +969,7 @@ Create the project **by CLI so it is never linked to GitHub**, then give it a re
 - Create: `.vercelignore`
 
 **Interfaces:**
-- Consumes: `DATABASE_PUBLIC_URL` from Task 5.
+- Consumes: the composed public proxy URL from Task 5 (there is no `DATABASE_PUBLIC_URL`).
 - Produces: `.vercel/project.json` containing `orgId` and `projectId`, which Task 7 reads into GitHub secrets. `.vercel/` is already git-ignored.
 
 - [ ] **Step 1: Authenticate with the token, without putting it in argv**
@@ -1372,7 +1372,7 @@ L.forEach((l,i)=>{ if(/Neon/.test(l)) console.log((i+1)+': '+l.trim()); });
 
 - [ ] **Step 7: Write the runbook**
 
-Create `docs/deploy.md` covering, each in a few lines: the topology and why the regions are paired; the four production environment variables and what each failure looks like when one is wrong or missing; that the Vercel project is **not** connected to GitHub and must never be; how to deploy manually (`gh workflow run deploy.yml`); how to rotate the Vercel token (`vercel tokens`, then `gh secret set VERCEL_TOKEN`); how to restore the database from the laptop (Task 5's steps, condensed); and the standing rule that it is `drizzle-kit push`, never `migrate`, with the `scripts/cutover.ts:24-31` reference.
+Create `docs/deploy.md` covering, each in a few lines: the topology and why the regions are paired; the four production environment variables and what each failure looks like when one is wrong or missing; that the Vercel project is **not** connected to GitHub and must never be; how to deploy manually (`gh workflow run deploy.yml`); how to rotate the Vercel token (`vercel tokens`, then `gh secret set VERCEL_TOKEN`); how to restore the database from the laptop (Task 5's steps, condensed); and the standing rule that **neither `drizzle-kit push` nor `migrate` may be run** — `migrate` for the `scripts/cutover.ts:24-31` journal divergence, `push` because it offered to truncate 61 rows of the real budget to add a constraint that already existed.
 
 - [ ] **Step 8: Add the claims row**
 
