@@ -96,11 +96,48 @@ function exportedActions(source: string): Array<{ name: string; body: string }> 
     .map((x) => ({ name: x.match[1], body: x.body }));
 }
 
-describe('every exported action calls requireAdmin, not just every file', () => {
-  const cases = guardedFiles.flatMap((file) =>
-    exportedActions(readFileSync(file, 'utf8'))
-      .map((action) => [`${relative(process.cwd(), file)} → ${action.name}`, action] as const),
+/**
+ * An action may be guarded by delegation: `unlinkAliasAndReturn` calls
+ * `unlinkAliasAction`, which calls `requireAdmin`, and redirects with the
+ * result. That is a legitimate shape and the wrapper is genuinely protected.
+ *
+ * So resolve it rather than exempting it. An exemption would be a *claim* that
+ * the delegate is guarded, and the claim would go stale the moment the delegate
+ * changed — silently, which is the whole failure mode this file exists against.
+ * Following the chain to a fixpoint re-checks it on every run: break the
+ * delegate's guard and both the delegate and its wrapper go red.
+ */
+function resolveGuarded(actions: Array<{ name: string; body: string }>): Set<string> {
+  const guarded = new Set(
+    actions.filter((a) => a.body.includes('requireAdmin(')).map((a) => a.name),
   );
+  // Fixpoint: a wrapper of a wrapper is guarded too. Bounded by the action
+  // count, so a cycle cannot spin here.
+  for (let pass = 0; pass < actions.length; pass += 1) {
+    let grew = false;
+    for (const action of actions) {
+      if (guarded.has(action.name)) continue;
+      const delegates = actions.some(
+        (other) => other.name !== action.name
+          && guarded.has(other.name)
+          && action.body.includes(`${other.name}(`),
+      );
+      if (delegates) { guarded.add(action.name); grew = true; }
+    }
+    if (!grew) break;
+  }
+  return guarded;
+}
+
+describe('every exported action calls requireAdmin, not just every file', () => {
+  const cases = guardedFiles.flatMap((file) => {
+    const actions = exportedActions(readFileSync(file, 'utf8'));
+    const guarded = resolveGuarded(actions);
+    return actions.map((action) => [
+      `${relative(process.cwd(), file)} → ${action.name}`,
+      { ...action, guarded: guarded.has(action.name) },
+    ] as const);
+  });
 
   // Without this, a regex that stopped matching would make every case below
   // vacuously pass — the same hole this whole block exists to close.
@@ -113,7 +150,9 @@ describe('every exported action calls requireAdmin, not just every file', () => 
       expect(GUARD_EXEMPT[action.name].length).toBeGreaterThan(20);
       return;
     }
-    expect(action.body).toContain('requireAdmin(');
+    // Guarded directly, or by a delegate that is itself guarded — resolved
+    // above rather than asserted, so the chain is re-verified every run.
+    expect(action.guarded).toBe(true);
   });
 });
 
