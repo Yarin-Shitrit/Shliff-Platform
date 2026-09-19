@@ -1,0 +1,63 @@
+/* Structure is drawn with 1px borders and tokens only; shadows are reserved
+   for overlays (A7). Logical properties throughout (A10). */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.sub {
+  margin-block-start: 2px;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.spacer { flex: 1; }
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-inline: 10px;
+  block-size: 30px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-2);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.chip:hover { background: var(--hover); }
+
+.chip[aria-current] {
+  background: var(--brand-soft);
+  border-color: var(--brand);
+  color: var(--brand-text);
+}
+
+/* Phone: one column of tiles, and targets that clear 44px (A8, B7). */
+@media (max-width: 768px) {
+  .tiles { grid-template-columns: 1fr; }
+  .chip { block-size: 44px; }
+}
