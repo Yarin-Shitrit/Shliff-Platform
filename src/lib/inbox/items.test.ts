@@ -44,14 +44,19 @@ function row(over: Partial<WorklistRow> = {}): WorklistRow {
     top: 5, bottom: 20, seasonId: 'season-26', seasonName: 'ברן 26',
     state: 'promoted', rowCount: 14, wouldWrite: 14, refusals: [],
     deleted: 0, retained: [], ...over,
-  } as WorklistRow;
+  };
 }
 
 function sheet(over: Partial<SheetRow> = {}): SheetRow {
   return {
     id: 's1', name: 'סיכום כללי', uploadId: 'u1',
     filename: 'קופת קאמפ 2026.xlsx', seasonId: null, seasonName: null,
-    authoritative: null, ...over,
+    authoritative: null,
+    // Live by default. A retired sheet is history a lead chose to stop being
+    // asked about, so the fixtures that care set it explicitly rather than
+    // inheriting it.
+    retiredAt: null, retiredBy: null,
+    ...over,
   };
 }
 
@@ -64,7 +69,7 @@ function block(over: Partial<BlockStateRow> = {}): BlockStateRow {
     mappingSource: 'admin', budgetCategory: null,
     confirmedBy: LEAD, confirmedAt: new Date('2026-09-01T00:00:00Z'),
     promotedRows: 14, state: 'promoted', ...over,
-  } as BlockStateRow;
+  };
 }
 
 const FLAG = {
