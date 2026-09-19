@@ -51,7 +51,7 @@ touching `docs/reference-data/`, and pushing or force-pushing shared branches.
 
 | Who | Area | Branch | State | As of |
 |---|---|---|---|---|
-| @Yarin-Shitrit | Phase 4 UI redesign | `feat/ui-01-foundation` | **active** — wave 3, inbox lane | 2026-09-19 |
+| @Yarin-Shitrit | Phase 4 UI redesign | `feat/ui-01-foundation` | **complete** — all twelve plans landed, 203 files / 2606 tests / 0 failed, 0 pending. Not yet merged to `main` | 2026-09-19 |
 | @Yarin-Shitrit | Promotion gate + sheet retirement | merged to `main`; migration `0008` pending | **active** | 2026-09-19 |
 | `@<teammate-handle>` | Logistics | — | onboarding, not yet started | 2026-09-19 |
 | @Yarin-Shitrit | Collaboration harness + CI | merged to `main` | done | 2026-09-19 |
@@ -63,12 +63,15 @@ Reported by the session executing it on 2026-09-18, **not independently verified
 
 - **Wave 2 complete and merged** — plans 06 (אנשים), 07 (דמי קאמפ), 08 (כספים),
   10 (משימות). Gate reported at 150 files, 1760 tests, 0 failures.
-- **Wave 3 in flight**, two lanes:
-  - plan 09 → `src/app/(admin)/money/ledger`, `.../debts`, `src/lib/money/**`
-  - plan 11 → `src/app/(admin)/imports/**`, `src/app/(admin)/upload/**`, `src/lib/import/**`
-- The shared-module consolidation **finished** — `src/lib/errors/hebrew.ts`,
-  `tasks/failure-messages.ts` and `shell/actions.ts` have settled and are no
-  longer in flight.
+- **All five waves are done.** Reported 2026-09-19: 203 files, 2606 tests, zero
+  failed, zero pending, all twelve plans landed. The branch is not yet merged to
+  `main`, so the shared surfaces marked *(ui)* in `ownership.md` still read as
+  absent from `main`.
+- One class of bug got through the whole gate and was caught in a browser: a
+  `'use server'` file exporting a string constant beside its server actions
+  makes Next reject the entire module, returning 500 on **every** route
+  including `/signin`, while `tsc`, `eslint`, `next build` and 868 unit tests
+  all passed. A static net for that rule has been added.
 - Still ahead: wave 4 (plan 04 בית), wave 5 (plan 12 mobile and polish, which
   deletes wave 0's token aliases).
 

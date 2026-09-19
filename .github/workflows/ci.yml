@@ -17,12 +17,14 @@ jobs:
   verify:
     name: typecheck · lint · test
     runs-on: ubuntu-latest
-    # Measured 2026-09-18: 903 tests in 77 files took 11m20s at --maxWorkers=2.
-    # main does not carry Phase 4 yet; feat/ui-01-foundation has 182 test files,
-    # so expect roughly 22 minutes once that merges. Headroom is deliberate --
-    # a timeout kills the run without a report, which reads like a hang rather
-    # than a slow suite.
-    timeout-minutes: 45
+    # Measured 2026-09-18 on main: 903 tests in 77 files, 11m20s at
+    # --maxWorkers=2 -- about 0.75s per test. Phase 4 completed 2026-09-19 at
+    # 2606 tests in 203 files, so expect roughly 33 minutes once it merges, and
+    # more if the runner is slow or pglite setup dominates at that file count.
+    # Headroom is deliberate: a timeout kills the run before the report is
+    # written, so it surfaces as a hang rather than as a slow suite -- and it
+    # would do so on the same day as the largest merge in the project.
+    timeout-minutes: 60
 
     env:
       # src/db/index.ts reads DATABASE_URL at import time. The suite never talks
