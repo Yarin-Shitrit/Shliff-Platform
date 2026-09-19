@@ -1,0 +1,289 @@
+<!--meta {"file": "Build.dc.html", "w": 1440, "h": 1060, "nav": "build", "title": "הקמה", "interactive": true} -->
+<!doctype html>
+<html lang="he">
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!--HEAD-->
+<div class="app {{themeClass}}" dir="rtl" style="width: __W__px; height: __H__px;">
+<!--SIDEBAR-->
+  <div class="main">
+    <header class="topbar">
+      <div class="crumbs"><span>לוגיסטיקה</span> <span class="dim">/</span> <span class="here">הקמה</span></div>
+      <span class="scopechip">[[i:calendar:14]] ברן 26</span>
+      <span class="spacer"></span>
+      <a class="btn sm" href="Tasks.dc.html">[[i:tasks:14]] כל המשימות</a>
+      <button class="btn primary sm" type="button">[[i:plus:14]] משימת הקמה</button>
+    </header>
+
+    <div class="page" style="gap: 14px;">
+      <div class="pagehead">
+        <div>
+          <h1>הקמה</h1>
+          <p class="sub"><bdi>5</bdi> משימות הקמה לברן 26 · <bdi>2</bdi> ממתינות לחומרים · הראשונה נסגרת בעוד <bdi>18</bdi> ימים</p>
+        </div>
+      </div>
+
+      <div class="banner neutral">
+        <span class="ic">[[i:info:16]]</span>
+        <span class="t">המשימות כאן הן משימות ההקמה מתוך <b style="font-weight: 600;">משימות</b> — אותן משימות, אותם אחראים. מה שנוסף כאן הוא רשימת הציוד שכל משימה דורשת.</span>
+        <a class="btn sm" href="Tasks.dc.html">מעבר למשימות</a>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+        <div class="card stat">
+          <span class="k">משימות הקמה פתוחות</span>
+          <span class="v"><bdi>5</bdi></span>
+          <span class="d"><bdi>1</bdi> דחופה · <bdi>2</bdi> בעדיפות גבוהה</span>
+        </div>
+        <a class="card stat" href="Acquisitions.dc.html">
+          <span class="k">חומרים שחסרים</span>
+          <span class="v" style="color: var(--bad);"><bdi>3</bdi></span>
+          <span class="d">חוסמים <bdi>2</bdi> משימות · כולם ברשימת הרכש</span>
+        </a>
+        <a class="card stat" href="Warehouse.dc.html">
+          <span class="k">חומרים שדורשים תיקון</span>
+          <span class="v" style="color: var(--warn);"><bdi>1</bdi></span>
+          <span class="d">קיים במחסן אבל לא במצב עבודה</span>
+        </a>
+      </div>
+
+      <div class="tablewrap" style="flex: 1; min-height: 0;">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>משימה וחומרים</th>
+              <th class="n">דרוש</th>
+              <th>מצב החומר</th>
+              <th>היכן</th>
+              <th>אחראי</th>
+              <th>יעד</th>
+              <th class="w0"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="grouprow"><td colspan="7">ממתינות לחומרים · <bdi>2</bdi> משימות</td></tr>
+
+            <tr class="sel">
+              <td>
+                <span style="display: flex; align-items: center; gap: 8px;">
+                  <b style="font-weight: 600;">בניית ספסלים</b>
+                  <span class="pill bad">דחוף</span>
+                </span>
+              </td>
+              <td class="n dim">—</td>
+              <td><span class="pill warn"><span class="dot"></span>חסר חומר אחד</span></td>
+              <td class="dim">—</td>
+              <td>
+                <span class="stack">
+                  <span class="av sm c2">אכ</span><span class="av sm c4">מר</span><span class="av sm empty">+</span>
+                </span>
+              </td>
+              <td><bdi>12/07/26</bdi></td>
+              <td class="w0"><span class="rowact show"><button class="btn sm" type="button">[[i:plus:14]] חומר</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+            <tr>
+              <td style="padding-inline-start: 34px;"><span class="muted">משטחי עץ</span></td>
+              <td class="n"><bdi>8</bdi></td>
+              <td><span class="pill ok"><span class="dot"></span>במחסן</span></td>
+              <td><a class="nm" href="Warehouse.dc.html">מאחורי המכולה</a></td>
+              <td class="dim">—</td>
+              <td class="dim">—</td>
+              <td class="w0"></td>
+            </tr>
+            <tr>
+              <td style="padding-inline-start: 34px;"><span class="muted">ברגים לעץ 4×60</span></td>
+              <td class="n"><bdi>200</bdi></td>
+              <td><span class="pill bad"><span class="dot"></span>צריך להשיג</span></td>
+              <td><a class="nm" href="Acquisitions.dc.html">ברכש · לחפש</a></td>
+              <td><span class="namecell"><span class="av sm c2">אכ</span></span></td>
+              <td class="dim">—</td>
+              <td class="w0"><span class="rowact"><button class="btn sm" type="button">פתיחה ברכש</button></span></td>
+            </tr>
+            <tr>
+              <td style="padding-inline-start: 34px;"><span class="muted">מברגה־מקדחה</span></td>
+              <td class="n"><bdi>1</bdi></td>
+              <td><span class="pill info"><span class="dot"></span>הושג</span></td>
+              <td><a class="nm" href="Acquisitions.dc.html">הוזמן · ממתין לרישום</a></td>
+              <td><span class="namecell"><span class="av sm c2">אכ</span></span></td>
+              <td class="dim">—</td>
+              <td class="w0"></td>
+            </tr>
+
+            <tr>
+              <td>
+                <span style="display: flex; align-items: center; gap: 8px;">
+                  <b style="font-weight: 600;">הקמת מקלחות</b>
+                  <span class="pill warn">גבוה</span>
+                </span>
+              </td>
+              <td class="n dim">—</td>
+              <td><span class="pill warn"><span class="dot"></span>חומר דורש תיקון</span></td>
+              <td class="dim">—</td>
+              <td>
+                <span class="stack">
+                  <span class="av sm c5">דל</span><span class="av sm empty">+</span>
+                </span>
+              </td>
+              <td><bdi>15/07/26</bdi></td>
+              <td class="w0"><span class="rowact"><button class="btn sm" type="button">[[i:plus:14]] חומר</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+            <tr>
+              <td style="padding-inline-start: 34px;"><span class="muted">משאבת מים 12 וולט</span></td>
+              <td class="n"><bdi>1</bdi></td>
+              <td><span class="pill warn"><span class="dot"></span>במחסן · דורש תיקון</span></td>
+              <td><a class="nm" href="Warehouse.dc.html">משטח 2</a></td>
+              <td class="dim">—</td>
+              <td class="dim">—</td>
+              <td class="w0"><span class="rowact"><button class="btn sm" type="button">פתיחה במחסן</button></span></td>
+            </tr>
+            <tr>
+              <td style="padding-inline-start: 34px;"><span class="muted">צינור גינה <bdi>25</bdi> מ׳</span></td>
+              <td class="n"><bdi>2</bdi></td>
+              <td><span class="pill ok"><span class="dot"></span>במחסן</span></td>
+              <td><a class="nm" href="Warehouse.dc.html">משטח 2</a></td>
+              <td class="dim">—</td>
+              <td class="dim">—</td>
+              <td class="w0"></td>
+            </tr>
+
+            <tr class="grouprow"><td colspan="7">מוכנות לעבודה · <bdi>3</bdi> משימות</td></tr>
+
+            <tr>
+              <td>
+                <span style="display: flex; align-items: center; gap: 8px;">
+                  <b style="font-weight: 600;">הקמת מטבח שדה</b>
+                  <span class="pill info">בינוני</span>
+                </span>
+              </td>
+              <td class="n dim">—</td>
+              <td><span class="pill ok"><span class="dot"></span>כל החומרים במחסן</span></td>
+              <td class="dim">—</td>
+              <td>
+                <span class="stack">
+                  <span class="av sm c4">מר</span><span class="av sm c3">יב</span>
+                </span>
+              </td>
+              <td><bdi>20/07/26</bdi></td>
+              <td class="w0"><span class="rowact"><button class="btn sm" type="button">[[i:plus:14]] חומר</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+            <tr>
+              <td style="padding-inline-start: 34px;"><span class="muted">סיר תעשייתי 50 ליטר</span></td>
+              <td class="n"><bdi>2</bdi></td>
+              <td><span class="pill ok"><span class="dot"></span>במחסן</span></td>
+              <td><a class="nm" href="Warehouse.dc.html">ארגז כחול #1</a></td>
+              <td class="dim">—</td>
+              <td class="dim">—</td>
+              <td class="w0"></td>
+            </tr>
+
+            <tr>
+              <td>
+                <span style="display: flex; align-items: center; gap: 8px;">
+                  <b style="font-weight: 600;">סידור המחסן אחרי הברן</b>
+                  <span class="pill outline">נמוך</span>
+                </span>
+              </td>
+              <td class="n dim">—</td>
+              <td class="dim">—</td>
+              <td class="dim">—</td>
+              <td>
+                <span class="stack">
+                  <span class="av sm empty">+</span>
+                </span>
+              </td>
+              <td><bdi>02/08/26</bdi></td>
+              <td class="w0"><span class="rowact"><button class="btn sm" type="button">[[i:plus:14]] חומר</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+            <tr>
+              <td colspan="7" style="padding-inline-start: 34px;">
+                <div style="border: 1px dashed var(--line-strong); border-radius: 10px; padding: 16px; text-align: center;">
+                  <div style="font-size: 13px;">עדיין לא הוגדרו חומרים למשימה הזו.</div>
+                  <div class="muted" style="font-size: 12.5px; margin-top: 2px;">מוסיפים כלי או חומר, והמערכת תגיד לבד אם הוא כבר במחסן או שצריך להשיג אותו.</div>
+                  <button class="btn sm" type="button" style="margin-top: 10px;">[[i:plus:14]] הוספת חומר ראשון</button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="scrim"></div>
+    <aside class="drawer">
+      <div class="drawer-h">
+        <span class="av c2">[[i:board:15]]</span>
+        <div>
+          <h2>הוספת חומר — בניית ספסלים</h2>
+          <span class="muted" style="font-size: 12.5px;">משימת הקמה · דחוף · יעד <bdi>12/07/26</bdi></span>
+        </div>
+        <span class="x">
+          <button class="btn ghost sm icon" type="button" aria-label="פתיחה בעמוד מלא">[[i:expand:15]]</button>
+          <button class="btn ghost sm icon" type="button" aria-label="סגירה">[[i:x:15]]</button>
+        </span>
+      </div>
+
+      <div class="drawer-b">
+        <div class="field">
+          <label for="mname">מה צריך</label>
+          <span class="input focus" id="mname">[[i:search:15]] <span class="muted">שם הכלי או החומר</span></span>
+          <span class="hint">מחפש קודם במחסן. אם זה שם שכבר קיים שם, הוא יקושר אליו.</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+          <div class="field">
+            <label for="mqty">כמות דרושה</label>
+            <span class="input" id="mqty"><bdi>1</bdi></span>
+          </div>
+          <div class="field">
+            <label for="mcat">קטגוריה</label>
+            <span class="input" id="mcat">בנייה, כלים ותשתיות <span style="margin-inline-start: auto;">[[i:down:14]]</span></span>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div>
+          <div class="sectitle" style="margin-bottom: 8px;">מצב החומר מחושב, לא נבחר</div>
+          <div style="border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+            <span style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
+              <span class="pill ok"><span class="dot"></span>במחסן</span>
+              <span class="muted">אם יש במחסן מספיק יחידות — מקושר לשורה שם.</span>
+            </span>
+            <span style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
+              <span class="pill info"><span class="dot"></span>הושג</span>
+              <span class="muted">אם יש שורת רכש שכבר הוזמנה או הגיעה.</span>
+            </span>
+            <span style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
+              <span class="pill bad"><span class="dot"></span>צריך להשיג</span>
+              <span class="muted">אם אין אף אחד מהשניים — ואז אפשר לפתוח שורת רכש מכאן.</span>
+            </span>
+          </div>
+          <div class="muted" style="font-size: 12.5px; margin-top: 8px;">המצב לא נשמר כשדה נפרד, כדי שלא יישאר ״במחסן״ אחרי שמישהו לקח את זה.</div>
+        </div>
+      </div>
+
+      <div class="drawer-f">
+        <button class="btn primary" type="button">הוספת החומר</button>
+        <button class="btn" type="button">הוספה ופתיחת שורת רכש</button>
+        <span class="grow"></span>
+        <span class="muted" style="font-size: 12.5px; align-self: center;">יירשם על שמך · שירה</span>
+      </div>
+    </aside>
+  </div>
+<!--OVERLAYS-->
+</div>
+</x-dc>
+<script data-dc-script data-props='__PROPS__'>
+class Component extends DCLogic {
+/*SHELL*/
+  renderVals() {
+    return { ...this.shell() };
+  }
+}
+</script>
+</body>
+</html>
