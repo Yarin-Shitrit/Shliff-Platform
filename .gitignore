@@ -50,3 +50,6 @@ coverage/
 
 # Parallel task worktrees (scratch, never committed)
 /.worktrees/
+
+# Subagent-driven-development ledgers, briefs and review packages (scratch)
+/.superpowers/

@@ -95,14 +95,37 @@ Append to `.github/workflows/ci.yml`:
 
       - name: Prove the real workbooks are not in the build output
         # next.config.ts excludes docs/reference-data/ from every traced route
-        # via the global '/*' key. This asserts the exclusion actually held,
-        # rather than trusting that the config was read.
+        # via the global '/*' key. This asserts the exclusion actually held.
+        #
+        # Checking file PATHS alone would be an instrument that always agrees:
+        # a non-standalone `next build` never copies traced files into .next,
+        # it only LISTS them in .nft.json trace manifests. So a path check
+        # passes even with outputFileTracingExcludes deleted outright. The
+        # manifests' contents are the oracle that can actually fail.
         run: |
-          if find .next -path '*reference-data*' -print -quit | grep -q .; then
-            echo "docs/reference-data/ leaked into .next — outputFileTracingExcludes did not hold"
+          set -euo pipefail
+
+          manifests=$(find .next -name '*.nft.json' | wc -l | tr -d ' ')
+          echo "trace manifests found: $manifests"
+          if [ "$manifests" -eq 0 ]; then
+            echo "no .nft.json manifests — this check cannot prove anything."
+            echo "Find what this Next version names its trace files before trusting a green result."
             exit 1
           fi
-          echo "no reference-data paths in .next"
+
+          if grep -rl 'reference-data' $(find .next -name '*.nft.json') 2>/dev/null | head -1 | grep -q .; then
+            echo "docs/reference-data/ is listed in a trace manifest — it would ship in a function bundle"
+            grep -rl 'reference-data' $(find .next -name '*.nft.json') | head -5
+            exit 1
+          fi
+          echo "no reference-data in any trace manifest"
+
+          # Belt and braces: no copied file either.
+          if find .next -path '*reference-data*' -print -quit | grep -q .; then
+            echo "a reference-data path exists under .next"
+            exit 1
+          fi
+          echo "no reference-data paths under .next"
 ```
 
 - [ ] **Step 3: Commit and push so the runner picks it up**
@@ -837,9 +860,10 @@ Creating the store through the dashboard while the project is linked may add `BL
 Each value is piped from stdin, never passed as an argument.
 
 ```sh
-# The PUBLIC url from Task 5, with sslmode=require appended if it is not
-# already present. src/db/index.ts also sets ssl:'require' for any non-local
-# host, so this is belt and braces rather than the only guard.
+# The PUBLIC url from Task 5, exactly as Railway gives it -- no sslmode
+# parameter appended. Task 2 sets ssl:'require' in the client for every
+# non-local host, so the parameter would be redundant, and a URL that carries
+# its own TLS setting invites the two to drift.
 printf '%s' "$RAILWAY_URL" | vercel env add DATABASE_URL production
 
 # A NEW secret -- not the laptop's. 32 bytes, base64.
@@ -944,14 +968,27 @@ name: Deploy
 # moved. A red main is exactly when a deploy is most expensive, and CI is the
 # only thing that runs the 2640-test suite.
 #
-# workflow_dispatch is the manual path: the first deployment, and any redeploy
-# that does not follow a commit.
+# workflow_dispatch is the manual path: any redeploy that does not follow a
+# commit. It cannot fire the FIRST deployment, though -- GitHub only offers
+# workflow_dispatch for a workflow already present on the default branch, and
+# this file is new. Hence the temporary push trigger below.
 on:
   workflow_run:
     workflows: [CI]
     types: [completed]
     branches: [main]
   workflow_dispatch:
+  # TEMPORARY -- removed in Task 8 Step 9, before this goes up for review.
+  #
+  # The first deployment has to come from a Linux runner: building on a Mac
+  # would ship argon2's darwin-arm64 binding and 500 every sign-in, which is
+  # the failure Task 1 exists to catch. And it has to happen BEFORE the PR
+  # merges, because Task 8 verifies the live site and the protocol wants that
+  # evidence in the PR body. So this branch deploys itself, once.
+  #
+  # While this line is present, any push to this branch deploys production.
+  push:
+    branches: [feat/deploy-vercel-railway]
 
 # Never two production deploys at once, and never cancel one midway -- a
 # half-uploaded deployment is worse than a late one.
@@ -1059,14 +1096,15 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 /usr/bin/git push
 ```
 
-- [ ] **Step 4: Trigger the first deploy by hand**
+- [ ] **Step 4: Watch the deploy the push in Step 3 already triggered**
 
-`workflow_run` fires only for CI runs on `main`, and this work is on a branch, so the first deployment is manual. A `workflow_dispatch` workflow must exist on the default branch to be dispatchable — if `gh workflow run` reports the workflow not found, that is why, and the deploy waits for the PR to merge rather than being forced.
+Step 3's push fires the temporary `push:` trigger — no manual dispatch, because `gh workflow run` cannot reach a `workflow_dispatch` workflow that is not yet on the default branch.
 
 ```sh
-gh workflow run deploy.yml --ref feat/deploy-vercel-railway
 gh run watch --exit-status $(gh run list --workflow deploy.yml --limit 1 --json databaseId -q '.[0].databaseId')
 ```
+
+If the run does not appear within a minute, the temporary trigger is missing or misspelled — check the `push:` block's branch name against the branch you are on (`/usr/bin/git rev-parse --abbrev-ref HEAD`) before trying anything else.
 
 - [ ] **Step 5: Read the deployment URL out of the run**
 
@@ -1182,10 +1220,21 @@ In `docs/collab/claims.md` §3, add a row and bump the `updated:` date at the to
 | @Yarin-Shitrit | Hosting on Vercel + Railway | `feat/deploy-vercel-railway` | **active** — live at shliff-platform.vercel.app; Vercel project deliberately not Git-connected | 2026-09-19 |
 ```
 
-- [ ] **Step 9: Commit the documentation**
+- [ ] **Step 9: Remove the temporary deploy trigger, then commit the documentation**
+
+The first deployment is done, so `.github/workflows/deploy.yml`'s temporary `push:` block has served its purpose. **Delete it now** — the whole block, comment included — leaving `workflow_run` and `workflow_dispatch`. While it stays, any push to this branch redeploys production, and once this merges `workflow_dispatch` works normally because the file will be on the default branch.
+
+Confirm it is gone before committing:
+
+```sh
+/usr/bin/grep -n -A2 '^on:' .github/workflows/deploy.yml
+/usr/bin/grep -c 'feat/deploy-vercel-railway' .github/workflows/deploy.yml
+```
+
+Expected: the `on:` block lists only `workflow_run` and `workflow_dispatch`, and the branch name count is **0**.
 
 ```bash
-/usr/bin/git add docs/deploy.md docs/collab/claims.md docs/superpowers/specs/2026-09-09-camp-data-platform-design.md
+/usr/bin/git add .github/workflows/deploy.yml docs/deploy.md docs/collab/claims.md docs/superpowers/specs/2026-09-09-camp-data-platform-design.md
 /usr/bin/git commit -m "docs(deploy): a runbook, and Neon corrected where it was stated
 
 The Phase 1 spec's stack table said Neon. Fixing it in the new design
