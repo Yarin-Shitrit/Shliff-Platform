@@ -1644,13 +1644,29 @@ none of them* — was right. I looked for package entries, found zero, and repor
 that the declarations did not exist. Two things were true at once and I measured
 only one of them.
 
-**And the fix is not a regeneration.** `npm install --package-lock-only` with the
-same `package.json`, no `.npmrc`, and no `omit` in npm config produces a
-**byte-identical file**. There is no version drift to weigh because there is no
-change at all. Closing this needs a deliberate dependency session — a cleared
-npm cache, a different npm version, or installing the optional deps explicitly —
-not a lockfile refresh, and the CI workaround (`--no-save` install of the
-runner's own binding) stands until then.
+**CORRECTED AGAIN — the fix IS a regeneration, of the other kind.** This section
+originally said a regeneration produces a byte-identical file and concluded there
+was no fix in that direction. **That is true of the in-place variant and false of
+the delete-first one**, and I measured only the first:
+
+| operation | md5 | `@rolldown/binding-*` entries |
+|---|---|---|
+| `npm install --package-lock-only` (lock kept) | `3ed2b25…` — identical | 0 |
+| `rm package-lock.json && npm install --package-lock-only` | `bbe477c…` | **15, all `resolved`** |
+
+Reproduced independently; the second also brings 9 `lightningcss` bindings,
+which removes the blocker on ever adding `next build` to CI.
+
+**Verified past inspection before being applied**: a clean `npm ci` in a scratch
+copy from the regenerated lock installs `@rolldown/binding-darwin-arm64`, and
+`vitest --version` answers `vitest/5.0.1 darwin-arm64` — the precise thing that
+cannot happen today. Inspecting the JSON would only have shown that the file
+changed.
+
+**The price, measured rather than quoted: 41 version moves, 29 packages added, 4
+removed.** `vitest` 5.0.0→5.0.1, `vite` 8.2.2→8.3.0, `rolldown` 1.2.8→1.2.9,
+`react-is` 16→17. Only the last is a major, and `@testing-library` sits on it, so
+that is where to look first if anything in the test-renderer path goes strange.
 
 **The lesson is the one A40 itself states, turned on its author.** I corrected a
 colleague's accurate note with a confident measurement of the wrong field, and
@@ -1661,3 +1677,16 @@ because it spends the credibility of the person who was right.
 **What would have caught it:** asking where the fifteen were declared, not only
 whether they were resolved. A negative result answers the question you asked,
 and I asked a narrower one than the claim I was checking.
+
+**And then I did it again, one layer down.** Having measured the wrong *field*,
+I measured the wrong *operation* — in-place rather than delete-first — and
+reported that no fix existed. Same shape twice in one hour, from the same
+author, on the same finding.
+
+**The general rule, and the most useful sentence to come out of this project: a
+negative result from the wrong operation is the most expensive kind, because it
+closes the question.** A wrong positive gets checked by whoever depends on it. A
+wrong negative gets filed, and the next person never runs the experiment that
+would have worked. Both variants above are recorded with their md5s for exactly
+that reason — so that someone who runs the in-place one, sees nothing change,
+and is about to conclude the problem is unfixable, finds the other row instead.
