@@ -99,11 +99,12 @@ function blobStorage(): Storage {
  * confined to a dev-only tool like `seed.ts`, which `actions.ts` already
  * refuses to run in production before ever calling here. `route.ts` wraps its
  * `getStorage().put(...)` call in a `try`/`catch` that turns this throw into
- * the machine code `'storage unavailable'` (503), and the upload form maps
- * that to Hebrew — so this English text stays in logs and never becomes
- * user-facing copy. The guard belongs to the route rather than to this
- * function: that is what lets `route.ts` honour the "nothing here may throw"
- * contract in its own header.
+ * the machine code `'storage unavailable'` (503). The upload form has no
+ * dedicated entry for that code, so it shows its generic Hebrew refusal — the
+ * same path any unanticipated code takes — and this English text stays in
+ * logs, never becoming user-facing copy. The guard belongs to the route rather
+ * than to this function: that is what lets `route.ts` honour the "nothing here
+ * may throw" contract in its own header.
  */
 export function getStorage(): Storage {
   const driver = process.env.STORAGE_DRIVER;
