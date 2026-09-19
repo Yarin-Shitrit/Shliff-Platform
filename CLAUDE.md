@@ -90,8 +90,17 @@ before you label it that way.
   dispatched and the gap surfaced only because the implementer wrote "Tasks 12-15
   not started" in its report. A truncated list that announces itself costs
   nothing; one reporting a count that matches its own truncation is
-  indistinguishable from a complete answer. **Never take a count that decides
-  scope from a hook-filtered `grep`.**
+  indistinguishable from a complete answer.
+- **Counts here are intermittently inflated, and no command has proven safe.**
+  Twice in one session a count came back high and did not reproduce: `grep
+  "^### Task" <plan> | wc -l` gave 13 against a true 9, and `ls drizzle/*.sql |
+  wc -l` gave 11 against a true 9 — both correct on re-measurement minutes
+  later, same target, unchanged. So do **not** trust a named "safe" form,
+  including `| wc -l`, which is the one that was wrong both times. **When a
+  count decides something — what to dispatch, whether a migration is missing —
+  take it twice, or take it from `node` or a raw `/bin`/`/usr/bin` binary.**
+  Two readings of the same unchanged thing that disagree is the signal; a
+  single confident number is not evidence.
 - **The hook elides source lines from `cat`.** A filtered `cat -n` dropped a line
   from a source file, which broke an exact-match edit until it was re-read with
   the `Read` tool. **Read files with `Read`, not `cat`** — a missing line does not
