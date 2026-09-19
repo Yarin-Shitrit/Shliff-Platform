@@ -38,6 +38,13 @@ VERCEL_TOKEN
 RAILWAY_TOKEN
 .env
 .env.*
+# ...except .env.example: it is checked in, holds only placeholders (see the
+# file itself), and the prebuilt Next.js output traces it as a required file.
+# Excluding it isn't a security measure, it just breaks `vercel deploy
+# --prebuilt`: CLI warning "`.vercelignore` excludes 1 file the prebuilt
+# functions need" was followed by the deploy actually failing --
+# `Error: ENOENT: no such file or directory, readlink '/vercel/path0/.env.example'`.
+!.env.example
 
 # Tests never run on Vercel.
 **/*.test.ts
