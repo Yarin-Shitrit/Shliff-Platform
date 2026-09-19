@@ -1555,11 +1555,31 @@ The home performs the register's entire read per request — block states,
 collisions, seasonless sheets, arithmetic flags, unnamed debts, unlinked names, a
 name suggestion per name, and a copy diff per collision. That is exactly what I2
 instructs (one `loadInboxItems` per request, derive the rest, no third query) and
-it runs **no** promoter dry run, which was the hazard I2 was written against. But
-it is now by far the heaviest read on the first screen a lead opens, and "it is
-what the ruling says" is not the same as "it is fast enough". Measure it against
-the live database before wave 5 closes; if it needs a cheaper path, that is a new
-ruling, not a quiet exception to I2.
+it runs **no** promoter dry run, which was the hazard I2 was written against.
+
+**MEASURED 2026-09-19, and this section's alarm was wrong.** Median server
+response against the live database, warmed, three runs each:
+
+| route | median |
+|---|---|
+| `/money` | 344 ms |
+| `/fees` | 193 ms |
+| **`/` (home)** | **150 ms** |
+| `/members` | 81 ms |
+
+The home is **third of four, faster than `/fees` and less than half of
+`/money`** — not "by far the heaviest read on the first screen", which is what
+this section claimed from reading the query list rather than from timing it. The
+register's queries are indexed and the register is small; the aggregation on
+`/money` costs more than the breadth here does. **I2 needs no exception and the
+home needs no cheaper path.**
+
+Two caveats kept deliberately, because the measurement is narrower than the
+claim it replaces: this is `next dev`, so the absolute numbers mean nothing and
+only the ordering does; and it is against today's register — 19 sheets, 29
+blocks, 7 members. The cost is per-block and per-collision, so **re-measure if
+the block count grows by an order of magnitude.** The ordering is what was
+checked, and the ordering is what this now asserts.
 
 **Also in flight: plan 12 has made `Table`'s `card` slot required.** Its own
 comment gives the reason — "a missing `card` is a compile error, not a storm with
@@ -1571,3 +1591,40 @@ nine call sites until that task finishes. **A tree with 55 type errors mid-task
 is expected here and is not a defect** — but it is also the state that would be
 left behind if the lane died, so it is worth knowing it is recoverable with
 `git checkout -- src/components/ui/table.*`.
+
+### A23b — RESOLVED: A23 stands, and the reason it stands has changed
+
+The camp lead authorised closing this out. Measured against the live database
+rather than argued:
+
+**The gate is real.** `promoteAllGated` re-reads a true row count per target
+table on every call and skips any confirmed block that already owns rows, from
+every caller. Block `66ad3b61` — the block A23 was written about — **is already
+promoted and owns 24 budget rows**, so the gate skips it. A23's stated hazard,
+re-promotion duplicating fabricated rows, **cannot fire through that path.** The
+action-layer fix A23a predicted exists and works.
+
+**And A23 still stands, for a different reason.** Twenty-three confirmed blocks
+currently own zero rows. A bulk press writes all twenty-three in one action,
+none of them previewed — and **this promoter is known to fabricate rows from a
+summary sub-table**: that is precisely how `66ad3b61` came to hold `42,000` and
+`22,375.30` as budget lines. The gate protects against writing the same rows
+twice. It does not protect against writing twenty-three blocks' worth of wrong
+rows once, which no one has looked at.
+
+**Ruling: the promote-everything button does not ship. Not because it would
+duplicate — it would not — but because it writes unseen.** The register already
+does the better thing: it renders what each block *would* write, with the
+workbook cell beside it, and sends a lead to the per-block path where the counts
+of written, removed and retained rows are visible before the press. That is
+informed consent; a bulk button is consent to a number.
+
+**What changed here is the argument, not the conclusion, and the distinction
+matters for whoever revisits this.** An implementer who believed A23's original
+reasoning would gate on duplication, find the gate already closed it, and ship
+the button. The reason has to be right or the ruling does not survive contact
+with someone competent.
+
+**Reopen this if** a per-row veto lands (Wave 3's shape), or if the promoter
+stops fabricating from summary sub-tables — either removes the remaining
+objection. Neither has happened.
