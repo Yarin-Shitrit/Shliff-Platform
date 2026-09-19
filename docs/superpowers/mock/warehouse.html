@@ -1,0 +1,268 @@
+<!--meta {"file": "Warehouse.dc.html", "w": 1440, "h": 1020, "nav": "warehouse", "title": "מחסן", "interactive": true} -->
+<!doctype html>
+<html lang="he">
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!--HEAD-->
+<div class="app {{themeClass}}" dir="rtl" style="width: __W__px; height: __H__px;">
+<!--SIDEBAR-->
+  <div class="main">
+    <header class="topbar">
+      <div class="crumbs"><span>לוגיסטיקה</span> <span class="dim">/</span> <span class="here">מחסן</span></div>
+      <span class="scopechip">[[i:layers:14]] כלל־קאמפי · לא משויך לשנה</span>
+      <span class="spacer"></span>
+      <button class="btn sm" type="button">[[i:download:14]] ייצוא</button>
+      <button class="btn primary sm" type="button">[[i:plus:14]] הוספת פריט</button>
+    </header>
+
+    <div class="page" style="gap: 14px;">
+      <div class="pagehead">
+        <div>
+          <h1>מחסן</h1>
+          <p class="sub"><bdi>63</bdi> פריטים ב־<bdi>5</bdi> קטגוריות · <bdi>9</bdi> דורשים טיפול · עודכן לאחרונה <bdi>14/09/26</bdi></p>
+        </div>
+      </div>
+
+      <div class="banner neutral">
+        <span class="ic">[[i:info:16]]</span>
+        <span class="t"><b style="font-weight: 600;">המחסן אינו משויך לשנה.</b> ציוד שנקנה בברן 25 עדיין שייך לקאמפ בברן 26, ולכן הרשימה הזו זהה בכל שנה. רק רשימת הרכש מתחלפת משנה לשנה.</span>
+        <a class="btn sm" href="Acquisitions.dc.html">מעבר לרכש</a>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;">
+        <div class="card stat">
+          <span class="k">סך הפריטים</span>
+          <span class="v"><bdi>63</bdi></span>
+          <span class="d">כולם נספרו ידנית · אין קובץ מקור</span>
+        </div>
+        <a class="card stat" href="Warehouse.dc.html">
+          <span class="k">דורשים בדיקה</span>
+          <span class="v" style="color: var(--warn);"><bdi>6</bdi></span>
+          <span class="d">לבדוק לפני היציאה · מסננת במסך הזה</span>
+        </a>
+        <a class="card stat" href="Warehouse.dc.html">
+          <span class="k">דורשים תיקון</span>
+          <span class="v" style="color: var(--bad);"><bdi>3</bdi></span>
+          <span class="d">מהם <bdi>2</bdi> נחוצים למשימת הקמה פתוחה</span>
+        </a>
+        <a class="card stat" href="Acquisitions.dc.html">
+          <span class="k">חסרים ונמצאים ברכש</span>
+          <span class="v"><bdi>11</bdi></span>
+          <span class="d">מתוכם <bdi>4</bdi> כבר הוזמנו</span>
+        </a>
+      </div>
+
+      <div class="toolbar">
+        <span class="search">[[i:search:15]] <span class="muted">חיפוש לפי שם פריט או מיקום</span></span>
+        <button class="chip on" type="button">מטבח <b><bdi>14</bdi></b></button>
+        <button class="chip" type="button">מקלחות ותברואה <b><bdi>11</bdi></b></button>
+        <button class="chip" type="button">מרחב מחיה <b><bdi>9</bdi></b></button>
+        <button class="chip" type="button">בנייה, כלים ותשתיות <b><bdi>21</bdi></b></button>
+        <button class="chip" type="button">כללי <b><bdi>8</bdi></b></button>
+        <button class="chip" type="button">[[i:sort:13]] מיון: <b>מצב</b></button>
+        <button class="btn ghost sm icon" type="button" aria-label="עמודות">[[i:columns:15]]</button>
+        <span class="muted" style="margin-inline-start: auto; font-size: 13px;"><bdi>14</bdi> שורות</span>
+      </div>
+
+      <div class="tablewrap" style="flex: 1; min-height: 0;">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>פריט</th>
+              <th>קטגוריה</th>
+              <th class="n">כמות</th>
+              <th>מיקום במחסן</th>
+              <th>מצב</th>
+              <th>מקור הנתון</th>
+              <th class="w0"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="sel">
+              <td><b style="font-weight: 500;">סיר תעשייתי 50 ליטר</b></td>
+              <td class="muted">מטבח</td>
+              <td class="n"><bdi>2</bdi></td>
+              <td>ארגז כחול #1</td>
+              <td><span class="pill ok"><span class="dot"></span>תקין ומוכן</span></td>
+              <td><span class="src manual">נרשם ידנית</span></td>
+              <td class="w0"><span class="rowact show"><button class="btn sm" type="button">עדכון מצב</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+            <tr>
+              <td><b style="font-weight: 500;">גזייה תעשייתית</b></td>
+              <td class="muted">מטבח</td>
+              <td class="n"><bdi>1</bdi></td>
+              <td>מדף עליון</td>
+              <td><span class="pill warn"><span class="dot"></span>דורש בדיקה</span></td>
+              <td><span class="src manual">נרשם ידנית</span></td>
+              <td class="w0"><span class="rowact"><button class="btn sm" type="button">עדכון מצב</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+            <tr>
+              <td><b style="font-weight: 500;">ארגז כלי מטבח</b></td>
+              <td class="muted">מטבח</td>
+              <td class="n"><bdi>1</bdi></td>
+              <td>ארגז כחול #2</td>
+              <td><span class="pill ok"><span class="dot"></span>תקין ומוכן</span></td>
+              <td><span class="src manual">נרשם ידנית</span></td>
+              <td class="w0"><span class="rowact"><button class="btn sm" type="button">עדכון מצב</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+            <tr class="grouprow"><td colspan="7">מקלחות ותברואה · <bdi>11</bdi> פריטים</td></tr>
+            <tr>
+              <td><b style="font-weight: 500;">משאבת מים 12 וולט</b></td>
+              <td class="muted">מקלחות ותברואה</td>
+              <td class="n"><bdi>2</bdi></td>
+              <td>משטח 2</td>
+              <td><span class="pill bad"><span class="dot"></span>דורש תיקון</span></td>
+              <td><span class="src manual">נרשם ידנית</span></td>
+              <td class="w0"><span class="rowact"><button class="btn sm" type="button">עדכון מצב</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+            <tr>
+              <td><b style="font-weight: 500;">צינור גינה <bdi>25</bdi> מ׳</b></td>
+              <td class="muted">מקלחות ותברואה</td>
+              <td class="n"><bdi>3</bdi></td>
+              <td>משטח 2</td>
+              <td><span class="pill ok"><span class="dot"></span>תקין ומוכן</span></td>
+              <td><span class="src manual">נרשם ידנית</span></td>
+              <td class="w0"><span class="rowact"><button class="btn sm" type="button">עדכון מצב</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+            <tr>
+              <td><b style="font-weight: 500;">מחברי צנרת ¾</b></td>
+              <td class="muted">מקלחות ותברואה</td>
+              <td class="n"><bdi>18</bdi></td>
+              <td>ארגז קטן #4</td>
+              <td><span class="pill warn"><span class="dot"></span>דורש בדיקה</span></td>
+              <td><span class="src manual">נרשם ידנית</span></td>
+              <td class="w0"><span class="rowact"><button class="btn sm" type="button">עדכון מצב</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+            <tr class="grouprow"><td colspan="7">בנייה, כלים ותשתיות · <bdi>21</bdi> פריטים</td></tr>
+            <tr>
+              <td><b style="font-weight: 500;">מברגה־מקדחה</b></td>
+              <td class="muted">בנייה, כלים ותשתיות</td>
+              <td class="n"><bdi>1</bdi></td>
+              <td>ארגז גדול #2</td>
+              <td><span class="pill ok"><span class="dot"></span>תקין ומוכן</span></td>
+              <td><span class="src manual">נרשם ידנית</span></td>
+              <td class="w0"><span class="rowact"><button class="btn sm" type="button">עדכון מצב</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+            <tr>
+              <td><b style="font-weight: 500;">מאריך חשמל <bdi>25</bdi> מ׳</b></td>
+              <td class="muted">בנייה, כלים ותשתיות</td>
+              <td class="n"><bdi>4</bdi></td>
+              <td>ארגז גדול #1</td>
+              <td><span class="pill ok"><span class="dot"></span>תקין ומוכן</span></td>
+              <td><span class="src manual">נרשם ידנית</span></td>
+              <td class="w0"><span class="rowact"><button class="btn sm" type="button">עדכון מצב</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+            <tr>
+              <td><b style="font-weight: 500;">משטחי עץ</b></td>
+              <td class="muted">בנייה, כלים ותשתיות</td>
+              <td class="n"><bdi>8</bdi></td>
+              <td>מאחורי המכולה</td>
+              <td><span class="pill ok"><span class="dot"></span>תקין ומוכן</span></td>
+              <td><span class="src manual">נרשם ידנית</span></td>
+              <td class="w0"><span class="rowact"><button class="btn sm" type="button">עדכון מצב</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+            <tr>
+              <td><b style="font-weight: 500;">מסור עגול</b> <span class="muted" style="font-size: 12.5px;">· נשבר בברן 25</span></td>
+              <td class="muted">בנייה, כלים ותשתיות</td>
+              <td class="n"><bdi>1</bdi></td>
+              <td>ארגז גדול #2</td>
+              <td><span class="pill outline">יצא משימוש</span></td>
+              <td><span class="src manual">נרשם ידנית</span></td>
+              <td class="w0"><span class="rowact"><button class="btn sm" type="button">עדכון מצב</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>סך הכול בקטגוריות שמוצגות</td>
+              <td></td>
+              <td class="n"><bdi>41</bdi></td>
+              <td colspan="4"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <div class="scrim"></div>
+    <aside class="drawer">
+      <div class="drawer-h">
+        <span class="av c3">[[i:layers:15]]</span>
+        <div>
+          <h2>סיר תעשייתי 50 ליטר</h2>
+          <span class="muted" style="font-size: 12.5px;">מטבח · <bdi>2</bdi> יחידות · ארגז כחול #1</span>
+        </div>
+        <span class="x">
+          <span class="muted" style="font-size: 12.5px; align-self: center;"><bdi>1</bdi> מתוך <bdi>14</bdi></span>
+          <button class="btn ghost sm icon" type="button" aria-label="הקודם">[[i:up:15]]</button>
+          <button class="btn ghost sm icon" type="button" aria-label="הבא">[[i:down:15]]</button>
+          <button class="btn ghost sm icon" type="button" aria-label="פתיחה בעמוד מלא">[[i:expand:15]]</button>
+          <button class="btn ghost sm icon" type="button" aria-label="סגירה">[[i:x:15]]</button>
+        </span>
+      </div>
+
+      <div class="drawer-b">
+        <div class="field">
+          <span class="flabel">מצב הפריט</span>
+          <div class="seg">
+            <button type="button" aria-pressed="true">תקין ומוכן</button>
+            <button type="button">דורש בדיקה</button>
+            <button type="button">דורש תיקון</button>
+            <button type="button">יצא משימוש</button>
+          </div>
+          <span class="hint">פריט שיצא משימוש נשאר ברשימה ומסומן, ולא נמחק — כדי שבשנה הבאה לא יתברר שמישהו חשב שהוא קיים.</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+          <div class="field">
+            <label for="qty">כמות</label>
+            <span class="input focus" id="qty"><bdi>2</bdi></span>
+            <span class="hint">נספר ידנית · אין קובץ מקור</span>
+          </div>
+          <div class="field">
+            <label for="loc">מיקום במחסן</label>
+            <span class="input" id="loc">ארגז כחול #1</span>
+            <span class="hint">כותבים כמו שכתוב על הארגז עצמו.</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="inote">הערה</label>
+          <textarea class="input" id="inote" rows="2" style="height: 60px;" placeholder="לא חובה — למשל מה בדיוק לא עובד"></textarea>
+        </div>
+
+        <div class="divider"></div>
+
+        <div>
+          <div class="sectitle" style="margin-bottom: 8px;">משימות שצריכות את הפריט</div>
+          <a class="banner neutral" href="Build.dc.html" style="text-decoration: none;">
+            <span class="ic">[[i:board:16]]</span>
+            <span class="t" style="font-size: 13px;">משימת ההקמה <b style="font-weight: 600;">הקמת מטבח שדה</b> דורשת <bdi>2</bdi> סירים. יש במלאי.</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="drawer-f">
+        <button class="btn primary" type="button">שמירה</button>
+        <button class="btn" type="button">שמירה ומעבר לבא</button>
+        <span class="grow"></span>
+        <span class="muted" style="font-size: 12.5px; align-self: center;">יירשם על שמך · שירה</span>
+      </div>
+    </aside>
+  </div>
+<!--OVERLAYS-->
+</div>
+</x-dc>
+<script data-dc-script data-props='__PROPS__'>
+class Component extends DCLogic {
+/*SHELL*/
+  renderVals() {
+    return { ...this.shell() };
+  }
+}
+</script>
+</body>
+</html>

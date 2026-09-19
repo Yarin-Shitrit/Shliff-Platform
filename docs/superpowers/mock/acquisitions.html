@@ -1,0 +1,254 @@
+<!--meta {"file": "Acquisitions.dc.html", "w": 1440, "h": 1020, "nav": "acquisitions", "title": "רכש", "interactive": true} -->
+<!doctype html>
+<html lang="he">
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!--HEAD-->
+<div class="app {{themeClass}}" dir="rtl" style="width: __W__px; height: __H__px;">
+<!--SIDEBAR-->
+  <div class="main">
+    <header class="topbar">
+      <div class="crumbs"><span>לוגיסטיקה</span> <span class="dim">/</span> <span class="here">רכש</span></div>
+      <span class="scopechip">[[i:calendar:14]] ברן 26</span>
+      <span class="spacer"></span>
+      <button class="btn sm" type="button">[[i:download:14]] ייצוא</button>
+      <button class="btn primary sm" type="button">[[i:plus:14]] הוספת פריט לרכש</button>
+    </header>
+
+    <div class="page" style="gap: 14px;">
+      <div class="pagehead">
+        <div>
+          <h1>רכש</h1>
+          <p class="sub"><bdi>11</bdi> פריטים חסרים לברן 26 · אומדן <bdi>4,850 ₪</bdi> · הוצא בפועל <bdi>2,310 ₪</bdi> · <bdi>4</bdi> כבר הגיעו למחסן</p>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;">
+        <a class="card stat" href="Money.dc.html">
+          <span class="k">אומדן תקציב</span>
+          <span class="v"><bdi>4,850 ₪</bdi></span>
+          <span class="d"><bdi>7</bdi> פריטים משויכים לסעיף תקציב</span>
+        </a>
+        <a class="card stat" href="Ledger.dc.html">
+          <span class="k">הוצא בפועל</span>
+          <span class="v" style="color: var(--ok);"><bdi>2,310 ₪</bdi></span>
+          <span class="bar" style="margin: 4px 0 2px;"><i style="width: 48%; background: var(--viz-dues);"></i></span>
+          <span class="d"><bdi>48%</bdi> מהאומדן · <bdi>4</bdi> פריטים</span>
+        </a>
+        <div class="card stat">
+          <span class="k">נותר לרכוש</span>
+          <span class="v"><bdi>2,540 ₪</bdi></span>
+          <span class="d">על פי האומדן של <bdi>7</bdi> פריטים שטרם נרכשו</span>
+        </div>
+        <a class="card stat" href="Warehouse.dc.html">
+          <span class="k">הגיעו למחסן</span>
+          <span class="v"><bdi>4</bdi></span>
+          <span class="d">כל אחד מהם נרשם כפריט במחסן</span>
+        </a>
+      </div>
+
+      <div class="banner info">
+        <span class="ic">[[i:alert:16]]</span>
+        <span class="t"><b style="font-weight: 600;">פריט אחד הגיע ועדיין לא נרשם במחסן.</b> המערכת לא ממציאה לו מיקום ומצב — צריך להגיד לה איפה הוא אוחסן.</span>
+        <button class="btn sm" type="button">רישום למחסן</button>
+      </div>
+
+      <div class="tabs">
+        <button class="tab" type="button">הכול <span class="n"><bdi>11</bdi></span></button>
+        <button class="tab" type="button" aria-selected="true">לחפש <span class="n"><bdi>4</bdi></span></button>
+        <button class="tab" type="button">במשא ומתן <span class="n"><bdi>2</bdi></span></button>
+        <button class="tab" type="button">הוזמן <span class="n"><bdi>1</bdi></span></button>
+        <button class="tab" type="button">הגיע למחסן <span class="n"><bdi>4</bdi></span></button>
+      </div>
+
+      <div class="tablewrap" style="flex: 1; min-height: 0;">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>פריט</th>
+              <th>קטגוריה</th>
+              <th class="n">כמות</th>
+              <th>דרך ההשגה</th>
+              <th class="n">אומדן</th>
+              <th class="n">בפועל</th>
+              <th>אחראי</th>
+              <th>סטטוס</th>
+              <th class="w0"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="sel">
+              <td><b style="font-weight: 500;">מקדחה רוטטת</b></td>
+              <td class="muted">בנייה, כלים ותשתיות</td>
+              <td class="n"><bdi>1</bdi></td>
+              <td>לקנות חדש</td>
+              <td class="n"><bdi>400 ₪</bdi></td>
+              <td class="n" style="font-weight: 500;"><bdi>380 ₪</bdi><div><span class="src manual">נרשם ידנית</span></div></td>
+              <td><span class="namecell"><span class="av sm c2">אכ</span><a class="nm" href="Person.dc.html">איתי כהן</a></span></td>
+              <td><span class="pill warn"><span class="dot"></span>הוזמן</span></td>
+              <td class="w0"><span class="rowact show"><button class="btn sm" type="button">רישום למחסן</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+            <tr>
+              <td><b style="font-weight: 500;">משאבת מים 12 וולט</b> <span class="muted" style="font-size: 12.5px;">· להחלפת זו שבתיקון</span></td>
+              <td class="muted">מקלחות ותברואה</td>
+              <td class="n"><bdi>1</bdi></td>
+              <td>יד שנייה</td>
+              <td class="n"><bdi>250 ₪</bdi></td>
+              <td class="n dim">—</td>
+              <td><span class="namecell"><span class="av sm c4">מר</span><a class="nm" href="Person.dc.html">מיכל רוזן</a></span></td>
+              <td><span class="pill info"><span class="dot"></span>במשא ומתן</span></td>
+              <td class="w0"><span class="rowact"><button class="btn sm" type="button">עדכון</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+            <tr>
+              <td><b style="font-weight: 500;">ברגים לעץ 4×60</b></td>
+              <td class="muted">בנייה, כלים ותשתיות</td>
+              <td class="n"><bdi>200</bdi></td>
+              <td>לקנות חדש</td>
+              <td class="n"><bdi>90 ₪</bdi></td>
+              <td class="n dim">—</td>
+              <td><span class="namecell"><span class="av sm c2">אכ</span><a class="nm" href="Person.dc.html">איתי כהן</a></span></td>
+              <td><span class="pill bad"><span class="dot"></span>לחפש</span></td>
+              <td class="w0"><span class="rowact"><button class="btn sm" type="button">עדכון</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+            <tr>
+              <td><b style="font-weight: 500;">מקרר קטן</b></td>
+              <td class="muted">מטבח</td>
+              <td class="n"><bdi>1</bdi></td>
+              <td>השאלה מחבר קאמפ</td>
+              <td class="n dim">—</td>
+              <td class="n dim">—</td>
+              <td><span class="namecell"><span class="av sm c4">מר</span><a class="nm" href="Person.dc.html">מיכל רוזן</a></span></td>
+              <td><span class="pill bad"><span class="dot"></span>לחפש</span></td>
+              <td class="w0"><span class="rowact"><button class="btn sm" type="button">עדכון</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+            <tr>
+              <td><b style="font-weight: 500;">שטיחים גדולים</b></td>
+              <td class="muted">מרחב מחיה</td>
+              <td class="n"><bdi>4</bdi></td>
+              <td>יד שנייה</td>
+              <td class="n"><bdi>600 ₪</bdi></td>
+              <td class="n" style="font-weight: 500;"><bdi>520 ₪</bdi><div><span class="src manual">נרשם ידנית</span></div></td>
+              <td><span class="namecell"><span class="av sm c5">דל</span><a class="nm" href="Person.dc.html">דנה לוי</a></span></td>
+              <td><span class="pill ok"><span class="dot"></span>הגיע למחסן</span></td>
+              <td class="w0"><span class="rowact"><button class="btn sm" type="button">פתיחת הפריט במחסן</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+            <tr>
+              <td><b style="font-weight: 500;">כריות ישיבה</b></td>
+              <td class="muted">מרחב מחיה</td>
+              <td class="n"><bdi>10</bdi></td>
+              <td>לקנות חדש</td>
+              <td class="n"><bdi>450 ₪</bdi></td>
+              <td class="n" style="font-weight: 500;"><bdi>410 ₪</bdi><div><span class="src manual">נרשם ידנית</span></div></td>
+              <td><span class="namecell"><span class="av sm c5">דל</span><a class="nm" href="Person.dc.html">דנה לוי</a></span></td>
+              <td><span class="pill ok"><span class="dot"></span>הגיע למחסן</span></td>
+              <td class="w0"><span class="rowact"><button class="btn sm" type="button">פתיחת הפריט במחסן</button><button class="btn ghost sm icon" type="button" aria-label="אפשרויות">[[i:more:15]]</button></span></td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>סך הכול</td>
+              <td></td>
+              <td class="n"></td>
+              <td></td>
+              <td class="n"><bdi>4,850 ₪</bdi></td>
+              <td class="n"><bdi>2,310 ₪</bdi><div><span class="src manual">סכום של רישומים ידניים</span></div></td>
+              <td colspan="3"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <div class="scrim"></div>
+    <aside class="drawer">
+      <div class="drawer-h">
+        <span class="av c2">[[i:in:15]]</span>
+        <div>
+          <h2>הגיע למחסן — איפה אוחסן?</h2>
+          <span class="muted" style="font-size: 12.5px;">מקדחה רוטטת · <bdi>1</bdi> יחידה · נרכשה ב־<bdi>380 ₪</bdi></span>
+        </div>
+        <span class="x">
+          <button class="btn ghost sm icon" type="button" aria-label="פתיחה בעמוד מלא">[[i:expand:15]]</button>
+          <button class="btn ghost sm icon" type="button" aria-label="סגירה">[[i:x:15]]</button>
+        </span>
+      </div>
+
+      <div class="drawer-b">
+        <div class="banner neutral">
+          <span class="ic">[[i:info:16]]</span>
+          <span class="t" style="font-size: 13px;">המערכת לא יודעת איפה הנחתם את זה ובאיזה מצב זה הגיע, ולא תנחש. שתי השאלות למטה הן מה שחסר כדי שזה ייכנס למחסן.</span>
+        </div>
+
+        <div class="field">
+          <span class="flabel">הפריט במחסן</span>
+          <div class="seg">
+            <button type="button" aria-pressed="true">[[i:plus:14]] פריט חדש</button>
+            <button type="button">[[i:merge:14]] הוספה לפריט קיים</button>
+          </div>
+          <span class="hint">במחסן אין כרגע מקדחה רוטטת, ולכן ברירת המחדל היא פריט חדש.</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+          <div class="field">
+            <label for="aloc">מיקום במחסן</label>
+            <span class="input focus" id="aloc"><span class="muted">למשל: ארגז גדול #2</span></span>
+            <span class="hint">חובה — בלי מיקום אי אפשר למצוא את זה בשנה הבאה.</span>
+          </div>
+          <div class="field">
+            <label for="aqty">כמות שנכנסת</label>
+            <span class="input" id="aqty"><bdi>1</bdi></span>
+            <span class="hint">מתוך <bdi>1</bdi> שהוזמנו</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="flabel">מצב הפריט בקבלה</span>
+          <div class="seg">
+            <button type="button" aria-pressed="true">תקין ומוכן</button>
+            <button type="button">דורש בדיקה</button>
+            <button type="button">דורש תיקון</button>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="field">
+          <label for="abud">סעיף תקציב</label>
+          <span class="input" id="abud">[[i:pie:15]] ציוד והקמה <span style="margin-inline-start: auto;">[[i:down:14]]</span></span>
+          <span class="hint">בלי סעיף, <bdi>380 ₪</bdi> ייספרו ברכש אבל לא בתקציב הקאמפ.</span>
+        </div>
+
+        <div>
+          <div class="sectitle" style="margin-bottom: 8px;">משימות שממתינות לפריט</div>
+          <a class="banner neutral" href="Build.dc.html" style="text-decoration: none;">
+            <span class="ic">[[i:board:16]]</span>
+            <span class="t" style="font-size: 13px;"><b style="font-weight: 600;">בניית ספסלים</b> ממתינה למקדחה. ברגע שתירשם, הסטטוס שם יתעדכן ל״הושג״.</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="drawer-f">
+        <button class="btn primary" type="button">רישום למחסן</button>
+        <button class="btn" type="button">ביטול</button>
+        <span class="grow"></span>
+        <span class="muted" style="font-size: 12.5px; align-self: center;">יירשם על שמך · שירה</span>
+      </div>
+    </aside>
+  </div>
+<!--OVERLAYS-->
+</div>
+</x-dc>
+<script data-dc-script data-props='__PROPS__'>
+class Component extends DCLogic {
+/*SHELL*/
+  renderVals() {
+    return { ...this.shell() };
+  }
+}
+</script>
+</body>
+</html>
