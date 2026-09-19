@@ -5,26 +5,20 @@ name: Deploy
 # only thing that runs the 2640-test suite.
 #
 # workflow_dispatch is the manual path: any redeploy that does not follow a
-# commit. It cannot fire the FIRST deployment, though -- GitHub only offers
-# workflow_dispatch for a workflow already present on the default branch, and
-# this file is new. Hence the temporary push trigger below.
+# commit.
+#
+# A temporary `push` trigger on `feat/deploy-vercel-railway` lived here while
+# that branch was unmerged, because GitHub only offers workflow_dispatch for a
+# workflow already on the default branch, and this file was new -- so the first
+# deployment had no other way to run from a Linux runner. It has served its
+# purpose and is gone. Do not reintroduce it: with this file on `main`,
+# workflow_dispatch works normally.
 on:
   workflow_run:
     workflows: [CI]
     types: [completed]
     branches: [main]
   workflow_dispatch:
-  # TEMPORARY -- removed in Task 8 Step 9, before this goes up for review.
-  #
-  # The first deployment has to come from a Linux runner: building on a Mac
-  # would ship argon2's darwin-arm64 binding and 500 every sign-in, which is
-  # the failure Task 1 exists to catch. And it has to happen BEFORE the PR
-  # merges, because Task 8 verifies the live site and the protocol wants that
-  # evidence in the PR body. So this branch deploys itself, once.
-  #
-  # While this line is present, any push to this branch deploys production.
-  push:
-    branches: [feat/deploy-vercel-railway]
 
 # Never two production deploys at once, and never cancel one midway -- a
 # half-uploaded deployment is worse than a late one.
@@ -37,15 +31,16 @@ jobs:
     name: build on linux · deploy prebuilt
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # BUG FOUND BY RUNNING THIS WORKFLOW, FIXED HERE -- the original condition
-    # (workflow_dispatch OR a successful workflow_run) never matches the
-    # temporary `push` trigger above, so the very deployment that trigger
-    # exists to cause was silently skipped (0 steps ran; GitHub reported the
-    # job "skipped", not failed). Added the push arm so the comments above,
-    # which already promise "any push to this branch deploys production",
-    # are actually true. TEMPORARY, same as the push trigger: remove together
-    # in Task 8 Step 9.
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event.workflow_run.conclusion == 'success' }}
+    # A `workflow_run` event fires whether CI passed or failed, so this gates on
+    # the conclusion: a red `main` is exactly when a deploy costs most. The
+    # dispatch arm is what makes the manual path work, since a manual run has no
+    # `workflow_run` context and would otherwise be filtered out here.
+    #
+    # Worth knowing if you ever add a trigger: an earlier version of this line
+    # listed only those two arms while a third trigger existed, and the result
+    # was not an error -- GitHub reported the job "skipped" with 0 steps, which
+    # reads like success in the runs list. Add a trigger above, add its arm here.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
 
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}

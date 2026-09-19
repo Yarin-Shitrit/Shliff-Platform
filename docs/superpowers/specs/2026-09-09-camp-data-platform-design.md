@@ -333,7 +333,7 @@ Auth mechanism: Auth.js (NextAuth) with a credentials provider and Argon2 passwo
 | Concern | Choice | Rationale |
 |---|---|---|
 | Framework | Next.js (App Router) + TypeScript | One codebase, first-class RTL, deploys on push |
-| Database | Postgres (Neon) | Relational model with JSON columns for raw block grids |
+| Database | Postgres 18 (Railway, `europe-west4`) | Relational model with JSON columns for raw block grids. Neon until 2026-09-19; see `2026-09-19-deployment-vercel-railway-design.md` |
 | ORM | Drizzle | Explicit SQL-shaped schema; readable migrations |
 | XLSX parsing | ExcelJS | MIT-licensed, on npm, exposes cell types, number formats and merged ranges |
 | File storage | Vercel Blob (private) | Uploaded workbooks are private financial records |
