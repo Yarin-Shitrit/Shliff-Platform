@@ -70,7 +70,21 @@ export async function POST(request: Request): Promise<NextResponse> {
     uploadId = existing[0].id;
   } else {
     const storageKey = `uploads/${sha256}.xlsx`;
-    await getStorage().put(storageKey, buffer);
+    try {
+      await getStorage().put(storageKey, buffer);
+    } catch {
+      /**
+       * Two ways this fails: `getStorage()` refuses to guess a driver in
+       * production (`src/lib/storage/index.ts`), and a Blob write can fail on
+       * its own. Either way this file's contract at the top holds — nothing
+       * here may throw, so the failure leaves as a machine code the form maps
+       * to Hebrew, never as an HTML error page the client cannot parse.
+       *
+       * 503, not 500: the bytes are fine and the request was valid: what is
+       * unavailable is storage.
+       */
+      return NextResponse.json({ error: 'storage unavailable' }, { status: 503 });
+    }
 
     const [row] = await db.insert(uploads).values({
       filename: file.name,

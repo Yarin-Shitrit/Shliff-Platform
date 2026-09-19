@@ -95,8 +95,13 @@ function blobStorage(): Storage {
  *
  * Outside production the fallback stays: dev and tests should need no setup.
  * The message is English because its only audience is whoever is holding a
- * deploy log — it is an operator misconfiguration that cannot reach a Hebrew
- * screen, since a correctly configured deployment never evaluates this branch.
+ * deploy log. This branch *is* reachable on the live upload path — it is not
+ * confined to a dev-only tool like `seed.ts`, which `actions.ts` already
+ * refuses to run in production before ever calling here. `route.ts:73` calls
+ * `getStorage()` unguarded, and it is that route's job — not this function's —
+ * to catch the throw and turn it into a machine code the upload form maps to
+ * Hebrew, so this English text stays in logs and never becomes user-facing
+ * copy.
  */
 export function getStorage(): Storage {
   const driver = process.env.STORAGE_DRIVER;
