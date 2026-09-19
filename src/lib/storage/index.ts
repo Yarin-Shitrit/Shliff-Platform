@@ -97,11 +97,13 @@ function blobStorage(): Storage {
  * The message is English because its only audience is whoever is holding a
  * deploy log. This branch *is* reachable on the live upload path — it is not
  * confined to a dev-only tool like `seed.ts`, which `actions.ts` already
- * refuses to run in production before ever calling here. `route.ts:73` calls
- * `getStorage()` unguarded, and it is that route's job — not this function's —
- * to catch the throw and turn it into a machine code the upload form maps to
- * Hebrew, so this English text stays in logs and never becomes user-facing
- * copy.
+ * refuses to run in production before ever calling here. `route.ts` wraps its
+ * `getStorage().put(...)` call in a `try`/`catch` that turns this throw into
+ * the machine code `'storage unavailable'` (503), and the upload form maps
+ * that to Hebrew — so this English text stays in logs and never becomes
+ * user-facing copy. The guard belongs to the route rather than to this
+ * function: that is what lets `route.ts` honour the "nothing here may throw"
+ * contract in its own header.
  */
 export function getStorage(): Storage {
   const driver = process.env.STORAGE_DRIVER;
