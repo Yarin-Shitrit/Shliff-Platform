@@ -64,6 +64,13 @@
       "when": 1789764720569,
       "tag": "0008_legal_sharon_carter",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789852684829,
+      "tag": "0009_wealthy_emma_frost",
+      "breakpoints": true
     }
   ]
 }
