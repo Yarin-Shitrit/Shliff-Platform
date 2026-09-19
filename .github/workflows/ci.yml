@@ -82,3 +82,75 @@ jobs:
           path: vitest-report.json
           if-no-files-found: warn
           retention-days: 14
+
+  # `next build` had never run outside a developer's Mac. Two failure modes it
+  # is here to catch, both of which pass every other check in this workflow:
+  #   argon2 is a native module (node-gyp-build + a prebuilds/ tree). A bundle
+  #     built on Apple silicon carries darwin-arm64 and 500s every sign-in on
+  #     Vercel's Linux runtime, with a green build.
+  #   the output-file tracer resolves differently on a case-sensitive
+  #     filesystem, and next.config.ts leans on it to keep
+  #     docs/reference-data/ out of every traced route.
+  # It does not deploy. Deployment is .github/workflows/deploy.yml, which
+  # builds its own copy through `vercel build`.
+  build:
+    name: next build (linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # Same reason as the verify job: src/db/index.ts reads DATABASE_URL at
+      # import time and every route reaches it through src/lib/auth/config.ts,
+      # so the build needs the variable to exist. Nothing connects to it --
+      # every admin page is dynamic behind requireAdmin().
+      DATABASE_URL: postgres://ci:ci@127.0.0.1:5432/ci
+      AUTH_SECRET: ci-not-a-real-secret
+      STORAGE_DRIVER: local
+      LOCAL_STORAGE_DIR: ./.uploads
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build
+        run: npx next build
+
+      - name: Prove the real workbooks are not in the build output
+        # next.config.ts excludes docs/reference-data/ from every traced route
+        # via the global '/*' key. This asserts the exclusion actually held.
+        #
+        # Checking file PATHS alone would be an instrument that always agrees:
+        # a non-standalone `next build` never copies traced files into .next,
+        # it only LISTS them in .nft.json trace manifests. So a path check
+        # passes even with outputFileTracingExcludes deleted outright. The
+        # manifests' contents are the oracle that can actually fail.
+        run: |
+          set -euo pipefail
+
+          manifests=$(find .next -name '*.nft.json' | wc -l | tr -d ' ')
+          echo "trace manifests found: $manifests"
+          if [ "$manifests" -eq 0 ]; then
+            echo "no .nft.json manifests — this check cannot prove anything."
+            echo "Find what this Next version names its trace files before trusting a green result."
+            exit 1
+          fi
+
+          if grep -rl 'reference-data' $(find .next -name '*.nft.json') 2>/dev/null | head -1 | grep -q .; then
+            echo "docs/reference-data/ is listed in a trace manifest — it would ship in a function bundle"
+            grep -rl 'reference-data' $(find .next -name '*.nft.json') | head -5
+            exit 1
+          fi
+          echo "no reference-data in any trace manifest"
+
+          # Belt and braces: no copied file either.
+          if find .next -path '*reference-data*' -print -quit | grep -q .; then
+            echo "a reference-data path exists under .next"
+            exit 1
+          fi
+          echo "no reference-data paths under .next"
