@@ -107,10 +107,36 @@ jobs:
           echo "### Deployed" >> "$GITHUB_STEP_SUMMARY"
           echo "$URL" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Prove the workbooks are not in what was uploaded
+      - name: Prove the workbooks are not traced into the build
+        # `find .vercel/output -path '*reference-data*'` used to live here. It
+        # could not fail: .vercel/output holds no trace manifests and never
+        # receives docs/reference-data/ whether the exclusion exists or not.
+        # Measured with a matched pair -- neutralising outputFileTracingExcludes
+        # and rebuilding leaves that find at 0, while the .next manifests below
+        # go from 0 hits to 1 (the /upload route). So this checks .next, which
+        # `vercel build` also produces, and which ci.yml already uses.
         run: |
+          set -euo pipefail
+
+          manifests=$(find .next -name '*.nft.json' | wc -l | tr -d ' ')
+          echo "trace manifests found: $manifests"
+          if [ "$manifests" -eq 0 ]; then
+            echo "no .nft.json manifests -- this check proved nothing."
+            echo "Find what this Next version names its trace files before trusting a green result."
+            exit 1
+          fi
+
+          if grep -rl 'docs/reference-data' $(find .next -name '*.nft.json') 2>/dev/null | head -1 | grep -q .; then
+            echo "docs/reference-data/ is listed in a trace manifest -- it would ship in a function bundle"
+            grep -rl 'docs/reference-data' $(find .next -name '*.nft.json') | head -5
+            exit 1
+          fi
+          echo "no reference-data in any trace manifest"
+
+          # Kept, but honestly labelled: this one is belt-and-braces, not proof.
+          # It has never been observed to fail, including with the exclusion off.
           if find .vercel/output -path '*reference-data*' -print -quit | grep -q .; then
-            echo "docs/reference-data/ is inside .vercel/output — it would have been uploaded"
+            echo "a reference-data path exists in .vercel/output"
             exit 1
           fi
           echo "no reference-data paths in .vercel/output"
