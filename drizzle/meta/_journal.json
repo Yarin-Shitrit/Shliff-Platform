@@ -57,6 +57,13 @@
       "when": 1789678612144,
       "tag": "0007_tiny_sabretooth",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789764720569,
+      "tag": "0008_legal_sharon_carter",
+      "breakpoints": true
     }
   ]
 }

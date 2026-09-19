@@ -37,6 +37,12 @@ export const sheets = pgTable('sheets', {
   /** True on the chosen copy when the same sheet name appears in more than
    *  one upload for the same season. Null means undecided. */
   authoritative: boolean('authoritative'),
+  /** When a lead marked this sheet as history — a closed season nobody can
+   *  act on — set by hand, mirroring `blocks.confirmedAt`/`confirmedBy`.
+   *  Orthogonal to `seasonId`/`authoritative` (R45): retiring neither clears
+   *  nor requires either, and setting either does not un-retire. */
+  retiredAt: timestamp('retired_at', { withTimezone: true }),
+  retiredBy: text('retired_by'),
 });
 
 export const blocks = pgTable('blocks', {

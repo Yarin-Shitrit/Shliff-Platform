@@ -69,6 +69,30 @@ export interface RetainedRow {
   reason: string;
 }
 
+/**
+ * A confirmed block `promoteBlock` did not promote or refuse this run, and
+ * why — currently only a retired sheet (R43). Also what a bulk run
+ * (`promoteAll`, `promoteAllGated`) reports for a block it skipped, whether
+ * that skip bubbled up from `promoteBlock` (a retired sheet) or was decided
+ * by the bulk run's own gate before ever calling it (`promoteAllGated`'s
+ * already-owns-rows check). One shape either way — a second, parallel skip
+ * vocabulary is how a register ends up unable to explain itself.
+ */
+export interface SkippedBlock {
+  blockId: string;
+  /** Machine-readable, so a caller can branch without string-matching the
+   *  Hebrew `reason`. */
+  code: 'already-promoted' | 'sheet-retired';
+  /** For `already-promoted`, the count from `promotedRowCounts` that decided
+   *  the skip — not recomputed. For `sheet-retired`, the block's current row
+   *  count, reported for context (so a lead can see nothing was lost), but
+   *  not itself the reason for the skip: retirement skips a block whether it
+   *  owns zero rows or many. */
+  rowCount: number;
+  /** Hebrew, shown to a lead in the register. */
+  reason: string;
+}
+
 export interface PromotionResult {
   blockId: string;
   archetype: BlockArchetype;
@@ -83,6 +107,18 @@ export interface PromotionResult {
    *  something references them. Filled on a dry run too. A plain array, so
    *  results for several blocks concatenate. */
   retained: RetainedRow[];
+  /**
+   * Set instead of writing, refusing, deleting, or retaining anything, when
+   * `promoteBlock` skipped this block rather than promoting or refusing it
+   * (R43: a retired sheet). `written`, `refused`, `deleted`, and `retained`
+   * are always at their empty/zero defaults whenever this is set — a skip
+   * touches nothing, which is the whole point of it being a skip and not a
+   * refusal (a refusal releases the block's rows; see `promoteWithin` in
+   * promote.ts). Undefined for every ordinary promote-or-refuse outcome, so
+   * existing callers that only ever read `written`/`refused`/etc. keep
+   * working unchanged.
+   */
+  skip?: SkippedBlock;
 }
 
 export interface PromoteContext {
