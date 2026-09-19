@@ -27,6 +27,52 @@ export interface SheetEligibility {
 }
 
 /**
+ * R54's guard: a sheet that already owns ≥1 promoted row (in any of the
+ * four target tables — W6) refuses ANY change to its season, in either
+ * direction, including clearing to `null` and including setting a season on
+ * a sheet that currently has none.
+ *
+ * That last case is the one worth spelling out: `budgetRow` requires a
+ * season (`budget_lines.season_id` is `NOT NULL`), but `ledgerRow` and
+ * obligations do not — a block promotes ledger/obligation rows with a
+ * `null` season and nothing ever backfills it. So "the sheet has no season
+ * yet" does NOT mean "it owns no rows", and a season-less sheet that already
+ * owns promoted rows is exactly as stale-making to re-label as one that has
+ * a season already.
+ *
+ * Why refuse instead of re-tagging the rows to match: the promoted rows'
+ * seasons are derived from the workbook via the sheet, and silently moving
+ * money between years as a side effect of a label change is exactly the
+ * silent mutation this platform exists to refuse. The honest sequence is
+ * release the rows, relabel the sheet, then re-promote — this guard only
+ * forces that order.
+ *
+ * This is the fix for the defect the retirement review found: without it,
+ * moving or clearing an authoritative, already-promoted sheet's season made
+ * `conflicts()` stop seeing its same-named rival as a contest, so the rival
+ * read `eligible` with no authority action at all and promoting it INSERTed
+ * a second copy of the same money (R54).
+ *
+ * A no-op (setting the season it already has) is allowed even when the
+ * sheet owns rows — nothing about the stored data would change — and any
+ * change is allowed on a sheet that owns no rows, exactly today's
+ * behaviour.
+ */
+async function refuseIfSheetOwnsPromotedRows(db: AnyDb, sheetId: string): Promise<void> {
+  const ownBlocks = await db.select({ id: blocks.id }).from(blocks)
+    .where(eq(blocks.sheetId, sheetId));
+  if (ownBlocks.length === 0) return;
+
+  const owned = await promotedRowCounts(db, ownBlocks.map((b) => b.id));
+  if (owned.size === 0) return;
+
+  throw new Error(
+    'אי אפשר לשנות את העונה של גיליון שיש לו שורות מקודמות — קודם צריך לשחרר את השורות '
+    + 'המקודמות של הגיליון, ורק אז לשנות עונה ולקדם מחדש',
+  );
+}
+
+/**
  * Clearing the season (`null`) also clears authority. Otherwise a decision
  * made under one season would survive un-labelling and silently re-apply if
  * the sheet is later labelled into a different season — the same "which
@@ -37,13 +83,23 @@ export interface SheetEligibility {
  * quiet alternative is worse than `setSheetAuthority`'s Hebrew refusal
  * below: a lead sets a season, nothing happens, and there is no error to
  * read at all.
+ *
+ * Refuses instead (R54, see `refuseIfSheetOwnsPromotedRows`) when the sheet
+ * already owns ≥1 promoted row AND the requested `seasonId` differs from
+ * the current one. Checked, and thrown, before the UPDATE runs — a refused
+ * call must not partially apply, so a sheet that owns rows keeps both its
+ * season and its authority exactly as they were.
  */
 export async function setSheetSeason(
   db: AnyDb, sheetId: string, seasonId: string | null,
 ): Promise<void> {
-  const [sheet] = await db.select({ id: sheets.id }).from(sheets)
+  const [sheet] = await db.select({ id: sheets.id, seasonId: sheets.seasonId }).from(sheets)
     .where(eq(sheets.id, sheetId));
   if (!sheet) throw new Error(`unknown sheet ${sheetId}`);
+
+  if (seasonId !== sheet.seasonId) {
+    await refuseIfSheetOwnsPromotedRows(db, sheetId);
+  }
 
   await db.update(sheets)
     .set(seasonId === null ? { seasonId, authoritative: null } : { seasonId })
