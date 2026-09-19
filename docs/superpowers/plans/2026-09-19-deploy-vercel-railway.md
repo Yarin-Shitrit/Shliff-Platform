@@ -794,6 +794,59 @@ docker exec -e U="$RAILWAY_URL" shliff-pg psql "$U" -tAc \
 
 Expected: still `persons=25`.
 
+- [ ] **Step 11: Replace the two assertions in `src/db/index.ts` with measurements**
+
+Task 2's review approved the client options but flagged that two of their justifications are asserted rather than checked. Railway now exists, so they can be measured. **Neither fails loudly if wrong at the wrong moment — one exhausts connections under load, the other breaks every query — so measure both before anything deploys.**
+
+First, the connection ceiling the `max: 3` comment appeals to:
+
+```sh
+docker exec -e U="$RAILWAY_URL" shliff-pg psql "$U" -tAc \
+  "select 'max_connections='||setting from pg_settings where name='max_connections'"
+docker exec -e U="$RAILWAY_URL" shliff-pg psql "$U" -tAc \
+  "select 'reserved='||setting from pg_settings where name='superuser_reserved_connections'"
+```
+
+`src/db/index.ts` claims twenty warm instances at `max: 3` sit at sixty sockets, "inside Railway's default limit". **Edit that comment to cite the number you just read**, and note the headroom left for a developer's own `psql`, a migration run, and the reserved connections. If the real ceiling makes sixty uncomfortable, lower `max` and say why in the same comment — do not leave a number in place that the measurement contradicts.
+
+Second, the `prepare: false` omission — by the review's reckoning the highest-risk assumption in the whole task, and the one whose symptom is *every query failing*. A `psql` query does not exercise it: postgres.js's named prepared statements are what a transaction-mode pooler rejects, so the test has to go through postgres.js itself, against the real proxy.
+
+```sh
+DATABASE_URL="$RAILWAY_URL" node --input-type=module -e "
+import postgres from 'postgres';
+// Same options src/db/index.ts builds for a remote host.
+const sql = postgres(process.env.DATABASE_URL, {
+  ssl: 'require', max: 3, idle_timeout: 20, connect_timeout: 10,
+});
+try {
+  // .prepare() forces a NAMED prepared statement — the exact thing PgBouncer
+  // and Supavisor reject in transaction mode. Run it twice: the second call
+  // reuses the cached statement, which is where a pooler actually fails.
+  const q = sql.prepare('shliff_prepare_probe');
+  const a = await sql\`select count(*)::int as n from persons\`.execute();
+  const b = await sql\`select count(*)::int as n from persons\`.execute();
+  console.log('prepared statements OK — persons =', a[0].n, '/', b[0].n);
+  console.log('TLS in use:', true);
+} catch (e) {
+  console.error('PREPARED STATEMENT PROBE FAILED:', e.message);
+  console.error('If this mentions a prepared statement, Railway IS fronting a pooler');
+  console.error('and src/db/index.ts needs prepare: false. Fix it before deploying.');
+  process.exitCode = 1;
+} finally { await sql.end(); }
+"
+```
+
+Expected: `prepared statements OK — persons = 25 / 25`. **If it fails on anything mentioning a prepared statement, add `prepare: false` to `src/db/index.ts` for the remote branch, correct the comment that says it is unnecessary, and update `src/db/client-options.test.ts` to assert it** — that comment currently tells the next reader the opposite, and a wrong contract left standing is worse than no comment.
+
+Also confirm TLS is genuinely on rather than merely requested:
+
+```sh
+docker exec -e U="$RAILWAY_URL" shliff-pg psql "$U" -tAc \
+  "select 'ssl='||ssl, version from pg_stat_ssl join pg_stat_activity using (pid) where pid = pg_backend_pid()"
+```
+
+Expected: `ssl=t` and a TLS version. `ssl=f` means the connection is in clear text and the camp's financial data is crossing the public internet unencrypted — stop and fix it before any further step.
+
 ---
 
 ### Task 6: The Vercel project, its Blob store, and its environment
