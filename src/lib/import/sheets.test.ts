@@ -487,15 +487,28 @@ describe('season guard — a sheet that owns promoted rows refuses a season chan
     expect(await budgetTotalAgorot(db, s26)).toBe(58523);
 
     // The lead tries to move a's season now that it owns a promoted row.
-    await expect(setSheetSeason(db, a, s25)).rejects.toThrow();
+    // Swallowed, not `.rejects.toThrow()` — a version of this test that
+    // stops here the moment the guard fails to throw would never reach the
+    // total below, so a weakened guard could hide behind an aborted test.
+    // The walkthrough continues either way, and the final total is what
+    // actually catches a re-opened double-count.
+    try {
+      await setSheetSeason(db, a, s25);
+    } catch {
+      // expected with the guard in place — see the dedicated throw/message
+      // tests above for that assertion.
+    }
 
-    // Even after choosing b too, a's rival contest still stands (a's season
-    // never moved), so b's own promotion cannot land a second copy.
+    // Whether or not the move above actually landed, the lead now chooses b
+    // too and tries to promote it — the original defect's exact next step.
     await setSheetAuthority(db, b, true);
     const blockB = await addBudgetBlock(b, '585.23');
     await promoteBlock(db, blockB, { dryRun: false, recordedBy: 'lead@shliff.test' });
 
+    // The assertion that matters: with the guard genuinely blocking a's
+    // season move, a and b still contest each other and b cannot land a
+    // second copy. Without it (mutation 1), a's move succeeds, b reads
+    // uncontested, and this becomes 117,046.
     expect(await budgetTotalAgorot(db, s26)).toBe(58523);
-    expect(await budgetTotalAgorot(db, s26)).not.toBe(117046);
   });
 });
