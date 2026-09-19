@@ -1628,3 +1628,36 @@ with someone competent.
 **Reopen this if** a per-row veto lands (Wave 3's shape), or if the promoter
 stops fabricating from summary sub-tables — either removes the remaining
 objection. Neither has happened.
+
+### A40a — CORRECTION: the bindings are declared and unresolved, and regenerating does not fix it
+
+A40 said the lockfile "contains none of the fifteen platform bindings — no
+`@rolldown/binding-darwin-arm64` and no sibling." **That is wrong, and it was my
+correction of someone else's accurate description.** Measured properly:
+
+- `node_modules/rolldown` **declares all fifteen** on its `optionalDependencies`.
+- **None of the fifteen has its own package entry**, so none carries a `resolved`
+  URL and `npm ci` installs nothing.
+
+So the original description — *declares fifteen platform bindings and resolves
+none of them* — was right. I looked for package entries, found zero, and reported
+that the declarations did not exist. Two things were true at once and I measured
+only one of them.
+
+**And the fix is not a regeneration.** `npm install --package-lock-only` with the
+same `package.json`, no `.npmrc`, and no `omit` in npm config produces a
+**byte-identical file**. There is no version drift to weigh because there is no
+change at all. Closing this needs a deliberate dependency session — a cleared
+npm cache, a different npm version, or installing the optional deps explicitly —
+not a lockfile refresh, and the CI workaround (`--no-save` install of the
+runner's own binding) stands until then.
+
+**The lesson is the one A40 itself states, turned on its author.** I corrected a
+colleague's accurate note with a confident measurement of the wrong field, and
+they rewrote their ledger to match me. A note that fails verification discredits
+the notes around it — and a *correction* that fails verification does worse,
+because it spends the credibility of the person who was right.
+
+**What would have caught it:** asking where the fifteen were declared, not only
+whether they were resolved. A negative result answers the question you asked,
+and I asked a narrower one than the claim I was checking.
