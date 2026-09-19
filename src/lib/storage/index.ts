@@ -84,6 +84,32 @@ function blobStorage(): Storage {
   };
 }
 
+/**
+ * The driver is chosen explicitly or not at all.
+ *
+ * This used to be `=== 'blob' ? blobStorage() : localStorage()`, which meant
+ * every typo and every unset variable selected the *disk* driver. On Vercel
+ * the disk is ephemeral, so the camp's fee workbook would upload, report
+ * success, and vanish with the instance — the system guessing, and guessing
+ * wrong, about real financial records.
+ *
+ * Outside production the fallback stays: dev and tests should need no setup.
+ * The message is English because its only audience is whoever is holding a
+ * deploy log — it is an operator misconfiguration that cannot reach a Hebrew
+ * screen, since a correctly configured deployment never evaluates this branch.
+ */
 export function getStorage(): Storage {
-  return process.env.STORAGE_DRIVER === 'blob' ? blobStorage() : localStorage();
+  const driver = process.env.STORAGE_DRIVER;
+  if (driver === 'blob') return blobStorage();
+  if (driver === 'local') return localStorage();
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      `STORAGE_DRIVER must be "blob" or "local" in production; got ` +
+        `${driver ? `"${driver}"` : 'no value'}. Uploads would otherwise be ` +
+        `written to an ephemeral filesystem and silently lost.`,
+    );
+  }
+
+  return localStorage();
 }

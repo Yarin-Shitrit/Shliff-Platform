@@ -119,3 +119,44 @@ describe('blob storage driver', () => {
     await expect(storage.get('cached/key.xlsx')).rejects.toThrow(/304/);
   });
 });
+
+describe('driver selection', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('refuses to pick a driver in production when STORAGE_DRIVER is unset', () => {
+    // The old behaviour was to fall through to the disk driver. On Vercel that
+    // writes to an ephemeral filesystem: the upload reports success and the
+    // workbook is gone with the instance.
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('STORAGE_DRIVER', '');
+    expect(() => getStorage()).toThrow(/STORAGE_DRIVER/);
+  });
+
+  it('names the value it was given, so a typo is diagnosable', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('STORAGE_DRIVER', 'Blob');
+    expect(() => getStorage()).toThrow(/"Blob"/);
+  });
+
+  it('accepts local in production when it is asked for explicitly', () => {
+    // Explicit is the whole point: a deliberate choice is honoured, a guess is
+    // not. Someone self-hosting with a persistent volume is not a mistake.
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('STORAGE_DRIVER', 'local');
+    expect(() => getStorage()).not.toThrow();
+  });
+
+  it('accepts blob in production', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('STORAGE_DRIVER', 'blob');
+    expect(() => getStorage()).not.toThrow();
+  });
+
+  it('still falls back to disk outside production, so dev and tests need no setup', () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('STORAGE_DRIVER', '');
+    expect(() => getStorage()).not.toThrow();
+  });
+});
