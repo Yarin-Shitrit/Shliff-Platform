@@ -843,17 +843,14 @@ Set the region to **fra1** in the project's Settings → Functions → Function 
 
 - [ ] **Step 4: Create the Blob store**
 
-```sh
-vercel blob --help
-```
-
-If the CLI exposes a store command, use it; otherwise create the store in the dashboard under Storage → Blob, named `shliff-workbooks`, and copy its read-write token.
+Verified against CLI 54.18.6: the subcommand is **`create-store`**, and `vercel blob` also offers `list-stores`, `get-store` and `list`.
 
 ```sh
-vercel blob store add shliff-workbooks    # only if `vercel blob --help` lists it
+vercel blob create-store shliff-workbooks
+vercel blob list-stores
 ```
 
-Creating the store through the dashboard while the project is linked may add `BLOB_READ_WRITE_TOKEN` to the project automatically. Step 6 checks whether it did rather than assuming either way.
+Expected: the store is created and then listed. Creating a store against a linked project may add `BLOB_READ_WRITE_TOKEN` to the project's environment automatically; Step 6 checks whether it did rather than assuming either way. If it did not, `vercel blob get-store shliff-workbooks` surfaces the token to add by hand.
 
 - [ ] **Step 5: Set the environment variables, production scope only**
 
