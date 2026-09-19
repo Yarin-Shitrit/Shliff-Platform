@@ -26,6 +26,13 @@ cd Shliff-Platform
 npm install
 ```
 
+> **This whole section is due for deletion.** The lockfile was regenerated and
+> verified green on `feat/ui-01-foundation` at `724106e` — 203 files, 2606
+> tests, zero failed — so a fresh clone of that branch runs its own tests. It
+> is still true of `main` until Phase 4 merges. **When it does, delete this
+> section and the binding-install step in `.github/workflows/ci.yml`**; a
+> warning about a fixed problem costs the next person a search.
+
 **If `npm install` leaves vitest unable to start**, with `Cannot find native
 binding` and `Cannot find module '@rolldown/binding-...'`, the lockfile is at
 fault, not your machine. `package-lock.json` declares rolldown's fifteen
