@@ -1,0 +1,38 @@
+/* The boundary's own layout. Tokens only, logical properties throughout
+   (A10) — this screen is drawn in the same language as the ones it stands
+   in for. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-inline-size: 640px;
+}
+
+.digest {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+/* Selectable, monospaced, and `dir="ltr"` by way of the `.num` convention:
+   a digest is an opaque identifier a lead pastes into a message, and it must
+   survive being read out of an RTL paragraph unchanged. */
+.code {
+  direction: ltr;
+  display: inline-block;
+  padding-inline: 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12.5px;
+  user-select: all;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
