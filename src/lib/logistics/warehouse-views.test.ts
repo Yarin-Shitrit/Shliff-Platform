@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseWarehouseQuery, warehouseHref, categoryHref, newItemHref, sortHref,
-  WAREHOUSE_PATH, NEW_ITEM_ACT,
+  warehouseExportHref, WAREHOUSE_PATH, NEW_ITEM_ACT,
 } from './warehouse-views';
 
 /**
@@ -115,5 +115,24 @@ describe('sorting, which is a link and not a click handler', () => {
   it('reverses the column that is already sorted, rather than re-applying it', () => {
     expect(sortHref({ sort: 'name', dir: 'asc' }, 'name')).toContain('dir=desc');
     expect(sortHref({ sort: 'name', dir: 'desc' }, 'name')).toContain('dir=asc');
+  });
+});
+
+describe('the export, which is the same list as a file', () => {
+  it('carries the filters the screen is showing', () => {
+    // A button beside the filters that exported everything would be a
+    // different list under the same name.
+    const href = warehouseExportHref({ view: 'attention', cat: 'kitchen', q: 'סיר' });
+    expect(href.startsWith(`${WAREHOUSE_PATH}/export?`)).toBe(true);
+    expect(href).toContain('view=attention');
+    expect(href).toContain('cat=kitchen');
+  });
+
+  it('never carries an open drawer into a file', () => {
+    expect(warehouseExportHref({ peek: 'abc' })).not.toContain('peek=');
+  });
+
+  it('is the bare path when nothing is filtered', () => {
+    expect(warehouseExportHref({})).toBe(`${WAREHOUSE_PATH}/export`);
   });
 });

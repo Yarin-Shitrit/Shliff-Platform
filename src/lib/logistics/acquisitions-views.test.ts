@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   parseAcquisitionQuery, acquisitionsHref, acquisitionHref, arrivalHref,
   newAcquisitionHref, acquisitionSortHref,
-  ACQUISITIONS_PATH, NEW_ACQUISITION_ACT, ARRIVAL_ACT,
+  acquisitionsExportHref, ACQUISITIONS_PATH, NEW_ACQUISITION_ACT, ARRIVAL_ACT,
 } from './acquisitions-views';
 
 /**
@@ -102,5 +102,18 @@ describe('every link carries the season', () => {
 
   it('starts at the path when there is nothing to carry', () => {
     expect(acquisitionsHref({}, {})).toBe(ACQUISITIONS_PATH);
+  });
+});
+
+describe('the export', () => {
+  it('carries the season, so the file is one year and says which', () => {
+    const href = acquisitionsExportHref({ season: 's1', view: 'ordered' });
+    expect(href.startsWith(`${ACQUISITIONS_PATH}/export?`)).toBe(true);
+    expect(href).toContain('season=s1');
+    expect(href).toContain('view=ordered');
+  });
+
+  it('never carries an open drawer into a file', () => {
+    expect(acquisitionsExportHref({ season: 's1', peek: 'a1' })).not.toContain('peek=');
   });
 });

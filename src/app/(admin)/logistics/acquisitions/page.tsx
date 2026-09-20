@@ -11,7 +11,7 @@ import {
 import { listWarehouse } from '@/lib/logistics/warehouse';
 import {
   parseAcquisitionQuery, acquisitionsHref, arrivalHref, newAcquisitionHref,
-  acquisitionSortHref, ACQUISITION_SORTS,
+  acquisitionSortHref, acquisitionsExportHref, ACQUISITION_SORTS,
   type RawParams, type AcquisitionView, type AcquisitionSort,
 } from '@/lib/logistics/acquisitions-views';
 import { itemHref, WAREHOUSE_PATH } from '@/lib/logistics/warehouse-views';
@@ -168,10 +168,16 @@ export default async function AcquisitionsPage(
         crumbs={[{ label: 'לוגיסטיקה', href: '/logistics' }, { label: 'רכש' }]}
         chip={<SeasonChip seasonName={current.name} />}
         actions={(
-          <ButtonLink tone="primary" size="sm" href={addHref}>
-            <Icon name="plus" size={14} />
-            הוספת פריט לרכש
-          </ButtonLink>
+          <>
+            <ButtonLink size="sm" href={acquisitionsExportHref(params)} download>
+              <Icon name="download" size={14} />
+              ייצוא
+            </ButtonLink>
+            <ButtonLink tone="primary" size="sm" href={addHref}>
+              <Icon name="plus" size={14} />
+              הוספת פריט לרכש
+            </ButtonLink>
+          </>
         )}
       />
 

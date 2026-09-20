@@ -5,7 +5,7 @@ import { requireAdmin } from '@/lib/auth/guard';
 import { listWarehouse, warehouseCounts, itemById } from '@/lib/logistics/warehouse';
 import {
   parseWarehouseQuery, warehouseHref, categoryHref, newItemHref, sortHref,
-  WAREHOUSE_SORTS,
+  warehouseExportHref, WAREHOUSE_SORTS,
   type RawParams, type WarehouseView, type WarehouseSort,
 } from '@/lib/logistics/warehouse-views';
 import { ACQUISITIONS_PATH } from '@/lib/logistics/acquisitions-views';
@@ -108,10 +108,20 @@ export default async function WarehousePage(
         crumbs={[{ label: 'לוגיסטיקה', href: '/logistics' }, { label: 'מחסן' }]}
         chip={<ScopeChip icon="layers">כלל־קאמפי · לא משויך לשנה</ScopeChip>}
         actions={(
-          <ButtonLink tone="primary" size="sm" href={addHref}>
-            <Icon name="plus" size={14} />
-            הוספת פריט
-          </ButtonLink>
+          <>
+            {/* `download`, because the destination is a file and not a page:
+                without it the client router fetches the Route Handler's CSV as
+                an RSC payload and nothing reaches the reader's downloads
+                folder. The kit's `ButtonLink` carries the prop for this. */}
+            <ButtonLink size="sm" href={warehouseExportHref(params)} download>
+              <Icon name="download" size={14} />
+              ייצוא
+            </ButtonLink>
+            <ButtonLink tone="primary" size="sm" href={addHref}>
+              <Icon name="plus" size={14} />
+              הוספת פריט
+            </ButtonLink>
+          </>
         )}
       />
 

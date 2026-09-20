@@ -146,3 +146,16 @@ export function sortHref(params: RawParams, sort: WarehouseSort): string {
   const dir = active && one(params.dir) !== 'desc' ? 'desc' : 'asc';
   return warehouseHref(params, { sort, dir });
 }
+
+/**
+ * The ייצוא button's destination: the same filters, as a file.
+ *
+ * Built from `warehouseHref` rather than from the params directly, so the
+ * export and the screen can never disagree about what "the current view"
+ * means — which is the whole risk of an export button, and the reason a file
+ * that quietly held the unfiltered table would be worse than no button.
+ */
+export function warehouseExportHref(params: RawParams): string {
+  const [, qs] = warehouseHref(params, {}).split('?');
+  return qs ? `${WAREHOUSE_PATH}/export?${qs}` : `${WAREHOUSE_PATH}/export`;
+}

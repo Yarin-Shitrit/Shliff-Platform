@@ -136,3 +136,9 @@ export function acquisitionSortHref(params: RawParams, sort: AcquisitionSort): s
   const dir = active && one(params.dir) !== 'desc' ? 'desc' : 'asc';
   return acquisitionsHref(params, { sort, dir });
 }
+
+/** The same filters and the same season, as a file. */
+export function acquisitionsExportHref(params: RawParams): string {
+  const [, qs] = acquisitionsHref(params, {}).split('?');
+  return qs ? `${ACQUISITIONS_PATH}/export?${qs}` : `${ACQUISITIONS_PATH}/export`;
+}
