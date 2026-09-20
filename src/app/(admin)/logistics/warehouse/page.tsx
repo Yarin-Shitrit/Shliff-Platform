@@ -8,6 +8,7 @@ import {
   WAREHOUSE_SORTS,
   type RawParams, type WarehouseView, type WarehouseSort,
 } from '@/lib/logistics/warehouse-views';
+import { ACQUISITIONS_PATH } from '@/lib/logistics/acquisitions-views';
 import { CATEGORY_LABELS } from '@/lib/logistics/labels';
 import type { LogisticsCategory } from '@/db/schema/logistics';
 import { StatTile } from '@/components/ui/stat-tile';
@@ -128,10 +129,18 @@ export default async function WarehousePage(
         </div>
       </div>
 
+      {/*
+        The artboard puts a fourth tile here, `חסרים ונמצאים ברכש`. It is not
+        built, and deliberately: that number belongs to one season, and this
+        screen has just said in the line above that it belongs to none.
+        Drawing a season's figure under that sentence would contradict it on
+        the same screen. The link goes to רכש, where the number is in scope.
+      */}
       <Banner
         tone="neutral"
         headline="המחסן אינו משויך לשנה."
         detail="ציוד שנקנה בשנה אחת עדיין שייך לקאמפ בשנה הבאה, ולכן הרשימה הזו זהה בכל שנה. רק רשימת הרכש מתחלפת."
+        action={{ label: 'מעבר לרכש', href: ACQUISITIONS_PATH }}
       />
 
       <div className={styles.tiles}>

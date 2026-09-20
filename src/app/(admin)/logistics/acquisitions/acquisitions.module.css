@@ -1,0 +1,105 @@
+/* Structure is drawn with 1px borders and tokens only; shadows are reserved
+   for overlays (A7). Logical properties throughout (A10). */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.sub {
+  margin-block-start: 2px;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.toolbar {
+  display: flex;
+  min-inline-size: 0;
+}
+
+.toolbar > * { flex: 1; min-inline-size: 0; }
+
+/* A name and its avatar on one line, in the reading direction. */
+.person {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The source chip under an amount: its own line, so the number keeps the
+   tabular alignment its column depends on (A10). */
+.cellSource {
+  display: block;
+  margin-block-start: 2px;
+}
+
+.rowActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The status menu's panel: four states stacked, each a full-width target. */
+.menu {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 180px;
+}
+
+.menu > * { justify-content: flex-start; }
+
+/* The drawers' forms. */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+/* The kit has no control for `type="number"` — TextInput hard-codes
+   type="text" — and R1 forbids reaching for a component library, so a count
+   box is a plain input drawn to match. Field still owns its label, hint and
+   aria wiring. */
+.plainInput {
+  inline-size: 100%;
+  min-block-size: 36px;
+  padding-inline: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink-1);
+  /* 16px so iOS does not zoom the page on focus. */
+  font-size: 16px;
+}
+
+.formError {
+  margin: 0;
+  color: var(--bad);
+  font-size: 13px;
+}
+
+/* Phone: one column throughout, and targets that clear 44px (A8, B7). */
+@media (max-width: 768px) {
+  .tiles { grid-template-columns: 1fr; }
+  .pair { grid-template-columns: 1fr; }
+  .plainInput { min-block-size: 44px; }
+}
