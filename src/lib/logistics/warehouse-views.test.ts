@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  parseWarehouseQuery, warehouseHref, categoryHref, WAREHOUSE_PATH,
+  parseWarehouseQuery, warehouseHref, categoryHref, newItemHref, sortHref,
+  WAREHOUSE_PATH, NEW_ITEM_ACT,
 } from './warehouse-views';
 
 /**
@@ -72,5 +73,47 @@ describe('warehouse hrefs', () => {
     // The peeked row may not be in the new result set, and a drawer over a row
     // that is no longer listed is a dead end.
     expect(warehouseHref({ peek: 'abc' }, { cat: 'living' })).not.toContain('peek=');
+  });
+});
+
+describe('the create drawer, which has no record to peek at', () => {
+  it('opens on ?act= rather than on a second boolean param', () => {
+    // §5 A3: a create drawer is `?act=<verb>` with no `peek`, and the param
+    // name is the kit's rather than this screen's to spell.
+    expect(newItemHref({})).toContain(`act=${NEW_ITEM_ACT}`);
+  });
+
+  it('keeps the filters the lead was looking at', () => {
+    const href = newItemHref({ cat: 'kitchen', view: 'attention' });
+    expect(href).toContain('cat=kitchen');
+    expect(href).toContain('view=attention');
+  });
+
+  it('closes when the filter changes, exactly as the record drawer does', () => {
+    expect(warehouseHref({ act: NEW_ITEM_ACT }, { cat: 'living' })).not.toContain('act=');
+  });
+
+  it('is not open just because a stray act= arrived in the URL', () => {
+    expect(parseWarehouseQuery({ act: 'whatever' }).creating).toBe(false);
+    expect(parseWarehouseQuery({ act: NEW_ITEM_ACT }).creating).toBe(true);
+  });
+
+  it('yields to a record drawer, because a URL naming both means one of them', () => {
+    // A create drawer has no record; a `peek` names one. Opening the create
+    // form over a row the lead asked to see would lose the row silently.
+    expect(parseWarehouseQuery({ act: NEW_ITEM_ACT, peek: 'abc' }).creating).toBe(false);
+  });
+});
+
+describe('sorting, which is a link and not a click handler', () => {
+  it('sorts by a new column ascending', () => {
+    const href = sortHref({ sort: 'condition', dir: 'asc' }, 'quantity');
+    expect(href).toContain('sort=quantity');
+    expect(href).toContain('dir=asc');
+  });
+
+  it('reverses the column that is already sorted, rather than re-applying it', () => {
+    expect(sortHref({ sort: 'name', dir: 'asc' }, 'name')).toContain('dir=desc');
+    expect(sortHref({ sort: 'name', dir: 'desc' }, 'name')).toContain('dir=asc');
   });
 });

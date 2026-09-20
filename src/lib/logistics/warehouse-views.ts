@@ -1,4 +1,4 @@
-import { PEEK_PARAM } from '@/components/ui/drawer-url';
+import { ACT_PARAM, PEEK_PARAM } from '@/components/ui/drawer-url';
 import type { LogisticsCategory } from '@/db/schema/logistics';
 
 /**
@@ -24,6 +24,13 @@ const CATEGORIES: readonly LogisticsCategory[] = [
 
 export const WAREHOUSE_PATH = '/logistics/warehouse';
 
+/**
+ * The verb behind `?act=`. A create drawer has no record to peek at (§5 A3),
+ * so it is spelled as an action rather than as a second boolean param that
+ * every href builder would then have to remember to clear.
+ */
+export const NEW_ITEM_ACT = 'item';
+
 export interface WarehouseQuery {
   view: WarehouseView;
   q: string;
@@ -31,6 +38,8 @@ export interface WarehouseQuery {
   sort: WarehouseSort;
   dir: 'asc' | 'desc';
   peek: string | null;
+  /** `?act=item` and no `peek`: the drawer that adds an item by hand. */
+  creating: boolean;
 }
 
 export type RawParams = Record<string, string | string[] | undefined>;
@@ -54,6 +63,8 @@ export function parseWarehouseQuery(params: RawParams): WarehouseQuery {
   const rawSort = one(params.sort) as WarehouseSort;
   const rawCat = one(params.cat) as LogisticsCategory;
 
+  const peek = one(params[PEEK_PARAM]) || null;
+
   return {
     view: WAREHOUSE_VIEWS.includes(rawView) ? rawView : 'all',
     q: one(params.q).trim(),
@@ -62,19 +73,28 @@ export function parseWarehouseQuery(params: RawParams): WarehouseQuery {
     // doing before the camp leaves, not for an alphabetical list.
     sort: WAREHOUSE_SORTS.includes(rawSort) ? rawSort : 'condition',
     dir: one(params.dir) === 'desc' ? 'desc' : 'asc',
-    peek: one(params[PEEK_PARAM]) || null,
+    peek,
+    /*
+     * A `peek` wins. A URL naming both a record and the create verb means one
+     * of the two, and the record is the one a lead asked to see by id —
+     * opening a blank form over it would lose that row with nothing on screen
+     * saying so.
+     */
+    creating: peek === null && one(params[ACT_PARAM]) === NEW_ITEM_ACT,
   };
 }
 
 const KEYS = ['view', 'q', 'cat', 'sort', 'dir'] as const;
-type PatchKey = (typeof KEYS)[number] | typeof PEEK_PARAM;
+type PatchKey = (typeof KEYS)[number] | typeof PEEK_PARAM | typeof ACT_PARAM;
 
 /**
  * One param changed, the rest preserved, and any open drawer dropped.
  *
  * The drawer is dropped because the peeked row may not survive the new filter,
  * and a drawer standing over a row that is no longer in the list is a dead end
- * with no way back that a lead would guess.
+ * with no way back that a lead would guess. `act` goes with it: neither drawer
+ * param is in `KEYS`, so neither is copied forward unless the patch asks for
+ * it by name.
  */
 export function warehouseHref(
   params: RawParams,
@@ -108,4 +128,21 @@ export function categoryHref(params: RawParams, category: LogisticsCategory): st
 /** The drawer over one item, per R6: a drawer is a URL. */
 export function itemHref(params: RawParams, id: string): string {
   return warehouseHref(params, { [PEEK_PARAM]: id });
+}
+
+/** The create drawer, with whatever the lead was looking at kept underneath it. */
+export function newItemHref(params: RawParams): string {
+  return warehouseHref(params, { [ACT_PARAM]: NEW_ITEM_ACT });
+}
+
+/**
+ * A column header is a link, because sorting is a server concern (plan `ui-03`
+ * Task 2). Clicking the column that is already sorted reverses it rather than
+ * re-applying it — the second click on a header has a meaning everywhere else
+ * in the world, and refusing to give it one reads as a broken control.
+ */
+export function sortHref(params: RawParams, sort: WarehouseSort): string {
+  const active = (one(params.sort) || 'condition') === sort;
+  const dir = active && one(params.dir) !== 'desc' ? 'desc' : 'asc';
+  return warehouseHref(params, { sort, dir });
 }

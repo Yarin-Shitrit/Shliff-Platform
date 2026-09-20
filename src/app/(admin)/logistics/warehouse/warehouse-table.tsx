@@ -19,6 +19,14 @@ export type WarehouseTableProps = {
   /** Totalled over the filtered set by the page, not over this array's page. */
   shownQuantity: number;
   /**
+   * The per-row control slot. A prop rather than a component this file
+   * reaches for itself: `ConditionMenu` is a client component that writes and
+   * reports through `useToast`, so a table that rendered one unconditionally
+   * could not be rendered anywhere without a `ToastProvider` above it —
+   * including in its own test.
+   */
+  rowActions?: (row: WarehouseRow) => ReactNode;
+  /**
    * What stands in for the body when there is nothing to list. It arrives
    * from the page because only the page knows *why* the list is empty —
    * nothing entered yet, or nothing matching a filter — and E1 exists so
@@ -32,7 +40,7 @@ export type WarehouseTableProps = {
 const DASH = '—';
 
 export function WarehouseTable(
-  { rows, params, shownQuantity, empty }: WarehouseTableProps,
+  { rows, params, shownQuantity, rowActions, empty }: WarehouseTableProps,
 ): ReactElement {
   const columns: ReadonlyArray<TableColumn<WarehouseRow>> = [
     {
@@ -90,11 +98,14 @@ export function WarehouseTable(
       caption="ציוד הקאמפ במחסן"
       columns={columns}
       rows={rows.map((row) => ({ id: row.id, data: row }))}
+      rowActions={rowActions}
+      rowActionsHeader="פעולות"
       totals={[
         { key: 'label', content: 'סך הכול בתצוגה הזו' },
         { key: 'category', content: '' },
         { key: 'quantity', content: shownQuantity, numeric: true },
-        { key: 'rest', content: '', colSpan: 3 },
+        /* Four, not three: `rowActions` adds a column of its own. */
+        { key: 'rest', content: '', colSpan: rowActions === undefined ? 3 : 4 },
       ]}
       totalsLabel="סיכום"
       empty={empty}

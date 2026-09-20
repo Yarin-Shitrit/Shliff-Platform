@@ -61,3 +61,74 @@
   .tiles { grid-template-columns: 1fr; }
   .chip { block-size: 44px; }
 }
+
+/* The item drawer's form. The drawer owns the panel; these are the fields
+   inside it, and the two-up row that keeps category and quantity on one line
+   where there is width for it. */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+/* The kit ships TextInput, MoneyInput, Select, Textarea, Segmented and
+   Checkbox; TextInput hard-codes type="text", so a count box is a plain
+   <input type="number"> drawn to match. R1 forbids reaching for a component
+   library, and the field still gets its label, hint and aria wiring from the
+   kit's Field. */
+.plainInput {
+  inline-size: 100%;
+  min-block-size: 36px;
+  padding-inline: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink-1);
+  /* 16px so iOS does not zoom the page on focus. Suppressing zoom instead
+     would take away the gesture a lead in bright sun actually needs. */
+  font-size: 16px;
+}
+
+.formError {
+  margin: 0;
+  color: var(--bad);
+  font-size: 13px;
+}
+
+@media (max-width: 768px) {
+  .pair { grid-template-columns: 1fr; }
+  .plainInput { min-block-size: 44px; }
+}
+
+/* The condition menu's panel: four states stacked, each a full-width target.
+   The popover supplies the panel; this is only how its children sit in it. */
+.menu {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 180px;
+}
+
+.menu > * { justify-content: flex-start; }
+
+/* The header's action slot, and the bar under the view strip. Both are
+   layout only — the controls inside them are the kit's. */
+.headActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-inline-start: auto;
+}
+
+.toolbar {
+  display: flex;
+  min-inline-size: 0;
+}
+
+.toolbar > * { flex: 1; min-inline-size: 0; }
