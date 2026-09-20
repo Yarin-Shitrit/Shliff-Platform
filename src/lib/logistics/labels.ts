@@ -1,6 +1,7 @@
 import type {
   LogisticsCategory, ItemCondition, AcquisitionSource, AcquisitionStatus,
 } from '@/db/schema/logistics';
+import type { MaterialState } from './build';
 
 /**
  * The library home for every logistics enum label, and deliberately the only
@@ -70,4 +71,29 @@ export const STATUS_TONES: Record<AcquisitionStatus, 'ok' | 'warn' | 'bad' | 'in
   in_review: 'info',
   ordered: 'warn',
   arrived: 'ok',
+};
+
+/**
+ * The fifth map, and the only one whose enum is not in the schema:
+ * `MaterialState` is derived at read time from a material's two links, never
+ * stored (see `build.ts`). It is named here all the same, because the reason
+ * this file exists — one home, `Record<T, string>`, tsc as the exhaustiveness
+ * check — applies to a computed vocabulary exactly as it does to a stored one.
+ *
+ * `במחסן · דורש תיקון` says both halves on purpose. "Needs repair" alone
+ * would send somebody out to buy one, when the camp owns one and it is three
+ * metres away.
+ */
+export const MATERIAL_STATE_LABELS: Record<MaterialState, string> = {
+  in_stock: 'במחסן',
+  needs_repair: 'במחסן · דורש תיקון',
+  obtained: 'הושג',
+  missing: 'צריך להשיג',
+};
+
+export const MATERIAL_STATE_TONES: Record<MaterialState, 'ok' | 'warn' | 'bad' | 'info'> = {
+  in_stock: 'ok',
+  needs_repair: 'warn',
+  obtained: 'info',
+  missing: 'bad',
 };

@@ -1,0 +1,75 @@
+/* Structure is drawn with 1px borders and tokens only; shadows are reserved
+   for overlays (A7). Logical properties throughout (A10). */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.sub {
+  margin-block-start: 2px;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.taskTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The indent is what says "this belongs to the task above it". It is
+   `padding-inline-start`, not `padding-left`: under RTL the nesting has to
+   read from the same edge the text starts at (A10). */
+.materialName {
+  display: inline-block;
+  padding-inline-start: 22px;
+  color: var(--ink-2);
+}
+
+/* The drawer's form. */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.plainInput {
+  inline-size: 100%;
+  min-block-size: 36px;
+  padding-inline: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink-1);
+  /* 16px so iOS does not zoom the page on focus. */
+  font-size: 16px;
+}
+
+.formError {
+  margin: 0;
+  color: var(--bad);
+  font-size: 13px;
+}
+
+@media (max-width: 768px) {
+  .tiles { grid-template-columns: 1fr; }
+  .plainInput { min-block-size: 44px; }
+  /* On a card the indent has no column to hang off, so it goes away rather
+     than nudging the name into the middle of nowhere. */
+  .materialName { padding-inline-start: 0; }
+}
