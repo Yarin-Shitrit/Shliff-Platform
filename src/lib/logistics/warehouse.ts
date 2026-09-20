@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import type { AnyDb } from '@/lib/db-types';
+import { isBlank } from '@/lib/text/normalize';
 import { inventoryItems, type ItemCondition, type LogisticsCategory } from '@/db/schema/logistics';
 import type { WarehouseQuery } from './warehouse-views';
 
@@ -96,7 +97,10 @@ export interface WarehouseCounts {
   shownQuantity: number;
   needsTesting: number;
   needsRepair: number;
+  retired: number;
   total: number;
+  /** The newest edit anywhere in the warehouse; null while it is empty. */
+  lastUpdatedAt: Date | null;
 }
 
 export async function warehouseCounts(db: AnyDb, query: WarehouseQuery): Promise<WarehouseCounts> {
@@ -107,13 +111,20 @@ export async function warehouseCounts(db: AnyDb, query: WarehouseQuery): Promise
     CATEGORIES.map((c) => [c, all.filter((r) => r.category === c).length]),
   ) as Record<LogisticsCategory, number>;
 
+  const newest = all.reduce<Date | null>((latest, row) => {
+    const at = row.updatedAt as Date;
+    return latest === null || at > latest ? at : latest;
+  }, null);
+
   return {
     byCategory,
     shownRows: shown.length,
     shownQuantity: shown.reduce((sum, r) => sum + r.quantity, 0),
     needsTesting: all.filter((r) => r.condition === 'needs_testing').length,
     needsRepair: all.filter((r) => r.condition === 'needs_repair').length,
+    retired: all.filter((r) => r.condition === 'retired').length,
     total: all.length,
+    lastUpdatedAt: newest,
   };
 }
 
@@ -133,5 +144,122 @@ export async function setCondition(
 ): Promise<void> {
   await db.update(inventoryItems)
     .set({ condition, updatedBy: actor, updatedAt: new Date() })
+    .where(eq(inventoryItems.id, id));
+}
+
+/**
+ * What the two drawers on this screen send. Every field is present on both:
+ * a create with a missing field and an edit with a missing field would mean
+ * two different things — "not entered" against "leave it alone" — and one
+ * shape that always carries all six removes the question.
+ */
+export interface ItemInput {
+  name: string;
+  category: LogisticsCategory;
+  quantity: number;
+  locationText: string;
+  condition: ItemCondition;
+  notes: string | null;
+}
+
+/**
+ * The refusals, in one place, so the create drawer and the edit drawer cannot
+ * drift apart on what counts as a valid item.
+ *
+ * English, on purpose. `src/lib` throws for whoever is reading a stack trace;
+ * the Hebrew a lead sees is mapped at the action boundary by
+ * `failure-messages.ts` (R9, integration §5 A7). Every message below is a
+ * stable prefix that file keys on.
+ */
+function validate(input: ItemInput): void {
+  if (isBlank(input.name)) {
+    throw new Error('an inventory item must have a name');
+  }
+  if (isBlank(input.locationText)) {
+    // The arrival drawer says this out loud on screen: an item nobody can
+    // find next year is worth less than a row that was never written, because
+    // the row also claims the camp has one.
+    throw new Error('an inventory item must have a location');
+  }
+  if (!Number.isInteger(input.quantity) || input.quantity < 0) {
+    // Zero is allowed and is not a blank: "we have none of these" is a fact
+    // somebody counted, and the warehouse has to be able to hold it.
+    throw new Error('an inventory quantity must be a whole number, zero or more');
+  }
+  if (!CATEGORIES.includes(input.category)) {
+    throw new Error(`unknown category: ${input.category}`);
+  }
+  if (!(input.condition in CONDITION_RANK)) {
+    throw new Error(`unknown condition: ${input.condition}`);
+  }
+}
+
+/** Trimmed, so a name that differs only by a space is not a second item. */
+function clean(input: ItemInput) {
+  return {
+    name: input.name.trim(),
+    category: input.category,
+    quantity: input.quantity,
+    locationText: input.locationText.trim(),
+    condition: input.condition,
+    notes: input.notes === null || isBlank(input.notes) ? null : input.notes.trim(),
+  };
+}
+
+/** Returns the new row's id, so the caller can link to the item it just made. */
+export async function createItem(
+  db: AnyDb, input: ItemInput, actor: string,
+): Promise<string> {
+  validate(input);
+  /* `.returning()` with no column list: `AnyDb` is a union of the Postgres
+     and PGlite handles, and the projected form resolves to neither side's
+     overload. Every other write in `src/lib` returns the whole row for the
+     same reason. */
+  const [row] = await db.insert(inventoryItems)
+    .values({ ...clean(input), updatedBy: actor })
+    .returning();
+  return row.id;
+}
+
+/**
+ * Checked before it writes. An `update` whose `where` matches no row succeeds
+ * and changes nothing, so without this the drawer would close on a save that
+ * never happened — the exact silent-success failure this platform exists to
+ * remove.
+ */
+export async function updateItem(
+  db: AnyDb, id: string, input: ItemInput, actor: string,
+): Promise<void> {
+  validate(input);
+  if (!(await itemById(db, id))) throw new Error(`unknown inventory item ${id}`);
+
+  await db.update(inventoryItems)
+    .set({ ...clean(input), updatedBy: actor, updatedAt: new Date() })
+    .where(eq(inventoryItems.id, id));
+}
+
+/**
+ * More of something the camp already owns — what the acquisitions screen calls
+ * when a lead says the thing that arrived belongs in an existing box.
+ *
+ * It adds rather than replaces, and it never touches the condition: what
+ * arrived is not necessarily in the same state as what is already on the
+ * shelf, and picking one of the two would be a guess. The arrival drawer asks.
+ */
+export async function addToItem(
+  db: AnyDb, id: string, quantity: number, actor: string,
+): Promise<void> {
+  if (!Number.isInteger(quantity) || quantity < 1) {
+    throw new Error('an arriving quantity must be a whole number, one or more');
+  }
+  const existing = await itemById(db, id);
+  if (!existing) throw new Error(`unknown inventory item ${id}`);
+
+  await db.update(inventoryItems)
+    .set({
+      quantity: existing.quantity + quantity,
+      updatedBy: actor,
+      updatedAt: new Date(),
+    })
     .where(eq(inventoryItems.id, id));
 }

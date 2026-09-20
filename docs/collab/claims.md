@@ -55,7 +55,7 @@ touching `docs/reference-data/`, and pushing or force-pushing shared branches.
 |---|---|---|---|---|
 | @Yarin-Shitrit | Phase 4 UI redesign | merged to `main` | **done** — all twelve plans landed; CI green on `main` at 2640 tests in 203 files, 17m21s | 2026-09-19 |
 | @Yarin-Shitrit | Promotion gate + sheet retirement | merged to `main`; migration `0008` pending | **active** | 2026-09-19 |
-| @josefcohen96 | Logistics | `feat/logistics-schema` | **active** — artboards merged (#5); schema + migration `0009` awaiting review | 2026-09-20 |
+| @josefcohen96 | Logistics | `feat/logistics-warehouse-screen` → `feat/logistics-acquisitions` → `feat/logistics-build` → `feat/logistics-nav` → `feat/logistics-export` | **active** — artboards, schema and migration `0009` merged. Five stacked branches, each on the one before it: the warehouse screen finished, רכש, הקמה, the rail entry, and the two ייצוא route handlers. The last one touches `src/app/(admin)/shell/**` and needs @Yarin-Shitrit's review; the other three are inside the logistics area. Also carries a one-line `.gitignore` negation — `build/` is unanchored and was silently refusing to track `/logistics/build` | 2026-09-20 |
 | @Yarin-Shitrit | Collaboration harness + CI | merged to `main` | done | 2026-09-19 |
 | @Yarin-Shitrit | Hosting on Vercel + Railway | merged to `main` | **live** at <https://shliff-platform.vercel.app>. Vercel project is deliberately **not** Git-connected — do not connect it. Railway Postgres 18 in `europe-west4` holds the real data. Runbook: `docs/deploy.md`. **`drizzle-kit push` is now forbidden alongside `migrate`** — see the runbook §6. Signed-in pages not yet verified by a human | 2026-09-19 |
 

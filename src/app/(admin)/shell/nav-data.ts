@@ -66,6 +66,22 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: 'debts', label: 'חובות', href: '/money/debts', icon: 'scale' },
     ],
   },
+  /*
+   * Logistics sits after כספים and before נתונים: it is camp operations, and
+   * נתונים is the utility tail (import, upload) rather than a peer of it.
+   *
+   * There is no hub item. `/logistics` redirects to the warehouse, and a
+   * fourth entry holding four tiles is not worth the rail space; the three
+   * screens are what a lead actually opens.
+   */
+  {
+    label: 'לוגיסטיקה',
+    items: [
+      { id: 'warehouse', label: 'מחסן', href: '/logistics/warehouse', icon: 'layers' },
+      { id: 'acquisitions', label: 'רכש', href: '/logistics/acquisitions', icon: 'list' },
+      { id: 'build', label: 'הקמה', href: '/logistics/build', icon: 'board' },
+    ],
+  },
   {
     label: 'נתונים',
     items: [

@@ -13,6 +13,17 @@ build/
 out/
 *.tsbuildinfo
 
+# `build/` above is unanchored, so it matches a directory of that name at ANY
+# depth — including the App Router segment `/logistics/build` (הקמה), whose
+# ten source files git silently refused to track. `git add` warned; a commit
+# that had redirected stderr did not, and the screen was committed as its
+# library alone with nothing on screen saying so.
+#
+# Re-included rather than anchoring `build/` to the root, because that rule is
+# the camp lead's and may be guarding output directories elsewhere. A route is
+# named for the screen it draws; this one is not build output.
+!src/app/(admin)/logistics/build/
+
 # Env & secrets
 .env
 .env.*

@@ -6,11 +6,12 @@ import { NAV_GROUPS, NAV_ITEMS, activeItemId } from '@/app/(admin)/shell/nav-dat
 describe('nav data', () => {
   it('holds B1 sections in B1 order, grouped as B1 groups them', () => {
     expect(NAV_GROUPS.map((group) => group.label))
-      .toEqual([null, 'הקאמפ', 'כספים', 'נתונים']);
+      .toEqual([null, 'הקאמפ', 'כספים', 'לוגיסטיקה', 'נתונים']);
     expect(NAV_ITEMS.map((item) => item.label)).toEqual([
       'בית', 'לטיפול',
       'אנשים', 'דמי קאמפ', 'משימות',
       'סקירה כספית', 'תנועות', 'תקציב', 'חובות',
+      'מחסן', 'רכש', 'הקמה',
       'קבצים וייבוא', 'העלאת קובץ',
     ]);
   });
@@ -27,6 +28,20 @@ describe('nav data', () => {
   it('marks the section a record page belongs to (B3)', () => {
     expect(activeItemId('/members/6f1c0e0e-0000-4000-8000-000000000000')).toBe('people');
     expect(activeItemId('/imports/6f1c0e0e-0000-4000-8000-000000000000')).toBe('files');
+  });
+
+  it('marks the logistics screen a lead is actually on', () => {
+    // All three live under `/logistics/`, so prefix matching has to pick the
+    // longest — otherwise one of them would light up the rail for all three.
+    expect(activeItemId('/logistics/warehouse')).toBe('warehouse');
+    expect(activeItemId('/logistics/acquisitions')).toBe('acquisitions');
+    expect(activeItemId('/logistics/build')).toBe('build');
+  });
+
+  it('leaves the rail unmarked on the redirect that owns no screen', () => {
+    // `/logistics` is a redirect to the warehouse and has no rail entry of
+    // its own; a reader passes through it and never sits there.
+    expect(activeItemId('/logistics')).toBeNull();
   });
 
   it('gives the longest matching section the mark, not the first', () => {
@@ -71,6 +86,9 @@ describe('nav data', () => {
       ledger: '/money/ledger',
       budget: '/money#budget',
       debts: '/money/debts',
+      warehouse: '/logistics/warehouse',
+      acquisitions: '/logistics/acquisitions',
+      build: '/logistics/build',
       files: '/imports',
       upload: '/upload',
     });
