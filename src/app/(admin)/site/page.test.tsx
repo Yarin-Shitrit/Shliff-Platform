@@ -1,0 +1,200 @@
+/**
+ * @vitest-environment jsdom
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
+import { ToastProvider } from '@/components/ui/toaster';
+import type { SiteItemView, SitePlan } from '@/lib/site/plan';
+
+const { requireAdmin, resolveSeason, siteView, seasonsWithPlans, itemById, listTasks } = vi.hoisted(() => ({
+  requireAdmin: vi.fn(), resolveSeason: vi.fn(), siteView: vi.fn(),
+  seasonsWithPlans: vi.fn(), itemById: vi.fn(), listTasks: vi.fn(),
+}));
+const { replace } = vi.hoisted(() => ({ replace: vi.fn() }));
+vi.mock('next/navigation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/navigation')>()),
+  useRouter: () => ({ replace, push: vi.fn(), refresh: vi.fn() }),
+}));
+vi.mock('@/db', () => ({ db: {} }));
+vi.mock('@/lib/auth/guard', () => ({ requireAdmin }));
+vi.mock('@/lib/seasons/current', () => ({ resolveSeason }));
+vi.mock('@/lib/work/tasks', () => ({ listTasks }));
+/* Only the readers are replaced; the geometry the screen draws stays real. */
+vi.mock('@/lib/site/plan', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/site/plan')>()),
+  siteView, seasonsWithPlans, itemById,
+}));
+/* The board reaches `useToast`, which needs a provider the page does not
+   render (the admin layout does). The board has its own test. */
+vi.mock('./site-board', () => ({
+  SiteBoard: ({ items }: { items: unknown[] }) => <div data-testid="board">{`board:${items.length}`}</div>,
+}));
+
+import SitePage from './page';
+
+const S26 = { id: 's26', name: 'ברן 26', year: 2026, flatRate: '1200.00', plannedSize: 35, startsOn: null };
+const S25 = { id: 's25', name: 'ברן 25', year: 2025, flatRate: '1500.00', plannedSize: 43, startsOn: null };
+
+const PLAN: SitePlan = {
+  id: 'p1', seasonId: 's26', widthCm: 2600, depthCm: 2400, gridCm: 50, notes: null,
+  updatedAt: new Date('2026-09-01T00:00:00Z'), updatedBy: 'lead@shliff.camp',
+};
+
+function item(over: Partial<SiteItemView> & { id: string }): SiteItemView {
+  return {
+    planId: 'p1', kind: 'tent', label: 'אוהל 1', xCm: 0, yCm: 0, widthCm: 300, depthCm: 300,
+    insetCm: null, sort: 0, taskId: null, taskTitle: null, notes: null,
+    updatedAt: new Date('2026-09-01T00:00:00Z'), updatedBy: 'lead@shliff.camp',
+    outside: false, overlapping: false, shade: 'unshaded', ...over,
+  };
+}
+
+function view(items: SiteItemView[], counts: Partial<ReturnType<typeof baseCounts>> = {}) {
+  return { plan: PLAN, items, counts: { ...baseCounts(items.length), ...counts } };
+}
+
+function baseCounts(items: number) {
+  return {
+    items, outside: 0, overlapping: 0, overlapPairs: 0, plotAreaM2: 624,
+    shade: { nets: 0, shaded: 0, partly: 0, unshaded: items, shadedAreaM2: 0 },
+  };
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  requireAdmin.mockResolvedValue({ ok: true, email: 'lead@shliff.camp' });
+  resolveSeason.mockResolvedValue({ seasons: [S26, S25], current: S26 });
+  siteView.mockResolvedValue(null);
+  seasonsWithPlans.mockResolvedValue([]);
+  itemById.mockResolvedValue(null);
+  listTasks.mockResolvedValue([]);
+});
+
+/* The admin layout mounts the `ToastProvider` the drawers report through. */
+async function renderPage(params: Record<string, string> = {}) {
+  const page = await SitePage({ searchParams: Promise.resolve({ season: 's26', ...params }) });
+  render(<ToastProvider>{page}</ToastProvider>);
+}
+
+describe('the camp map screen', () => {
+  it('invites an import when the camp has no seasons at all', async () => {
+    resolveSeason.mockResolvedValue({ seasons: [], current: null });
+    await renderPage();
+    expect(screen.getByText('אין כאן כלום עדיין')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'ייבוא מהגיליון' }).getAttribute('href')).toBe('/imports');
+  });
+
+  it('invites the lead to create a map for a season that has none', async () => {
+    await renderPage();
+    expect(screen.getByText('אין כאן כלום לשנה הזו')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'יצירת מפה' }).getAttribute('href'))
+      .toBe('/site?season=s26&act=plot');
+    expect(screen.queryByRole('link', { name: /העתקה/ })).toBeNull();
+  });
+
+  it('offers a copy from a season that has a map', async () => {
+    seasonsWithPlans.mockResolvedValue([{ seasonId: 's25', seasonName: 'ברן 25', items: 12 }]);
+    await renderPage();
+    expect(screen.getByRole('link', { name: 'העתקה מברן 25' }).getAttribute('href'))
+      .toBe('/site?season=s26&act=copy');
+  });
+
+  it('opens the create drawer from the URL', async () => {
+    await renderPage({ act: 'plot' });
+    const drawer = screen.getByRole('dialog');
+    expect(within(drawer).getByText('יצירת מפה')).toBeTruthy();
+    expect(within(drawer).getByRole('button', { name: 'יצירת המפה' })).toBeTruthy();
+  });
+
+  it('draws the plot, its tiles and its list, every figure linking onward', async () => {
+    siteView.mockResolvedValue(view([
+      item({ id: 'a', label: 'אוהל 1' }),
+      item({ id: 'b', label: 'מטבח 1', kind: 'kitchen', xCm: 500, widthCm: 400, taskId: 't1', taskTitle: 'הקמת המטבח' }),
+    ]));
+    await renderPage();
+
+    expect(screen.getByText('624 מ״ר')).toBeTruthy();
+    expect(screen.getByText('26 × 24 מ׳ · נרשם ידנית')).toBeTruthy();
+    expect(screen.getByRole('link', { name: /שטח המגרש/ }).getAttribute('href'))
+      .toBe('/site?season=s26&act=plot');
+    expect(screen.getByTestId('board').textContent).toBe('board:2');
+
+    const table = screen.getByRole('table', { name: 'הפריטים במפה' });
+    expect(within(table).getByRole('link', { name: 'אוהל 1' }).getAttribute('href'))
+      .toBe('/site?season=s26&peek=a');
+    expect(within(table).getByRole('link', { name: 'הקמת המטבח' }).getAttribute('href'))
+      .toBe('/logistics/build?season=s26');
+    expect(within(table).getAllByRole('link', { name: 'עריכה' })).toHaveLength(2);
+    // R11, on every row.
+    expect(within(table).getAllByRole('img', { name: 'מקור: נרשם ידנית' })).toHaveLength(2);
+  });
+
+  it('counts what the fence cuts through and points at the first offender, moving nothing', async () => {
+    siteView.mockResolvedValue(view([
+      item({ id: 'in' }),
+      item({ id: 'out', label: 'קראוון 1', kind: 'caravan', xCm: 2500, outside: true }),
+    ], { outside: 1 }));
+    await renderPage();
+
+    const banner = screen.getByRole('region', { name: 'פריטים מחוץ למגרש' });
+    expect(within(banner).getByText('1 פריטים נמצאים מחוץ למגרש.')).toBeTruthy();
+    expect(within(banner).getByRole('link', { name: 'לפריט הראשון' }).getAttribute('href'))
+      .toBe('/site?season=s26&peek=out');
+    expect(screen.getByRole('link', { name: /מחוץ למגרש/ }).getAttribute('href'))
+      .toBe('/site?season=s26&peek=out');
+    // The row says the word, not just the colour.
+    const table = screen.getByRole('table', { name: 'הפריטים במפה' });
+    expect(within(table).getAllByText('מחוץ למגרש').length).toBeGreaterThan(0);
+  });
+
+  it('says how much of the ground is in shade, and who is not', async () => {
+    siteView.mockResolvedValue(view([
+      item({ id: 'net', kind: 'shade', label: 'רשת צל 1', widthCm: 800, depthCm: 800, insetCm: 50, shade: null }),
+      item({ id: 'sofa', kind: 'sofa', label: 'ספה 1', xCm: 200, yCm: 200, widthCm: 200, depthCm: 90, shade: 'shaded' }),
+      item({ id: 'chair', kind: 'armchair', label: 'כורסה 1', widthCm: 90, depthCm: 90, shade: 'partly' }),
+    ], { shade: { nets: 1, shaded: 1, partly: 1, unshaded: 0, shadedAreaM2: 49 } }));
+    await renderPage();
+
+    expect(screen.getByText('49 מ״ר')).toBeTruthy();
+    expect(screen.getByText('1 רשתות צל · 1 פריטים חלקית או ללא צל')).toBeTruthy();
+    const table = screen.getByRole('table', { name: 'הפריטים במפה' });
+    expect(within(table).getByText('בצל 7 × 7 מ׳')).toBeTruthy();
+    expect(within(table).getByText('חלקית בצל')).toBeTruthy();
+    expect(within(table).getByText('בצל')).toBeTruthy();
+  });
+
+  it('opens the item drawer over the row the URL names, with the season’s build tasks', async () => {
+    const row = item({ id: 'a', label: 'אוהל 1' });
+    siteView.mockResolvedValue(view([row]));
+    itemById.mockResolvedValue(row);
+    listTasks.mockResolvedValue([{ taskId: 't1', title: 'הקמת המטבח' }]);
+    await renderPage({ peek: 'a' });
+
+    const drawer = screen.getByRole('dialog');
+    expect(within(drawer).getByRole('heading', { name: 'אוהל 1' })).toBeTruthy();
+    expect(within(drawer).getByRole('option', { name: 'הקמת המטבח' })).toBeTruthy();
+    expect(within(drawer).getByRole('link', { name: 'הסרה מהמפה' }).getAttribute('href'))
+      .toBe('/site?season=s26&peek=a&act=remove');
+  });
+
+  it('raises the confirmation, naming the verb, when asked to remove', async () => {
+    const row = item({ id: 'a', label: 'אוהל 1' });
+    siteView.mockResolvedValue(view([row]));
+    itemById.mockResolvedValue(row);
+    await renderPage({ peek: 'a', act: 'remove' });
+    const dialog = screen.getByRole('alertdialog');
+    expect(within(dialog).getByRole('button', { name: 'הסרת הפריט' })).toBeTruthy();
+  });
+
+  it('opens no drawer for an item on another season’s map', async () => {
+    siteView.mockResolvedValue(view([item({ id: 'a' })]));
+    itemById.mockResolvedValue(item({ id: 'z', planId: 'p-other' }));
+    await renderPage({ peek: 'z' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('is not found for a signed-in non-admin', async () => {
+    requireAdmin.mockResolvedValue({ ok: false });
+    await expect(renderPage()).rejects.toThrow();
+  });
+});

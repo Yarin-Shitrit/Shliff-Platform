@@ -7,6 +7,7 @@ export default {
     './src/db/schema/camp.ts',
     './src/db/schema/money.ts',
     './src/db/schema/logistics.ts',
+    './src/db/schema/site.ts',
   ],
   out: './drizzle',
   dialect: 'postgresql',

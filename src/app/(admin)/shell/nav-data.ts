@@ -55,6 +55,10 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: 'people', label: 'אנשים', href: '/members', icon: 'users', count: 'rosterSize' },
       { id: 'dues', label: 'דמי קאמפ', href: '/fees', icon: 'receipt' },
       { id: 'tasks', label: 'משימות', href: '/tasks', icon: 'tasks', count: 'understaffedTasks' },
+      /* Not in B1: the camp map came after the twelve plans. It sits with
+         the camp's own things — people, dues, tasks — because it is where
+         those people and tasks physically land, not a logistics list. */
+      { id: 'site', label: 'מפת הקאמפ', href: '/site', icon: 'tent' },
     ],
   },
   {
