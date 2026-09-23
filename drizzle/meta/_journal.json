@@ -71,6 +71,13 @@
       "when": 1789852684829,
       "tag": "0009_wealthy_emma_frost",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790194103049,
+      "tag": "0010_mysterious_trish_tilby",
+      "breakpoints": true
     }
   ]
 }

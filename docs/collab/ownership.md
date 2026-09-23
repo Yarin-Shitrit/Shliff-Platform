@@ -14,6 +14,7 @@ from this table, see `protocol.md`.
 | Area | Owner | Owns outright |
 |---|---|---|
 | **Phase 4 — UI redesign** | @Yarin-Shitrit | `src/app/(admin)/{members,fees,money,tasks,imports,upload,data}/**`, `src/components/**`, `src/lib/{members,fees,money,work,import,inbox,blocks}/**`, `docs/superpowers/{plans,specs,kickoffs}/**` |
+| **Camp map** (מפת הקאמפ) | @Yarin-Shitrit | `src/app/(admin)/site/**`, `src/lib/site/**`, `src/db/schema/site.ts` |
 | **Logistics** | @josefcohen96 | `src/app/(admin)/logistics/**`, `src/lib/logistics/**`, `src/db/schema/logistics.ts` |
 | **Collaboration harness** | @Yarin-Shitrit | `docs/collab/**`, `CLAUDE.md` |
 

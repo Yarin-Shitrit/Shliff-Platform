@@ -1,0 +1,260 @@
+/* Tokens only, logical properties throughout (A10). The kit components carry
+   their own modules; nothing below restyles one. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-block-size: 0;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.sub {
+  margin-block-start: 2px;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.invitations {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* ---- the board ------------------------------------------------------- */
+
+.board {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.palette {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+}
+
+.paletteTitle {
+  color: var(--ink-2);
+  font-size: var(--text-label);
+  font-weight: 600;
+}
+
+.paletteGroup {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.paletteGroupLabel {
+  margin-inline-end: var(--space-1);
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: var(--control-h-lg);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--sunken);
+}
+
+.hint {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.toolbarTitle {
+  font-weight: 600;
+}
+
+.toolbarMeta {
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.toolbarActions {
+  display: inline-flex;
+  gap: var(--space-1);
+  margin-inline-start: auto;
+}
+
+/* The canvas fills the panel's width; its height follows the plot's shape
+   through `aspect-ratio`, set inline from the plan. `touch-action: none` is
+   on the canvas only, so a finger on a tent drags the tent and a finger on
+   the page still scrolls it. Page zoom stays allowed. */
+.canvas {
+  inline-size: 100%;
+  block-size: auto;
+  display: block;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--canvas);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.plot { fill: var(--panel); }
+.gridLine { fill: none; stroke: var(--line); stroke-width: 2; }
+.gridMajor { fill: none; stroke: var(--line-strong); stroke-width: 3; }
+.fence { fill: none; stroke: var(--ink); stroke-width: 6; stroke-dasharray: 30 18; }
+
+.dimension {
+  fill: var(--ink-2);
+  font-weight: 600;
+}
+
+.item { cursor: grab; }
+.item:active { cursor: grabbing; }
+/* The ring stays (A9); the stroke is a second signal on top of it. */
+.item:focus-visible .body { stroke: var(--focus); stroke-width: 10; }
+
+.body {
+  stroke-width: 6;
+}
+
+.group_sleep .body { fill: var(--info-soft); stroke: var(--info); }
+.group_living .body { fill: var(--ok-soft); stroke: var(--ok); }
+.group_sanitation .body { fill: var(--brand-soft); stroke: var(--brand-text); }
+.group_utility .body { fill: var(--warn-soft); stroke: var(--warn); }
+.group_other .body { fill: var(--sunken); stroke: var(--ink-3); }
+
+/* A net is a footprint drawn dashed, over a tinted core of what it shades.
+   The core is translucent so the sofas under it stay readable. */
+.shade .body {
+  fill: none;
+  stroke: var(--info);
+  stroke-dasharray: 24 16;
+}
+.shadeCore {
+  fill: var(--info);
+  fill-opacity: 0.16;
+  pointer-events: none;
+}
+
+.selected .body { stroke: var(--focus); stroke-width: 10; }
+.outside .body { stroke: var(--bad); stroke-dasharray: 20 12; }
+.overlapping .body { stroke: var(--warn); stroke-width: 10; }
+.partly .body { stroke: var(--warn); }
+
+.label {
+  fill: var(--ink);
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.caption {
+  fill: var(--ink-3);
+  pointer-events: none;
+}
+
+.handle {
+  fill: var(--panel);
+  stroke: var(--focus);
+  stroke-width: 6;
+  cursor: nwse-resize;
+}
+.handle[data-handle='n'], .handle[data-handle='s'] { cursor: ns-resize; }
+.handle[data-handle='e'], .handle[data-handle='w'] { cursor: ew-resize; }
+.handle[data-handle='ne'], .handle[data-handle='sw'] { cursor: nesw-resize; }
+
+/* ---- drawers --------------------------------------------------------- */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+/* The kit ships no number control (`TextInput` hard-codes type="text"), so
+   a centimetre box is a plain input drawn to the same metrics. 16px so iOS
+   does not zoom the page on focus. */
+.plainInput {
+  inline-size: 100%;
+  min-block-size: var(--control-h);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: var(--input-font-phone);
+}
+
+.formError {
+  margin: 0;
+  color: var(--bad);
+  font-size: var(--text-meta);
+}
+
+.preview {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+.drawerActions {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--line);
+}
+
+/* ---- the table's two-line cell --------------------------------------- */
+
+.title {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  line-height: var(--leading-cell);
+}
+
+.pills {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+@media (max-width: 768px) {
+  .tiles { grid-template-columns: 1fr; }
+  .pair { grid-template-columns: 1fr; }
+  .plainInput { min-block-size: var(--tap-min); }
+  .toolbarActions { margin-inline-start: 0; }
+}
+
+@media print {
+  .palette, .toolbar, .handle { display: none; }
+  .canvas { border: 0; }
+}

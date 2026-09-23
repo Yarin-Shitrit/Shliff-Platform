@@ -9,7 +9,7 @@ describe('nav data', () => {
       .toEqual([null, 'הקאמפ', 'כספים', 'לוגיסטיקה', 'נתונים']);
     expect(NAV_ITEMS.map((item) => item.label)).toEqual([
       'בית', 'לטיפול',
-      'אנשים', 'דמי קאמפ', 'משימות',
+      'אנשים', 'דמי קאמפ', 'משימות', 'מפת הקאמפ',
       'סקירה כספית', 'תנועות', 'תקציב', 'חובות',
       'מחסן', 'רכש', 'הקמה',
       'קבצים וייבוא', 'העלאת קובץ',
@@ -53,6 +53,7 @@ describe('nav data', () => {
   it('matches home exactly, so every path does not light it up', () => {
     expect(activeItemId('/')).toBe('home');
     expect(activeItemId('/fees')).toBe('dues');
+    expect(activeItemId('/site')).toBe('site');
   });
 
   it('marks nothing for a path no section owns', () => {
@@ -82,6 +83,7 @@ describe('nav data', () => {
       people: '/members',
       dues: '/fees',
       tasks: '/tasks',
+      site: '/site',
       money: '/money',
       ledger: '/money/ledger',
       budget: '/money#budget',

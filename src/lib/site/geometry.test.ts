@@ -1,0 +1,199 @@
+import { describe, it, expect } from 'vitest';
+import {
+  HANDLES, areaM2, contains, formatArea, formatMetres, formatSize, move, outsideIds,
+  overlap, overlapPairs, placeNew, resize, shadeCounts, shadeState, shadedRect, snap,
+  swapSides, type PlacedItem, type Rect,
+} from './geometry';
+
+const PLOT = { widthCm: 2600, depthCm: 2400 };
+
+function item(over: Partial<PlacedItem> & { id: string }): PlacedItem {
+  return { kind: 'tent', insetCm: null, x: 0, y: 0, width: 300, depth: 300, ...over };
+}
+
+describe('snapping', () => {
+  it('rounds to the nearest grid line', () => {
+    expect(snap(37, 50)).toBe(50);
+    expect(snap(24, 50)).toBe(0);
+    expect(snap(125, 50)).toBe(150);
+    expect(snap(-37, 50)).toBe(-50);
+  });
+
+  it('keeps the value when there is no grid', () => {
+    expect(snap(37, 0)).toBe(37);
+    expect(snap(37.4, 0)).toBe(37);
+  });
+});
+
+describe('containment and overlap', () => {
+  it('counts an item flush against the fence as inside', () => {
+    expect(contains(PLOT, { x: 2300, y: 2100, width: 300, depth: 300 })).toBe(true);
+    expect(contains(PLOT, { x: 2301, y: 2100, width: 300, depth: 300 })).toBe(false);
+    expect(contains(PLOT, { x: -1, y: 0, width: 300, depth: 300 })).toBe(false);
+  });
+
+  it('does not call two rectangles sharing an edge an overlap', () => {
+    const a: Rect = { x: 0, y: 0, width: 200, depth: 90 };
+    expect(overlap(a, { x: 200, y: 0, width: 200, depth: 90 })).toBe(false);
+    expect(overlap(a, { x: 199, y: 0, width: 200, depth: 90 })).toBe(true);
+    expect(overlap(a, { x: 0, y: 90, width: 200, depth: 90 })).toBe(false);
+  });
+
+  it('lists every overlapping pair once, in input order', () => {
+    const items = [
+      item({ id: 'a', x: 0, y: 0 }),
+      item({ id: 'b', x: 100, y: 100 }),
+      item({ id: 'c', x: 1000, y: 1000 }),
+      item({ id: 'd', x: 1100, y: 1100 }),
+    ];
+    expect(overlapPairs(items)).toEqual([['a', 'b'], ['c', 'd']]);
+  });
+
+  it('never pairs a shade net with what sits under it, nor two nets', () => {
+    const items = [
+      item({ id: 'net', kind: 'shade', insetCm: 50, width: 800, depth: 800 }),
+      item({ id: 'net2', kind: 'shade', insetCm: 50, x: 400, width: 800, depth: 800 }),
+      item({ id: 'sofa', kind: 'sofa', x: 100, y: 100, width: 200, depth: 90 }),
+    ];
+    expect(overlapPairs(items)).toEqual([]);
+  });
+
+  it('names what the fence now cuts through', () => {
+    const items = [item({ id: 'in', x: 0, y: 0 }), item({ id: 'out', x: 2500, y: 0 })];
+    expect(outsideIds(items, PLOT)).toEqual(['out']);
+    // Shrinking the plot moves nothing; it only changes who is outside.
+    expect(outsideIds(items, { widthCm: 200, depthCm: 200 })).toEqual(['in', 'out']);
+  });
+});
+
+describe('moving and resizing', () => {
+  const rect: Rect = { x: 500, y: 500, width: 300, depth: 200 };
+
+  it('moves by a snapped delta', () => {
+    expect(move(rect, 37, -120, 50)).toEqual({ x: 550, y: 400, width: 300, depth: 200 });
+  });
+
+  it('keeps the opposite edge still on every handle', () => {
+    expect(resize(rect, 'e', 100, 0, 50)).toEqual({ x: 500, y: 500, width: 400, depth: 200 });
+    expect(resize(rect, 'w', 100, 0, 50)).toEqual({ x: 600, y: 500, width: 200, depth: 200 });
+    expect(resize(rect, 's', 0, 100, 50)).toEqual({ x: 500, y: 500, width: 300, depth: 300 });
+    expect(resize(rect, 'n', 0, 100, 50)).toEqual({ x: 500, y: 600, width: 300, depth: 100 });
+    expect(resize(rect, 'se', 100, 100, 50)).toEqual({ x: 500, y: 500, width: 400, depth: 300 });
+    expect(resize(rect, 'nw', -100, -100, 50)).toEqual({ x: 400, y: 400, width: 400, depth: 300 });
+    expect(resize(rect, 'ne', 100, -100, 50)).toEqual({ x: 500, y: 400, width: 400, depth: 300 });
+    expect(resize(rect, 'sw', -100, 100, 50)).toEqual({ x: 400, y: 500, width: 400, depth: 300 });
+  });
+
+  it('stops at the minimum side rather than turning inside out', () => {
+    for (const handle of HANDLES) {
+      const result = resize(rect, handle, -10_000, -10_000, 50);
+      expect(result.width).toBeGreaterThanOrEqual(10);
+      expect(result.depth).toBeGreaterThanOrEqual(10);
+      const grown = resize(rect, handle, 10_000, 10_000, 50);
+      expect(grown.width).toBeGreaterThanOrEqual(10);
+      expect(grown.depth).toBeGreaterThanOrEqual(10);
+    }
+    expect(resize(rect, 'e', -10_000, 0, 50)).toEqual({ x: 500, y: 500, width: 10, depth: 200 });
+    expect(resize(rect, 'w', 10_000, 0, 50)).toEqual({ x: 790, y: 500, width: 10, depth: 200 });
+  });
+
+  it('snaps the dragged edge', () => {
+    expect(resize(rect, 'e', 37, 0, 50)).toEqual({ x: 500, y: 500, width: 350, depth: 200 });
+  });
+
+  it('turns by swapping the sides on the same corner', () => {
+    expect(swapSides(rect)).toEqual({ x: 500, y: 500, width: 200, depth: 300 });
+  });
+});
+
+describe('placing a new item', () => {
+  const size = { width: 300, depth: 300 };
+
+  it('lands on the origin of an empty plot', () => {
+    expect(placeNew([], PLOT, size, 50, 'tent')).toEqual({ x: 0, y: 0 });
+  });
+
+  it('skips what is already there, reading across first', () => {
+    const items = [item({ id: 'a', x: 0, y: 0 })];
+    expect(placeNew(items, PLOT, size, 50, 'tent')).toEqual({ x: 300, y: 0 });
+  });
+
+  it('wraps to the next row when the first is full', () => {
+    const items = [item({ id: 'row', x: 0, y: 0, width: 2600, depth: 100 })];
+    expect(placeNew(items, PLOT, size, 50, 'tent')).toEqual({ x: 0, y: 100 });
+  });
+
+  it('respects the fence', () => {
+    expect(placeNew([], { widthCm: 250, depthCm: 250 }, size, 50, 'tent')).toBeNull();
+  });
+
+  it('returns null when nothing fits, rather than guessing', () => {
+    const items = [item({ id: 'all', x: 0, y: 0, width: 2600, depth: 2400 })];
+    expect(placeNew(items, PLOT, size, 50, 'tent')).toBeNull();
+  });
+
+  it('lets a sofa land under a net, and a net land over anything', () => {
+    const net = item({ id: 'net', kind: 'shade', insetCm: 50, width: 800, depth: 800 });
+    expect(placeNew([net], PLOT, { width: 200, depth: 90 }, 50, 'sofa')).toEqual({ x: 0, y: 0 });
+    const tent = item({ id: 't', x: 0, y: 0 });
+    expect(placeNew([tent], PLOT, { width: 800, depth: 800 }, 50, 'shade')).toEqual({ x: 0, y: 0 });
+  });
+});
+
+describe('shade', () => {
+  const net = item({ id: 'net', kind: 'shade', insetCm: 50, x: 100, y: 100, width: 800, depth: 800 });
+
+  it('shades (m − 1) × (n − 1) of an m × n net', () => {
+    expect(shadedRect(net)).toEqual({ x: 150, y: 150, width: 700, depth: 700 });
+  });
+
+  it('shades nothing when the net is smaller than twice its strip', () => {
+    expect(shadedRect(item({ id: 'tiny', kind: 'shade', insetCm: 50, width: 100, depth: 100 }))).toBeNull();
+    expect(shadedRect(item({ id: 'thin', kind: 'shade', insetCm: 50, width: 800, depth: 100 }))).toBeNull();
+  });
+
+  it('treats a net with no inset as shading its whole footprint', () => {
+    expect(shadedRect(item({ id: 'flat', kind: 'shade', insetCm: 0, width: 800, depth: 800 })))
+      .toEqual({ x: 0, y: 0, width: 800, depth: 800 });
+  });
+
+  it('tells a sofa in the strip from one in the shade from one in the sun', () => {
+    const inShade: Rect = { x: 200, y: 200, width: 200, depth: 90 };
+    const inStrip: Rect = { x: 100, y: 100, width: 200, depth: 90 };
+    const edge: Rect = { x: 150, y: 150, width: 700, depth: 700 };
+    const inSun: Rect = { x: 1500, y: 1500, width: 200, depth: 90 };
+    expect(shadeState(inShade, [net])).toBe('shaded');
+    expect(shadeState(inStrip, [net])).toBe('partly');
+    expect(shadeState(edge, [net])).toBe('shaded');
+    expect(shadeState(inSun, [net])).toBe('unshaded');
+  });
+
+  it('counts nets, states and shaded ground', () => {
+    const items = [
+      net,
+      item({ id: 'sofa', kind: 'sofa', x: 200, y: 200, width: 200, depth: 90 }),
+      item({ id: 'chair', kind: 'armchair', x: 100, y: 100, width: 90, depth: 90 }),
+      item({ id: 'tent', kind: 'tent', x: 1500, y: 1500 }),
+    ];
+    expect(shadeCounts(items)).toEqual({
+      nets: 1, shaded: 1, partly: 1, unshaded: 1, shadedAreaM2: 49,
+    });
+  });
+});
+
+describe('formatting', () => {
+  it('speaks metres', () => {
+    expect(formatMetres(350)).toBe('3.5 מ׳');
+    expect(formatMetres(300)).toBe('3 מ׳');
+    expect(formatMetres(275)).toBe('2.75 מ׳');
+    expect(formatSize(300, 300)).toBe('3 × 3 מ׳');
+    expect(formatSize(700, 250)).toBe('7 × 2.5 מ׳');
+  });
+
+  it('measures the plot in square metres', () => {
+    expect(areaM2(PLOT)).toBe(624);
+    expect(areaM2({ width: 800, depth: 800 })).toBe(64);
+    expect(areaM2({ width: 250, depth: 90 })).toBe(2.3);
+    expect(formatArea(624)).toBe('624 מ״ר');
+  });
+});
