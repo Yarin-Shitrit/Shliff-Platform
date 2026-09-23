@@ -1,6 +1,6 @@
 # What is in flight
 
-**updated: 2026-09-23** · if that date is more than a day or two old, **this file
+**updated: 2026-09-24** · if that date is more than a day or two old, **this file
 is fiction**. Read §1 before you act on §3.
 
 This is the only document in `docs/collab/` that goes stale, and it goes stale
@@ -55,7 +55,7 @@ touching `docs/reference-data/`, and pushing or force-pushing shared branches.
 |---|---|---|---|---|
 | @Yarin-Shitrit | Phase 4 UI redesign | merged to `main` | **done** — all twelve plans landed; CI green on `main` at 2640 tests in 203 files, 17m21s | 2026-09-19 |
 | @Yarin-Shitrit | Promotion gate + sheet retirement | merged to `main`; migration `0008` pending | **active** | 2026-09-19 |
-| @josefcohen96 | Logistics | merged to `main` (#8); open: `fix/logistics-error-boundary` | **blocked in production** — the three screens (מחסן, רכש, הקמה), the rail entry and the two exports are on `main`. **Migration `0009` has never been applied to any real database**, so every `/logistics/*` page throws in production (React #441 — a Server Components render error). `drizzle-kit migrate` and `push` are both forbidden here, so applying it is a manual, camp-lead decision: `docs/deploy.md` §6. Nothing else is known to be wrong — all three screens render signed-in locally once the tables exist | 2026-09-20 |
+| @josefcohen96 | Logistics | merged to `main` (#8, #9); open: `fix/admin-error-boundary-and-migrations` | **blocked in production, code is done** — the three screens (מחסן, רכש, הקמה), the rail entry and the two exports are on `main`. **Migrations `0009` and `0010` have never been applied to Railway**, so every `/logistics/*` page and `/site` throw in production (React #441). Both are additive `CREATE TABLE`s; the exact `psql` runbook is `docs/deploy.md` §6, and running it is the camp lead's call. Verified 2026-09-24 signed-in on a local database carrying both: all four screens render in Hebrew. The open branch adds one shared error boundary at `src/app/(admin)/error.tsx` so `/site` fails in Hebrew like `/logistics` does until the migration lands | 2026-09-24 |
 | @Yarin-Shitrit | Collaboration harness + CI | merged to `main` | done | 2026-09-19 |
 | @Yarin-Shitrit | Camp map (מפת הקאמפ) | `claude/new-interesting-page-fv986o` | **active** — a new `/site` screen: one drag-and-drop map per season, plot size per event, item sizes editable, shade nets that shade (m−1)×(n−1). Touches shared surfaces: `src/db/schema/site.ts` + migration **`0010`** (generated with `drizzle-kit generate`; applying it to Railway is the camp lead's manual step, like `0009`), `drizzle.config.ts`, `shell/nav-data.ts` (a `מפת הקאמפ` item in הקאמפ), this file and `ownership.md` | 2026-09-23 |
 | @Yarin-Shitrit | Hosting on Vercel + Railway | merged to `main` | **live** at <https://shliff-platform.vercel.app>. Vercel project is deliberately **not** Git-connected — do not connect it. Railway Postgres 18 in `europe-west4` holds the real data. Runbook: `docs/deploy.md`. **`drizzle-kit push` is now forbidden alongside `migrate`** — see the runbook §6. Signed-in pages not yet verified by a human | 2026-09-19 |

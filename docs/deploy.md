@@ -167,9 +167,57 @@ docker run --rm postgres:18-alpine psql "$RAILWAY_URL" -tAc "$Q" > /tmp/remote.t
 diff /tmp/local.txt /tmp/remote.txt && echo IDENTICAL
 ```
 
-187 columns each side, empty diff. If it is ever non-empty, read the difference
-and apply the specific change by hand — with the camp lead's approval, because
-it is real financial data.
+187 columns each side, empty diff — as measured on 2026-09-19, before
+migrations `0009` and `0010` existed. Re-measure rather than trusting that
+number. If the diff is ever non-empty, read the difference and apply the
+specific change by hand — with the camp lead's approval, because it is real
+financial data.
+
+### Migrations `0009` and `0010` have never reached Railway
+
+As of 2026-09-24 the production database is at `0008`. Two migrations on
+`main` create tables it does not have, and every screen that reads them
+throws during its server render (React #441) instead of loading:
+
+| Migration | Creates | Screens that throw without it |
+|---|---|---|
+| `0009_wealthy_emma_frost` | `inventory_items`, `acquisition_items`, `task_materials` | `/logistics/warehouse`, `/logistics/acquisitions`, `/logistics/build`, both exports |
+| `0010_mysterious_trish_tilby` | `site_plans`, `site_items` | `/site` (מפת הקאמפ) |
+
+Both are purely additive — `CREATE TABLE` and foreign keys, no `ALTER`, no
+`DROP`, no row touched — which is why they can be applied by hand with `psql`
+instead of by either forbidden `drizzle-kit` command. Applying them is still
+the camp lead's decision, because it is the camp's real database.
+
+First confirm they are genuinely missing. Read-only:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" postgres:18-alpine \
+  psql "$R" -tAc "select table_name from information_schema.tables
+    where table_schema='public' and table_name in
+    ('inventory_items','acquisition_items','task_materials','site_plans','site_items')"
+```
+
+Expected before: nothing. Then apply, one transaction per file, stopping on the
+first error:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine sh -euc '
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0009_wealthy_emma_frost.sql
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0010_mysterious_trish_tilby.sql
+'
+```
+
+The `--> statement-breakpoint` markers drizzle writes are SQL line comments,
+so `psql -f` runs the files as they are — this is exactly how the local
+container received both. Afterwards, the parity check above must come back
+empty against a local database that also carries both, and the five tables
+must appear in the read-only query. No deploy is needed: the code that reads
+these tables has been on `main` since #8 and #10.
+
+Nothing journals this. The database has no `drizzle.__drizzle_migrations`
+table (`scripts/cutover.ts` explains why), so the parity check *is* the
+record of what has been applied.
 
 Five constraints are load-bearing and must exist:
 `{budget_lines,ledger_entries,obligations,ticket_rounds,funding_targets}_source_key`,
