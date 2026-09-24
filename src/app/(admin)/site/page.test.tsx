@@ -124,7 +124,11 @@ describe('the camp map screen', () => {
       .toBe('/site?season=s26&peek=a');
     expect(within(table).getByRole('link', { name: 'הקמת המטבח' }).getAttribute('href'))
       .toBe('/logistics/build?season=s26');
-    expect(within(table).getAllByRole('link', { name: 'עריכה' })).toHaveLength(2);
+    // Two icon-only actions per row, each named (E4), the bin pointing at the confirmation.
+    expect(within(table).getAllByRole('link', { name: 'עריכה' }).map((a) => a.getAttribute('href')))
+      .toEqual(['/site?season=s26&peek=a', '/site?season=s26&peek=b']);
+    expect(within(table).getAllByRole('link', { name: 'מחיקה' }).map((a) => a.getAttribute('href')))
+      .toEqual(['/site?season=s26&peek=a&act=remove', '/site?season=s26&peek=b&act=remove']);
     // R11, on every row.
     expect(within(table).getAllByRole('img', { name: 'מקור: נרשם ידנית' })).toHaveLength(2);
   });

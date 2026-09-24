@@ -197,7 +197,17 @@ export default async function SitePage(
         params={here}
         season={current.id}
         rowActions={(row) => (
-          <ButtonLink size="sm" href={itemHref(here, row.id)}>עריכה</ButtonLink>
+          /* Two glyphs, named for assistive technology (E4): the pencil opens
+             the same drawer the board's toolbar does, the bin opens the
+             confirmation — never the delete itself. */
+          <>
+            <ButtonLink tone="ghost" size="sm" iconLabel="עריכה" href={itemHref(here, row.id)}>
+              <Icon name="pencil" size={15} />
+            </ButtonLink>
+            <ButtonLink tone="ghost" size="sm" iconLabel="מחיקה" href={removeItemHref(here, row.id)}>
+              <Icon name="trash" size={15} />
+            </ButtonLink>
+          </>
         )}
         empty={(
           /* An invitation: the palette above is how a thing gets on the map. */
