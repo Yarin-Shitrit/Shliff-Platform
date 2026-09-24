@@ -1,0 +1,184 @@
+/*
+ * The camp map's editor (spec §10). Tokens only, logical properties
+ * throughout (A10) — except where a position comes from the scene's own
+ * screen coordinates, which are physical, like the map itself.
+ *
+ * The group colours are the scene's (`scene/palette.ts`). SiteEditor hands
+ * them to this tree as `--group-*` custom properties, so a swatch in a panel
+ * is the colour of the thing on the map. They are scoped data, like the
+ * chart palette in `charts.module.css`'s `.viz`.
+ *
+ * This file holds the shell only — the layout, the tool row, the save state
+ * and the banners. Each panel keeps its own styles beside it
+ * (`panels/<name>.module.css`).
+ */
+
+.root {
+  flex: 1;
+  min-block-size: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.icon { flex-shrink: 0; }
+
+.editorArea {
+  flex: 1;
+  min-block-size: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- save state and banners ------------------------------------------- */
+
+.saveState {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.saveText {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.saveDot {
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: var(--radius-pill);
+  background: var(--ok);
+}
+
+.saveState[data-status='pending'],
+.saveState[data-status='saving'] { color: var(--brand-text); }
+.saveState[data-status='pending'] .saveDot,
+.saveState[data-status='saving'] .saveDot { background: var(--brand); }
+.saveState[data-status='error'],
+.saveState[data-status='conflict'] { color: var(--bad); }
+.saveState[data-status='error'] .saveDot,
+.saveState[data-status='conflict'] .saveDot { background: var(--bad); }
+
+.banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding-block: var(--space-2);
+  padding-inline: var(--space-4);
+  border-block-end: 1px solid var(--line);
+  background: var(--info-soft);
+  color: var(--ink);
+  font-size: var(--text-dense);
+}
+.banner[data-tone='warn'] { background: var(--warn-soft); border-block-end-color: var(--warn-line); }
+.banner[data-tone='bad'] { background: var(--bad-soft); }
+
+.bannerText {
+  margin: 0;
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.bannerActions {
+  display: inline-flex;
+  gap: var(--space-2);
+}
+
+/* ---- the tool row ------------------------------------------------------ */
+
+.toolRow {
+  block-size: 48px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-inline: var(--space-3);
+  border-block-end: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.grow { flex: 1; }
+
+.seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-control);
+  background: var(--sunken);
+}
+
+.segButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  block-size: 28px;
+  padding-inline: 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-2);
+  font-size: var(--text-dense);
+  cursor: pointer;
+}
+.segButton[aria-pressed='true'] {
+  background: var(--panel);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+/* A key's own name reads left to right whatever the page's direction. */
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  direction: ltr;
+  padding-inline: 4px;
+  line-height: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--ink-3);
+  font-family: inherit;
+  font-size: var(--text-label);
+  font-weight: 500;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  block-size: 30px;
+  padding-inline: 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.toggle:hover { background: var(--sunken); color: var(--ink); }
+.toggle[aria-pressed='true'] {
+  background: var(--brand-soft);
+  color: var(--brand-text);
+  border-color: var(--line-strong);
+  font-weight: 600;
+}
+
+/* ---- the stage --------------------------------------------------------- */
+
+.stage {
+  position: relative;
+  flex: 1;
+  min-block-size: 0;
+  overflow: hidden;
+  background: var(--sunken);
+}
+
+.scene {
+  position: absolute;
+  inset: 0;
+}

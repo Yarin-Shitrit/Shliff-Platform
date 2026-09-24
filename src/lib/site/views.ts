@@ -74,3 +74,36 @@ export function plotHref(params: RawParams): string {
 export function copyHref(params: RawParams): string {
   return openActHref(SITE_PATH, carried(params), COPY_ACT);
 }
+
+/**
+ * The day shade by hour is worked out for (spec §11): the season's gate day,
+ * as the calendar date it is in Israel. Null when the season has none — the
+ * sun card then asks for one rather than guessing a day (§13).
+ */
+export function sunDateOf(startsOn: Date | null): string | null {
+  if (startsOn === null) return null;
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(startsOn);
+  const part = (type: 'year' | 'month' | 'day') => parts.find((entry) => entry.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+const SUN_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * A day as `sunDateOf` writes it — `YYYY-MM-DD`, and a day the calendar has —
+ * or null: anything else is no day, never a guess (§13). The one check of that
+ * shape (plan 04, ruling P15): `SiteEditor` asks it once and hands only what
+ * it accepts to the scene and the sun card, so neither keeps a pattern of its
+ * own. What it accepts, `sun.ts` `jerusalemInstant` accepts.
+ */
+export function readSunDate(text: string | null): string | null {
+  if (text === null) return null;
+  const match = SUN_DATE.exec(text);
+  if (match === null) return null;
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const date = new Date(Date.UTC(year, month - 1, day));
+  const real = date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+  return real ? text : null;
+}
