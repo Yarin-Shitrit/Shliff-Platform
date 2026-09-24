@@ -113,6 +113,24 @@ describe('CommandPalette', () => {
     expect(nav.pushed).toEqual(['/members/p1']);
   });
 
+  /**
+   * The palette's trigger lives in the rail, but ⌘K and / open it from
+   * anywhere — including below 1024px with the rail closed, where the rail
+   * sits off-screen under a `transform` and would take every
+   * `position: fixed` element inside it along: the palette would open
+   * off-screen and take focus with it.
+   */
+  it('opens outside the rail that hosts it, scrim and all', () => {
+    const { container } = render(<div data-rail><CommandPalette /></div>);
+    fireEvent.keyDown(document, { code: 'KeyK', key: 'ל', metaKey: true });
+
+    const dialog = screen.getByRole('dialog');
+    expect(container.contains(dialog)).toBe(false);
+    expect(container.contains(screen.getByRole('button', { name: 'סגירה' }))).toBe(false);
+    // The trigger stays where it was.
+    expect(container.contains(screen.getByRole('button', { name: /חיפוש/ }))).toBe(true);
+  });
+
   it('hints its keys in the footer', () => {
     render(<CommandPalette />);
     fireEvent.keyDown(document, { code: 'KeyK', key: 'ל', metaKey: true });

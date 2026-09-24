@@ -12,15 +12,12 @@
  * with the same `pickSeason` the switcher and every page use, so the drawer
  * cannot edit a season other than the one on screen.
  *
- * Unlike `NewSeasonDrawer`, it is portalled to `document.body`. Below 1024px
- * a closed rail is moved off-screen with a `transform`, which makes the rail
- * the containing block of every `position: fixed` element inside it — so a
- * drawer opened from a page link (/tasks, the camp map), with the rail
- * closed, would open off-screen while its focus trap made the page inert.
+ * Rendered through `BodyPortal`, like `NewSeasonDrawer`: this drawer opens
+ * from page links (/tasks, the camp map) while a phone's rail is closed and
+ * off-screen, and a drawer left inside that rail would go with it.
  */
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Drawer } from '@/components/ui/drawer';
@@ -31,6 +28,7 @@ import { DateText } from '@/components/format';
 import { formatDateFull, parseDateInput } from '@/lib/dates';
 import { pickSeason } from '@/lib/seasons/pick';
 import { setSeasonStartsOnAction } from './actions';
+import { BodyPortal } from './body-portal';
 import { SEASON_DATE_ACT } from './season-href';
 import type { SwitchSeason } from './season-switch';
 import styles from './season-date-drawer.module.css';
@@ -54,46 +52,36 @@ function campDay(at: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-/**
- * True once the browser is running this component. A portal needs
- * `document.body`, which the server does not have, and the first client
- * render must match the server's — so the drawer appears one commit after
- * hydration rather than being guessed at on the server.
- */
-const never = () => () => {};
-function useInBrowser(): boolean {
-  return useSyncExternalStore(never, () => true, () => false);
-}
-
 export function SeasonDateDrawer({ seasons }: { seasons: DatedSeason[] }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const inBrowser = useInBrowser();
 
-  if (searchParams.get(ACT_PARAM) !== SEASON_DATE_ACT || !inBrowser) return null;
+  if (searchParams.get(ACT_PARAM) !== SEASON_DATE_ACT) return null;
 
   const closeHref = closePeekHref(pathname, searchParams);
   const season = pickSeason(seasons, searchParams.get('season'));
 
   if (season === null) {
-    return createPortal(
-      <Drawer title="פתיחת השער" closeHref={closeHref}>
-        <p className={styles.empty}>
-          עדיין אין שנים.{' '}
-          <Link href={openActHref(pathname, searchParams, 'season')}>שנה חדשה</Link>
-        </p>
-      </Drawer>,
-      document.body,
+    return (
+      <BodyPortal>
+        <Drawer title="פתיחת השער" closeHref={closeHref}>
+          <p className={styles.empty}>
+            עדיין אין שנים.{' '}
+            <Link href={openActHref(pathname, searchParams, 'season')}>שנה חדשה</Link>
+          </p>
+        </Drawer>
+      </BodyPortal>
     );
   }
 
-  return createPortal(
-    <Drawer title="פתיחת השער" subtitle={season.name} closeHref={closeHref}>
-      {/* Keyed so a different season, or a reopened drawer, starts from its
-          own stored date rather than from what was last typed. */}
-      <SeasonDateForm key={season.id} season={season} closeHref={closeHref} />
-    </Drawer>,
-    document.body,
+  return (
+    <BodyPortal>
+      <Drawer title="פתיחת השער" subtitle={season.name} closeHref={closeHref}>
+        {/* Keyed so a different season, or a reopened drawer, starts from its
+            own stored date rather than from what was last typed. */}
+        <SeasonDateForm key={season.id} season={season} closeHref={closeHref} />
+      </Drawer>
+    </BodyPortal>
   );
 }
 
