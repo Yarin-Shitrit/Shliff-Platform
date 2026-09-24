@@ -8,3 +8,6 @@
 
 /** A locked item was dragged, nudged or resized. */
 export const LOCKED_NOTICE = 'הפריט נעול. אפשר לשחרר אותו בכפתור הנעילה.';
+
+/** The same, when several items are selected and every one of them is locked. */
+export const LOCKED_ALL_NOTICE = 'הפריטים הנבחרים נעולים. אפשר לשחרר אותם בכפתור הנעילה.';

@@ -22,7 +22,7 @@ import { useToast } from '@/components/ui/toaster';
 import { areaM2, formatArea, outsideIds } from '@/lib/site/geometry';
 import { toPlaced, type ItemShape } from '@/lib/site/derive';
 import { createPlanAction, setPlotAction } from './actions';
-import { PLOT_SIDE_INVALID } from './failure-messages';
+import { NORTH_INVALID, PLOT_SIDE_INVALID } from './failure-messages';
 import styles from './site.module.css';
 
 const GRID_OPTIONS = [
@@ -41,7 +41,7 @@ function toCm(metresText: string): number {
 export function PlotDrawer({ seasonId, seasonName, plan, items, closeHref }: {
   seasonId: string;
   seasonName: string;
-  plan: { id: string; widthCm: number; depthCm: number; gridCm: number; notes: string | null } | null;
+  plan: { id: string; widthCm: number; depthCm: number; gridCm: number; northDeg: number; notes: string | null } | null;
   items: readonly ItemShape[];
   closeHref: string;
 }) {
@@ -51,6 +51,7 @@ export function PlotDrawer({ seasonId, seasonName, plan, items, closeHref }: {
   const [width, setWidth] = useState(plan === null ? '26' : String(plan.widthCm / 100));
   const [depth, setDepth] = useState(plan === null ? '24' : String(plan.depthCm / 100));
   const [grid, setGrid] = useState(String(plan?.gridCm ?? 50));
+  const [north, setNorth] = useState(String(plan?.northDeg ?? 0));
   const [pending, setPending] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
 
@@ -58,6 +59,9 @@ export function PlotDrawer({ seasonId, seasonName, plan, items, closeHref }: {
   const depthCm = toCm(depth);
   const valid = Number.isInteger(widthCm) && Number.isInteger(depthCm)
     && widthCm >= 100 && depthCm >= 100 && widthCm <= 50_000 && depthCm <= 50_000;
+  /* Whole degrees, 0–359: the same refusal `plan.ts` makes, made here first. */
+  const northDeg = Number(north.trim());
+  const northValid = north.trim() !== '' && Number.isInteger(northDeg) && northDeg >= 0 && northDeg <= 359;
   const wouldBeOutside = valid
     ? outsideIds(items.map(toPlaced), { widthCm, depthCm }).length
     : null;
@@ -66,8 +70,9 @@ export function PlotDrawer({ seasonId, seasonName, plan, items, closeHref }: {
     event?.preventDefault();
     setRefusal(null);
     if (!valid) { setRefusal(PLOT_SIDE_INVALID); return; }
+    if (!northValid) { setRefusal(NORTH_INVALID); return; }
 
-    const input = { widthCm, depthCm, gridCm: Number(grid), notes: plan?.notes ?? null };
+    const input = { widthCm, depthCm, gridCm: Number(grid), northDeg, notes: plan?.notes ?? null };
     setPending(true);
     try {
       const result = plan === null
@@ -75,7 +80,7 @@ export function PlotDrawer({ seasonId, seasonName, plan, items, closeHref }: {
         : await setPlotAction(plan.id, input);
       if (!result.ok) { setRefusal(result.error); return; }
       show({
-        message: plan === null ? `נוצרה מפה ל${seasonName}` : 'גודל המגרש עודכן',
+        message: plan === null ? `נוצרה מפה ל${seasonName}` : 'הגדרות המגרש עודכנו',
         tone: 'ok',
       });
       router.push(closeHref);
@@ -87,7 +92,7 @@ export function PlotDrawer({ seasonId, seasonName, plan, items, closeHref }: {
 
   return (
     <Drawer
-      title={plan === null ? 'יצירת מפה' : 'גודל המגרש'}
+      title={plan === null ? 'יצירת מפה' : 'הגדרות המגרש'}
       subtitle={seasonName}
       closeHref={closeHref}
       phone="full"
@@ -124,6 +129,20 @@ export function PlotDrawer({ seasonId, seasonName, plan, items, closeHref }: {
 
         <Field id="plot-grid" label="צעד הרשת" hint="הפריטים נצמדים לרשת הזו כשגוררים אותם.">
           <Select id="plot-grid" value={grid} onChange={setGrid} options={GRID_OPTIONS} />
+        </Field>
+
+        <Field
+          id="plot-north"
+          label="כיוון הצפון"
+          hint="במעלות שלמות, מ־0 עד 359: לאן פונה החלק העליון של המפה. 0 הוא צפון. משמש רק לצל לפי שעה."
+        >
+          <input
+            className={styles.plainInput}
+            id="plot-north"
+            type="number" min="0" max="359" step="1" inputMode="numeric"
+            value={north}
+            onChange={(event) => { setNorth(event.target.value); }}
+          />
         </Field>
 
         {valid ? (

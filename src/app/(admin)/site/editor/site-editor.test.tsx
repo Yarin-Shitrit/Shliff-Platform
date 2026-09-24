@@ -2,12 +2,15 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
-import { act, createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ToastProvider } from '@/components/ui/toaster';
 import { unnamedControls } from '@/test/a11y';
+import { contains, overlap } from '@/lib/site/geometry';
+import { rectOf } from '@/lib/site/editor/model';
 import type { EditorDoc, EditorItem, EditorPlot } from '@/lib/site/editor/model';
 import type { SiteOp } from '@/lib/site/editor/ops';
 import { NETWORK_FAILURE, type QueueSnapshot } from './save-queue';
+import { LOCKED_ALL_NOTICE, LOCKED_NOTICE } from './notices';
 import type { EditorStore, EditorStoreInit } from './use-editor-store';
 import type { SceneHandle, SceneViewProps, ViewInfo } from './scene/scene-view';
 
@@ -100,9 +103,23 @@ const fake = vi.hoisted(() => {
 });
 
 vi.mock('./use-editor-store', async () => {
-  const { useRef, useState, useSyncExternalStore } = await import('react');
+  const { useMemo, useRef, useState, useSyncExternalStore } = await import('react');
   const { applyOps, invertOps } = await import('@/lib/site/editor/ops');
   const history = await import('@/lib/site/editor/history');
+  const { derive } = await import('@/lib/site/derive');
+
+  /* The flags as the real store works them out — from `derive`, the server's
+     own rule — so the checks bar and the list see a real problem. */
+  function flagsOf(doc: EditorDoc): EditorStore['flags'] {
+    const derived = derive(doc.plot, doc.items);
+    const flags: EditorStore['flags'] = { outside: new Set(), overlapping: new Set(), partly: new Set(), pairs: derived.pairs };
+    for (const item of derived.items) {
+      if (item.outside) flags.outside.add(item.id);
+      if (item.overlapping) flags.overlapping.add(item.id);
+      if (item.shade === 'partly') flags.partly.add(item.id);
+    }
+    return flags;
+  }
 
   type Held = { doc: EditorDoc; selection: string[]; past: ReturnType<typeof history.record> };
 
@@ -113,6 +130,7 @@ vi.mock('./use-editor-store', async () => {
     }));
     const latest = useRef(held);
     const { save, notice } = useSyncExternalStore(fake.subscribe, fake.read);
+    const flags = useMemo(() => flagsOf(held.doc), [held.doc]);
 
     function commit(next: Held): void {
       latest.current = next;
@@ -129,7 +147,7 @@ vi.mock('./use-editor-store', async () => {
     return {
       doc: held.doc,
       selection: held.selection,
-      flags: { outside: new Set(), overlapping: new Set(), partly: new Set(), pairs: [] },
+      flags,
       canUndo: held.past.past.length > 0,
       canRedo: held.past.future.length > 0,
       save,
@@ -179,6 +197,9 @@ function stubMedia({ wide = true, dark = false }: { wide?: boolean; dark?: boole
 
 beforeAll(() => {
   stubMedia();
+  // jsdom captures no pointer; the library's tiles only need the calls to exist.
+  Element.prototype.setPointerCapture = () => {};
+  Element.prototype.releasePointerCapture = () => {};
 });
 
 beforeEach(() => {
@@ -476,5 +497,446 @@ describe('the keyboard', () => {
     expect(redo.disabled).toBe(false);
     fireEvent.click(redo);
     expect(firstItem().widthCm).toBe(200);
+  });
+});
+
+describe('placing from the library', () => {
+  it('puts a clicked kind at the free spot nearest the middle of the view, and selects it', async () => {
+    scene.handle.centreGround.mockReturnValue([1300, 1200]);
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('button', { name: /^הוספת מטבח,/ }));
+    const items = lastScene().store.doc.items;
+    expect(items).toHaveLength(2);
+    const kitchen = items.find((entry) => entry.kind === 'kitchen');
+    if (kitchen === undefined) throw new Error('no kitchen was added');
+    expect(lastScene().store.selection).toEqual([kitchen.id]);
+    // Free and on the plot, by the geometry the server uses — not by the placement code under test.
+    expect(overlap(rectOf(kitchen), rectOf(items[0]))).toBe(false);
+    expect(contains({ widthCm: 2600, depthCm: 2400 }, rectOf(kitchen))).toBe(true);
+    // Its middle is within a grid step of the middle of the view.
+    expect(Math.abs(kitchen.xCm + kitchen.widthCm / 2 - 1300)).toBeLessThanOrEqual(50);
+    expect(Math.abs(kitchen.yCm + kitchen.depthCm / 2 - 1200)).toBeLessThanOrEqual(50);
+  });
+
+  it('records an add under a fixed noun, so the kind אחר never reads "הוספת אחר"', async () => {
+    scene.handle.centreGround.mockReturnValue([1300, 1200]);
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('button', { name: /^הוספת אחר,/ }));
+    let label: string | null = null;
+    act(() => { label = lastScene().store.undo(); });
+    expect(label).toBe('הוספת פריט מסוג אחר');
+    expect(lastScene().store.doc.items).toHaveLength(1);
+  });
+
+  it('says there is no room instead of guessing a spot', async () => {
+    renderEditor({
+      initial: {
+        doc: siteDoc([siteItem({ id: 'a', xCm: 0, yCm: 0, widthCm: 300, depthCm: 300 })], { widthCm: 300, depthCm: 300 }),
+        version: 0,
+      },
+    });
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('button', { name: /^הוספת אוהל,/ }));
+    expect(await screen.findByText('אין במגרש מקום פנוי לפריט מסוג אוהל במידות 3 × 3 מ׳.')).toBeTruthy();
+    expect(lastScene().store.doc.items).toHaveLength(1);
+  });
+
+  it('drags a kind onto the ground with a ghost, and lands it centred on the pointer, on the grid', async () => {
+    scene.handle.groundAtClient.mockReturnValue([1010, 790]);
+    renderEditor();
+    const sceneElement = await screen.findByTestId('scene');
+    document.elementFromPoint = () => sceneElement;
+    const tent = screen.getByRole('button', { name: /^הוספת אוהל,/ });
+    fireEvent.pointerDown(tent, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(tent, { pointerId: 1, clientX: 400, clientY: 300 });
+    // A 3 × 3 m tent centred on (10.1 m, 7.9 m), snapped to the 50 cm grid.
+    expect(scene.handle.setGhost).toHaveBeenLastCalledWith({ kind: 'tent', xCm: 850, yCm: 650 });
+    fireEvent.pointerUp(tent, { pointerId: 1, clientX: 400, clientY: 300 });
+    fireEvent.click(tent, { detail: 1 }); // the click a browser sends after the drop — a pointer's, so it counts one press
+    expect(scene.handle.setGhost).toHaveBeenLastCalledWith(null);
+    const items = lastScene().store.doc.items;
+    expect(items).toHaveLength(2);
+    expect(items.find((entry) => entry.id !== 'a')).toMatchObject({ kind: 'tent', xCm: 850, yCm: 650 });
+  });
+
+  it('lands nothing when the drag ends back over a panel', async () => {
+    scene.handle.groundAtClient.mockReturnValue([1000, 800]);
+    renderEditor();
+    await screen.findByTestId('scene');
+    const panel = screen.getByRole('region', { name: 'הוספה ורשימת הפריטים' });
+    document.elementFromPoint = () => panel;
+    const tent = screen.getByRole('button', { name: /^הוספת אוהל,/ });
+    fireEvent.pointerDown(tent, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(tent, { pointerId: 1, clientX: 60, clientY: 60 });
+    expect(scene.handle.setGhost).toHaveBeenLastCalledWith(null);
+    fireEvent.pointerUp(tent, { pointerId: 1, clientX: 60, clientY: 60 });
+    expect(lastScene().store.doc.items).toHaveLength(1);
+  });
+});
+
+describe('the list of what is on the map', () => {
+  it('selects a row and flies to it; shift adds a row', async () => {
+    renderEditor({
+      initial: { doc: siteDoc([siteItem({ id: 'a' }), siteItem({ id: 'b', label: 'אוהל 2', xCm: 1500 })]), version: 0 },
+      initialSelection: null,
+    });
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('tab', { name: /במפה/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^אוהל 1/ }));
+    expect(lastScene().store.selection).toEqual(['a']);
+    expect(scene.handle.fitIds).toHaveBeenLastCalledWith(['a']);
+    fireEvent.click(screen.getByRole('button', { name: /^אוהל 2/ }), { shiftKey: true });
+    expect(lastScene().store.selection).toEqual(['a', 'b']);
+  });
+
+  it('hides a group from the scene and lets go of its items', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('tab', { name: /במפה/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'הסתרת לינה וצל' }));
+    expect(lastScene().ui.hiddenGroups).toEqual(['sleep']);
+    expect(lastScene().store.selection).toEqual([]);
+  });
+
+  /* Rulings G1, G2: a hidden item is never selected, and a group's count selects what it counts. */
+
+  it('shows a hidden group before it selects a row in it', async () => {
+    renderEditor({ initialSelection: null });
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('tab', { name: /במפה/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'הסתרת לינה וצל' }));
+    expect(lastScene().ui.hiddenGroups).toEqual(['sleep']);
+    fireEvent.click(screen.getByRole('button', { name: 'אוהל 1, בהסתרה, 3 × 2 מ׳' }));
+    expect(lastScene().ui.hiddenGroups).toEqual([]);
+    expect(lastScene().store.selection).toEqual(['a']);
+    expect(scene.handle.fitIds).toHaveBeenLastCalledWith(['a']);
+  });
+
+  it('shows the nets before it selects a net’s row while they are hidden', async () => {
+    const net = siteItem({ id: 's', kind: 'shade', label: 'רשת צל 1', xCm: 1200, widthCm: 800, depthCm: 800, insetCm: 50 });
+    renderEditor({ initial: { doc: siteDoc([siteItem({ id: 'a' }), net]), version: 0 }, initialSelection: null });
+    await screen.findByTestId('scene');
+    fireEvent.click(button('הסתרת רשתות צל'));
+    expect(lastScene().ui.netsHidden).toBe(true);
+    fireEvent.click(screen.getByRole('tab', { name: /במפה/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'רשת צל 1, בהסתרה, 8 × 8 מ׳' }), { shiftKey: true });
+    expect(lastScene().ui.netsHidden).toBe(false);
+    expect(lastScene().store.selection).toEqual(['s']);
+  });
+
+  it('selects every row a group counts and flies to them, showing the group first', async () => {
+    renderEditor({
+      initial: {
+        doc: siteDoc([
+          siteItem({ id: 'a' }),
+          siteItem({ id: 'b', label: 'אוהל 2', xCm: 1500 }),
+          siteItem({ id: 'k', kind: 'kitchen', label: 'מטבח 1', yCm: 1500, widthCm: 400, depthCm: 300 }),
+        ]),
+        version: 0,
+      },
+      initialSelection: null,
+    });
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('tab', { name: /במפה/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'הסתרת לינה וצל' }));
+    fireEvent.click(screen.getByRole('button', { name: 'בחירת הפריטים בקבוצה לינה וצל (2)' }));
+    expect(lastScene().ui.hiddenGroups).toEqual([]);
+    expect(lastScene().store.selection).toEqual(['a', 'b']);
+    expect(scene.handle.fitIds).toHaveBeenLastCalledWith(['a', 'b']);
+  });
+
+  it('takes an empty list to the library, and the focus with it', async () => {
+    renderEditor({ initial: { doc: siteDoc([]), version: 0 }, initialSelection: null });
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('tab', { name: 'במפה 0' }));
+    const go = button('מעבר להוספה למפה');
+    go.focus();
+    fireEvent.click(go);
+    const library = screen.getByRole('tab', { name: 'הוספה למפה' });
+    expect(library.getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(library);
+  });
+});
+
+describe('the inspector', () => {
+  const inspector = () => within(screen.getByRole('region', { name: 'מאפיינים' }));
+  const twoTents = () => ({
+    doc: siteDoc([siteItem({ id: 'a' }), siteItem({ id: 'b', label: 'אוהל 2', xCm: 1500 })]),
+    version: 0,
+  });
+
+  it('shows the one item selected, the plot when nothing is, and the kinds when several are', async () => {
+    renderEditor({ initial: twoTents() });
+    await screen.findByTestId('scene');
+    expect(inspector().getByRole('heading', { name: 'אוהל 1' })).toBeTruthy();
+    fireEvent.keyDown(stage(), { code: 'Escape' });
+    expect(inspector().getByRole('heading', { name: 'המגרש' })).toBeTruthy();
+    fireEvent.keyDown(stage(), { code: 'KeyA', metaKey: true });
+    expect(inspector().getByRole('heading', { name: 'נבחרו 2 פריטים' })).toBeTruthy();
+    // A kind's chip selects that kind and flies to it (ruling P9).
+    fireEvent.click(inspector().getByRole('button', { name: '2 אוהלים' }));
+    expect(lastScene().store.selection).toEqual(['a', 'b']);
+    expect(scene.handle.fitIds).toHaveBeenLastCalledWith(['a', 'b']);
+  });
+
+  it('takes no shortcut from a box being typed in', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(inspector().getByLabelText('שם'), { code: 'KeyR', key: 'ר' });
+    expect(firstItem()).toMatchObject({ widthCm: 300, depthCm: 200 });
+  });
+
+  it('applies a typed width through the store, so ⌘Z takes it back', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    const width = inspector().getByLabelText('רוחב');
+    fireEvent.change(width, { target: { value: '4' } });
+    fireEvent.keyDown(width, { key: 'Enter' });
+    expect(firstItem().widthCm).toBe(400);
+    fireEvent.keyDown(stage(), { code: 'KeyZ', metaKey: true });
+    expect(firstItem().widthCm).toBe(300);
+  });
+
+  it('turns, locks and removes from its footer, and a lock keeps the item', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.click(inspector().getByRole('button', { name: 'סיבוב' }));
+    expect(firstItem()).toMatchObject({ widthCm: 200, depthCm: 300 });
+    fireEvent.click(inspector().getByRole('button', { name: 'נעילה' }));
+    expect(firstItem().locked).toBe(true);
+    fireEvent.click(inspector().getByRole('button', { name: 'הסרה' }));
+    expect(lastScene().store.doc.items).toHaveLength(1);
+    fireEvent.click(inspector().getByRole('button', { name: 'נעילה' }));
+    fireEvent.click(inspector().getByRole('button', { name: 'הסרה' }));
+    expect(lastScene().store.doc.items).toHaveLength(0);
+    expect(inspector().getByRole('heading', { name: 'המגרש' })).toBeTruthy();
+  });
+
+  it('shows a hidden group before a figure of the plot selects it — the one pickIds', async () => {
+    renderEditor({ initialSelection: null });
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('tab', { name: /במפה/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'הסתרת לינה וצל' }));
+    expect(lastScene().ui.hiddenGroups).toEqual(['sleep']);
+    fireEvent.click(inspector().getByRole('button', { name: 'לינה וצל 1' }));
+    expect(lastScene().ui.hiddenGroups).toEqual([]);
+    expect(lastScene().store.selection).toEqual(['a']);
+    expect(scene.handle.fitIds).toHaveBeenLastCalledWith(['a']);
+  });
+});
+
+describe('what an edit says', () => {
+  /** The toast holding `text`, to press its ביטול. */
+  async function toastOf(text: string) {
+    const message = await screen.findByText(text);
+    const toast = message.closest('li');
+    if (toast === null) throw new Error(`"${text}" is not in a toast`);
+    return within(toast);
+  }
+
+  const threeTents = (lockedIds: string[] = []) => ({
+    doc: siteDoc(['a', 'b', 'c'].map((id, index) => siteItem({
+      id, label: `אוהל ${index + 1}`, xCm: 300 + index * 500, locked: lockedIds.includes(id),
+    }))),
+    version: 0,
+  });
+
+  it('removes without asking, and ביטול puts the item back', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'Delete' });
+    expect(lastScene().store.doc.items).toEqual([]);
+    fireEvent.click((await toastOf('הפריט אוהל 1 הוסר מהמפה')).getByRole('button', { name: 'ביטול' }));
+    await waitFor(() => { expect(lastScene().store.doc.items.map((entry) => entry.id)).toEqual(['a']); });
+  });
+
+  it('keeps a locked item where it is, and says why nothing happened', async () => {
+    renderEditor({ initial: { doc: siteDoc([siteItem({ id: 'a', locked: true })]), version: 0 } });
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'Delete' });
+    // Ruling P14: the one sentence every surface says about a locked item.
+    expect(await screen.findByText(LOCKED_NOTICE)).toBeTruthy();
+    expect(lastScene().store.doc.items).toHaveLength(1);
+    fireEvent.keyDown(stage(), { code: 'KeyR' });
+    expect(firstItem().widthCm).toBe(300);
+  });
+
+  it('says so in the plural when every selected item is locked', async () => {
+    renderEditor({ initial: threeTents(['a', 'b', 'c']) });
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'KeyA', metaKey: true });
+    fireEvent.keyDown(stage(), { code: 'ArrowRight' });
+    expect(await screen.findByText(LOCKED_ALL_NOTICE)).toBeTruthy();
+    expect(lastScene().store.doc.items.map((entry) => entry.xCm)).toEqual([300, 800, 1300]);
+  });
+
+  it('says what a duplicate made, and ביטול takes the copy away', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'KeyD', metaKey: true });
+    expect(lastScene().store.doc.items).toHaveLength(2);
+    fireEvent.click((await toastOf('נוצר עותק של אוהל 1')).getByRole('button', { name: 'ביטול' }));
+    await waitFor(() => { expect(lastScene().store.doc.items).toHaveLength(1); });
+  });
+
+  it('says a lock was put on, and ביטול takes it off', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'KeyL' });
+    expect(firstItem().locked).toBe(true);
+    fireEvent.click((await toastOf('הפריט אוהל 1 ננעל')).getByRole('button', { name: 'ביטול' }));
+    await waitFor(() => { expect(firstItem().locked).toBe(false); });
+  });
+
+  it('counts the items a lock actually changed, not the ones selected (ruling P12)', async () => {
+    renderEditor({ initial: threeTents(['b']) });
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'KeyA', metaKey: true });
+    fireEvent.keyDown(stage(), { code: 'KeyL' });
+    expect(lastScene().store.doc.items.every((entry) => entry.locked)).toBe(true);
+    expect(await screen.findByText('2 פריטים ננעלו')).toBeTruthy();
+    expect(screen.queryByText('3 פריטים ננעלו')).toBeNull();
+  });
+
+  it('names the one item a lock changed, even from a larger selection', async () => {
+    renderEditor({ initial: threeTents(['a', 'c']) });
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'KeyA', metaKey: true });
+    fireEvent.keyDown(stage(), { code: 'KeyL' });
+    expect(await screen.findByText('הפריט אוהל 2 ננעל')).toBeTruthy();
+  });
+
+  it('says a library item landed, and ביטול takes it off the map', async () => {
+    scene.handle.centreGround.mockReturnValue([1300, 1200]);
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('button', { name: /^הוספת מטבח,/ }));
+    expect(lastScene().store.doc.items).toHaveLength(2);
+    fireEvent.click((await toastOf('הפריט מטבח 1 נוסף למפה')).getByRole('button', { name: 'ביטול' }));
+    await waitFor(() => { expect(lastScene().store.doc.items).toHaveLength(1); });
+  });
+
+  /* Ruling P6: an undo toast undoes only its own history entry. Once anything
+     newer is on top, its ביטול would undo that instead — so it goes. */
+
+  it('takes an undo toast away when a newer edit is made', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'KeyD', metaKey: true });
+    expect(await screen.findByText('נוצר עותק של אוהל 1')).toBeTruthy();
+    fireEvent.keyDown(stage(), { code: 'KeyR' });
+    expect(screen.queryByText('נוצר עותק של אוהל 1')).toBeNull();
+    // The newer edit and the copy both stand.
+    const items = lastScene().store.doc.items;
+    expect(items).toHaveLength(2);
+    expect(items[1]).toMatchObject({ widthCm: 200, depthCm: 300 });
+  });
+
+  it('takes an undo toast away when the keys undo its entry', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'KeyD', metaKey: true });
+    expect(await screen.findByText('נוצר עותק של אוהל 1')).toBeTruthy();
+    fireEvent.keyDown(stage(), { code: 'KeyZ', metaKey: true });
+    expect(lastScene().store.doc.items).toHaveLength(1);
+    expect(screen.queryByText('נוצר עותק של אוהל 1')).toBeNull();
+  });
+
+  it('takes an undo toast away when a drag in the scene makes a newer edit', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'KeyD', metaKey: true });
+    expect(await screen.findByText('נוצר עותק של אוהל 1')).toBeTruthy();
+    act(() => { lastScene().store.run('הזזה', [{ type: 'update', id: 'a', patch: { xCm: 600 } }]); });
+    expect(screen.queryByText('נוצר עותק של אוהל 1')).toBeNull();
+    expect(firstItem().xCm).toBe(600);
+  });
+
+  it('keeps an older toast from undoing a newer toast’s entry', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'KeyD', metaKey: true });
+    expect(await screen.findByText('נוצר עותק של אוהל 1')).toBeTruthy();
+    const copy = lastScene().store.doc.items[1];
+    fireEvent.keyDown(stage(), { code: 'KeyL' }); // the copy is what is selected
+    // Only the newest undo toast is left, and its ביטול takes off only the lock.
+    expect(screen.queryByText('נוצר עותק של אוהל 1')).toBeNull();
+    fireEvent.click((await toastOf(`הפריט ${copy.label} ננעל`)).getByRole('button', { name: 'ביטול' }));
+    await waitFor(() => { expect(lastScene().store.doc.items.every((entry) => !entry.locked)).toBe(true); });
+    expect(lastScene().store.doc.items).toHaveLength(2);
+  });
+});
+
+describe('the checks, the view controls and the minimap', () => {
+  it('presses a check to select the next case and fly to it', async () => {
+    renderEditor({ initial: { doc: siteDoc([siteItem({ id: 'a', xCm: 2500 })]), version: 0 }, initialSelection: null });
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('button', { name: '1 מחוץ לגדר' }));
+    expect(lastScene().store.selection).toEqual(['a']);
+    expect(scene.handle.fitIds).toHaveBeenLastCalledWith(['a']);
+  });
+
+  it('shows a hidden group before a check selects a case in it — the one pickIds', async () => {
+    renderEditor({ initial: { doc: siteDoc([siteItem({ id: 'a', xCm: 2500 })]), version: 0 }, initialSelection: null });
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('tab', { name: /במפה/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'הסתרת לינה וצל' }));
+    fireEvent.click(screen.getByRole('button', { name: '1 מחוץ לגדר' }));
+    expect(lastScene().ui.hiddenGroups).toEqual([]);
+    expect(lastScene().store.selection).toEqual(['a']);
+  });
+
+  it('zooms and brings north up from the view controls, by the keys’ step', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('button', { name: 'התקרבות' }));
+    expect(scene.handle.zoomBy).toHaveBeenLastCalledWith(0.8);
+    fireEvent.click(screen.getByRole('button', { name: 'צפון למעלה' }));
+    expect(scene.handle.northUp).toHaveBeenCalled();
+  });
+
+  it('points the compass at the plot’s own north', async () => {
+    renderEditor({ initial: { doc: siteDoc([siteItem({ id: 'a' })], { northDeg: 90 }), version: 0 } });
+    await screen.findByTestId('scene');
+    act(() => { lastScene().onView(VIEW); });
+    const needle = button('צפון למעלה').querySelector('svg');
+    expect(needle?.style.transform).toBe('rotate(-90deg)');
+  });
+
+  it('moves the view from the minimap', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    const minimap = screen.getByRole('img', { name: /מפה מוקטנת/ });
+    minimap.getBoundingClientRect = () => ({
+      left: 0, top: 0, width: 168, height: 154, right: 168, bottom: 154, x: 0, y: 0, toJSON: () => ({}),
+    }) as DOMRect;
+    fireEvent.pointerDown(minimap, { pointerId: 1, button: 0, clientX: 84, clientY: 77 });
+    expect(scene.handle.jumpTo).toHaveBeenLastCalledWith(1300, 1200);
+  });
+
+  it('floats the selection bar by the selection, and hides it while the view moves', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    act(() => { lastScene().onView({ ...VIEW, selectionBox: { l: 100, t: 200, r: 300, b: 260 } }); });
+    const bar = screen.getByRole('group', { name: 'פעולות על הבחירה' });
+    expect(bar.style.left).toBe('200px');
+    fireEvent.click(within(bar).getByRole('button', { name: 'סיבוב ברבע' }));
+    expect(firstItem().widthCm).toBe(200);
+    fireEvent.click(within(bar).getByRole('button', { name: 'נעילה' }));
+    expect(firstItem().locked).toBe(true);
+    act(() => { lastScene().onView({ ...VIEW, moving: true, selectionBox: null }); });
+    expect(screen.queryByRole('group', { name: 'פעולות על הבחירה' })).toBeNull();
+  });
+
+  it('opens the shortcuts card with ?, and esc closes it without letting go of the selection', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'Slash', shiftKey: true });
+    expect(screen.getByRole('dialog', { name: 'קיצורי מקלדת' })).toBeTruthy();
+    fireEvent.keyDown(stage(), { code: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'קיצורי מקלדת' })).toBeNull();
+    expect(lastScene().store.selection).toEqual(['a']);
   });
 });

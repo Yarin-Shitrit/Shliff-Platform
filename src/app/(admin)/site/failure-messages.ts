@@ -43,3 +43,4 @@ export function siteFailureMessage(error: unknown): string {
 export const LABEL_REQUIRED = SITE_ERRORS.find(([prefix]) => prefix === 'an item must have a label')![1];
 export const PLOT_SIDE_INVALID = SITE_ERRORS.find(([prefix]) => prefix === 'a plot side must be')![1];
 export const ITEM_SIDE_INVALID = SITE_ERRORS.find(([prefix]) => prefix === 'an item side must be')![1];
+export const NORTH_INVALID = SITE_ERRORS.find(([prefix]) => prefix === 'north must be')![1];

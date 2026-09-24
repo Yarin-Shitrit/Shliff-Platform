@@ -1,0 +1,40 @@
+/* The checks bar (spec §10). Tokens only, logical properties throughout. */
+
+/* Centred over the scene: inset on both inline sides, as wide as its content. */
+.checks {
+  position: absolute;
+  inset-block-start: 12px;
+  inset-inline: 0;
+  margin-inline: auto;
+  inline-size: fit-content;
+  display: flex;
+  gap: 6px;
+  padding: 5px;
+  border-radius: var(--radius-pill);
+  background: var(--panel);
+  box-shadow: var(--shadow-pop);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  block-size: 28px;
+  padding-inline: 11px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.chip[data-tone='bad'] { background: var(--bad-soft); color: var(--bad); }
+.chip[data-tone='warn'] { background: var(--warn-soft); color: var(--warn); }
+.chip[data-tone='ok'] { background: var(--ok-soft); color: var(--ok); cursor: default; }
+
+.chipDot {
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+}
