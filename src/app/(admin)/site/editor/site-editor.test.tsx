@@ -342,6 +342,8 @@ describe('saving', () => {
     expect(fake.retrySave).toHaveBeenCalledTimes(1);
     // A reload would throw away what the lead did while offline (ruling P8).
     expect(screen.queryByRole('button', { name: 'טעינת הגרסה העדכנית' })).toBeNull();
+    // Nor is a dropped connection a reason to rebuild over the server's map: the retry is the way.
+    expect(screen.queryByRole('button', { name: 'שמירת השינויים שלי מעליה' })).toBeNull();
     expect(fake.resolveConflict).not.toHaveBeenCalled();
   });
 
@@ -363,6 +365,23 @@ describe('saving', () => {
     await act(async () => { loading.settle(); await loading.promise; });
     expect(button('טעינת הגרסה העדכנית').disabled).toBe(false);
     expect(button('ניסיון חוזר').disabled).toBe(false);
+  });
+
+  /* Review C2: a refused batch is resent unchanged by every retry, and the
+     reload throws away everything unsent. The third way keeps the work: the
+     latest map, with what can still apply replayed on top and the rest named. */
+  it('offers to keep my changes over the latest map when a batch is refused', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    saving({ status: 'error', errorKind: 'refused', error: 'הפריט נעול.', pending: 1 });
+    const loading = held();
+    fake.resolveConflict.mockReturnValueOnce(loading.promise);
+    fireEvent.click(button('שמירת השינויים שלי מעליה'));
+    expect(fake.resolveConflict).toHaveBeenCalledWith('mine');
+    // One answer at a time.
+    expect(button('שמירת השינויים שלי מעליה').disabled).toBe(true);
+    expect(button('טעינת הגרסה העדכנית').disabled).toBe(true);
+    await act(async () => { loading.settle(); await loading.promise; });
   });
 
   it('turns a stale version into a choice, and takes the other lead’s map only when chosen', async () => {

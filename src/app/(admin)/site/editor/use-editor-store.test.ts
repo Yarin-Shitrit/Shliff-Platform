@@ -166,6 +166,32 @@ describe('the editor store', () => {
     expect(result.current.save.status).toBe('saved');
   });
 
+  /*
+   * Review C2: another lead removed an item this lead has just moved. The
+   * server skips the move and says so; the item leaves this map too, by the
+   * name the lead knew it by — the same sentence 'mine' uses.
+   */
+  it('drops and names an item the server skipped because another lead removed it', async () => {
+    const save = vi.fn<EditorStoreInit['save']>(async (base) => ({ ok: true, version: base + 1, skipped: [B] }));
+    const { result } = setup({ save });
+    act(() => { result.current.run('הזזה', [moveTo(A, 400), moveTo(B, 900)], [A, B]); });
+    await waitForSave();
+    expect(result.current.doc.items.map((entry) => entry.id)).toEqual([A]);
+    expect(result.current.doc.items[0].xCm).toBe(400);
+    expect(result.current.selection).toEqual([A]);
+    expect(result.current.notice).toBe(goneNotice('אוהל 2'));
+    expect(result.current.save).toMatchObject({ status: 'saved', version: 1, pending: 0 });
+  });
+
+  it('says nothing about a skipped removal of an item already gone here too', async () => {
+    const save = vi.fn<EditorStoreInit['save']>(async (base) => ({ ok: true, version: base + 1, skipped: [B] }));
+    const { result } = setup({ save });
+    act(() => { result.current.run('הסרה', [{ type: 'remove', id: B }]); });
+    await waitForSave();
+    expect(result.current.doc.items.map((entry) => entry.id)).toEqual([A]);
+    expect(result.current.notice).toBeNull();
+  });
+
   describe('when another lead saved first', () => {
     const conflicting = () => vi.fn<EditorStoreInit['save']>(async (base): Promise<SaveResult> => (
       base === 0 ? { ok: false, reason: 'conflict', version: 5 } : { ok: true, version: base + 1 }

@@ -50,6 +50,12 @@ export interface SaveQueueOptions {
   /** Quiet time after the last change before a send. Default 500 ms. */
   delayMs?: number;
   onChange: (snapshot: QueueSnapshot) => void;
+  /**
+   * The ids a saved batch named that the server no longer has — it skipped
+   * those updates and removals and saved the rest (review C2). Called only
+   * when there were any.
+   */
+  onSkipped?: (ids: string[]) => void;
   /** Injectable for tests; defaults to `setTimeout` / `clearTimeout`. */
   timers?: { set: (fn: () => void, ms: number) => unknown; clear: (handle: unknown) => void };
 }
@@ -63,6 +69,7 @@ export class SaveQueue {
   private readonly send: SaveFn;
   private readonly delayMs: number;
   private readonly onChange: (snapshot: QueueSnapshot) => void;
+  private readonly onSkipped: ((ids: string[]) => void) | undefined;
   private readonly setTimer: (fn: () => void, ms: number) => unknown;
   private readonly clearTimer: (handle: unknown) => void;
 
@@ -101,6 +108,7 @@ export class SaveQueue {
     this.version = options.version;
     this.delayMs = options.delayMs ?? DEFAULT_DELAY_MS;
     this.onChange = options.onChange;
+    this.onSkipped = options.onSkipped;
     this.setTimer = options.timers?.set ?? ((fn, ms) => setTimeout(fn, ms));
     this.clearTimer = options.timers?.clear ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>));
   }
@@ -297,11 +305,13 @@ export class SaveQueue {
     this.inFlight = null;
     this.inFlightIsStranded = false;
     this.flight = null;
+    let skipped: string[] = [];
     if (result !== null && result.ok) {
       this.version = result.version;
       this.halted = null;
       this.error = null;
       this.errorKind = null;
+      skipped = result.skipped ?? [];
     } else {
       this.cancelTimer();
       if (result === null) {
@@ -343,6 +353,13 @@ export class SaveQueue {
       }
     }
     this.emit();
+    if (skipped.length > 0 && !this.disposed) {
+      try {
+        this.onSkipped?.(skipped);
+      } catch {
+        // Same as `emit`: a subscriber's failure never corrupts the queue.
+      }
+    }
   }
 
   private emit(): void {

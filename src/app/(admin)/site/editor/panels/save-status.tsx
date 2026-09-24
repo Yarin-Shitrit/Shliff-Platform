@@ -72,19 +72,30 @@ export function ConflictBanner({ busy, onTheirs, onMine }: {
  * `onReload` — the way back — only for a refusal. A lost connection gets the
  * reason and the retry, never a reload (plan 04, ruling P8): a reload must not
  * be the only way out of a dropped connection.
+ *
+ * `onMine` — also only for a refusal (review C2): the retry resends the same
+ * refused batch, and the reload drops everything unsent, so the third way
+ * keeps the work — the latest map, with what can still apply replayed on top
+ * and the rest named.
  */
-export function SaveErrorBanner({ message, busy, onReload, id }: {
+export function SaveErrorBanner({ message, busy, onReload, onMine, id }: {
   message: string;
   busy: boolean;
   onReload?: () => void;
+  onMine?: () => void;
   id?: string;
 }): ReactElement {
   return (
     <div className={styles.banner} data-tone="bad" role="alert">
       <p className={styles.bannerText} id={id}>{message}</p>
-      {onReload === undefined ? null : (
+      {onReload === undefined && onMine === undefined ? null : (
         <span className={styles.bannerActions}>
-          <Button size="sm" onClick={onReload} disabled={busy}>טעינת הגרסה העדכנית</Button>
+          {onReload === undefined ? null : (
+            <Button size="sm" onClick={onReload} disabled={busy}>טעינת הגרסה העדכנית</Button>
+          )}
+          {onMine === undefined ? null : (
+            <Button size="sm" onClick={onMine} disabled={busy}>שמירת השינויים שלי מעליה</Button>
+          )}
         </span>
       )}
     </div>

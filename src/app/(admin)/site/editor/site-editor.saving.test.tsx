@@ -141,6 +141,31 @@ describe('saving, through the store and the queue', () => {
     expect(screen.getByText('כל השינויים נשמרו')).toBeTruthy();
   });
 
+  /*
+   * Review C2, end to end: another lead locked the tent this lead just turned.
+   * Every retry resent the same refused batch, and the only other button
+   * threw away everything unsent. Keeping mine reloads, names the locked
+   * item, drops only that change, and the queue is free again.
+   */
+  it('gets out of a refused batch by keeping my changes over the latest map, naming what was locked', async () => {
+    saveSiteChangesAction.mockResolvedValueOnce({ ok: false, reason: 'refused', error: 'הפריט נעול.' });
+    loadSiteDocAction.mockResolvedValue({
+      ok: true,
+      value: { doc: siteDoc([siteItem({ id: 'a', locked: true }), siteItem({ id: 'b', label: 'אוהל 2', xCm: 1500 })]), version: 2 },
+    });
+    await renderEditor();
+    turn();
+    expect(await screen.findByText('הפריט נעול.', undefined, WAIT)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'שמירת השינויים שלי מעליה' }));
+    await waitFor(() => { expect(loadSiteDocAction).toHaveBeenCalledWith('p1'); });
+    expect(await screen.findByText(/לא נשמרו שינויים בפריטים נעולים/)).toBeTruthy();
+    expect(firstItem()).toMatchObject({ widthCm: 300, depthCm: 200, locked: true });
+    expect(await saved()).toBeTruthy();
+    expect(screen.queryByText('הפריט נעול.')).toBeNull();
+    // Nothing was left to send: the refused turn is not tried again.
+    expect(saveSiteChangesAction).toHaveBeenCalledTimes(1);
+  });
+
   it('turns a stale version into a choice, and the other lead’s map replaces mine when chosen', async () => {
     saveSiteChangesAction.mockResolvedValue({ ok: false, reason: 'conflict', version: 4 });
     loadSiteDocAction.mockResolvedValue({

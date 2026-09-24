@@ -675,6 +675,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
           message={saveError}
           busy={resolving}
           onReload={refused ? () => { void resolve('theirs'); } : undefined}
+          onMine={refused ? () => { void resolve('mine'); } : undefined}
         />
       )}
       {store.notice === null ? null : (

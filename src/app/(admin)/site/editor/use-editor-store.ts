@@ -77,6 +77,10 @@ const LRI = '⁦';
 const PDI = '⁩';
 const isolate = (name: string) => `${LRI}${name}${PDI}`;
 
+/** Changes to items another lead removed: not saved, named by what this lead called them. */
+const goneSentence = (names: readonly string[]) =>
+  `לא נשמרו שינויים בפריטים שכבר לא במפה: ${names.map(isolate).join(', ')}.`;
+
 /** Only ids the map still has, each once, in the order given. */
 function existing(doc: EditorDoc, ids: readonly string[]): string[] {
   const present = new Set(doc.items.map((item) => item.id));
@@ -195,6 +199,18 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
         versionRef.current = snapshot.version;
         setSave(snapshot);
       },
+      /* The server skipped changes to items another lead removed (review
+         C2). They leave this map too — the server has no such item — named
+         by what this lead called them. A removal already gone here says
+         nothing: it did what it was asked. */
+      onSkipped: (ids) => {
+        const current = latest.current;
+        const gone = new Set(ids.filter((id) => findItem(current.doc, id) !== undefined));
+        if (gone.size === 0) return;
+        const names = current.doc.items.filter((entry) => gone.has(entry.id)).map((entry) => entry.label);
+        const doc = { ...current.doc, items: current.doc.items.filter((entry) => !gone.has(entry.id)) };
+        commit({ ...current, doc, selection: existing(doc, current.selection), notice: goneSentence(names) });
+      },
     });
     queueRef.current = queue;
 
@@ -222,7 +238,7 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
       queue.dispose();
       if (queueRef.current === queue) queueRef.current = null;
     };
-  }, [initial]);
+  }, [initial, commit]); // `commit` is stable: the queue is still made once per `initial`
 
   const run = useCallback((label: string, ops: SiteOp[], selection?: string[]) => {
     const current = latest.current;
@@ -376,7 +392,7 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
       const sentences: string[] = [];
       const gone = [...new Set(goneNames)];
       const locked = [...new Set(lockedNames)];
-      if (gone.length > 0) sentences.push(`לא נשמרו שינויים בפריטים שכבר לא במפה: ${gone.map(isolate).join(', ')}.`);
+      if (gone.length > 0) sentences.push(goneSentence(gone));
       if (locked.length > 0) sentences.push(`לא נשמרו שינויים בפריטים נעולים: ${locked.map(isolate).join(', ')}.`);
       commit({
         ...current,

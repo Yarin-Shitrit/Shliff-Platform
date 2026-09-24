@@ -217,6 +217,7 @@ export type SaveStatus = 'saved' | 'pending' | 'saving' | 'error' | 'conflict';
 export interface QueueSnapshot { status: SaveStatus; version: number; pending: number; error: string | null }
 export interface SaveQueueOptions { send: SaveFn; version: number; delayMs?: number;           // default 500
   onChange: (snapshot: QueueSnapshot) => void;
+  onSkipped?: (ids: string[]) => void;          // a saved batch's ids the server no longer has (review C2)
   timers?: { set: (fn: () => void, ms: number) => unknown; clear: (handle: unknown) => void } }
 export class SaveQueue {
   constructor(options: SaveQueueOptions);
@@ -230,6 +231,11 @@ export class SaveQueue {
   dispose(): void;
 }
 // A network failure (send throws) → status 'error', error 'השמירה נכשלה, אולי אין חיבור. אפשר לנסות שוב.'
+// SaveResult (ops.ts): { ok: true; version: number; skipped?: string[] } | { ok: false; reason: 'conflict'; version }
+//   | { ok: false; reason: 'refused'; error }. `skipped` (review C2, additive): `applySiteOps` passes over an update or a
+//   removal naming an item the plan no longer has — the rule `applyOps` keeps — instead of refusing the whole batch, and
+//   reports the ids; the store drops those items from its map and names them. A batch whose every op was skipped keeps
+//   the version.
 
 // use-editor-store.ts — Task 16
 export interface EditorFlags { outside: Set<string>; overlapping: Set<string>; partly: Set<string>; pairs: Array<[string, string]> }
@@ -378,7 +384,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement;
 - `sun`: `jerusalemInstant` reads DST from the tz database via `Intl`; a malformed date throws `a sun date must be YYYY-MM-DD` (callers pass `startsOn`, so only a code bug reaches it).
 - `applyOps` inserts an add in (sort, id) order, so an undone removal returns to its place. The server keeps the client's `sort` on add (ruling during Task 7; `newItemRefusal` requires a whole number ≥ 0), so client and server agree on draw order.
 - One lock rule, in one file: `ops.ts` exports `LOCKED_FIELDS` (`xCm`, `yCm`, `widthCm`, `depthCm`, `heightCm`, `kind`, `insetCm`) and `lockRefusal(locked, patch)`. `commands.ts` (`patchOps` and every geometry command) and `plan.ts` both use them; neither declares its own list. Height counts as a size, so a locked item's height cannot change.
-- An empty batch saves nothing and keeps the version; `setPlot` bumps the version, so an editor open during a plot change gets a conflict instead of saving over a stale plot. `saveSiteChangesAction` does not call `revalidatePath`.
+- An empty batch saves nothing and keeps the version, and so does a batch whose every op was skipped (review C2); `setPlot` bumps the version, so an editor open during a plot change gets a conflict instead of saving over a stale plot. `saveSiteChangesAction` does not call `revalidatePath`.
 - Test files do not import fixtures from other test files (that re-registers their tests); each has its own small fixture.
 
 ### Amendments recorded after plan 03 was written (additive; binding)
@@ -397,7 +403,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement;
 - `SiteEditorProps.fallback?: ReactNode` carries the item table. `SiteEditor` probes WebGL once; without it, it renders `SceneView` (for its `NO_WEBGL` notice) with the table under it. It never imports `NO_WEBGL` statically — a static import of `scene-view.tsx` would put `three` in the page's first bundle.
 - A newer `initial.version` after a plot save: `SiteEditor` is never keyed; with nothing pending it calls `resolveConflict('mine')` — never 'theirs', which empties the queue and so dropped every edit made while the map loaded (hotfix H1) — and moves the P6 history mark only after the await; it asks nothing while that load runs. With pending ops it shows the conflict banner, with a batch in flight it waits for the answer (Task 25).
 - `SiteEditor` exposes `SCENE_PALETTE` as `--group-*` / `--scene-*` CSS variables (a static import of `palette.ts`, which must stay free of `three`).
-- New panel pieces: `SaveErrorBanner({ message, busy, onReload })`, `panels/selection-actions.tsx` (shared by the inspector footer and `SelectionBar`), `ItemInspector.footer?`, `MultiInspector.footer?`/`onClear?`, `panels/north.ts` (`northText`), pure helpers `scaleFor`, `minimapBounds`, `minimapPoint`, `hourText`; `views.ts` gains `sunDateOf` and `seasonDateHref`; `failure-messages.ts` gains `NORTH_INVALID`.
+- New panel pieces: `SaveErrorBanner({ message, busy, onReload, onMine })` (`onMine` for a refusal: keep my changes over the latest map, review C2), `panels/selection-actions.tsx` (shared by the inspector footer and `SelectionBar`), `ItemInspector.footer?`, `MultiInspector.footer?`/`onClear?`, `panels/north.ts` (`northText`), pure helpers `scaleFor`, `minimapBounds`, `minimapPoint`, `hourText`; `views.ts` gains `sunDateOf` and `seasonDateHref`; `failure-messages.ts` gains `NORTH_INVALID`.
 - Toasts keep the kit's dwell (10 s with an undo), not the spec's 5 s — one timing across the platform. An undo toast undoes only its own history entry (P6): every history change `SiteEditor` makes (an edit from any panel, the keys or the scene — the scene is handed the store with its `run` routed through the same door — an undo, a redo, a reload) takes the open undo toasts away, through the kit's `show`, which returns a dismiss function; a stale ביטול says so instead of undoing. The lock toast counts `ops.length` (P12); the locked sentence is `notices.ts` `LOCKED_NOTICE`, with `LOCKED_ALL_NOTICE` beside it for an all-locked selection (P14).
 - The plot drawer is titled "הגדרות המגרש" (it now holds north too).
 - An existing season's gate date (`seasons.startsOn`) is edited in the shell's `?act=season-date` drawer (rulings SD1–SD3, the separate season-opening-date branch). The sun card links there (SD4) through `views.ts` `seasonDateHref` / `SEASON_DATE_ACT`: its no-date state invites the date, and a shown date links to it. Until that branch is on main the link opens nothing.

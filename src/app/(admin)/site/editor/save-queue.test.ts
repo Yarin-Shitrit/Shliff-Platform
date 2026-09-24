@@ -68,6 +68,26 @@ describe('the save queue', () => {
     expect(queue.snapshot).toEqual({ status: 'saved', version: 1, pending: 0, error: null, errorKind: null });
   });
 
+  it('hands on the items the server skipped because they are no longer on the map (review C2)', async () => {
+    const clock = manualTimers();
+    const onSkipped = vi.fn();
+    const send = vi.fn<SaveFn>(async () => ({ ok: true, version: 1, skipped: ['gone'] }));
+    const queue = new SaveQueue({ send, version: 0, timers: clock.timers, onChange: () => {}, onSkipped });
+    queue.enqueue([move('gone', 100), move('b', 20)]);
+    clock.fire();
+    await settle();
+    expect(onSkipped).toHaveBeenCalledWith(['gone']);
+    expect(queue.snapshot).toEqual({ status: 'saved', version: 1, pending: 0, error: null, errorKind: null });
+
+    // A save with nothing skipped says nothing.
+    onSkipped.mockClear();
+    send.mockResolvedValueOnce({ ok: true, version: 2 });
+    queue.enqueue([move('b', 30)]);
+    clock.fire();
+    await settle();
+    expect(onSkipped).not.toHaveBeenCalled();
+  });
+
   it('sends nothing for an item added and removed before the save', () => {
     const { queue, send, clock } = setup();
     queue.enqueue([{ type: 'add', item: tent('n1') }]);
