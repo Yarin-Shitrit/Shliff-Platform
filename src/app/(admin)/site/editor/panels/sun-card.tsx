@@ -16,6 +16,7 @@ import { cx } from '@/components/ui/cx';
 import { Icon } from '@/components/ui/icon';
 import type { ShadeAtHour } from '@/lib/site/editor/sun';
 import { northText } from './north';
+import chrome from './panel.module.css';
 import styles from './sun-card.module.css';
 
 /**
@@ -63,16 +64,16 @@ export function SunCard({ hour, onHour, summary, northDeg, plotHref, dateHref, s
   sunDate: string | null;
 }): ReactElement {
   return (
-    <div className={cx(styles.card, styles.sunCard)} role="group" aria-label="צל לפי שעה" data-panel="true">
+    <div className={cx(chrome.card, styles.sunCard)} role="group" aria-label="צל לפי שעה" data-panel="true">
       {sunDate === null ? (
         /* SD4 (replacing D1's interim statement): an empty state is an
            invitation. The opening date is the shell's to set, in its own
            drawer; the card links there. */
         <>
-          <p className={styles.hint}>
+          <p className={chrome.hint}>
             לעונה הזו עוד לא נרשם תאריך פתיחה. עם תאריך, הצל לפי שעה יחושב ליום פתיחת השער.
           </p>
-          <Link href={dateHref} className={styles.link}>קביעת תאריך הפתיחה</Link>
+          <Link href={dateHref} className={chrome.link}>קביעת תאריך הפתיחה</Link>
         </>
       ) : (
         <>
@@ -91,12 +92,12 @@ export function SunCard({ hour, onHour, summary, northDeg, plotHref, dateHref, s
               onChange={(event) => { onHour(Number(event.target.value)); }}
             />
           </div>
-          <p className={styles.hint}><bdi>{summaryText(hour, summary)}</bdi></p>
-          <p className={styles.meta}>
+          <p className={chrome.hint}><bdi>{summaryText(hour, summary)}</bdi></p>
+          <p className={chrome.meta}>
             {'ביום פתיחת השער, '}
             <Link
               href={dateHref}
-              className={styles.link}
+              className={chrome.link}
               aria-label={`${dayText(sunDate)}, שינוי תאריך הפתיחה`}
             >
               <bdi>{dayText(sunDate)}</bdi>
@@ -105,10 +106,10 @@ export function SunCard({ hour, onHour, summary, northDeg, plotHref, dateHref, s
           </p>
         </>
       )}
-      <p className={styles.meta}>
+      <p className={chrome.meta}>
         <bdi>{northText(northDeg)}</bdi>
         {' · '}
-        <Link href={plotHref} className={styles.link}>שינוי בהגדרות המגרש</Link>
+        <Link href={plotHref} className={chrome.link}>שינוי בהגדרות המגרש</Link>
       </p>
     </div>
   );

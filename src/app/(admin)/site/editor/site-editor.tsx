@@ -22,6 +22,7 @@ import {
 } from 'react';
 import { SeasonChip, TopBar } from '@/components/shell/top-bar';
 import { Button, ButtonLink } from '@/components/ui/button';
+import { cx } from '@/components/ui/cx';
 import { Icon } from '@/components/ui/icon';
 import { useToast } from '@/components/ui/toaster';
 import type { SiteItemKind } from '@/db/schema/site';
@@ -56,6 +57,7 @@ import { ViewControls } from './panels/view-controls';
 import { SelectionBar } from './panels/selection-bar';
 import { ShortcutsCard } from './panels/shortcuts-card';
 import { SunCard } from './panels/sun-card';
+import chrome from './panels/panel.module.css';
 import inspectorStyles from './panels/inspector.module.css';
 import styles from './editor.module.css';
 
@@ -722,7 +724,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
             />
           )}
         />
-        <section className={inspectorStyles.inspector} aria-label="מאפיינים" data-panel="true">
+        <section className={cx(chrome.panel, inspectorStyles.inspector)} aria-label="מאפיינים" data-panel="true">
           {renderInspector()}
         </section>
         <ChecksBar doc={store.doc} flags={store.flags} onGo={pickIds} />

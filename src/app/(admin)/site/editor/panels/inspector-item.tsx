@@ -36,6 +36,7 @@ import {
 import { LABEL_REQUIRED } from '../../failure-messages';
 import type { EditorFlags } from '../use-editor-store';
 import { size3 } from './size-text';
+import chrome from './panel.module.css';
 import styles from './inspector.module.css';
 
 type Length = 'width' | 'depth' | 'height' | 'x' | 'y' | 'inset';
@@ -196,9 +197,9 @@ export function ItemInspector({ doc, item, flags, buildTasks, onRun, onPickIds, 
   return (
     <>
       <header className={styles.head}>
-        <span className={cx(styles.swatch, styles[`g_${preset.group}`])} aria-hidden="true" />
+        <span className={cx(chrome.swatch, chrome[`g_${preset.group}`])} aria-hidden="true" />
         <h2 className={styles.headTitle}>{item.label}</h2>
-        <span className={styles.meta}>{preset.label}</span>
+        <span className={chrome.meta}>{preset.label}</span>
         {/* Ruling P11: a noun phrase, never an adjective that must agree with the item's name. */}
         {item.locked ? <Pill tone="neutral">בנעילה</Pill> : null}
         <span className={styles.headEnd}>
@@ -209,7 +210,7 @@ export function ItemInspector({ doc, item, flags, buildTasks, onRun, onPickIds, 
         </span>
       </header>
 
-      <div className={styles.body}>
+      <div className={chrome.body}>
         <label className={styles.field}>
           שם
           <input
@@ -236,7 +237,7 @@ export function ItemInspector({ doc, item, flags, buildTasks, onRun, onPickIds, 
 
         {refusal === null ? null : <p className={styles.error} id={errorId} role="alert">{refusal.message}</p>}
         {item.locked ? (
-          <p className={styles.hint}>הפריט נעול. שחרור הנעילה מאפשר להזיז אותו ולשנות את מידותיו.</p>
+          <p className={chrome.hint}>הפריט נעול. שחרור הנעילה מאפשר להזיז אותו ולשנות את מידותיו.</p>
         ) : null}
 
         <div className={styles.section}>
@@ -249,15 +250,15 @@ export function ItemInspector({ doc, item, flags, buildTasks, onRun, onPickIds, 
             {lengthBox('depth', 'עומק', metres(item.depthCm))}
             {lengthBox('height', 'גובה', item.heightCm === null ? '' : metres(item.heightCm), item.heightCm === null ? metres(height) : undefined)}
           </div>
-          {item.heightCm === null ? <p className={styles.meta}>גובה ברירת מחדל</p> : null}
-          <p className={styles.hint}>
+          {item.heightCm === null ? <p className={chrome.meta}>גובה ברירת מחדל</p> : null}
+          <p className={chrome.hint}>
             <bdi>{`ברירת המחדל של ${preset.label}: ${size3(standard)}`}</bdi>
           </p>
           <div className={styles.links}>
-            <button type="button" className={styles.link} onClick={saveAsDefault}>
+            <button type="button" className={chrome.link} onClick={saveAsDefault}>
               {`שמירת המידות כברירת המחדל של ${preset.label}`}
             </button>
-            <button type="button" className={styles.link} onClick={backToDefault} disabled={item.locked}>
+            <button type="button" className={chrome.link} onClick={backToDefault} disabled={item.locked}>
               חזרה לברירת המחדל
             </button>
           </div>
@@ -279,7 +280,7 @@ export function ItemInspector({ doc, item, flags, buildTasks, onRun, onPickIds, 
             <h3 className={styles.sectionTitle}>צל</h3>
             <div className={cx(styles.fields, styles.fieldsTwo)}>
               {lengthBox('inset', 'שוליים בלי צל', metres(item.insetCm ?? DEFAULT_SHADE_INSET_CM))}
-              <p className={styles.meta}>
+              <p className={chrome.meta}>
                 מצל בפועל
                 <br />
                 <bdi>{shaded === null ? 'הרשת קטנה מכדי להצל' : `${formatSize(shaded.width, shaded.depth)} · ${formatArea(areaM2(shaded))}`}</bdi>

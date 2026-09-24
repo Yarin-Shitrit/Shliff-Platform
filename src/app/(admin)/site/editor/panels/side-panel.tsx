@@ -9,6 +9,7 @@
 
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
 import { cx } from '@/components/ui/cx';
+import chrome from './panel.module.css';
 import styles from './side-panel.module.css';
 
 export type SideTab = 'library' | 'objects';
@@ -48,7 +49,7 @@ export function SidePanel({ tab, onTab, library, objects, count }: {
   }
 
   return (
-    <section className={cx(styles.panel, styles.side)} aria-label="הוספה ורשימת הפריטים" data-panel="true">
+    <section className={cx(chrome.panel, styles.side)} aria-label="הוספה ורשימת הפריטים" data-panel="true">
       <div className={styles.tabs} role="tablist" aria-label="הוספה ורשימה" onKeyDown={onKeyDown}>
         <button
           ref={libraryTab}
@@ -79,9 +80,9 @@ export function SidePanel({ tab, onTab, library, objects, count }: {
           <span className={styles.tabCount}><bdi>{count}</bdi></span>
         </button>
       </div>
-      <div className={styles.body} role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${tab}`}>
+      <div className={chrome.body} role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${tab}`}>
         {count === 0 && tab === 'library' ? (
-          <p className={styles.invite}>המפה ריקה. אפשר להתחיל מכל פריט שכאן.</p>
+          <p className={chrome.invite}>המפה ריקה. אפשר להתחיל מכל פריט שכאן.</p>
         ) : null}
         {tab === 'library' ? library : objects}
       </div>

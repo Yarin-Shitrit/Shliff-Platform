@@ -19,6 +19,7 @@ import { KIND_GROUP_LABELS, KIND_GROUP_ORDER, SITE_KINDS, type SiteKindGroup } f
 import type { EditorItem } from '@/lib/site/editor/model';
 import type { EditorFlags } from '../use-editor-store';
 import { EditorIcon } from './editor-icons';
+import chrome from './panel.module.css';
 import styles from './objects-panel.module.css';
 
 interface Issue {
@@ -74,7 +75,7 @@ export function ObjectsPanel({
   if (items.length === 0) {
     return (
       <div className={styles.offer}>
-        <p className={styles.invite}>
+        <p className={chrome.invite}>
           המפה ריקה. בלשונית ״הוספה למפה״ גוררים פריט אל המפה או לוחצים עליו.
         </p>
         {onShowLibrary === undefined ? null : (
@@ -85,13 +86,13 @@ export function ObjectsPanel({
   }
 
   return (
-    <div className={styles.stack}>
-      <label className={styles.search}>
+    <div className={chrome.stack}>
+      <label className={chrome.search}>
         <Icon name="search" size={15} />
         <input
           ref={searchBox}
           type="search"
-          className={styles.searchInput}
+          className={chrome.searchInput}
           placeholder="חיפוש במפה"
           aria-label="חיפוש במפה"
           value={query}
@@ -103,7 +104,7 @@ export function ObjectsPanel({
         return (
           <div key={group}>
             <div className={styles.groupHead}>
-              <span className={cx(styles.swatch, styles[`g_${group}`])} aria-hidden="true" />
+              <span className={cx(chrome.swatch, chrome[`g_${group}`])} aria-hidden="true" />
               <span>{KIND_GROUP_LABELS[group]}</span>
               {/* The number and what it selects are one set: the rows shown under it.
                   Its name carries the number it shows (label-in-name), so a
@@ -153,12 +154,12 @@ export function ObjectsPanel({
                   aria-pressed={selected.has(item.id)}
                   onClick={(event) => { onPick(item.id, event.shiftKey || event.metaKey || event.ctrlKey); }}
                 >
-                  <span className={cx(styles.rowSwatch, styles[`g_${group}`])} aria-hidden="true" />
+                  <span className={cx(styles.rowSwatch, chrome[`g_${group}`])} aria-hidden="true" />
                   <span className={styles.rowLabel}>{item.label}</span>
                   {item.locked ? <EditorIcon name="lock" size={14} /> : null}
                   {issues.length === 0 ? null : (
                     <span
-                      className={styles.issueDot}
+                      className={chrome.issueDot}
                       data-tone={issues.some((issue) => issue.tone === 'bad') ? 'bad' : 'warn'}
                       aria-hidden="true"
                     />
@@ -172,7 +173,7 @@ export function ObjectsPanel({
       })}
       {groups.length === 0 ? (
         <div className={styles.offer}>
-          <p className={styles.hint}>אין במפה פריט בשם הזה. אפשר לחפש בשם אחר, או לחזור לכל הרשימה.</p>
+          <p className={chrome.hint}>אין במפה פריט בשם הזה. אפשר לחפש בשם אחר, או לחזור לכל הרשימה.</p>
           <Button size="sm" tone="ghost" onClick={clearSearch}>ניקוי החיפוש</Button>
         </div>
       ) : null}

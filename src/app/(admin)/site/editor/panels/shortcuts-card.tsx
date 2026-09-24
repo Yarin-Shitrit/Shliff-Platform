@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { cx } from '@/components/ui/cx';
 import { Icon } from '@/components/ui/icon';
 import shell from '../editor.module.css';
+import chrome from './panel.module.css';
 import styles from './shortcuts-card.module.css';
 
 const ROWS: ReadonlyArray<{ what: string; keys: readonly string[] }> = [
@@ -39,8 +40,8 @@ const ROWS: ReadonlyArray<{ what: string; keys: readonly string[] }> = [
 export function ShortcutsCard({ onClose }: { onClose: () => void }): ReactElement {
   const titleId = useId();
   return (
-    <div className={cx(styles.card, styles.keysCard)} role="dialog" aria-labelledby={titleId} data-panel="true">
-      <div className={styles.cardHead}>
+    <div className={cx(chrome.card, styles.keysCard)} role="dialog" aria-labelledby={titleId} data-panel="true">
+      <div className={chrome.cardHead}>
         <h2 className={styles.title} id={titleId}>קיצורי מקלדת</h2>
         <Button tone="ghost" size="sm" iconLabel="סגירה" onClick={onClose}>
           <Icon name="x" size={14} />
@@ -54,7 +55,7 @@ export function ShortcutsCard({ onClose }: { onClose: () => void }): ReactElemen
           </Fragment>
         ))}
       </dl>
-      <p className={styles.meta}>המקשים נקראים לפי מיקומם במקלדת, כך שהם עובדים גם כשהמקלדת בעברית.</p>
+      <p className={chrome.meta}>המקשים נקראים לפי מיקומם במקלדת, כך שהם עובדים גם כשהמקלדת בעברית.</p>
     </div>
   );
 }

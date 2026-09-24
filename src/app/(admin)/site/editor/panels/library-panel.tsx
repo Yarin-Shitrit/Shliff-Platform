@@ -18,6 +18,7 @@ import { Icon } from '@/components/ui/icon';
 import { effectiveSize, isCustomised, type KindDefaults } from '@/lib/site/defaults';
 import { formatSize } from '@/lib/site/geometry';
 import { KIND_GROUP_LABELS, KIND_GROUP_ORDER, KIND_ORDER, SITE_KINDS } from '@/lib/site/kinds';
+import chrome from './panel.module.css';
 import styles from './library-panel.module.css';
 
 /** A press that travels less than this is a click, not a drag. */
@@ -77,7 +78,7 @@ function KindGlyph({ kind }: { kind: SiteItemKind }): ReactElement {
   const glyph = glyphOf(kind);
   return (
     <svg
-      className={cx(styles.glyph, styles[`g_${SITE_KINDS[kind].group}`])}
+      className={cx(styles.glyph, chrome[`g_${SITE_KINDS[kind].group}`])}
       data-glyph={glyph}
       width={30}
       height={24}
@@ -205,25 +206,25 @@ export function LibraryPanel({ defaults, onActivate, onDragMove, onDrop, onDragC
     .filter((entry) => entry.kinds.length > 0);
 
   return (
-    <div className={styles.stack}>
-      <label className={styles.search}>
+    <div className={chrome.stack}>
+      <label className={chrome.search}>
         <Icon name="search" size={15} />
         <input
           type="search"
-          className={styles.searchInput}
+          className={chrome.searchInput}
           placeholder="חיפוש פריט להוספה"
           aria-label="חיפוש פריט להוספה"
           value={query}
           onChange={(event) => { setQuery(event.target.value); }}
         />
       </label>
-      <p className={styles.hint}>
+      <p className={chrome.hint}>
         גרירה אל המפה מניחה את הפריט בדיוק שם. לחיצה מניחה אותו במקום הפנוי הקרוב למרכז התצוגה.
       </p>
       {groups.map(({ group, kinds }) => (
         <div key={group} className={styles.group}>
           <div className={styles.groupLabel}>
-            <span className={cx(styles.swatch, styles[`g_${group}`])} aria-hidden="true" />
+            <span className={cx(chrome.swatch, chrome[`g_${group}`])} aria-hidden="true" />
             {KIND_GROUP_LABELS[group]}
           </div>
           <div className={styles.tiles}>
@@ -242,7 +243,7 @@ export function LibraryPanel({ defaults, onActivate, onDragMove, onDrop, onDragC
         </div>
       ))}
       {groups.length === 0 ? (
-        <p className={styles.hint}>
+        <p className={chrome.hint}>
           אין סוג כזה ברשימה. הסוג ״אחר״ מקבל כל שם, כך שאפשר לצייר גם את מה שהרשימה לא חשבה עליו.
         </p>
       ) : null}
