@@ -35,11 +35,30 @@ function flagsOf(map: EditorDoc): EditorFlags {
 function renderChecks(items: EditorItem[]) {
   const map = doc(items);
   const onGo = vi.fn();
-  render(<ChecksBar doc={map} flags={flagsOf(map)} onGo={onGo} />);
-  return { onGo };
+  const { rerender } = render(<ChecksBar doc={map} flags={flagsOf(map)} onGo={onGo} />);
+  /** The same bar, after the lead has changed the map to `next`. */
+  const edit = (next: EditorItem[]) => {
+    const changed = doc(next);
+    rerender(<ChecksBar doc={changed} flags={flagsOf(changed)} onGo={onGo} />);
+  };
+  return { onGo, edit };
 }
 
 const bar = () => screen.getByRole('group', { name: 'בדיקות המפה' });
+
+/** Three tents past the fence — east, west and south — and where each goes once it is brought in. */
+const OUT = {
+  a: item({ id: 'a', xCm: 3000, yCm: 0 }),
+  b: item({ id: 'b', label: 'אוהל 2', xCm: -500 }),
+  c: item({ id: 'c', label: 'אוהל 3', yCm: 2600 }),
+  d: item({ id: 'd', label: 'אוהל 4', xCm: 2700, yCm: 1500 }),
+};
+const IN = {
+  a: item({ id: 'a', xCm: 1200, yCm: 1200 }),
+  b: item({ id: 'b', label: 'אוהל 2', xCm: 1200, yCm: 100 }),
+  c: item({ id: 'c', label: 'אוהל 3', xCm: 100, yCm: 1800 }),
+};
+const pressed = (onGo: { mock: { calls: unknown[][] } }) => onGo.mock.calls.map((call) => call[0]);
 
 describe('the checks bar', () => {
   it('says הכול תקין on an empty map, and offers nothing to press', () => {
@@ -58,6 +77,37 @@ describe('the checks bar', () => {
     for (let press = 0; press < 4; press += 1) fireEvent.click(chip);
     expect(onGo.mock.calls.map((call) => call[0])).toEqual([['a'], ['b'], ['c'], ['a']]);
     expect(screen.queryByText('הכול תקין')).toBeNull();
+  });
+
+  it('goes on to the next case when the lead has fixed the one it went to', () => {
+    const { onGo, edit } = renderChecks([OUT.a, OUT.b, OUT.c]);
+    fireEvent.click(screen.getByRole('button', { name: '3 מחוץ לגדר' }));
+    edit([IN.a, OUT.b, OUT.c]);
+    fireEvent.click(screen.getByRole('button', { name: '2 מחוץ לגדר' }));
+    expect(pressed(onGo)).toEqual([['a'], ['b']]);
+  });
+
+  it('goes on from the case it went to when an earlier one is fixed', () => {
+    const { onGo, edit } = renderChecks([OUT.a, OUT.b, OUT.c, OUT.d]);
+    const chip = () => screen.getByRole('button', { name: /מחוץ לגדר$/ });
+    fireEvent.click(chip());
+    fireEvent.click(chip());
+    edit([IN.a, OUT.b, OUT.c, OUT.d]);
+    fireEvent.click(chip());
+    edit([IN.a, OUT.b, IN.c, OUT.d]);
+    fireEvent.click(chip());
+    fireEvent.click(chip());
+    expect(pressed(onGo)).toEqual([['a'], ['b'], ['c'], ['d'], ['b']]);
+  });
+
+  it('starts from its first case again once its count has gone to nothing and come back', () => {
+    const { onGo, edit } = renderChecks([OUT.a, OUT.b]);
+    fireEvent.click(screen.getByRole('button', { name: '2 מחוץ לגדר' }));
+    edit([IN.a, IN.b]);
+    expect(screen.getByText('הכול תקין')).toBeTruthy();
+    edit([OUT.a, OUT.b]);
+    fireEvent.click(screen.getByRole('button', { name: '2 מחוץ לגדר' }));
+    expect(pressed(onGo)).toEqual([['a'], ['a']]);
   });
 
   it('counts one overlap in words, and goes to the pair', () => {

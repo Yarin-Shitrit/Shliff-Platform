@@ -61,7 +61,9 @@ export function Minimap({ doc, flags, selection, info, onJump }: {
   onJump: (xCm: number, yCm: number) => void;
 }): ReactElement {
   const box = minimapBounds(doc);
-  const dragging = useRef(false);
+  /* The pointer that started the drag. Another one — a second finger —
+     neither moves the view nor ends the drag. */
+  const dragging = useRef<number | null>(null);
   const selected = new Set(selection);
   const corners: ReadonlyArray<readonly [number, number]> = info.groundCorners;
   const seen = corners.length >= 3
@@ -73,8 +75,8 @@ export function Minimap({ doc, flags, selection, info, onJump }: {
     if (point !== null) onJump(Math.round(point[0]), Math.round(point[1]));
   }
 
-  function release(): void {
-    dragging.current = false;
+  function release(event: PointerEvent<SVGSVGElement>): void {
+    if (event.pointerId === dragging.current) dragging.current = null;
   }
 
   return (
@@ -86,12 +88,13 @@ export function Minimap({ doc, flags, selection, info, onJump }: {
         role="img"
         aria-label="מפה מוקטנת. לחיצה או גרירה כאן מזיזות את המבט."
         onPointerDown={(event) => {
-          if (event.button !== 0) return;
+          // The same pointer pressing again takes its drag back: its release was lost.
+          if (event.button !== 0 || (dragging.current !== null && dragging.current !== event.pointerId)) return;
           event.currentTarget.setPointerCapture(event.pointerId);
-          dragging.current = true;
+          dragging.current = event.pointerId;
           jump(event);
         }}
-        onPointerMove={(event) => { if (dragging.current) jump(event); }}
+        onPointerMove={(event) => { if (event.pointerId === dragging.current) jump(event); }}
         onPointerUp={release}
         onPointerCancel={release}
         onLostPointerCapture={release}

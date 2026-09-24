@@ -4,6 +4,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { unnamedControls } from '@/test/a11y';
+import { DISTANCE_MAX, DISTANCE_MIN, pxPerCm } from '@/lib/site/editor/camera';
 import type { ViewInfo } from '../scene/scene-view';
 import { shortcutFor, type Shortcut } from '../keyboard';
 import { scaleFor, ViewControls } from './view-controls';
@@ -11,10 +12,20 @@ import { ShortcutsCard } from './shortcuts-card';
 
 const STILL: ViewInfo = { yaw: 0, zoomPct: 150, pxPerM: 20, groundCorners: [], selectionBox: null, moving: false };
 
-function renderControls(info: ViewInfo = STILL, keysOpen = false) {
+function renderControls(info: ViewInfo = STILL, keysOpen = false, northDeg = 0) {
   const calls = { onZoom: vi.fn(), onFit: vi.fn(), onRotate: vi.fn(), onNorth: vi.fn(), onKeys: vi.fn() };
-  const { container } = render(<ViewControls info={info} keysOpen={keysOpen} {...calls} />);
+  const { container } = render(<ViewControls info={info} keysOpen={keysOpen} northDeg={northDeg} {...calls} />);
   return { ...calls, container };
+}
+
+/** The needle's turn, as drawn. */
+function needleOf(): string | undefined {
+  return screen.getByRole('button', { name: 'צפון למעלה' }).querySelector('svg')?.style.transform;
+}
+
+/** What the scene reports at this camera distance — `camera.ts`'s own `pxPerCm`, as the engine does. */
+function pxPerMAt(distance: number, height: number): number {
+  return pxPerCm({ targetX: 0, targetY: 0, distance, yaw: 0, pitch: 90 }, { width: height * 1.6, height }) * 100;
 }
 
 describe('the view controls', () => {
@@ -40,15 +51,49 @@ describe('the view controls', () => {
     const group = within(screen.getByRole('group', { name: 'מבט' }));
     expect(group.getByText('150%')).toBeTruthy();
     expect(group.getByText('2 מ׳')).toBeTruthy();
-    const needle = screen.getByRole('button', { name: 'צפון למעלה' }).querySelector('svg');
-    expect(needle?.style.transform).toBe('rotate(30deg)');
+    expect(needleOf()).toBe('rotate(30deg)');
+  });
+
+  /*
+   * The picture is turned `yaw` clockwise (`camera.ts`), and the map's up
+   * edge faces compass bearing `northDeg`, so true north sits
+   * yaw − northDeg clockwise of the screen's top. `northUp()` sets
+   * yaw = northDeg (Task 20), which must stand the needle straight up.
+   */
+  it('point the needle at true north, not at the map’s up edge', () => {
+    renderControls({ ...STILL, yaw: 36 }, false, 36);
+    expect(needleOf()).toBe('rotate(0deg)');
+  });
+
+  it('turn the needle back by the plot’s bearing while the map’s up edge is at the top', () => {
+    renderControls({ ...STILL, yaw: 0 }, false, 90);
+    expect(needleOf()).toBe('rotate(-90deg)');
   });
 
   it('pick the shortest round length at least 36 px long for the scale bar, and none before the scene reports', () => {
     expect(scaleFor(20)).toEqual({ px: 40, text: '2 מ׳' });
     expect(scaleFor(100)).toEqual({ px: 50, text: '0.5 מ׳' });
+    expect(scaleFor(200)).toEqual({ px: 40, text: '0.2 מ׳' });
     expect(scaleFor(0.5)).toEqual({ px: 25, text: '50 מ׳' });
     expect(scaleFor(0)).toBeNull();
+    expect(scaleFor(Infinity)).toBeNull();
+    expect(scaleFor(Number.NaN)).toBeNull();
+  });
+
+  it('draw a short scale bar at the closest zoom the camera allows', () => {
+    const closest = pxPerMAt(DISTANCE_MIN, 700);
+    expect(scaleFor(closest)).toEqual({ px: Math.round(closest / 10), text: '0.1 מ׳' });
+  });
+
+  it('keep the scale bar between 36 and 90 px across the whole zoom range', () => {
+    const drawn: number[] = [];
+    for (const height of [500, 700, 1000]) {
+      for (let distance = DISTANCE_MIN; distance <= DISTANCE_MAX; distance *= 1.1) {
+        drawn.push(scaleFor(pxPerMAt(distance, height))?.px ?? 0);
+      }
+    }
+    expect(Math.min(...drawn)).toBeGreaterThanOrEqual(36);
+    expect(Math.max(...drawn)).toBeLessThanOrEqual(90);
   });
 
   it('open and close the shortcuts card, and say which it is', () => {
@@ -88,6 +133,21 @@ const PRINTED: Record<Exclude<Shortcut, object>, { row: string; cap: string; eve
   keys: { row: 'הכרטיס הזה', cap: '?', event: { code: 'Slash', shiftKey: true } },
 };
 
+/**
+ * The keycaps that stand for no `Shortcut` name: the pointer's gestures,
+ * each with the modifier it is read with (spec §8's table), and the arrows,
+ * which `shortcutFor` reads as `{ arrow, big }` (checked below).
+ */
+const OTHER_CAPS: Record<string, readonly string[]> = {
+  'גרירה על שטח ריק — הזזת המבט': ['גרירה'],
+  'בחירת כמה פריטים במלבן': ['⇧', 'גרירה'],
+  'הוספה או הסרה מהבחירה': ['⇧', 'לחיצה'],
+  'סיבוב המבט בתלת־ממד': ['גרירה ימנית', '⌃ גרירה'],
+  'טיסה אל פריט': ['לחיצה כפולה'],
+  'הזזה בצעד רשת · בצעד של מטר': ['←↑→↓', '⇧'],
+  'הזזה בלי הצמדה': ['⌥', 'גרירה'],
+};
+
 function read(event: KeyEvent): Shortcut | null {
   return shortcutFor({ metaKey: false, ctrlKey: false, shiftKey: false, ...event });
 }
@@ -123,6 +183,21 @@ describe('the shortcuts card', () => {
     expect(read({ code: 'ArrowUp' })).toEqual({ arrow: 'ArrowUp', big: false });
     expect(read({ code: 'ArrowUp', shiftKey: true })).toEqual({ arrow: 'ArrowUp', big: true });
     expect(capsOf('הזזה בצעד רשת · בצעד של מטר')).toEqual(['←↑→↓', '⇧']);
+  });
+
+  it('prints nothing in a row but its keyboard.ts keys and its gesture words', () => {
+    const { dialog } = renderCard();
+    const expected: Record<string, string[]> = {};
+    for (const { row, cap } of Object.values(PRINTED)) (expected[row] ??= []).push(cap);
+    for (const [row, caps] of Object.entries(OTHER_CAPS)) (expected[row] ??= []).push(...caps);
+    const printed = [...dialog.querySelectorAll('dt')].map((term) => [
+      term.textContent ?? '',
+      [...(term.nextElementSibling?.querySelectorAll('kbd') ?? [])].map((cap) => cap.textContent ?? '').sort(),
+    ] as const);
+    expect(new Set(printed.map(([row]) => row)).size).toBe(printed.length);
+    expect(Object.fromEntries(printed)).toEqual(
+      Object.fromEntries(Object.entries(expected).map(([row, caps]) => [row, [...caps].sort()])),
+    );
   });
 
   it('draws each key as a glyph or a single letter, esc the one word', () => {

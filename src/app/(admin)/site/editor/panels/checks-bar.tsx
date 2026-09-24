@@ -14,25 +14,64 @@ import styles from './checks-bar.module.css';
 
 type Check = 'outside' | 'pairs' | 'partly';
 
+/** The case a chip last went to, and where it stood in the list then. */
+interface Visit {
+  key: string;
+  index: number;
+}
+
+const keyOf = (ids: readonly string[]): string => JSON.stringify(ids);
+
+/**
+ * Which case a press goes to. The lead fixes cases between presses, so a
+ * position alone would skip one: the case after the one last visited if it
+ * is still there, else — it was fixed — whatever now stands where it stood.
+ */
+function nextIndex(list: readonly string[][], last: Visit | null): number {
+  if (last === null) return 0;
+  const at = list.findIndex((ids) => keyOf(ids) === last.key);
+  return (at === -1 ? last.index : at + 1) % list.length;
+}
+
+/**
+ * One check's chip. It keeps its own place, so a chip whose count goes to
+ * nothing — and so leaves the bar — starts from its first case when it comes
+ * back.
+ */
+function CheckChip({ cases, tone, text, title, onGo }: {
+  cases: readonly string[][];
+  tone: 'bad' | 'warn';
+  text: string;
+  title: string;
+  onGo: (ids: string[]) => void;
+}): ReactElement {
+  const [last, setLast] = useState<Visit | null>(null);
+
+  function go(): void {
+    if (cases.length === 0) return;
+    const index = nextIndex(cases, last);
+    setLast({ key: keyOf(cases[index]), index });
+    onGo(cases[index]);
+  }
+
+  return (
+    <button type="button" className={styles.chip} data-tone={tone} title={title} onClick={go}>
+      <span className={styles.chipDot} aria-hidden="true" />
+      <bdi>{text}</bdi>
+    </button>
+  );
+}
+
 export function ChecksBar({ doc, flags, onGo }: {
   doc: EditorDoc;
   flags: EditorFlags;
   onGo: (ids: string[]) => void;
 }): ReactElement {
-  const [turns, setTurns] = useState<Record<Check, number>>({ outside: 0, pairs: 0, partly: 0 });
   const cases: Record<Check, string[][]> = {
     outside: doc.items.filter((item) => flags.outside.has(item.id)).map((item) => [item.id]),
     pairs: flags.pairs.map(([a, b]) => [a, b]),
     partly: doc.items.filter((item) => flags.partly.has(item.id)).map((item) => [item.id]),
   };
-
-  function go(check: Check): void {
-    const list = cases[check];
-    if (list.length === 0) return;
-    const index = turns[check] % list.length;
-    setTurns((current) => ({ ...current, [check]: index + 1 }));
-    onGo(list[index]);
-  }
 
   const chips: Array<{ check: Check; tone: 'bad' | 'warn'; text: string; title: string }> = [];
   if (cases.outside.length > 0) {
@@ -60,17 +99,14 @@ export function ChecksBar({ doc, flags, onGo }: {
           הכול תקין
         </span>
       ) : chips.map((chip) => (
-        <button
+        <CheckChip
           key={chip.check}
-          type="button"
-          className={styles.chip}
-          data-tone={chip.tone}
+          cases={cases[chip.check]}
+          tone={chip.tone}
+          text={chip.text}
           title={chip.title}
-          onClick={() => { go(chip.check); }}
-        >
-          <span className={styles.chipDot} aria-hidden="true" />
-          <bdi>{chip.text}</bdi>
-        </button>
+          onGo={onGo}
+        />
       ))}
     </div>
   );

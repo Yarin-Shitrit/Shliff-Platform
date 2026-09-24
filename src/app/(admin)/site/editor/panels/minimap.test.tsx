@@ -106,6 +106,38 @@ describe('the minimap', () => {
     expect(onJump).toHaveBeenCalledTimes(2);
   });
 
+  it('stops following when the pointer capture is lost', () => {
+    const { onJump, svg } = renderMap([]);
+    sized(svg);
+    fireEvent.pointerDown(svg, { pointerId: 1, button: 0, clientX: 84, clientY: 77 });
+    fireEvent.lostPointerCapture(svg, { pointerId: 1 });
+    fireEvent.pointerMove(svg, { pointerId: 1, clientX: 120, clientY: 77 });
+    expect(onJump).toHaveBeenCalledTimes(1);
+  });
+
+  it('follows only the pointer that started the drag: a second one neither jumps nor ends it', () => {
+    const { onJump, svg } = renderMap([]);
+    sized(svg);
+    fireEvent.pointerDown(svg, { pointerId: 1, button: 0, clientX: 84, clientY: 77 });
+    fireEvent.pointerDown(svg, { pointerId: 2, button: 0, clientX: 20, clientY: 20 });
+    fireEvent.pointerMove(svg, { pointerId: 2, clientX: 30, clientY: 20 });
+    expect(onJump).toHaveBeenCalledTimes(1);
+    fireEvent.pointerUp(svg, { pointerId: 2, clientX: 30, clientY: 20 });
+    fireEvent.lostPointerCapture(svg, { pointerId: 2 });
+    fireEvent.pointerMove(svg, { pointerId: 1, clientX: 90, clientY: 77 });
+    expect(onJump).toHaveBeenCalledTimes(2);
+    // The 2712 cm of height fill the 154 px box, so 6 px across is 6 × 2712 / 154 ≈ 105.7 cm east of the middle.
+    expect(onJump).toHaveBeenLastCalledWith(1406, 1200);
+  });
+
+  it('lets the same pointer take its drag back when its release never arrived', () => {
+    const { onJump, svg } = renderMap([]);
+    sized(svg);
+    fireEvent.pointerDown(svg, { pointerId: 1, button: 0, clientX: 84, clientY: 77 });
+    fireEvent.pointerDown(svg, { pointerId: 1, button: 0, clientX: 90, clientY: 77 });
+    expect(onJump).toHaveBeenCalledTimes(2);
+  });
+
   it('moves nothing while it has no size — before layout, or hidden', () => {
     const { onJump, svg } = renderMap([]);
     fireEvent.pointerDown(svg, { pointerId: 1, button: 0, clientX: 84, clientY: 77 });
