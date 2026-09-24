@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
-import { act, createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ToastProvider } from '@/components/ui/toaster';
 import { unnamedControls } from '@/test/a11y';
 import { contains, overlap } from '@/lib/site/geometry';
@@ -641,5 +641,72 @@ describe('the list of what is on the map', () => {
     const library = screen.getByRole('tab', { name: 'הוספה למפה' });
     expect(library.getAttribute('aria-selected')).toBe('true');
     expect(document.activeElement).toBe(library);
+  });
+});
+
+describe('the inspector', () => {
+  const inspector = () => within(screen.getByRole('region', { name: 'מאפיינים' }));
+  const twoTents = () => ({
+    doc: siteDoc([siteItem({ id: 'a' }), siteItem({ id: 'b', label: 'אוהל 2', xCm: 1500 })]),
+    version: 0,
+  });
+
+  it('shows the one item selected, the plot when nothing is, and the kinds when several are', async () => {
+    renderEditor({ initial: twoTents() });
+    await screen.findByTestId('scene');
+    expect(inspector().getByRole('heading', { name: 'אוהל 1' })).toBeTruthy();
+    fireEvent.keyDown(stage(), { code: 'Escape' });
+    expect(inspector().getByRole('heading', { name: 'המגרש' })).toBeTruthy();
+    fireEvent.keyDown(stage(), { code: 'KeyA', metaKey: true });
+    expect(inspector().getByRole('heading', { name: 'נבחרו 2 פריטים' })).toBeTruthy();
+    // A kind's chip selects that kind and flies to it (ruling P9).
+    fireEvent.click(inspector().getByRole('button', { name: '2 אוהלים' }));
+    expect(lastScene().store.selection).toEqual(['a', 'b']);
+    expect(scene.handle.fitIds).toHaveBeenLastCalledWith(['a', 'b']);
+  });
+
+  it('takes no shortcut from a box being typed in', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(inspector().getByLabelText('שם'), { code: 'KeyR', key: 'ר' });
+    expect(firstItem()).toMatchObject({ widthCm: 300, depthCm: 200 });
+  });
+
+  it('applies a typed width through the store, so ⌘Z takes it back', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    const width = inspector().getByLabelText('רוחב');
+    fireEvent.change(width, { target: { value: '4' } });
+    fireEvent.keyDown(width, { key: 'Enter' });
+    expect(firstItem().widthCm).toBe(400);
+    fireEvent.keyDown(stage(), { code: 'KeyZ', metaKey: true });
+    expect(firstItem().widthCm).toBe(300);
+  });
+
+  it('turns, locks and removes from its footer, and a lock keeps the item', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.click(inspector().getByRole('button', { name: 'סיבוב' }));
+    expect(firstItem()).toMatchObject({ widthCm: 200, depthCm: 300 });
+    fireEvent.click(inspector().getByRole('button', { name: 'נעילה' }));
+    expect(firstItem().locked).toBe(true);
+    fireEvent.click(inspector().getByRole('button', { name: 'הסרה' }));
+    expect(lastScene().store.doc.items).toHaveLength(1);
+    fireEvent.click(inspector().getByRole('button', { name: 'נעילה' }));
+    fireEvent.click(inspector().getByRole('button', { name: 'הסרה' }));
+    expect(lastScene().store.doc.items).toHaveLength(0);
+    expect(inspector().getByRole('heading', { name: 'המגרש' })).toBeTruthy();
+  });
+
+  it('shows a hidden group before a figure of the plot selects it — the one pickIds', async () => {
+    renderEditor({ initialSelection: null });
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('tab', { name: /במפה/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'הסתרת לינה וצל' }));
+    expect(lastScene().ui.hiddenGroups).toEqual(['sleep']);
+    fireEvent.click(inspector().getByRole('button', { name: 'לינה וצל 1' }));
+    expect(lastScene().ui.hiddenGroups).toEqual([]);
+    expect(lastScene().store.selection).toEqual(['a']);
+    expect(scene.handle.fitIds).toHaveBeenLastCalledWith(['a']);
   });
 });

@@ -30,6 +30,7 @@ import { formatSize, snap } from '@/lib/site/geometry';
 import { nearestFreeSpot } from '@/lib/site/editor/placement';
 import { KIND_GROUP_ORDER, SITE_KINDS, type SiteKindGroup } from '@/lib/site/kinds';
 import { findItem, type EditorDoc, type EditorItem } from '@/lib/site/editor/model';
+import type { SiteOp } from '@/lib/site/editor/ops';
 import { addOps, duplicateOps, lockOps, moveOps, removeOps, turnOps } from '@/lib/site/editor/commands';
 import { screenArrowToMap } from '@/lib/site/editor/camera';
 import { readSunDate } from '@/lib/site/views';
@@ -43,6 +44,11 @@ import { ConflictBanner, SaveErrorBanner, SaveStatus } from './panels/save-statu
 import { LibraryPanel } from './panels/library-panel';
 import { ObjectsPanel } from './panels/objects-panel';
 import { SidePanel, type SideTab } from './panels/side-panel';
+import { PlotInspector } from './panels/inspector-plot';
+import { ItemInspector } from './panels/inspector-item';
+import { MultiInspector } from './panels/inspector-multi';
+import { SelectionActions } from './panels/selection-actions';
+import inspectorStyles from './panels/inspector.module.css';
 import styles from './editor.module.css';
 
 const SceneView = dynamic<SceneViewProps & RefAttributes<SceneHandle>>(
@@ -381,6 +387,57 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
       .map((item) => item.id));
   }
 
+  function runEdit(label: string, ops: SiteOp[]): void {
+    if (ops.length > 0) store.run(label, ops);
+  }
+
+  /**
+   * One of three states (§10): the plot, one item, several items. Every
+   * figure in them that names items selects through `pickIds` — shown first,
+   * then selected and flown to.
+   */
+  function renderInspector(): ReactElement {
+    const items = selected();
+    if (items.length === 0) {
+      return <PlotInspector doc={store.doc} flags={store.flags} plotHref={plotHref} onPickIds={pickIds} />;
+    }
+    const actions = (
+      <SelectionActions
+        labelled
+        locked={items.every((item) => item.locked)}
+        onTurn={turnSelection}
+        onDuplicate={duplicateSelection}
+        onLock={toggleLock}
+        onRemove={removeSelection}
+      />
+    );
+    if (items.length === 1) {
+      return (
+        <ItemInspector
+          key={items[0].id}
+          doc={store.doc}
+          item={items[0]}
+          flags={store.flags}
+          buildTasks={props.buildTasks}
+          onRun={runEdit}
+          onPickIds={pickIds}
+          footer={actions}
+        />
+      );
+    }
+    return (
+      <MultiInspector
+        key={items.map((item) => item.id).join(' ')}
+        doc={store.doc}
+        ids={items.map((item) => item.id)}
+        onRun={runEdit}
+        onPickIds={pickIds}
+        onClear={() => { store.select([]); }}
+        footer={actions}
+      />
+    );
+  }
+
   function runShortcut(shortcut: Shortcut): void {
     if (typeof shortcut === 'object') {
       nudge(shortcut.arrow, shortcut.big);
@@ -514,6 +571,9 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
             />
           )}
         />
+        <section className={inspectorStyles.inspector} aria-label="מאפיינים" data-panel="true">
+          {renderInspector()}
+        </section>
         {/* floating panels, over the scene */}
       </section>
     </div>
