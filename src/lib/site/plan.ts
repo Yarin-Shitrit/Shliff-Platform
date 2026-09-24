@@ -11,7 +11,7 @@ import { placeNew } from './geometry';
 import { derive, toPlaced, type ItemFlags, type SiteCounts } from './derive';
 import type { KindDefaults } from './defaults';
 import type { EditorDoc, EditorItem } from './editor/model';
-import { lockRefusal, opRefusal, patchRefusal, type ItemPatch, type SiteOp } from './editor/ops';
+import { lockRefusal, opRefusal, patchRefusal, storedPatch, type ItemPatch, type SiteOp } from './editor/ops';
 
 /**
  * The camp map's reads and writes. One plan per season, any number of items
@@ -311,31 +311,27 @@ function validatePatch(patch: ItemPatch): void {
 type ItemRow = typeof siteItems.$inferSelect;
 
 /**
- * What a patch writes onto an existing row. A net keeps or gains an inset;
- * anything else never carries one — turning a sofa into a net gives it the
- * default rather than a null that would read as "shades its whole footprint".
+ * What a patch writes onto an existing row. `storedPatch` (`editor/ops.ts`,
+ * the one set of rules the client also runs) shapes the patch — trims the
+ * label, clears blank notes, decides the inset — and this copies its fields
+ * into the drizzle set.
  */
 function patchSet(
   existing: Pick<ItemRow, 'kind' | 'insetCm'>, patch: ItemPatch, actor: string,
 ): Partial<typeof siteItems.$inferInsert> {
-  const kind = patch.kind ?? existing.kind;
+  const stored = storedPatch(existing, patch);
   const set: Partial<typeof siteItems.$inferInsert> = { updatedBy: actor, updatedAt: new Date() };
-  if (patch.label !== undefined) set.label = patch.label.trim();
-  if (patch.kind !== undefined) set.kind = patch.kind;
-  if (patch.xCm !== undefined) set.xCm = patch.xCm;
-  if (patch.yCm !== undefined) set.yCm = patch.yCm;
-  if (patch.widthCm !== undefined) set.widthCm = patch.widthCm;
-  if (patch.depthCm !== undefined) set.depthCm = patch.depthCm;
-  if (patch.heightCm !== undefined) set.heightCm = patch.heightCm;
-  if (patch.taskId !== undefined) set.taskId = patch.taskId;
-  if (patch.notes !== undefined) set.notes = cleanNotes(patch.notes);
-  if (patch.locked !== undefined) set.locked = patch.locked;
-  if (kind === 'shade') {
-    if (patch.insetCm !== undefined) set.insetCm = patch.insetCm ?? DEFAULT_SHADE_INSET_CM;
-    else if (existing.insetCm === null) set.insetCm = DEFAULT_SHADE_INSET_CM;
-  } else if (patch.kind !== undefined || patch.insetCm !== undefined) {
-    set.insetCm = null;
-  }
+  if (stored.label !== undefined) set.label = stored.label;
+  if (stored.kind !== undefined) set.kind = stored.kind;
+  if (stored.xCm !== undefined) set.xCm = stored.xCm;
+  if (stored.yCm !== undefined) set.yCm = stored.yCm;
+  if (stored.widthCm !== undefined) set.widthCm = stored.widthCm;
+  if (stored.depthCm !== undefined) set.depthCm = stored.depthCm;
+  if (stored.heightCm !== undefined) set.heightCm = stored.heightCm;
+  if (stored.taskId !== undefined) set.taskId = stored.taskId;
+  if (stored.notes !== undefined) set.notes = stored.notes;
+  if (stored.locked !== undefined) set.locked = stored.locked;
+  if (stored.insetCm !== undefined) set.insetCm = stored.insetCm;
   return set;
 }
 
