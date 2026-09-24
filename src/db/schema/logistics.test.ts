@@ -64,12 +64,14 @@ describe('logistics schema', () => {
     expect(await db.select().from(inventoryItems)).toHaveLength(1);
   });
 
-  it('refuses an acquisition that belongs to no season', async () => {
-    await expect(
-      db.insert(acquisitionItems).values({
-        name: 'מקדחה רוטטת', category: 'build', quantityNeeded: 1, source: 'buy_new',
-      } as never),
-    ).rejects.toThrow();
+  it('accepts an acquisition that belongs to no season, and stores it as camp-wide', async () => {
+    // A generator is needed whichever burn is next. The absence of a season
+    // is a fact the row carries (null), not a refusal — `0011` dropped the
+    // NOT NULL for exactly this row.
+    const [row] = await db.insert(acquisitionItems).values({
+      name: 'גנרטור', category: 'general', quantityNeeded: 1, source: 'buy_new',
+    }).returning();
+    expect(row.seasonId).toBeNull();
   });
 
   it('records an acquisition against its season with both amounts optional', async () => {
