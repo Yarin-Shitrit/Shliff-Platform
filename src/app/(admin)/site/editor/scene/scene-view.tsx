@@ -5,7 +5,7 @@ import type { SiteItemKind } from '@/db/schema/site';
 import type { ScreenBox, ViewMode } from '@/lib/site/editor/camera';
 import type { SiteKindGroup } from '@/lib/site/kinds';
 import type { EditorStore } from '../use-editor-store';
-import { SceneEngine } from './engine';
+import { NoWebGLError, SceneEngine } from './engine';
 import { LabelsLayer, type LabelsLayerHandle } from './labels-layer';
 import type { SceneTheme } from './palette';
 import styles from './scene.module.css';
@@ -62,6 +62,9 @@ export interface SceneViewProps {
 /** What a browser without WebGL shows where the map would be (spec §7). */
 export const NO_WEBGL = 'המפה צריכה דפדפן עם גרפיקה תלת־ממדית פעילה.';
 
+/** What shows there when the graphics were fine and something else stopped the map from starting. */
+export const SCENE_FAILED = 'המפה לא נטענה. רענון הדף ינסה שוב.';
+
 const ENGINE_CLASSES = {
   canvas: styles.canvas,
   overlay: styles.overlay,
@@ -88,12 +91,15 @@ const ENGINE_CLASSES = {
  * created on the stage node, reads the latest props on every render through
  * a ref, and draws frames itself. A browser that cannot give WebGL makes the
  * engine throw; the component then says so, in Hebrew, instead of the map.
+ * Any other failure while the engine starts says the map did not load — it
+ * is not the browser's fault, and "no 3D graphics" would send the lead the
+ * wrong way.
  */
 export const SceneView = forwardRef<SceneHandle, SceneViewProps>(function SceneView(props, ref) {
   const propsRef = useRef(props);
   const engineRef = useRef<SceneEngine | null>(null);
   const labelsRef = useRef<LabelsLayerHandle | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<'no-webgl' | 'broken' | null>(null);
 
   useLayoutEffect(() => {
     propsRef.current = props;
@@ -111,8 +117,8 @@ export const SceneView = forwardRef<SceneHandle, SceneViewProps>(function SceneV
         labels: () => labelsRef.current,
         classes: ENGINE_CLASSES,
       });
-    } catch {
-      setFailed(true);
+    } catch (error) {
+      setFailed(error instanceof NoWebGLError ? 'no-webgl' : 'broken');
       return undefined;
     }
     engineRef.current = engine;
@@ -135,10 +141,10 @@ export const SceneView = forwardRef<SceneHandle, SceneViewProps>(function SceneV
     exportPng: () => engineRef.current?.exportPng() ?? null,
   }), []);
 
-  if (failed) {
+  if (failed !== null) {
     return (
       <div className={styles.scene}>
-        <p className={styles.fallback} role="status">{NO_WEBGL}</p>
+        <p className={styles.fallback} role="status">{failed === 'no-webgl' ? NO_WEBGL : SCENE_FAILED}</p>
       </div>
     );
   }

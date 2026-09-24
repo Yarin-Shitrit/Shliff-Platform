@@ -7,8 +7,7 @@ import { parseTheme } from '@/lib/theme';
 import { loadSiteDocAction, saveSiteChangesAction } from '../actions';
 import type { EditorUi, ViewInfo } from './scene/scene-view';
 import type { SceneTheme } from './scene/palette';
-import type { QueueSnapshot } from './save-queue';
-import { useEditorStore } from './use-editor-store';
+import { useEditorStore, type EditorStore } from './use-editor-store';
 import styles from './scene/scene.module.css';
 
 /**
@@ -48,7 +47,7 @@ function shownTheme(): SceneTheme {
 }
 
 /** The spec's three sentences (§6.3), and the conflict banner's (§6.4). */
-function statusText(save: QueueSnapshot): string {
+function statusText(save: EditorStore['save']): string {
   switch (save.status) {
     case 'saved': return 'כל השינויים נשמרו';
     case 'pending':

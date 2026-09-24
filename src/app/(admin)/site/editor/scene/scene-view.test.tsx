@@ -2,17 +2,23 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { createRef } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { DirectionalLight } from 'three';
 import type { EditorDoc, EditorItem } from '@/lib/site/editor/model';
 import type { EditorStore } from '../use-editor-store';
+import type { SceneHandle, ViewInfo } from './scene-view';
 
 /* jsdom has no WebGL. Each test decides what the renderer does: throw, as a
-   browser without WebGL does, or stand in for a GPU and count its frames.
-   The directional light is the real one, remembered, so a test can read
-   where the engine aimed it. */
+   browser without WebGL does, or stand in for a GPU — counting its frames,
+   naming the camera it last drew with, and counting what it was given back.
+   `failsAfter` breaks the first resize, after the renderer exists. The
+   directional light is the real one, remembered, so a test can read where
+   the engine aimed it. */
 const { renderer, lights } = vi.hoisted(() => ({
-  renderer: { fails: false, created: 0, frames: 0 },
+  renderer: {
+    fails: false, failsAfter: false, created: 0, frames: 0, camera: '', disposed: 0, contextLost: 0,
+  },
   lights: [] as unknown[],
 }));
 vi.mock('three', async (importOriginal) => {
@@ -24,10 +30,15 @@ vi.mock('three', async (importOriginal) => {
       if (renderer.fails) throw new Error('Error creating WebGL context.');
     }
     setPixelRatio() {}
-    setSize() {}
-    render() { renderer.frames += 1; }
-    dispose() {}
-    forceContextLoss() {}
+    setSize() {
+      if (renderer.failsAfter) throw new Error('Something broke after the context was made.');
+    }
+    render(_scene: unknown, camera: { type: string }) {
+      renderer.frames += 1;
+      renderer.camera = camera.type;
+    }
+    dispose() { renderer.disposed += 1; }
+    forceContextLoss() { renderer.contextLost += 1; }
   }
   class RememberedLight extends actual.DirectionalLight {
     constructor(...args: ConstructorParameters<typeof actual.DirectionalLight>) {
@@ -38,8 +49,8 @@ vi.mock('three', async (importOriginal) => {
   return { ...actual, WebGLRenderer, DirectionalLight: RememberedLight };
 });
 
-import { LOCKED_NOTICE } from './engine';
-import { NO_WEBGL, SceneView, type EditorUi } from './scene-view';
+import { LOCKED_NOTICE } from '../notices';
+import { NO_WEBGL, SCENE_FAILED, SceneView, type EditorUi } from './scene-view';
 
 const UI: EditorUi = {
   tool: 'select', mode: '3d', labels: true, sun: false, netsHidden: false,
@@ -77,37 +88,58 @@ function fakeStore(over: Partial<EditorStore> = {}): EditorStore {
 const NO_INSETS = { left: 0, right: 0, top: 0, bottom: 0 };
 
 function renderScene(store = fakeStore(), ui: EditorUi = UI) {
-  const onView = vi.fn();
+  const onView = vi.fn<(info: ViewInfo) => void>();
   const onNotice = vi.fn();
+  const onModeSettled = vi.fn();
+  const handle = createRef<SceneHandle>();
   const scene = (next: EditorStore, nextUi: EditorUi) => (
-    <SceneView store={next} ui={nextUi} insets={{ ...NO_INSETS }}
-      sunDate={null} onView={onView} onNotice={onNotice} />
+    <SceneView ref={handle} store={next} ui={nextUi} insets={{ ...NO_INSETS }}
+      sunDate={null} onView={onView} onNotice={onNotice} onModeSettled={onModeSettled} />
   );
   const view = render(scene(store, ui));
   const rerenderWith = (next: EditorStore, nextUi: EditorUi = ui) => { view.rerender(scene(next, nextUi)); };
-  return { ...view, onView, onNotice, store, rerenderWith };
+  return { ...view, onView, onNotice, onModeSettled, handle, store, rerenderWith };
 }
 
 function canvasOf(container: HTMLElement): HTMLCanvasElement {
   return container.querySelector('canvas') as HTMLCanvasElement;
 }
 
-function drag(canvas: HTMLCanvasElement, from: [number, number], to: [number, number]) {
-  fireEvent.pointerDown(canvas, { clientX: from[0], clientY: from[1], button: 0, pointerId: 1 });
-  fireEvent.pointerMove(canvas, { clientX: to[0], clientY: to[1], button: 0, pointerId: 1 });
-  fireEvent.pointerUp(canvas, { clientX: to[0], clientY: to[1], button: 0, pointerId: 1 });
+/** A mouse, a pen or the first finger: the pointer the map follows. */
+const PRIMARY = { button: 0, pointerId: 1, isPrimary: true };
+
+function press(canvas: HTMLCanvasElement, [x, y]: [number, number], over: Record<string, unknown> = {}) {
+  fireEvent.pointerDown(canvas, { clientX: x, clientY: y, ...PRIMARY, ...over });
+}
+function slide(canvas: HTMLCanvasElement, [x, y]: [number, number], over: Record<string, unknown> = {}) {
+  fireEvent.pointerMove(canvas, { clientX: x, clientY: y, ...PRIMARY, ...over });
+}
+function lift(canvas: HTMLCanvasElement, [x, y]: [number, number], over: Record<string, unknown> = {}) {
+  fireEvent.pointerUp(canvas, { clientX: x, clientY: y, ...PRIMARY, ...over });
+}
+
+function drag(canvas: HTMLCanvasElement, from: [number, number], to: [number, number], over: Record<string, unknown> = {}) {
+  press(canvas, from, over);
+  slide(canvas, to, over);
+  lift(canvas, to, over);
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => { setTimeout(resolve, ms); });
 }
 
 /** Long enough for any frame the engine asked for to have run. */
 function frames() {
-  return new Promise((resolve) => { setTimeout(resolve, 80); });
+  return wait(80);
 }
 
 const realRect = Element.prototype.getBoundingClientRect;
 const realGetContext = HTMLCanvasElement.prototype.getContext;
 
 beforeEach(() => {
-  Object.assign(renderer, { fails: false, created: 0, frames: 0 });
+  Object.assign(renderer, {
+    fails: false, failsAfter: false, created: 0, frames: 0, camera: '', disposed: 0, contextLost: 0,
+  });
   lights.length = 0;
   /* No 2D canvas either: labels are measured by an estimate, quietly. */
   HTMLCanvasElement.prototype.getContext = (() => null) as typeof realGetContext;
@@ -129,6 +161,20 @@ describe('the 3D map without WebGL', () => {
     expect(renderer.created).toBeGreaterThan(0);
     expect(screen.getByText('המפה צריכה דפדפן עם גרפיקה תלת־ממדית פעילה.')).toBeTruthy();
     expect(NO_WEBGL).toBe('המפה צריכה דפדפן עם גרפיקה תלת־ממדית פעילה.');
+    expect(screen.queryByText(SCENE_FAILED)).toBeNull();
+    expect(container.querySelector('canvas')).toBeNull();
+    expect(container.textContent).not.toMatch(/[A-Za-z]/);
+  });
+
+  it('says the map did not load — not that WebGL is missing — when something fails after the renderer exists, and gives the context back', () => {
+    renderer.failsAfter = true;
+    const { container } = renderScene();
+    expect(renderer.created).toBe(1);
+    expect(screen.getByText('המפה לא נטענה. רענון הדף ינסה שוב.')).toBeTruthy();
+    expect(SCENE_FAILED).toBe('המפה לא נטענה. רענון הדף ינסה שוב.');
+    expect(screen.queryByText(NO_WEBGL)).toBeNull();
+    expect(renderer.disposed).toBe(1);
+    expect(renderer.contextLost).toBe(1);
     expect(container.querySelector('canvas')).toBeNull();
     expect(container.textContent).not.toMatch(/[A-Za-z]/);
   });
@@ -140,6 +186,7 @@ describe('the 3D map with WebGL', () => {
     expect(container.querySelector('canvas')).not.toBeNull();
     await waitFor(() => { expect(onView).toHaveBeenCalled(); });
     expect(renderer.frames).toBeGreaterThan(0);
+    expect(renderer.camera).toBe('PerspectiveCamera');
     expect(onView.mock.calls.at(-1)?.[0]).toMatchObject({ moving: false, zoomPct: 100, selectionBox: null });
     expect(screen.getByText('אוהל 1')).toBeTruthy();
   });
@@ -174,6 +221,105 @@ describe('the 3D map with WebGL', () => {
     expect(light.target.position.z).toBeCloseTo(24, 5);
   });
 
+  it('lays the labels out again once the web font has loaded, and does nothing if that is after it is gone', async () => {
+    let loaded: () => void = () => {};
+    const ready = new Promise<void>((resolve) => { loaded = resolve; });
+    Object.defineProperty(document, 'fonts', { value: { ready }, configurable: true });
+    try {
+      const { onView } = renderScene();
+      await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+      await frames();
+      const drawn = renderer.frames;
+      loaded();
+      await frames();
+      expect(renderer.frames).toBeGreaterThan(drawn);
+
+      let late: () => void = () => {};
+      const lateReady = new Promise<void>((resolve) => { late = resolve; });
+      Object.defineProperty(document, 'fonts', { value: { ready: lateReady }, configurable: true });
+      const { unmount } = renderScene();
+      await frames();
+      unmount();
+      const before = renderer.frames;
+      late();
+      await frames();
+      expect(renderer.frames).toBe(before);
+    } finally {
+      delete (document as { fonts?: unknown }).fonts;
+    }
+  });
+
+  it('lets go of everything when it goes: the renderer, the context, the listeners and the frame it asked for', async () => {
+    const removed = vi.spyOn(window, 'removeEventListener');
+    const cancelled = vi.spyOn(globalThis, 'cancelAnimationFrame');
+    try {
+      const { container, onView, rerenderWith, unmount } = renderScene(fakeStore(), { ...UI, mode: 'plan', labels: false });
+      await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+      await frames();
+      const canvas = canvasOf(container);
+      const selected = fakeStore({ selection: ['tent'] });
+      rerenderWith(selected); // asks for a frame…
+      const drawn = renderer.frames;
+      unmount(); // …that never comes
+
+      expect(cancelled).toHaveBeenCalled();
+      expect(renderer.disposed).toBe(1);
+      expect(renderer.contextLost).toBe(1);
+      expect(canvas.isConnected).toBe(false);
+      expect(removed).toHaveBeenCalledWith('blur', expect.any(Function));
+
+      drag(canvas, [500, 350], [500, 350]);
+      expect(selected.select).not.toHaveBeenCalled();
+      await frames();
+      expect(renderer.frames).toBe(drawn);
+    } finally {
+      removed.mockRestore();
+      cancelled.mockRestore();
+    }
+  });
+
+  describe('switching between plan and 3D', () => {
+    it('lands in the orthographic camera once the tilt to plan has finished', async () => {
+      const { onView, onModeSettled, rerenderWith, store } = renderScene();
+      await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+      rerenderWith(store, { ...UI, mode: 'plan' });
+      await wait(800);
+      expect(onModeSettled.mock.calls).toEqual([['plan']]);
+      expect(renderer.camera).toBe('OrthographicCamera');
+    });
+
+    it('lands in 3D, orbiting, when a switch to plan is turned back halfway', async () => {
+      const { container, onView, onModeSettled, rerenderWith, store } = renderScene();
+      await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+      rerenderWith(store, { ...UI, mode: 'plan' });
+      await wait(150);
+      rerenderWith(store, { ...UI, mode: '3d' });
+      await wait(900);
+      expect(onModeSettled.mock.calls).toEqual([['3d']]);
+      expect(renderer.camera).toBe('PerspectiveCamera');
+
+      // A right-drag orbits in 3D (in plan it would pan): 100 px is 35° of yaw.
+      const yaw = onView.mock.calls.at(-1)?.[0].yaw ?? NaN;
+      drag(canvasOf(container), [500, 600], [600, 600], { button: 2 });
+      await wait(400);
+      const turned = onView.mock.calls.at(-1)?.[0].yaw ?? NaN;
+      expect((turned - yaw + 360) % 360).toBeCloseTo(35, 3);
+    });
+
+    it('fits the plot as plan when asked to halfway through the switch to plan', async () => {
+      const { handle, onView, onModeSettled, rerenderWith, store } = renderScene();
+      await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+      rerenderWith(store, { ...UI, mode: 'plan' });
+      await wait(150);
+      handle.current?.fitAll();
+      await wait(900);
+      expect(onModeSettled.mock.calls).toEqual([['plan']]);
+      expect(renderer.camera).toBe('OrthographicCamera');
+      // North up, as the switch left it, and the whole plot: the plan fit, not a 3D one.
+      expect(onView.mock.calls.at(-1)?.[0]).toMatchObject({ moving: false, yaw: 0, zoomPct: 100 });
+    });
+  });
+
   /* Plan view frames the plot's middle exactly at the screen's middle, so the
      tent at the plot's middle is under (500, 350) and the corner is bare ground.
      The plot is 2600 × 2400 cm in a 1000 × 700 box: 0.2917 px a centimetre,
@@ -185,8 +331,8 @@ describe('the 3D map with WebGL', () => {
     const { container, onView, store } = renderScene(fakeStore({ selection: ['tent'] }), PLAN);
     await waitFor(() => { expect(onView).toHaveBeenCalled(); });
     const canvas = canvasOf(container);
-    fireEvent.pointerDown(canvas, { clientX: 5, clientY: 690, button: 0, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 5, clientY: 690, button: 0, pointerId: 1 });
+    press(canvas, [5, 690]);
+    lift(canvas, [5, 690]);
     expect(store.select).toHaveBeenCalledWith([]);
   });
 
@@ -195,9 +341,93 @@ describe('the 3D map with WebGL', () => {
     const { container, onView, store } = renderScene(fakeStore(), QUIET_PLAN);
     await waitFor(() => { expect(onView).toHaveBeenCalled(); });
     const canvas = canvasOf(container);
-    fireEvent.pointerDown(canvas, { clientX: 500, clientY: 350, button: 0, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 500, clientY: 350, button: 0, pointerId: 1 });
+    press(canvas, [500, 350]);
+    lift(canvas, [500, 350]);
     expect(store.select).toHaveBeenCalledWith(['tent']);
+  });
+
+  it('never reports a click as the view moving, even with a small tremor', async () => {
+    const { container, onView, rerenderWith } = renderScene(fakeStore(), QUIET_PLAN);
+    await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+    await wait(150); // past the ten-a-second limit, so a "moving" report could not be held back by it
+    const canvas = canvasOf(container);
+    const before = onView.mock.calls.length;
+    press(canvas, [500, 350]);
+    rerenderWith(fakeStore({ selection: ['tent'] })); // the store answers the click
+    await frames(); // the button is still down
+    slide(canvas, [502, 351]);
+    lift(canvas, [502, 351]);
+    await wait(300);
+    const after = onView.mock.calls.slice(before).map(([info]) => info);
+    expect(after.some((info) => info.selectionBox !== null)).toBe(true);
+    expect(after.filter((info) => info.moving)).toEqual([]);
+  });
+
+  describe('moving an item', () => {
+    /* On the tent, clear of its label (470–530 × 339–361). Dragged 100 px
+       east and 30 px south: 342.86 × 102.86 cm. */
+    const ON_TENT: [number, number] = [500, 320];
+    const THERE: [number, number] = [600, 350];
+    const RESTING = 'translate(470px, 339px)';
+
+    it('moves a preview only, then saves one step on the drop, snapped to the grid', async () => {
+      const { container, onView, store } = renderScene(fakeStore(), PLAN);
+      await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+      const canvas = canvasOf(container);
+      expect(screen.getByText('אוהל 1').style.transform).toBe(RESTING);
+
+      press(canvas, ON_TENT);
+      slide(canvas, THERE);
+      await frames();
+      expect(screen.getByText('אוהל 1').style.transform).not.toBe(RESTING);
+      expect(store.run).not.toHaveBeenCalled();
+
+      lift(canvas, THERE);
+      expect(store.run).toHaveBeenCalledTimes(1);
+      expect(store.run).toHaveBeenCalledWith('הזזה', [{ type: 'update', id: 'tent', patch: { xCm: 1500, yCm: 1150 } }]);
+    });
+
+    it('moves by whole centimetres, unsnapped, with Alt', async () => {
+      const { container, onView, store } = renderScene(fakeStore(), PLAN);
+      await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+      drag(canvasOf(container), ON_TENT, THERE, { altKey: true });
+      expect(store.run).toHaveBeenCalledTimes(1);
+      expect(store.run).toHaveBeenCalledWith('הזזה', [{ type: 'update', id: 'tent', patch: { xCm: 1493, yCm: 1153 } }]);
+    });
+
+    /** A drag under way, its preview drawn; `abandon` ends it some way other than a release. */
+    async function abandonedDrag(abandon: (canvas: HTMLCanvasElement) => void) {
+      const { container, onView, store } = renderScene(fakeStore(), PLAN);
+      await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+      const canvas = canvasOf(container);
+      press(canvas, ON_TENT);
+      slide(canvas, THERE);
+      await frames();
+      expect(screen.getByText('אוהל 1').style.transform).not.toBe(RESTING);
+
+      abandon(canvas);
+      await frames();
+      expect(screen.getByText('אוהל 1').style.transform).toBe(RESTING);
+      lift(canvas, THERE);
+      await frames();
+      expect(screen.getByText('אוהל 1').style.transform).toBe(RESTING);
+      expect(store.run).not.toHaveBeenCalled();
+    }
+
+    it('drops the preview, saving nothing, when a second finger lands', async () => {
+      await abandonedDrag((canvas) => {
+        fireEvent.pointerDown(canvas, { clientX: 5, clientY: 690, button: 0, pointerId: 2, isPrimary: false });
+        fireEvent.pointerUp(canvas, { clientX: 5, clientY: 690, button: 0, pointerId: 2, isPrimary: false });
+      });
+    });
+
+    it('drops the preview, saving nothing, when the window loses focus', async () => {
+      await abandonedDrag(() => { fireEvent.blur(window); });
+    });
+
+    it('drops the preview, saving nothing, when the pointer is captured away', async () => {
+      await abandonedDrag((canvas) => { fireEvent.lostPointerCapture(canvas, { pointerId: 1, isPrimary: true }); });
+    });
   });
 
   describe('the handles of the one selected item', () => {
@@ -270,6 +500,28 @@ describe('the 3D map with WebGL', () => {
       expect(screen.getByText('תא שירותים 4')).toBeTruthy();
       expect(labels(container)).not.toContain('4 תאי שירותים');
       expect(labels(container)).not.toContain('3 תאי שירותים');
+    });
+
+    it('single out the item under the pointer — again after the pointer has left and come back', async () => {
+      // On the second toilet, just below the group's label (339–361).
+      const OVER_W2: [number, number] = [456, 363];
+      const { container, onView } = renderScene(fakeStore({ doc: docOf(ROW) }), PLAN);
+      await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+      const canvas = canvasOf(container);
+
+      slide(canvas, OVER_W2);
+      await frames();
+      expect(labels(container)).toContain('תא שירותים 2');
+      expect(canvas.style.cursor).toBe('grab');
+
+      fireEvent.pointerLeave(canvas, PRIMARY);
+      await frames();
+      expect(labels(container)).toEqual(['4 תאי שירותים']);
+      expect(canvas.style.cursor).toBe('default');
+
+      slide(canvas, OVER_W2);
+      await frames();
+      expect(labels(container)).toContain('תא שירותים 2');
     });
 
     /* A 5 cm peg is under 1.5 px on screen. */

@@ -14,6 +14,7 @@ import {
   contains, formatMetres, formatSize, gapsAround, overlap, unionRect, type Gap, type Handle, type Rect,
 } from '@/lib/site/geometry';
 import { SITE_KINDS, type SiteKindGroup } from '@/lib/site/kinds';
+import { LOCKED_NOTICE } from '../notices';
 import { CameraRig } from './camera-rig';
 import { Gestures, type GestureIntent, type GestureWorld, type PointerInput } from './gestures';
 import type { LabelsLayerHandle } from './labels-layer';
@@ -41,9 +42,23 @@ export interface EngineOptions {
 
 type RectCm = { xCm: number; yCm: number; widthCm: number; depthCm: number };
 
-/** Hebrew, for the toast the editor shows (`onNotice`). */
-export const LOCKED_NOTICE = 'הפריט נעול. אפשר לשחרר אותו בכפתור הנעילה.';
+/** Hebrew, for the toast the editor shows (`onNotice`). The locked notice is `../notices.ts`'s, shared with the panels. */
 export const CONTEXT_LOST_NOTICE = 'התצוגה התלת־ממדית נעצרה לרגע. היא תחזור מעצמה.';
+
+/**
+ * The browser could not give a WebGL context: the one failure `SceneView`
+ * reports as missing 3D graphics. Anything that breaks later is another
+ * failure, and says so differently. The message is for developers only.
+ */
+export class NoWebGLError extends Error {
+  constructor(cause: unknown) {
+    super('WebGL is not available', { cause });
+    this.name = 'NoWebGLError';
+  }
+}
+
+/** What a drag does once it is past the click threshold: from then until it settles, the view is moving. */
+const MOTION: ReadonlySet<GestureIntent['type']> = new Set(['panBy', 'orbitBy', 'movePreview', 'resizePreview', 'marquee']);
 
 /** Measured at the label's CSS size and weight (`scene.module.css` `.label`). */
 const LABEL_FONT_PX = 12.5;
@@ -87,9 +102,11 @@ export class SceneEngine {
   private readonly light = new THREE.DirectionalLight(SCENE_LIGHT.sun, 1.4);
   private sunOn = false;
   private readonly gestures: Gestures;
-  private readonly overlay: OverlayLayer;
+  /** Null until the constructor has made it, and again once disposed. */
+  private overlay: OverlayLayer | null = null;
   private readonly resizeObserver: ResizeObserver | null;
   private readonly text: CanvasRenderingContext2D | null;
+  private readonly font: string;
 
   private viewport: Viewport = { width: 0, height: 0 };
   private cam: CameraState | null = null;
@@ -102,6 +119,8 @@ export class SceneEngine {
   private lastMotion = -Infinity;
   private lastView = -Infinity;
   private lastCameraKey = '';
+  /** A drag past the click threshold is under way: the view counts as moving until it ends. */
+  private dragging = false;
   private viewDirty = true;
   private sceneDirty = true;
   private labelsDirty = true;
@@ -136,51 +155,68 @@ export class SceneEngine {
     canvas.className = options.classes.canvas;
     canvas.setAttribute('role', 'img');
     canvas.setAttribute('aria-label', 'מפת הקאמפ');
-    // First, so a browser without WebGL throws before anything is attached.
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
     this.canvas = canvas;
-    this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
-    this.renderer.shadowMap.enabled = true;
-    stage.appendChild(canvas);
-    this.overlay = new OverlayLayer(stage, options.classes);
-
-    this.light.shadow.mapSize.set(2048, 2048);
-    this.scene.add(this.hemisphere, this.light, this.light.target, this.sync.root);
-
-    const props = options.props();
-    this.mode = props.ui.mode;
-    this.drawMode = props.ui.mode;
-    this.text = document.createElement('canvas').getContext('2d');
-    if (this.text !== null) {
-      this.text.font = `500 ${LABEL_FONT_PX}px ${getComputedStyle(stage).fontFamily || 'system-ui, sans-serif'}`;
+    // First, so a browser without WebGL throws before anything is attached.
+    try {
+      this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+    } catch (cause) {
+      throw new NoWebGLError(cause);
     }
 
-    const world: GestureWorld = {
-      tool: () => this.options.props().ui.tool,
-      mode: () => this.drawMode,
-      handleAt: (x, y) => this.handleAt(x, y),
-      labelAt: (x, y) => this.labelAt(x, y),
-      itemAt: (x, y) => this.itemAt(x, y),
-      groundAt: (x, y) => (this.cam === null ? null : groundAt(this.cam, this.viewport, this.drawMode, x, y)),
-      selection: () => this.options.props().store.selection,
-    };
-    this.gestures = new Gestures(world);
+    try {
+      this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+      this.renderer.shadowMap.enabled = true;
+      stage.appendChild(canvas);
+      this.overlay = new OverlayLayer(stage, options.classes);
 
-    canvas.addEventListener('pointerdown', this.onPointerDown);
-    canvas.addEventListener('pointermove', this.onPointerMove);
-    canvas.addEventListener('pointerup', this.onPointerUp);
-    canvas.addEventListener('pointercancel', this.onPointerCancel);
-    canvas.addEventListener('pointerleave', this.onPointerLeave);
-    canvas.addEventListener('wheel', this.onWheel, { passive: false });
-    canvas.addEventListener('dblclick', this.onDoubleClick);
-    canvas.addEventListener('contextmenu', this.onContextMenu);
-    canvas.addEventListener('webglcontextlost', this.onContextLost);
-    canvas.addEventListener('webglcontextrestored', this.onContextRestored);
+      this.light.shadow.mapSize.set(2048, 2048);
+      this.scene.add(this.hemisphere, this.light, this.light.target, this.sync.root);
 
-    this.resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => { this.resize(); });
-    this.resizeObserver?.observe(stage);
-    this.update();
-    this.resize();
+      const props = options.props();
+      this.mode = props.ui.mode;
+      this.drawMode = props.ui.mode;
+      this.font = `500 ${LABEL_FONT_PX}px ${getComputedStyle(stage).fontFamily || 'system-ui, sans-serif'}`;
+      this.text = document.createElement('canvas').getContext('2d');
+      if (this.text !== null) this.text.font = this.font;
+
+      const world: GestureWorld = {
+        tool: () => this.options.props().ui.tool,
+        mode: () => this.drawMode,
+        handleAt: (x, y) => this.handleAt(x, y),
+        labelAt: (x, y) => this.labelAt(x, y),
+        itemAt: (x, y) => this.itemAt(x, y),
+        groundAt: (x, y) => (this.cam === null ? null : groundAt(this.cam, this.viewport, this.drawMode, x, y)),
+        selection: () => this.options.props().store.selection,
+      };
+      this.gestures = new Gestures(world);
+
+      canvas.addEventListener('pointerdown', this.onPointerDown);
+      canvas.addEventListener('pointermove', this.onPointerMove);
+      canvas.addEventListener('pointerup', this.onPointerUp);
+      canvas.addEventListener('pointercancel', this.onPointerCancel);
+      canvas.addEventListener('lostpointercapture', this.onPointerCancel);
+      canvas.addEventListener('pointerleave', this.onPointerLeave);
+      canvas.addEventListener('wheel', this.onWheel, { passive: false });
+      canvas.addEventListener('dblclick', this.onDoubleClick);
+      canvas.addEventListener('contextmenu', this.onContextMenu);
+      canvas.addEventListener('webglcontextlost', this.onContextLost);
+      canvas.addEventListener('webglcontextrestored', this.onContextRestored);
+      // A drag whose window loses focus never sees its release.
+      window.addEventListener('blur', this.onPointerCancel);
+
+      this.resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => { this.resize(); });
+      this.resizeObserver?.observe(stage);
+      this.update();
+      this.resize();
+
+      // Labels are measured in the page's font; a web font that arrives later measures differently.
+      // `document.fonts` is missing in some environments (jsdom), and the promise may settle after dispose.
+      document.fonts?.ready.then(() => { this.remeasure(); }, () => {});
+    } catch (error) {
+      // The renderer exists: its context is given back now, not whenever the collector gets to it.
+      this.teardown();
+      throw error;
+    }
   }
 
   /* ── from React ─────────────────────────────────────────────────────── */
@@ -231,8 +267,18 @@ export class SceneEngine {
   }
 
   dispose(): void {
+    this.teardown();
+  }
+
+  /**
+   * Lets go of everything: frames, timers, listeners, GPU memory, the
+   * context, the DOM. Also what a constructor that failed halfway calls, so
+   * nothing here may assume the constructor finished.
+   */
+  private teardown(): void {
     this.alive = false;
     cancelAnimationFrame(this.frameId);
+    this.frameId = 0;
     if (this.settleTimer !== null) clearTimeout(this.settleTimer);
     this.resizeObserver?.disconnect();
     const canvas = this.canvas;
@@ -240,32 +286,49 @@ export class SceneEngine {
     canvas.removeEventListener('pointermove', this.onPointerMove);
     canvas.removeEventListener('pointerup', this.onPointerUp);
     canvas.removeEventListener('pointercancel', this.onPointerCancel);
+    canvas.removeEventListener('lostpointercapture', this.onPointerCancel);
     canvas.removeEventListener('pointerleave', this.onPointerLeave);
     canvas.removeEventListener('wheel', this.onWheel);
     canvas.removeEventListener('dblclick', this.onDoubleClick);
     canvas.removeEventListener('contextmenu', this.onContextMenu);
     canvas.removeEventListener('webglcontextlost', this.onContextLost);
     canvas.removeEventListener('webglcontextrestored', this.onContextRestored);
+    window.removeEventListener('blur', this.onPointerCancel);
     this.sync.dispose();
     if (this.ground !== null) disposeObject(this.ground);
     this.setGhost(null);
     this.renderer.dispose();
     // This canvas is never reused, so its context is given back at once.
     this.renderer.forceContextLoss();
-    this.overlay.dispose();
+    this.overlay?.dispose();
+    this.overlay = null;
     canvas.remove();
+  }
+
+  /** The web font has arrived: labels are measured in it from now on, and laid out again. */
+  private remeasure(): void {
+    if (!this.alive) return;
+    if (this.text !== null) this.text.font = this.font;
+    this.labelsDirty = true;
+    this.requestFrame();
   }
 
   /* ── SceneHandle ────────────────────────────────────────────────────── */
 
+  /* Each command below first lands whatever animation is running
+     (`stopAnimation`) and only then works out where to go: halfway through
+     a switch to plan, "fit" means the plan fit, from the plan camera. */
+
   fitAll(): void {
     if (this.cam === null) return;
+    this.stopAnimation();
     const pitch = this.drawMode === 'plan' ? 90 : this.cam.pitch;
     this.animate(fitRect(null, this.cam.yaw, pitch, this.viewport, this.drawMode, this.safe(), this.plot()), 420);
   }
 
   fitIds(ids: readonly string[]): void {
     if (this.cam === null) return;
+    this.stopAnimation();
     const { doc } = this.options.props().store;
     const rect = unionRect(doc.items.filter((entry) => ids.includes(entry.id)).map(rectOf));
     if (rect === null) return;
@@ -278,6 +341,7 @@ export class SceneEngine {
 
   zoomBy(factor: number): void {
     if (this.cam === null) return;
+    this.stopAnimation();
     const safe = this.safe();
     this.animate(zoomAt(this.cam, this.viewport, this.drawMode, (safe.l + safe.r) / 2, (safe.t + safe.b) / 2, factor), 200);
   }
@@ -285,12 +349,15 @@ export class SceneEngine {
   /** A quarter turn in plan, an eighth in 3D. */
   rotateView(dir: 1 | -1): void {
     if (this.cam === null) return;
+    this.stopAnimation();
     const step = this.drawMode === 'plan' ? 90 : 45;
     this.animate({ ...this.cam, yaw: Math.round(this.cam.yaw / step) * step + dir * step }, 380);
   }
 
   northUp(): void {
-    if (this.cam !== null) this.animate({ ...this.cam, yaw: 0 }, 380);
+    if (this.cam === null) return;
+    this.stopAnimation();
+    this.animate({ ...this.cam, yaw: 0 }, 380);
   }
 
   centreGround(): [number, number] | null {
@@ -391,7 +458,7 @@ export class SceneEngine {
       this.layoutLabels();
       this.labelsDirty = false;
     }
-    this.overlay.draw(this.overlayModel());
+    this.overlay?.draw(this.overlayModel());
 
     const moving = this.isMoving(now);
     if (moving) {
@@ -403,8 +470,9 @@ export class SceneEngine {
     if (animating) this.requestFrame();
   };
 
+  /** A press that has not passed the click threshold is not motion: a click never hides the selection bar. */
   private isMoving(now: number): boolean {
-    return this.animation !== null || this.gestures.active || now - this.lastMotion < SETTLE_MS;
+    return this.animation !== null || this.dragging || now - this.lastMotion < SETTLE_MS;
   }
 
   /** Motion happened; once it has stopped for `SETTLE_MS`, report the settled view once. */
@@ -512,6 +580,12 @@ export class SceneEngine {
    * Plan is 3D seen from straight above (spec §7): going to plan tilts the
    * perspective camera to 90° and only then swaps in the orthographic one, so
    * the picture never jumps; going to 3D swaps first and then tilts down.
+   *
+   * A switch still under way is overtaken, not finished: its landing (the
+   * swap of cameras, the report that it settled) belongs to a mode the
+   * editor no longer wants, so it is dropped and the new switch goes on from
+   * wherever the camera is. `stopAnimation` would land it instead — right
+   * for a hand on the map, wrong here.
    */
   private switchMode(next: ViewMode): void {
     this.mode = next;
@@ -519,6 +593,7 @@ export class SceneEngine {
       this.drawMode = next;
       return;
     }
+    this.animation = null;
     const settle = () => this.options.props().onModeSettled?.(next);
     this.drawMode = '3d';
     if (next === 'plan') {
@@ -927,6 +1002,33 @@ export class SceneEngine {
           break;
       }
     }
+    // Past the click threshold, a drag is motion until it ends (`endDrag`), even while the pointer rests.
+    if (this.gestures.active && intents.some((intent) => MOTION.has(intent.type))) {
+      this.dragging = true;
+      this.markMotion(performance.now());
+    }
+    this.requestFrame();
+  }
+
+  /** The drag is over, however it ended: a view that was moving settles from now. */
+  private endDrag(): void {
+    if (!this.dragging) return;
+    this.dragging = false;
+    this.markMotion(performance.now());
+  }
+
+  /**
+   * A gesture that will not finish: the browser cancelled the pointer or took
+   * its capture away, a second finger landed, or the window lost focus.
+   * Nothing is saved, and nothing it previewed stays on the map.
+   */
+  private abandon(): void {
+    const open = this.gestures.active || this.preview.size > 0 || this.marquee !== null || this.guides.length > 0;
+    if (!open) return;
+    this.apply(this.gestures.cancel());
+    this.marquee = null;
+    this.clearPreview();
+    this.endDrag();
     this.requestFrame();
   }
 
@@ -998,8 +1100,16 @@ export class SceneEngine {
     return { x, y, button: event.button, shift: event.shiftKey, meta: event.metaKey, ctrl: event.ctrlKey, alt: event.altKey };
   }
 
+  /* The map follows one pointer: the mouse, the pen or the first finger
+     (`isPrimary`). Any other pointer is ignored, except that one landing
+     mid-gesture ends that gesture unsaved — a second finger is a pinch or a
+     slip, and neither is the drop of what the first finger was dragging. */
+
   private readonly onPointerDown = (event: PointerEvent): void => {
     if (this.cam === null) return;
+    // A second finger, or a press while a gesture is open (its release never came): that gesture ends here.
+    this.abandon();
+    if (!event.isPrimary) return;
     try {
       this.canvas.setPointerCapture(event.pointerId);
     } catch {
@@ -1010,34 +1120,29 @@ export class SceneEngine {
   };
 
   private readonly onPointerMove = (event: PointerEvent): void => {
-    if (this.cam === null) return;
-    if (this.gestures.active) this.markMotion(performance.now());
+    if (this.cam === null || !event.isPrimary) return;
     this.apply(this.gestures.move(this.pointer(event)));
   };
 
   private readonly onPointerUp = (event: PointerEvent): void => {
+    if (!event.isPrimary) return;
     try {
       this.canvas.releasePointerCapture(event.pointerId);
     } catch {
       // Already released.
     }
-    const dragging = this.gestures.active;
     this.apply(this.gestures.up(this.pointer(event)));
-    if (dragging) this.markMotion(performance.now());
+    this.endDrag();
   };
 
+  /** `pointercancel`, `lostpointercapture` and the window's `blur`: the gesture will not finish. */
   private readonly onPointerCancel = (): void => {
-    this.apply(this.gestures.cancel());
-    this.clearPreview();
-    this.requestFrame();
+    this.abandon();
   };
 
-  private readonly onPointerLeave = (): void => {
-    if (this.gestures.active || this.hover === null) return;
-    this.hover = null;
-    this.sceneDirty = true;
-    this.labelsDirty = true;
-    this.requestFrame();
+  private readonly onPointerLeave = (event: PointerEvent): void => {
+    if (!event.isPrimary) return;
+    this.apply(this.gestures.leave());
   };
 
   /** Wheel and trackpad pinch (a wheel with Ctrl) zoom toward the pointer. */
