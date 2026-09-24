@@ -173,11 +173,14 @@ number. If the diff is ever non-empty, read the difference and apply the
 specific change by hand — with the camp lead's approval, because it is real
 financial data.
 
-### Migrations `0009` and `0010` have never reached Railway
+### Migrations `0009` and `0010` — applied by hand on 2026-09-24
 
-As of 2026-09-24 the production database is at `0008`. Two migrations on
-`main` create tables it does not have, and every screen that reads them
-throws during its server render (React #441) instead of loading:
+**Applied 2026-09-24** with the `psql -f` command below, run by @josefcohen96
+from this laptop: the read-only check printed nothing before, and every
+`CREATE TABLE` / `ALTER TABLE` completed with no error. Until then the
+production database was at `0008`, and every screen that read these tables
+threw during its server render (React #441) instead of loading. The
+procedure stays here because the next migration will need it:
 
 | Migration | Creates | Screens that throw without it |
 |---|---|---|
