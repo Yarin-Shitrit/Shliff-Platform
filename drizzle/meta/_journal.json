@@ -78,6 +78,13 @@
       "when": 1790194103049,
       "tag": "0010_mysterious_trish_tilby",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790267384625,
+      "tag": "0011_faithful_starjammers",
+      "breakpoints": true
     }
   ]
 }

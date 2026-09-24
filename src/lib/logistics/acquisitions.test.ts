@@ -31,17 +31,20 @@ describe('what the camp still needs for one year', () => {
     db = await createTestDb();
     ({ seasonId, itayId } = await seed(db));
 
-    await createAcquisition(db, seasonId, {
+    await createAcquisition(db, {
+      seasonId,
       name: 'מקדחה רוטטת', category: 'build', quantityNeeded: 1,
       source: 'buy_new', estimatedCost: '400', actualCost: '380',
       assigneePersonId: itayId, lenderPersonId: null, budgetLineId: null,
     }, LEAD);
-    await createAcquisition(db, seasonId, {
+    await createAcquisition(db, {
+      seasonId,
       name: 'ברגים לעץ', category: 'build', quantityNeeded: 200,
       source: 'buy_new', estimatedCost: '90', actualCost: null,
       assigneePersonId: itayId, lenderPersonId: null, budgetLineId: null,
     }, LEAD);
-    await createAcquisition(db, seasonId, {
+    await createAcquisition(db, {
+      seasonId,
       name: 'מקרר קטן', category: 'kitchen', quantityNeeded: 1,
       source: 'borrow_member', estimatedCost: null, actualCost: null,
       assigneePersonId: null, lenderPersonId: itayId, budgetLineId: null,
@@ -53,7 +56,8 @@ describe('what the camp still needs for one year', () => {
     // a shopping list does not.
     const [other] = await db.insert(seasons)
       .values({ name: 'ברן 27', year: 2027, flatRate: '1200.00' }).returning();
-    await createAcquisition(db, other.id, {
+    await createAcquisition(db, {
+      seasonId: other.id,
       name: 'אוהל חדש', category: 'living', quantityNeeded: 1,
       source: 'buy_new', estimatedCost: null, actualCost: null,
       assigneePersonId: null, lenderPersonId: null, budgetLineId: null,
@@ -61,6 +65,47 @@ describe('what the camp still needs for one year', () => {
 
     expect(await listAcquisitions(db, seasonId, ALL)).toHaveLength(3);
     expect(await listAcquisitions(db, other.id, ALL)).toHaveLength(1);
+  });
+
+  it('lists a camp-wide row under every season, and says which rows those are', async () => {
+    // A generator is needed whichever burn is next. One row with no season,
+    // rather than a copy per year that somebody has to remember to make.
+    const [other] = await db.insert(seasons)
+      .values({ name: 'ברן 27', year: 2027, flatRate: '1200.00' }).returning();
+    await createAcquisition(db, {
+      seasonId: null,
+      name: 'גנרטור', category: 'general', quantityNeeded: 1,
+      source: 'buy_new', estimatedCost: '5000', actualCost: null,
+      assigneePersonId: null, lenderPersonId: null, budgetLineId: null,
+    }, LEAD);
+
+    const here = await listAcquisitions(db, seasonId, ALL);
+    const there = await listAcquisitions(db, other.id, ALL);
+    expect(here.map((row) => row.name)).toContain('גנרטור');
+    expect(there.map((row) => row.name)).toEqual(['גנרטור']);
+    expect(here.find((row) => row.name === 'גנרטור')?.seasonId).toBeNull();
+    expect(here.find((row) => row.name === 'מקדחה רוטטת')?.seasonId).toBe(seasonId);
+
+    // The tiles count it with the season's own rows, and say how many came along.
+    const counts = await acquisitionCounts(db, seasonId, ALL);
+    expect(counts.total).toBe(4);
+    expect(counts.campWide).toBe(1);
+    expect(counts.estimatedAgorot).toBe(40000 + 9000 + 500000);
+  });
+
+  it('moves a row between one season and every season on edit', async () => {
+    const [row] = await listAcquisitions(db, seasonId, { ...ALL, q: 'ברגים' });
+    const input = {
+      name: row.name, category: row.category, quantityNeeded: row.quantityNeeded,
+      source: row.source, estimatedCost: null, actualCost: null,
+      assigneePersonId: null, lenderPersonId: null, budgetLineId: null,
+    };
+
+    await updateAcquisition(db, row.id, { ...input, seasonId: null }, LEAD);
+    expect((await acquisitionById(db, row.id))?.seasonId).toBeNull();
+
+    await updateAcquisition(db, row.id, { ...input, seasonId }, LEAD);
+    expect((await acquisitionById(db, row.id))?.seasonId).toBe(seasonId);
   });
 
   it('starts every row at "to search", because nothing has happened to it yet', async () => {
@@ -108,13 +153,15 @@ describe('what the camp still needs for one year', () => {
   });
 
   it('refuses a nameless row and a quantity below one', async () => {
-    await expect(createAcquisition(db, seasonId, {
+    await expect(createAcquisition(db, {
+      seasonId,
       name: ' ', category: 'general', quantityNeeded: 1,
       source: 'buy_new', estimatedCost: null, actualCost: null,
       assigneePersonId: null, lenderPersonId: null, budgetLineId: null,
     }, LEAD)).rejects.toThrow(/name/);
 
-    await expect(createAcquisition(db, seasonId, {
+    await expect(createAcquisition(db, {
+      seasonId,
       name: 'משהו', category: 'general', quantityNeeded: 0,
       source: 'buy_new', estimatedCost: null, actualCost: null,
       assigneePersonId: null, lenderPersonId: null, budgetLineId: null,
@@ -125,7 +172,8 @@ describe('what the camp still needs for one year', () => {
     // "Borrowed from a camp member" with no member is a promise nobody can
     // keep: at the end of the burn there is a thing and no name to return it
     // to, which is how camps lose friends.
-    await expect(createAcquisition(db, seasonId, {
+    await expect(createAcquisition(db, {
+      seasonId,
       name: 'גנרטור', category: 'build', quantityNeeded: 1,
       source: 'borrow_member', estimatedCost: null, actualCost: null,
       assigneePersonId: null, lenderPersonId: null, budgetLineId: null,
@@ -135,6 +183,7 @@ describe('what the camp still needs for one year', () => {
   it('edits a row and stamps who did it', async () => {
     const [row] = await listAcquisitions(db, seasonId, { ...ALL, q: 'ברגים' });
     await updateAcquisition(db, row.id, {
+      seasonId,
       name: 'ברגים לעץ 4×60', category: 'build', quantityNeeded: 300,
       source: 'second_hand', estimatedCost: '120', actualCost: null,
       assigneePersonId: null, lenderPersonId: null, budgetLineId: null,
@@ -164,7 +213,8 @@ describe('the figures the screen puts at the top', () => {
   });
 
   async function add(over: Record<string, unknown> = {}) {
-    return createAcquisition(db, seasonId, {
+    return createAcquisition(db, {
+      seasonId,
       name: 'פריט', category: 'general', quantityNeeded: 1,
       source: 'buy_new', estimatedCost: null, actualCost: null,
       assigneePersonId: null, lenderPersonId: null, budgetLineId: null,
@@ -232,7 +282,8 @@ describe('the arrival decision, which the system never makes on its own', () => 
   beforeEach(async () => {
     db = await createTestDb();
     ({ seasonId } = await seed(db));
-    acquisitionId = await createAcquisition(db, seasonId, {
+    acquisitionId = await createAcquisition(db, {
+      seasonId,
       name: 'מקדחה רוטטת', category: 'build', quantityNeeded: 1,
       source: 'buy_new', estimatedCost: '400', actualCost: '380',
       assigneePersonId: null, lenderPersonId: null, budgetLineId: null,

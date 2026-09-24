@@ -6,7 +6,7 @@ import { AcquisitionsTable } from './acquisitions-table';
 
 function row(over: Partial<AcquisitionRow> = {}): AcquisitionRow {
   return {
-    id: 'a1', name: 'מקדחה רוטטת', category: 'build', quantityNeeded: 1,
+    seasonId: 's26', id: 'a1', name: 'מקדחה רוטטת', category: 'build', quantityNeeded: 1,
     source: 'buy_new', estimatedAgorot: 40000, actualAgorot: 38000,
     assignee: { id: 'p1', name: 'איתי כהן' }, lender: null,
     budgetLineId: null, arrivedItemId: null, status: 'ordered',
@@ -66,6 +66,17 @@ describe('AcquisitionsTable', () => {
     mount([row()]);
     const links = screen.getAllByRole('link');
     expect(links.some((a) => (a.getAttribute('href') ?? '').includes('peek=a1'))).toBe(true);
+  });
+
+  it('marks a camp-wide row on the row itself, and no other', () => {
+    // R5: a row that belongs to every season says so where it is read, so a
+    // lead going through one year's list can tell which lines were written
+    // for it and which came along because they always apply.
+    mount([row(), row({ id: 'a2', name: 'גנרטור', seasonId: null })]);
+    const shared = screen.getByRole('link', { name: 'גנרטור' }).closest('tr');
+    const own = screen.getByRole('link', { name: 'מקדחה רוטטת' }).closest('tr');
+    expect(within(shared as HTMLElement).getByText('כלל־קאמפי')).toBeTruthy();
+    expect(within(own as HTMLElement).queryByText('כלל־קאמפי')).toBeNull();
   });
 
   it('links the person responsible to their own page', () => {

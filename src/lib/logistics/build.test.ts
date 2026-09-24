@@ -153,7 +153,8 @@ describe('the build screen against a real database', () => {
     // A material linked to an order, whose order has since been registered in
     // the warehouse, is on a shelf. A rule that looked only at the direct
     // link would keep reading `הושג` for something a lead could go and fetch.
-    const acquisitionId = await createAcquisition(db, seasonId, {
+    const acquisitionId = await createAcquisition(db, {
+      seasonId,
       name: 'מברגה', category: 'build', quantityNeeded: 1, source: 'buy_new',
       estimatedCost: null, actualCost: null,
       assigneePersonId: null, lenderPersonId: null, budgetLineId: null,
@@ -212,7 +213,8 @@ describe('the build screen against a real database', () => {
       name: 'ברגים', category: 'build', quantity: 10,
       locationText: 'ארגז', condition: 'ready',
     }).returning();
-    const acquisitionId = await createAcquisition(db, seasonId, {
+    const acquisitionId = await createAcquisition(db, {
+      seasonId,
       name: 'ברגים', category: 'build', quantityNeeded: 200, source: 'buy_new',
       estimatedCost: null, actualCost: null,
       assigneePersonId: null, lenderPersonId: null, budgetLineId: null,
@@ -304,7 +306,8 @@ describe('the figures at the top of the build screen', () => {
     const [task] = await db.insert(tasks).values({
       seasonId, kind: 'build', title: 'בניית ספסלים', peopleNeeded: 1,
     }).returning();
-    const acquisitionId = await createAcquisition(db, seasonId, {
+    const acquisitionId = await createAcquisition(db, {
+      seasonId,
       name: 'ברגים', category: 'build', quantityNeeded: 200, source: 'buy_new',
       estimatedCost: null, actualCost: null,
       assigneePersonId: null, lenderPersonId: null, budgetLineId: null,

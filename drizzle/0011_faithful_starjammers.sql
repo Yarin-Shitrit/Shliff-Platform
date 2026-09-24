@@ -1,0 +1,1 @@
+ALTER TABLE "acquisition_items" ALTER COLUMN "season_id" DROP NOT NULL;

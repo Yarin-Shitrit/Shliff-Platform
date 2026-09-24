@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
 import type { Db } from '@/db';
 import type { AnyDb } from '@/lib/db-types';
 import { isBlank } from '@/lib/text/normalize';
@@ -20,12 +20,19 @@ import { statusOf, type AcquisitionQuery } from './acquisitions-views';
  * outlives a burn, a shopping list does not. They meet in one place —
  * `recordArrival`, below — and that meeting is a decision a lead makes, never
  * one this module infers.
+ *
+ * One exception to the season: a row with `seasonId === null` is camp-wide —
+ * needed whichever burn is next — and is listed under every season. The
+ * screen marks such rows, so a lead reading ברן 26's list knows which lines
+ * were written for it and which came along because they always apply.
  */
 
 export interface PersonRef { id: string; name: string }
 
 export interface AcquisitionRow {
   id: string;
+  /** Null is camp-wide: the row is not one season's and shows under all of them. */
+  seasonId: string | null;
   name: string;
   category: LogisticsCategory;
   quantityNeeded: number;
@@ -65,8 +72,13 @@ const STATUS_RANK: Record<AcquisitionStatus, number> = {
 const assigneeTable = sql.raw('assignee');
 const lenderTable = sql.raw('lender');
 
+/** This season's rows, plus the camp-wide ones that belong to every season. */
+function inSeason(seasonId: string) {
+  return or(eq(acquisitionItems.seasonId, seasonId), isNull(acquisitionItems.seasonId));
+}
+
 function predicate(seasonId: string, query: AcquisitionQuery) {
-  const clauses = [eq(acquisitionItems.seasonId, seasonId)];
+  const clauses = [inSeason(seasonId)];
 
   const status = statusOf(query.view);
   if (status !== null) clauses.push(eq(acquisitionItems.status, status));
@@ -129,6 +141,7 @@ type SelectedRow = {
 function toRow({ row, assigneeName, lenderName }: SelectedRow): AcquisitionRow {
   return {
     id: row.id,
+    seasonId: row.seasonId,
     name: row.name,
     category: row.category,
     quantityNeeded: row.quantityNeeded,
@@ -166,6 +179,8 @@ export interface AcquisitionCounts {
   /** Over the whole season: a tab count must not move when a filter is on. */
   byStatus: Record<AcquisitionStatus, number>;
   total: number;
+  /** How many of `total` are camp-wide rather than this season's own. */
+  campWide: number;
   /** Season totals, for the tiles. */
   estimatedAgorot: number;
   actualAgorot: number;
@@ -185,7 +200,7 @@ export async function acquisitionCounts(
   db: AnyDb, seasonId: string, query: AcquisitionQuery,
 ): Promise<AcquisitionCounts> {
   const all = (await selection(db)
-    .where(eq(acquisitionItems.seasonId, seasonId)) as SelectedRow[]).map(toRow);
+    .where(inSeason(seasonId)) as SelectedRow[]).map(toRow);
   const shown = await listAcquisitions(db, seasonId, query);
 
   const sum = (rows: AcquisitionRow[], of: 'estimatedAgorot' | 'actualAgorot') =>
@@ -198,6 +213,7 @@ export async function acquisitionCounts(
       STATUSES.map((status) => [status, all.filter((row) => row.status === status).length]),
     ) as Record<AcquisitionStatus, number>,
     total: all.length,
+    campWide: all.filter((row) => row.seasonId === null).length,
     estimatedAgorot: sum(all, 'estimatedAgorot'),
     actualAgorot: sum(all, 'actualAgorot'),
     remainingAgorot: sum(remaining, 'estimatedAgorot'),
@@ -218,6 +234,12 @@ export async function acquisitionCounts(
  * does arithmetic on a float.
  */
 export interface AcquisitionInput {
+  /**
+   * The season the need belongs to, or null for camp-wide. Part of the input
+   * rather than a separate call so an edit can move a row between "this
+   * year's" and "every year's" the same way it changes anything else.
+   */
+  seasonId: string | null;
   name: string;
   category: LogisticsCategory;
   quantityNeeded: number;
@@ -252,6 +274,7 @@ function money(value: string | null): string | null {
 
 function clean(input: AcquisitionInput) {
   return {
+    seasonId: input.seasonId,
     name: input.name.trim(),
     category: input.category,
     quantityNeeded: input.quantityNeeded,
@@ -268,11 +291,11 @@ function clean(input: AcquisitionInput) {
 }
 
 export async function createAcquisition(
-  db: AnyDb, seasonId: string, input: AcquisitionInput, actor: string,
+  db: AnyDb, input: AcquisitionInput, actor: string,
 ): Promise<string> {
   validate(input);
   const [row] = await db.insert(acquisitionItems)
-    .values({ ...clean(input), seasonId, updatedBy: actor })
+    .values({ ...clean(input), updatedBy: actor })
     .returning();
   return row.id;
 }
