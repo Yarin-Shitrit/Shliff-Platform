@@ -76,6 +76,13 @@
   font-weight: 600;
 }
 
+/* A heading with a control beside it: the control stays out of the heading's name. */
+.sectionHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .sectionMeta {
   margin-inline-start: auto;
   color: var(--ink-3);
@@ -146,6 +153,27 @@
   background: none;
   cursor: pointer;
 }
+
+/* A kind in the selection, as a chip that selects that kind. The kit's
+   neutral `Pill` look, drawn here because a `Pill` holds only a string and
+   the count needs its own `<bdi>`. The gap stands in for the space between
+   the count and the name, which a flex row does not draw. */
+.kindChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  block-size: 22px;
+  padding-inline: 8px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--sunken);
+  color: var(--ink-2);
+  font-size: var(--text-label);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.kindChip:hover { background: var(--hover); color: var(--ink); }
 
 /* A group's colour: the scene's, handed down by SiteEditor as `--group-*`. */
 .g_sleep { --swatch: var(--group-sleep, var(--line-strong)); }

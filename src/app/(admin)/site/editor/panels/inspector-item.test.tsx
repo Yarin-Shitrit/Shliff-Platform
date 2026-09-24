@@ -164,6 +164,52 @@ describe('one item', () => {
     expect(after().items[0].heightCm).toBe(250);
   });
 
+  it('shows the build task the item is linked to', () => {
+    renderItem({ taskId: 't1' });
+    const task = screen.getByLabelText('משימת הקמה') as HTMLSelectElement;
+    expect(task.value).toBe('t1');
+    expect(task.options[task.selectedIndex].text).toBe('הקמת הצל');
+  });
+
+  /* Fix round 1: a link the list does not hold is still a link — never "ללא משימת הקמה". */
+  it('never says an item has no build task when it is linked to one the list does not hold', () => {
+    renderItem({ taskId: 'elsewhere' });
+    const task = screen.getByLabelText('משימת הקמה') as HTMLSelectElement;
+    expect(task.value).toBe('elsewhere');
+    expect(task.options[task.selectedIndex].text).toBe('משימה שאינה ברשימה');
+  });
+
+  it('links a build task through the store', () => {
+    const { after } = renderItem();
+    fireEvent.change(screen.getByLabelText('משימת הקמה'), { target: { value: 't1' } });
+    expect(after().items[0].taskId).toBe('t1');
+  });
+
+  it('unlinks a build task through the store', () => {
+    const { after } = renderItem({ taskId: 't1' });
+    fireEvent.change(screen.getByLabelText('משימת הקמה'), { target: { value: '' } });
+    expect(after().items[0].taskId).toBeNull();
+  });
+
+  it('keeps a locked net’s unshaded strip from being typed', () => {
+    renderItem({ kind: 'shade', label: 'רשת צל 1', widthCm: 800, depthCm: 800, insetCm: 50, locked: true });
+    expect(box('שוליים בלי צל').disabled).toBe(true);
+  });
+
+  it('lets a locked item’s notes and build task still be changed', () => {
+    const { after, onRun } = renderItem({ locked: true });
+    const notes = screen.getByLabelText('הערות') as HTMLTextAreaElement;
+    const task = screen.getByLabelText('משימת הקמה') as HTMLSelectElement;
+    expect(notes.disabled).toBe(false);
+    expect(task.disabled).toBe(false);
+    fireEvent.change(notes, { target: { value: 'הפתח לכיוון הרחוב' } });
+    fireEvent.blur(notes);
+    expect(after().items[0]).toMatchObject({ notes: 'הפתח לכיוון הרחוב', locked: true });
+    fireEvent.change(task, { target: { value: 't1' } });
+    expect(after().items[0]).toMatchObject({ taskId: 't1', locked: true });
+    expect(onRun).toHaveBeenCalledTimes(2);
+  });
+
   it('puts a height of its own back on its kind’s when the kind’s height is typed', () => {
     const { after } = renderItem({ heightCm: 250 });
     expect(box('גובה').value).toBe('2.5');

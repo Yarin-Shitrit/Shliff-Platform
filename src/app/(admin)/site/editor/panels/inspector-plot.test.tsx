@@ -75,6 +75,16 @@ describe('the plot, when nothing is selected', () => {
     expect(onPickIds).toHaveBeenLastCalledWith(['a', 'b', 's']);
   });
 
+  /* Fix round 1: the total sits beside the heading, so the heading's name is the heading alone. */
+  it('keeps the heading its own name, with the total beside it rather than inside it', () => {
+    const { onPickIds } = renderPlot(doc([item({ id: 'a' })]));
+    expect(screen.getByRole('heading', { name: 'מה יש במפה' })).toBeTruthy();
+    const total = screen.getByRole('button', { name: 'פריט אחד' });
+    expect(total.closest('h3')).toBeNull();
+    fireEvent.click(total);
+    expect(onPickIds).toHaveBeenLastCalledWith(['a']);
+  });
+
   it('lists every problem as a row that selects what it names, and the shade the nets give selects the nets', () => {
     const { onPickIds } = renderPlot(doc([
       item({ id: 'n', kind: 'shade', label: 'רשת צל 1', xCm: 0, yCm: 0, widthCm: 800, depthCm: 800, insetCm: 50 }),

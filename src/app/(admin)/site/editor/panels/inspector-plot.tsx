@@ -94,8 +94,9 @@ export function PlotInspector({ doc, flags, plotHref, onPickIds }: {
 
         <div className={styles.divider} />
         <div className={styles.section}>
-          <h3 className={styles.sectionTitle}>
-            מה יש במפה
+          {/* The total beside the heading, not in it, so the heading is named by its words alone. */}
+          <div className={styles.sectionHead}>
+            <h3 className={styles.sectionTitle}>מה יש במפה</h3>
             {items.length === 0 ? null : (
               <span className={styles.sectionMeta}>
                 <button
@@ -107,7 +108,7 @@ export function PlotInspector({ doc, flags, plotHref, onPickIds }: {
                 </button>
               </span>
             )}
-          </h3>
+          </div>
           {groups.length === 0 ? (
             <p className={styles.hint}>המפה ריקה. גרירה של פריט מהספרייה אל המפה, או לחיצה עליו, מניחה את הראשון.</p>
           ) : groups.map(({ group, ids }) => (

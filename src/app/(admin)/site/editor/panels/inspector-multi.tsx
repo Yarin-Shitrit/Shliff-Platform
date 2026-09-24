@@ -7,19 +7,20 @@
  * kind in the selection, each resized about its own middle. A value the
  * selection does not share shows empty, with מעורב as the placeholder — never
  * a made-up number (§13). A height every item takes from its kind is marked
- * so (ruling P13). A kind's default is stored only when the selected items of
+ * so, and typing the kind's height puts the items back on it, as the one-item
+ * inspector does (ruling P13). A kind whose selected items are all locked
+ * cannot be typed into. A kind's default is stored only when the selected items of
  * that kind agree; until then the row says so and stores nothing.
  *
  * Then align, distribute and a row with a typed gap. Every typed length goes
  * through `readMetres` (plan 02).
  */
 
-import { useState, type ReactElement, type ReactNode } from 'react';
+import { useId, useState, type ReactElement, type ReactNode } from 'react';
 import type { SiteItemKind } from '@/db/schema/site';
 import { Button } from '@/components/ui/button';
 import { cx } from '@/components/ui/cx';
 import { Icon } from '@/components/ui/icon';
-import { Pill } from '@/components/ui/pill';
 import { SourceChip } from '@/components/ui/source-chip';
 import { effectiveSize, type KindSize } from '@/lib/site/defaults';
 import { metres } from '@/lib/site/geometry';
@@ -27,7 +28,7 @@ import { DEFAULT_SHADE_INSET_CM, KIND_ORDER, SITE_KINDS } from '@/lib/site/kinds
 import { findItem, type EditorDoc, type EditorItem } from '@/lib/site/editor/model';
 import { applyOps, type SiteOp } from '@/lib/site/editor/ops';
 import {
-  alignOps, distributeOps, resetSizeOps, resizeKindOps, rowOps, setKindDefaultOps, uniformSize,
+  alignOps, distributeOps, patchOps, resetSizeOps, resizeKindOps, rowOps, setKindDefaultOps, uniformSize,
   type Alignment,
 } from '@/lib/site/editor/commands';
 import {
@@ -72,9 +73,10 @@ function KindRow({ doc, kind, ids, onRun }: {
   ids: string[];
   onRun: (label: string, ops: SiteOp[]) => void;
 }): ReactElement {
+  const errorId = useId();
   const [drafts, setDrafts] = useState<Partial<Record<SizeField, string>>>({});
   const [keep, setKeep] = useState(false);
-  const [refusal, setRefusal] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<{ field: SizeField; message: string } | null>(null);
   const preset = SITE_KINDS[kind];
   const shared = uniformSize(doc, ids, kind);
   const sharedCm: Record<SizeField, number | null> = { width: shared.widthCm, depth: shared.depthCm, height: shared.heightCm };
@@ -82,15 +84,18 @@ function KindRow({ doc, kind, ids, onRun }: {
   const standard = effectiveSize(kind, doc.defaults);
   // Ruling P13: none of them has a height of its own — every one follows its kind.
   const onKindHeight = ids.every((id) => findItem(doc, id)?.heightCm === null);
+  // Every one is locked, so nothing typed here could change any of them — as ItemInspector does for one.
+  const allLocked = ids.every((id) => findItem(doc, id)?.locked === true);
 
   function commit(storeDefault: boolean): void {
     const size: { widthCm?: number; depthCm?: number; heightCm?: number } = {};
-    for (const { field, range } of SIZES) {
+    for (const { field, label, range } of SIZES) {
       const text = drafts[field];
       if (text === undefined) continue;
       const reading = readMetres(text, range);
       if (!reading.ok) {
-        setRefusal(reading.error);
+        // Named, because the row has three boxes and the refusal is about one of them.
+        setRefusal({ field, message: `${label}: ${reading.error}` });
         return;
       }
       if (reading.cm === null) continue;
@@ -98,7 +103,18 @@ function KindRow({ doc, kind, ids, onRun }: {
       else if (field === 'depth') size.depthCm = reading.cm;
       else size.heightCm = reading.cm;
     }
+    /* The kind's own height, typed, puts each item back on its kind's height
+       (null), the way ItemInspector does (P13) — so `heightCm` means the same
+       in both panels. `resizeKindOps` only writes a number, so the return to
+       null is a patch per item, asked of the map as the sides above leave it;
+       `patchOps` passes over a locked item and one already on its kind's. */
+    const toKind = size.heightCm !== undefined && size.heightCm === standard.heightCm;
+    if (toKind) delete size.heightCm;
     let ops: SiteOp[] = Object.keys(size).length > 0 ? resizeKindOps(doc, ids, kind, size) : [];
+    if (toKind) {
+      const resized = applyOps(doc, ops).doc;
+      ops = [...ops, ...ids.flatMap((id) => patchOps(resized, id, { heightCm: null }))];
+    }
     if (storeDefault) {
       // Asked of the map as it will be once the sizes above are applied.
       const after = applyOps(doc, ops).doc;
@@ -124,6 +140,7 @@ function KindRow({ doc, kind, ids, onRun }: {
       <div className={styles.fields}>
         {SIZES.map(({ field, label }) => {
           const cm = sharedCm[field];
+          const refused = refusal?.field === field;
           return (
             <label key={field} className={styles.field}>
               {label}
@@ -132,7 +149,9 @@ function KindRow({ doc, kind, ids, onRun }: {
                 inputMode="decimal"
                 value={drafts[field] ?? (cm === null ? '' : metres(cm))}
                 placeholder={cm === null ? 'מעורב' : undefined}
-                aria-invalid={refusal !== null || undefined}
+                disabled={allLocked}
+                aria-invalid={refused || undefined}
+                aria-describedby={refused ? errorId : undefined}
                 onChange={(event) => { setDrafts((current) => ({ ...current, [field]: event.target.value })); }}
                 onBlur={() => { commit(keep); }}
                 onKeyDown={(event) => {
@@ -165,7 +184,7 @@ function KindRow({ doc, kind, ids, onRun }: {
             : <bdi>{`ברירת המחדל של ${preset.label} עכשיו: ${size3(standard)}. כך היא מופיעה בספרייה.`}</bdi>}
         </p>
       ) : null}
-      {refusal === null ? null : <p className={styles.error} role="alert">{refusal}</p>}
+      {refusal === null ? null : <p className={styles.error} id={errorId} role="alert">{refusal.message}</p>}
     </div>
   );
 }
@@ -181,6 +200,7 @@ export function MultiInspector({ doc, ids, onRun, onPickIds, onClear, footer }: 
   /** Turn, duplicate, lock and remove — SiteEditor's, so their toasts are too. */
   footer?: ReactNode;
 }): ReactElement {
+  const gapErrorId = useId();
   const [gap, setGap] = useState('0.5');
   const [refusal, setRefusal] = useState<string | null>(null);
   const items = ids.map((id) => findItem(doc, id)).filter((entry): entry is EditorItem => entry !== undefined);
@@ -221,10 +241,10 @@ export function MultiInspector({ doc, ids, onRun, onPickIds, onClear, footer }: 
       <div className={styles.body}>
         <div className={styles.pills}>
           {kinds.map(({ kind, ids: ofKind }) => (
-            <button key={kind} type="button" className={styles.chipButton} onClick={() => { onPickIds(ofKind); }}>
-              <Pill tone="neutral">
-                {ofKind.length === 1 ? `1 ${SITE_KINDS[kind].label}` : `${ofKind.length} ${SITE_KINDS[kind].plural}`}
-              </Pill>
+            <button key={kind} type="button" className={styles.kindChip} onClick={() => { onPickIds(ofKind); }}>
+              <bdi>{ofKind.length}</bdi>
+              {' '}
+              {ofKind.length === 1 ? SITE_KINDS[kind].label : SITE_KINDS[kind].plural}
             </button>
           ))}
         </div>
@@ -278,6 +298,7 @@ export function MultiInspector({ doc, ids, onRun, onPickIds, onClear, footer }: 
                 inputMode="decimal"
                 value={gap}
                 aria-invalid={refusal !== null || undefined}
+                aria-describedby={refusal === null ? undefined : gapErrorId}
                 onChange={(event) => { setGap(event.target.value); }}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') {
@@ -292,7 +313,7 @@ export function MultiInspector({ doc, ids, onRun, onPickIds, onClear, footer }: 
               סידור בשורה
             </Button>
           </div>
-          {refusal === null ? null : <p className={styles.error} role="alert">{refusal}</p>}
+          {refusal === null ? null : <p className={styles.error} id={gapErrorId} role="alert">{refusal}</p>}
         </div>
       </div>
 

@@ -80,6 +80,11 @@ export function ItemInspector({ doc, item, flags, buildTasks, onRun, onPickIds, 
   const isNet = item.kind === 'shade';
   const onStandardSize = item.widthCm === standard.widthCm && item.depthCm === standard.depthCm;
   const shaded = isNet ? shadedRect(toPlaced(item)) : null;
+  /* A task link the build list does not hold: still a link, so the box says
+     so rather than falling back to "ללא משימת הקמה" (§13, nothing is guessed). */
+  const unlistedTask = item.taskId !== null && !buildTasks.some((task) => task.id === item.taskId)
+    ? item.taskId
+    : null;
 
   const partners = flags.pairs.flatMap(([a, b]) => (a === item.id ? [b] : b === item.id ? [a] : []));
   const partnerNames = partners
@@ -287,6 +292,7 @@ export function ItemInspector({ doc, item, flags, buildTasks, onRun, onPickIds, 
           משימת הקמה
           <select className={styles.input} value={item.taskId ?? ''} onChange={(event) => { setTask(event.target.value); }}>
             <option value="">ללא משימת הקמה</option>
+            {unlistedTask === null ? null : <option value={unlistedTask}>משימה שאינה ברשימה</option>}
             {buildTasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}
           </select>
         </label>

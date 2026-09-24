@@ -90,12 +90,93 @@ describe('several items', () => {
     expect(byId(items, 'c')).toMatchObject({ widthCm: 700, xCm: 500 });
   });
 
-  it('refuses a width that is not one, in Hebrew', () => {
+  it('refuses a width that is not one, in Hebrew, and names the box that was refused', () => {
     const { onRun } = renderMulti([T1, T2]);
+    const depth = screen.getByLabelText('עומק') as HTMLInputElement;
+    const height = screen.getByLabelText('גובה') as HTMLInputElement;
     fireEvent.change(widths()[0], { target: { value: 'abc' } });
     fireEvent.keyDown(widths()[0], { key: 'Enter' });
-    expect(screen.getByRole('alert').textContent).toBe(NOT_A_LENGTH);
+    let alert = screen.getByRole('alert');
+    expect(alert.textContent).toBe(`רוחב: ${NOT_A_LENGTH}`);
+    expect(alert.id).not.toBe('');
+    expect(widths()[0].getAttribute('aria-invalid')).toBe('true');
+    expect(widths()[0].getAttribute('aria-describedby')).toBe(alert.id);
+    for (const other of [depth, height]) {
+      expect(other.getAttribute('aria-invalid')).toBeNull();
+      expect(other.getAttribute('aria-describedby')).toBeNull();
+    }
+
+    // The width emptied and a depth refused: the refusal moves to the depth.
+    fireEvent.change(widths()[0], { target: { value: '' } });
+    fireEvent.change(depth, { target: { value: '0' } });
+    fireEvent.keyDown(depth, { key: 'Enter' });
+    alert = screen.getByRole('alert');
+    // `readMetres` isolates each number with U+2066…U+2069; read past them.
+    expect((alert.textContent ?? '').replace(/[⁦-⁩]/g, '')).toBe('עומק: צריך מספר בין 0.1 ל־500 מטר');
+    expect(depth.getAttribute('aria-invalid')).toBe('true');
+    expect(depth.getAttribute('aria-describedby')).toBe(alert.id);
+    expect(widths()[0].getAttribute('aria-invalid')).toBeNull();
     expect(onRun).not.toHaveBeenCalled();
+  });
+
+  /* Fix round 1: typing the kind's height means the kind's height here too, as in ItemInspector (P13). */
+  it('puts tents back on the kind’s height when it is typed, and leaves a locked one as it is', () => {
+    const { after } = renderMulti([
+      item({ id: 't1', heightCm: 250 }),
+      item({ id: 't2', label: 'אוהל 2', xCm: 1000, heightCm: 250 }),
+      item({ id: 't3', label: 'אוהל 3', xCm: 1500, heightCm: 200 }),
+      item({ id: 't4', label: 'אוהל 4', xCm: 2000, heightCm: 250, locked: true }),
+    ]);
+    const height = screen.getByLabelText('גובה') as HTMLInputElement;
+    fireEvent.change(height, { target: { value: '2' } });
+    fireEvent.keyDown(height, { key: 'Enter' });
+    const items = after().items;
+    expect(byId(items, 't1')).toMatchObject({ heightCm: null, widthCm: 300, xCm: 500 });
+    expect(byId(items, 't2')?.heightCm).toBeNull();
+    expect(byId(items, 't3')?.heightCm).toBeNull();
+    expect(byId(items, 't4')).toMatchObject({ heightCm: 250, locked: true });
+  });
+
+  it('isolates each chip’s count, so the number keeps its place in a right-to-left line', () => {
+    renderMulti([T1, T2, C]);
+    expect(screen.getByRole('button', { name: '2 אוהלים' }).querySelector('bdi')?.textContent).toBe('2');
+    expect(screen.getByRole('button', { name: '1 קראוון' }).querySelector('bdi')?.textContent).toBe('1');
+  });
+
+  it('keeps the sizes of a kind whose selected items are all locked from being typed', () => {
+    renderMulti([
+      item({ id: 't1', locked: true }),
+      item({ id: 't2', label: 'אוהל 2', xCm: 1000, locked: true }),
+      C,
+    ]);
+    for (const name of ['רוחב', 'עומק', 'גובה']) {
+      const [tentBox, caravanBox] = screen.getAllByLabelText(name) as HTMLInputElement[];
+      expect(tentBox.disabled).toBe(true);
+      expect(caravanBox.disabled).toBe(false);
+    }
+  });
+
+  it('says how many of the selection are locked, and does not align what is left when it is one', () => {
+    renderMulti([
+      item({ id: 't1', locked: true }),
+      item({ id: 't2', label: 'אוהל 2', xCm: 1000, locked: true }),
+      C,
+    ]);
+    expect(screen.getByText('2 פריטים בבחירה נעולים ולא ישתנו.')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'יישור לקצה המערבי' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'סידור בשורה' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('with one of three locked, aligns the other two, distributes nothing, and leaves the kind’s sizes open', () => {
+    const { after } = renderMulti([item({ id: 't1', xCm: 200, locked: true }), T2, C]);
+    expect(screen.getByText('פריט אחד בבחירה נעול ולא ישתנה.')).toBeTruthy();
+    expect(widths()[0].disabled).toBe(false);
+    expect((screen.getByRole('button', { name: 'פיזור שווה, מזרח־מערב' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'יישור לקצה המערבי' }));
+    const items = after().items;
+    expect(byId(items, 't1')?.xCm).toBe(200);
+    expect(byId(items, 't2')?.xCm).toBe(500);
+    expect(byId(items, 'c')?.xCm).toBe(500);
   });
 
   it('stores no default while the tents differ, and says why', () => {
