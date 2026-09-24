@@ -36,10 +36,12 @@ function property(body: string, name: string): string {
 }
 
 describe('the sun card on a phone', () => {
-  it('gives every day chip and every speed and scope option a full-size target', () => {
+  it('gives every day chip, every speed and scope option, and every ranked tent a full-size target', () => {
     const coarse = block(SHEET, '@media (pointer: coarse)');
     expect(property(block(coarse, '.chip'), 'block-size')).toBe('var(--tap-min)');
     expect(property(block(coarse, '.optionFace'), 'block-size')).toBe('var(--tap-min)');
+    expect(property(block(coarse, '.tentRow'), 'block-size')).toBe('var(--tap-min)');
+    expect(property(block(coarse, '.disclosure'), 'block-size')).toBe('var(--tap-min)');
   });
 });
 

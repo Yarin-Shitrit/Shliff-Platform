@@ -23,14 +23,17 @@
 import Link from 'next/link';
 import { Fragment, useId, useMemo, useState, type ReactElement } from 'react';
 import { cx } from '@/components/ui/cx';
-import { shadeWindows, type ShadeSample, type ShadeWindow } from '@/lib/site/editor/shade-timeline';
+import { shadeWindows, type ShadeSample, type ShadeWindow, type TentShade } from '@/lib/site/editor/shade-timeline';
 import type { ShadeAtHour } from '@/lib/site/editor/sun';
 import { burnDays, burnEnd, MAX_BURN_DAYS } from '@/lib/site/views';
+import { Choice } from './choice';
 import { EditorIcon } from './editor-icons';
 import { northText } from './north';
 import {
   daySpan, SPEEDS, usePlayback, useReducedMotion, type DaySpan, type Moment, type SpeedId,
 } from './sun-playback';
+import { dayText, shortDayText, weekdayText } from './sun-text';
+import { TentRanking } from './tent-ranking';
 import chrome from './panel.module.css';
 import styles from './sun-card.module.css';
 
@@ -52,29 +55,6 @@ function summaryText(hour: number, summary: ShadeAtHour | null): string {
   if (summary.under === 0) return `בשעה ${at} אין פריטים מתחת לרשתות הצל.`;
   const under = summary.under === 1 ? 'מתוך פריט אחד' : `מתוך ${summary.under} פריטים`;
   return `בשעה ${at}, ${under} מתחת לרשתות: ${summary.full} בצל מלא, ${summary.partial} בצל חלקי, ${summary.sun} בשמש.`;
-}
-
-/* A day as `sunDateOf` writes it, and `readSunDate` has already accepted: the
-   three parts are there, so these split it and never re-check its shape (P15). */
-
-/** "2026-06-04" → "4.6.2026". */
-function dayText(date: string): string {
-  const [year, month, day] = date.split('-');
-  return `${Number(day)}.${Number(month)}.${year}`;
-}
-
-/** "2026-11-02" → "2.11", for a chip beside its weekday. */
-function shortDayText(date: string): string {
-  const [, month, day] = date.split('-');
-  return `${Number(day)}.${Number(month)}`;
-}
-
-const WEEKDAYS = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'] as const;
-
-/** The day of the week a calendar day falls on — the calendar's, not a clock's. */
-function weekdayText(date: string): string {
-  const [year, month, day] = date.split('-').map(Number);
-  return WEEKDAYS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
 }
 
 /** The timeline's step (`shadeTimeline(doc, [day], 15)`), in hours. */
@@ -258,44 +238,6 @@ const PLAY_LABEL = 'הרצת הצל לאורך השעות';
 
 type Scope = 'day' | 'burn';
 
-interface ChoiceOption<T extends string> {
-  value: T;
-  label: string;
-  disabled?: boolean;
-}
-
-/**
- * A segmented choice: radios, so the browser gives the arrow keys and the
- * checked state for free. Not the kit's `Segmented`, which can only disable
- * the whole group, and one option here is disabled on its own.
- */
-function Choice<T extends string>({ label, name, options, value, onChange }: {
-  label: string;
-  name: string;
-  options: readonly ChoiceOption<T>[];
-  value: T;
-  onChange: (value: T) => void;
-}): ReactElement {
-  return (
-    <span className={styles.choice} role="radiogroup" aria-label={label}>
-      {options.map((option) => (
-        <label key={option.value} className={styles.option}>
-          <input
-            type="radio"
-            className={styles.optionInput}
-            name={name}
-            value={option.value}
-            checked={value === option.value}
-            disabled={option.disabled}
-            onChange={() => { onChange(option.value); }}
-          />
-          <span className={styles.optionFace}>{option.label}</span>
-        </label>
-      ))}
-    </span>
-  );
-}
-
 function isSpan(span: DaySpan | null): span is DaySpan {
   return span !== null;
 }
@@ -331,11 +273,20 @@ export interface SunCardProps {
   hasNets: boolean;
   /** Selects the map's nets (the editor's `pickIds`), offered where full shade never reaches most of what is under them. */
   onPickNets?: () => void;
+  /**
+   * `shadeRanking` over the map on screen (MST): the tents by their minutes
+   * in shade, for these days, to this hour. Without it the card has no
+   * ranking section.
+   */
+  rankTents?: (dates: readonly string[], endHour: number) => TentShade[];
+  /** The editor's `pickIds`, for a ranked tent's row. */
+  onPickIds?: (ids: string[]) => void;
 }
 
 export function SunCard(props: SunCardProps): ReactElement {
   const {
     hour, onHour, summary, northDeg, plotHref, dateHref, sunDate, endDay = null, onDay, samples, hasNets, onPickNets,
+    rankTents, onPickIds,
   } = props;
   const shown = props.day ?? sunDate;
   const days = useMemo(() => burnDays(sunDate, endDay), [sunDate, endDay]);
@@ -473,6 +424,15 @@ export function SunCard(props: SunCardProps): ReactElement {
           </div>
           <p className={chrome.hint}><bdi>{summaryText(hour, summary)}</bdi></p>
           <ShadeWords samples={samples} hasNets={hasNets} windows={windows} onPickNets={onPickNets} />
+          {rankTents === undefined ? null : (
+            <TentRanking
+              days={playScope === 'burn' ? days : [shown]}
+              scope={playScope}
+              rankTents={rankTents}
+              hasNets={hasNets}
+              onPickIds={onPickIds}
+            />
+          )}
           {shown === sunDate ? (
             <p className={chrome.meta}>
               {'ביום פתיחת השער, '}

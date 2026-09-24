@@ -974,6 +974,25 @@ describe('shade by hour', () => {
     expect(container.querySelector('[data-strip]')).toBeNull();
   });
 
+  it('ranks the map’s tents by their shade, and a row selects its tent (MST)', async () => {
+    // 4 June: the sun stands high, so the net's shade stays near it; a tent under it outranks one across the plot.
+    const net = siteItem({ id: 'n', kind: 'shade', label: 'רשת 1', xCm: 400, yCm: 400, widthCm: 800, depthCm: 800, insetCm: 50 });
+    const far = siteItem({ id: 'far', label: 'אוהל רחוק', xCm: 2000, yCm: 2000 });
+    renderEditor({ initial: { doc: siteDoc([far, siteItem({ id: 'a' }), net]), version: 0 }, initialSelection: null });
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    fireEvent.click(button('האוהלים המוצלים ביותר'));
+    const list = within(screen.getByRole('list', { name: 'האוהלים המוצלים ביותר' }));
+    const rows = list.getAllByRole('button');
+    expect(rows.map((row) => row.textContent?.startsWith('אוהל 1') ? 'a' : row.textContent?.startsWith('אוהל רחוק') ? 'far' : '?'))
+      .toEqual(['a', 'far']);
+    expect(rows[0].textContent).toMatch(/בצל$/);
+    expect(rows[1].textContent).toBe('אוהל רחוקאין צל');
+    fireEvent.click(rows[0]);
+    expect(lastScene().store.selection).toEqual(['a']);
+    expect(scene.handle.fitIds).toHaveBeenLastCalledWith(['a']);
+  });
+
   it('selects the nets from the invitation when full shade never reaches what is under them', async () => {
     /* A 10 × 10 m tent half under an 8 × 8 m net: the net's shaded ground is
        7 × 7 m, so the tent is never wholly in its shade. */

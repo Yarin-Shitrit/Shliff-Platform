@@ -35,7 +35,7 @@ import type { SiteOp } from '@/lib/site/editor/ops';
 import { addOps, duplicateOps, lockOps, moveOps, removeOps, turnOps } from '@/lib/site/editor/commands';
 import { screenArrowToMap } from '@/lib/site/editor/camera';
 import { CAMP_SITE, jerusalemInstant, shadeAtHour, sunPosition } from '@/lib/site/editor/sun';
-import { shadeTimeline } from '@/lib/site/editor/shade-timeline';
+import { shadeRanking, shadeTimeline } from '@/lib/site/editor/shade-timeline';
 import { burnDays, readSunDate } from '@/lib/site/views';
 import { loadSiteDocAction, saveSiteChangesAction } from '../actions';
 import { useEditorStore } from './use-editor-store';
@@ -255,6 +255,13 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     [ui.sun, sunDay, store.doc],
   );
   const hasNets = store.doc.items.some((item) => item.kind === 'shade');
+  /* The tents by their minutes in shade (MST), over the map on screen: one
+     function per map, so the card works the ranking out again only when the
+     map, the days or the end hour change — never for a new hour. */
+  const rankTents = useCallback(
+    (dates: readonly string[], endHour: number) => shadeRanking(store.doc, dates, 15, { endHour }),
+    [store.doc],
+  );
 
   /* A newer map from the server — the plot drawer's save bumps the version
      (`setPlot`) and refreshes the page. The store keeps its first `init`
@@ -799,6 +806,8 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
               onPickNets={() => {
                 pickIds(store.doc.items.filter((item) => item.kind === 'shade').map((item) => item.id));
               }}
+              rankTents={rankTents}
+              onPickIds={pickIds}
             />
           ) : null}
           {keysOpen ? <ShortcutsCard onClose={() => { setKeysOpen(false); }} /> : null}

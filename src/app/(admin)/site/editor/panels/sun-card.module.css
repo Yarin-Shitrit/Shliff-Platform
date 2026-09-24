@@ -152,10 +152,89 @@
   font-weight: 600;
 }
 
-/* Phone targets are at least `--tap-min` (A8): the day chips and every speed
-   and scope option. The play button is the shared `.iconButton`, which
-   already grows to it. */
+/* ---- the most shaded tents (MST) ------------------------------------------------ */
+
+.tents {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-block-start: var(--space-2);
+  border-block-start: 1px solid var(--line);
+}
+
+/* The section's fold: a heading that opens it. */
+.disclosure {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  block-size: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: var(--text-dense);
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+}
+
+.tentsBody {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.tentList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-self: stretch;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A ranked tent: its name, and how long it is in shade. A click selects it. */
+.tentRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  inline-size: 100%;
+  block-size: 28px;
+  padding-inline: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--text-meta);
+  text-align: start;
+  cursor: pointer;
+}
+.tentRow:hover { background: var(--sunken); }
+
+.tentName {
+  min-inline-size: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tentTime {
+  flex-shrink: 0;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+/* Phone targets are at least `--tap-min` (A8): the day chips, every speed
+   and scope option, the ranking's fold and its rows. The play button is the
+   shared `.iconButton`, which already grows to it. */
 @media (pointer: coarse) {
   .chip { block-size: var(--tap-min); }
   .optionFace { block-size: var(--tap-min); }
+  .disclosure { block-size: var(--tap-min); }
+  .tentRow { block-size: var(--tap-min); }
 }
