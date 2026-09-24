@@ -124,7 +124,30 @@
   color: var(--ink-3);
 }
 .seasonEmpty { padding: 8px 10px; font-size: 13px; color: var(--ink-3); }
-.navstack { display: contents; }
+/*
+ * The groups scroll inside the rail when the rail is taller than the window
+ * (fifteen links and the footer already are, at 800px), so the rail never
+ * lengthens a page that fits the screen — the camp map's editor must fill
+ * the window with no page scroll (Ruling X1). Only the groups scroll: the
+ * brand, the season switcher (whose menu is wider than the rail and must
+ * not be clipped) and the footer stay put.
+ *
+ * The 4px padding, cancelled by an equal negative margin, is room for the
+ * focus ring (A9): a scroll box clips outlines at its padding edge. The gap
+ * is `.side`'s own, which the groups had while this box was `contents`.
+ */
+.navstack {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  padding-inline: 4px;
+  padding-block-end: 4px;
+  margin-inline: -4px;
+  margin-block-end: -4px;
+}
 .navgroup { display: flex; flex-direction: column; gap: 1px; margin-block-start: 8px; }
 .grouplabel {
   font-size: 11.5px;
@@ -257,6 +280,18 @@
 .rail { display: contents; }
 .menubutton { display: none; }
 .railScrim { display: none; }
+
+/*
+ * At 1024px and above the rail is `.ground`'s flex item. Size containment
+ * keeps its content out of the row's height, so the rail is stretched to the
+ * page — exactly as tall as a long page, as before, and exactly one window
+ * tall on a page that fits the screen — and `.navstack` scrolls what does
+ * not fit. Size containment makes no containing block, so the drawers and
+ * menus the rail renders still position against the window.
+ */
+@media (min-width: 1024px) {
+  .side { contain: size; }
+}
 
 @media (max-width: 1023.98px) {
   .rail {
