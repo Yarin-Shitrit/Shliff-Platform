@@ -1,0 +1,57 @@
+/*
+ * The sun card (spec §11), co-located under W2: each panel keeps its own
+ * module rather than appending to the shared `editor.module.css`, so
+ * parallel lanes never collide on one file. `.card`, `.hint`, `.meta` and
+ * `.link` repeat the shell's floating-card language (`editor.module.css`'s
+ * `.card`/`.hint`, the inspector's `.meta`/`.link` — see the other panels'
+ * own modules) rather than importing it, for the same reason.
+ *
+ * Tokens only, logical properties throughout (A10).
+ */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-block: 10px;
+  padding-inline: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-pop);
+}
+
+.sunCard { inline-size: 360px; }
+
+.sunRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--text-dense);
+}
+
+.range {
+  flex: 1;
+  accent-color: var(--brand);
+}
+
+.hint {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+  line-height: 1.45;
+}
+
+.meta {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-label);
+}
+
+.link {
+  color: var(--brand-text);
+  font-size: var(--text-label);
+  font-weight: 500;
+  text-decoration: none;
+}
+.link:hover { text-decoration: underline; }
