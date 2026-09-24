@@ -10,8 +10,12 @@
  * opens it from any admin page — the rail's own "R6: a drawer is a URL, and
  * it survives a refresh" applies here exactly as it does to every record
  * drawer, even though this one names no record.
+ *
+ * Rendered through `BodyPortal`: below 1024px a closed rail sits off-screen
+ * under a `transform`, and `?act=season` loaded directly on a phone would
+ * otherwise open this drawer inside it, off-screen, over an inert page.
  */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Drawer } from '@/components/ui/drawer';
@@ -19,6 +23,7 @@ import { Field, TextInput, MoneyInput } from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
 import { ACT_PARAM, closePeekHref } from '@/components/ui/drawer-url';
 import { createSeasonAction } from './actions';
+import { BodyPortal } from './body-portal';
 import styles from './new-season-drawer.module.css';
 
 export function NewSeasonDrawer() {
@@ -33,6 +38,7 @@ export function NewSeasonDrawer() {
   const [startsOn, setStartsOn] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const startsOnRef = useRef<HTMLInputElement>(null);
 
   if (searchParams.get(ACT_PARAM) !== 'season') return null;
 
@@ -40,6 +46,14 @@ export function NewSeasonDrawer() {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    // A half-typed or impossible gate date (31/02, a year still being typed)
+    // leaves the control's value empty and sets `badInput`. The gate date is
+    // optional, so sending that empty value would create the season with no
+    // date while one was on screen.
+    if (startsOnRef.current?.validity.badInput === true) {
+      setError('תאריך פתיחת השער אינו תקין.');
+      return;
+    }
     setError(null);
     setPending(true);
     try {
@@ -58,40 +72,43 @@ export function NewSeasonDrawer() {
   }
 
   return (
-    <Drawer title="שנה חדשה" closeHref={closeHref}>
-      <form onSubmit={submit} className={styles.form}>
-        <Field id="new-season-name" label="שם" required>
-          <TextInput id="new-season-name" value={name} onChange={setName} />
-        </Field>
+    <BodyPortal>
+      <Drawer title="שנה חדשה" closeHref={closeHref}>
+        <form onSubmit={submit} className={styles.form}>
+          <Field id="new-season-name" label="שם" required>
+            <TextInput id="new-season-name" value={name} onChange={setName} />
+          </Field>
 
-        <Field id="new-season-year" label="שנה קלנדרית" required>
-          <TextInput id="new-season-year" value={year} onChange={setYear} />
-        </Field>
+          <Field id="new-season-year" label="שנה קלנדרית" required>
+            <TextInput id="new-season-year" value={year} onChange={setYear} />
+          </Field>
 
-        <Field id="new-season-flat-rate" label="דמי קאמפ" required>
-          <MoneyInput id="new-season-flat-rate" value={flatRate} onChange={setFlatRate} />
-        </Field>
+          <Field id="new-season-flat-rate" label="דמי קאמפ" required>
+            <MoneyInput id="new-season-flat-rate" value={flatRate} onChange={setFlatRate} />
+          </Field>
 
-        <Field id="new-season-planned-size" label="גודל מחנה מתוכנן" hint="לא חובה">
-          <TextInput id="new-season-planned-size" value={plannedSize} onChange={setPlannedSize} />
-        </Field>
+          <Field id="new-season-planned-size" label="גודל מחנה מתוכנן" hint="לא חובה">
+            <TextInput id="new-season-planned-size" value={plannedSize} onChange={setPlannedSize} />
+          </Field>
 
-        <Field id="new-season-starts-on" label="פתיחת השער" hint="לא חובה">
-          <input
-            type="date"
-            id="new-season-starts-on"
-            className={styles.date}
-            value={startsOn}
-            onChange={(event) => setStartsOn(event.target.value)}
-          />
-        </Field>
+          <Field id="new-season-starts-on" label="פתיחת השער" hint="לא חובה">
+            <input
+              ref={startsOnRef}
+              type="date"
+              id="new-season-starts-on"
+              className={styles.date}
+              value={startsOn}
+              onChange={(event) => setStartsOn(event.target.value)}
+            />
+          </Field>
 
-        {error !== null ? <p className={styles.error} role="alert">{error}</p> : null}
+          {error !== null ? <p className={styles.error} role="alert">{error}</p> : null}
 
-        <div className={styles.actions}>
-          <Button type="submit" tone="primary" disabled={pending}>יצירת שנה</Button>
-        </div>
-      </form>
-    </Drawer>
+          <div className={styles.actions}>
+            <Button type="submit" tone="primary" disabled={pending}>יצירת שנה</Button>
+          </div>
+        </form>
+      </Drawer>
+    </BodyPortal>
   );
 }

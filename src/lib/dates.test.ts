@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   formatDateShort, formatDateFull, formatDateProse, formatTime, formatDateTime,
+  parseDateInput,
 } from '@/lib/dates';
 
 // 19:30 on 7 September 2026 in the camp's timezone (IDT, UTC+3).
@@ -44,5 +45,38 @@ describe('dates', () => {
     const early = new Date('2026-04-05T09:00:00Z');
     expect(formatDateShort(early)).toBe('05/04/26');
     expect(formatDateProse(early)).toBe('5 באפר׳ 2026');
+  });
+});
+
+describe('parseDateInput', () => {
+  it('reads what <input type="date"> submits as UTC midnight of that day', () => {
+    expect(parseDateInput('2026-06-04')?.toISOString()).toBe('2026-06-04T00:00:00.000Z');
+  });
+
+  it('gives the day back unchanged when read in the camp timezone', () => {
+    const day = parseDateInput('2026-06-04');
+    expect(day && formatDateFull(day)).toBe('04/06/2026');
+  });
+
+  it('accepts a real leap day', () => {
+    expect(parseDateInput('2028-02-29')?.toISOString()).toBe('2028-02-29T00:00:00.000Z');
+  });
+
+  it('ignores whitespace around the day', () => {
+    expect(parseDateInput(' 2026-06-04 ')?.toISOString()).toBe('2026-06-04T00:00:00.000Z');
+  });
+
+  /**
+   * Every one of these is something `new Date` accepts without complaint:
+   * `2026-02-30` rolls over to 2 March, `2026-6-4` and `4/6/2026` are read
+   * as local time (the second month-first, so 6 April), and a time of day
+   * shifts the instant. Each would store a day nobody typed.
+   */
+  it.each([
+    '2026-02-30', '2026-02-29', '2026-13-01', '2026-00-10', '2026-6-4', '4/6/2026',
+    '2026-06-04T10:00', '2026-06-04T00:00:00Z', 'June 4 2026', '20260604',
+    'לא תאריך', '', '   ',
+  ])('refuses %j', (typed) => {
+    expect(parseDateInput(typed)).toBeNull();
   });
 });

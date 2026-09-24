@@ -14,14 +14,20 @@
  * `sidebar.tsx`) via `?act=season`. There is no record id to carry, so this
  * is an `act` with no `peek` (R6), built through `openActHref` — the same
  * shape plan 10's create drawer uses for `?act=task`.
+ *
+ * The active season's gate date sits under the list, as a link to
+ * `?act=season-date` (`SeasonDateDrawer`, also rendered in `sidebar.tsx`):
+ * every figure links to what changes it. A season with no date shows an
+ * invitation to set one instead of a blank.
  */
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Icon } from '@/components/ui/icon';
 import { openActHref } from '@/components/ui/drawer-url';
+import { DateText } from '@/components/format';
 import { pickSeason } from '@/lib/seasons/pick';
-import { seasonHref } from './season-href';
+import { seasonDateHref, seasonHref } from './season-href';
 import styles from './sidebar.module.css';
 
 export interface SwitchSeason {
@@ -29,6 +35,12 @@ export interface SwitchSeason {
   name: string;
   /** The word under the name in the menu: פעילה / הסתיימה / בלי דמי קאמפ. */
   state: string;
+  /**
+   * `seasons.starts_on` as stored — an instant, read in the camp's timezone
+   * wherever it is shown. `null` when nobody has set it: the menu then
+   * invites setting one rather than implying a date.
+   */
+  startsOn: Date | null;
 }
 
 export function SeasonSwitch({ seasons }: { seasons: SwitchSeason[] }) {
@@ -112,6 +124,27 @@ export function SeasonSwitch({ seasons }: { seasons: SwitchSeason[] }) {
                 <span className={styles.menumeta}>{season.state}</span>
               </Link>
             ))}
+            <div className={styles.divider} />
+            <Link
+              className={styles.menuitem}
+              href={seasonDateHref(pathname, searchParams)}
+              onClick={() => setOpen(false)}
+            >
+              <Icon name="calendar" size={16} />
+              {current.startsOn === null ? (
+                <>
+                  <span>תאריך הפתיחה לא נרשם</span>
+                  <span className={styles.menuInvite}>קביעה</span>
+                </>
+              ) : (
+                <>
+                  <span>פתיחת השער</span>
+                  <span className={styles.menumeta}>
+                    <DateText at={current.startsOn} form="prose" />
+                  </span>
+                </>
+              )}
+            </Link>
             <div className={styles.divider} />
             <Link
               className={styles.menuitem}
