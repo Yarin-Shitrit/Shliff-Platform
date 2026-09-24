@@ -58,7 +58,7 @@ export function readMetres(text: string, range: MetresRange): MetresReading {
   const cm = parseMetres(text);
   if (cm === 'invalid') return { ok: false, error: NOT_A_LENGTH };
   if (cm !== null && (cm < range.minCm || cm > range.maxCm)) {
-    return { ok: false, error: `צריך מספר בין ${metres(range.minCm)} ל־${metres(range.maxCm)} מטר` };
+    return { ok: false, error: `צריך מספר בין ⁦${metres(range.minCm)}⁩ ל־⁦${metres(range.maxCm)}⁩ מטר` };
   }
   return { ok: true, cm };
 }

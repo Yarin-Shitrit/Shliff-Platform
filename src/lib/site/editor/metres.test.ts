@@ -56,9 +56,9 @@ describe('a typed size, checked', () => {
   it('refuses the rest in Hebrew', () => {
     expect(readMetres('abc', SIDE_RANGE)).toEqual({ ok: false, error: NOT_A_LENGTH });
     expect(readMetres('1.234', SIDE_RANGE)).toEqual({ ok: false, error: NOT_A_LENGTH });
-    expect(readMetres('0', SIDE_RANGE)).toEqual({ ok: false, error: 'צריך מספר בין 0.1 ל־500 מטר' });
-    expect(readMetres('-1', SIDE_RANGE)).toEqual({ ok: false, error: 'צריך מספר בין 0.1 ל־500 מטר' });
-    expect(readMetres('25', HEIGHT_RANGE)).toEqual({ ok: false, error: 'צריך מספר בין 0.1 ל־20 מטר' });
+    expect(readMetres('0', SIDE_RANGE)).toEqual({ ok: false, error: 'צריך מספר בין ⁦0.1⁩ ל־⁦500⁩ מטר' });
+    expect(readMetres('-1', SIDE_RANGE)).toEqual({ ok: false, error: 'צריך מספר בין ⁦0.1⁩ ל־⁦500⁩ מטר' });
+    expect(readMetres('25', HEIGHT_RANGE)).toEqual({ ok: false, error: 'צריך מספר בין ⁦0.1⁩ ל־⁦20⁩ מטר' });
     for (const text of ['abc', '1.234', '0', '-1']) {
       const reading = readMetres(text, SIDE_RANGE);
       if (reading.ok) throw new Error(`"${text}" was accepted as a side`);
