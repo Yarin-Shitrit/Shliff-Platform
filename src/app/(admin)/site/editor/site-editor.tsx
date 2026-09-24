@@ -235,8 +235,8 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
      (SIM3). A chip picks it; a picked day that is no longer one of the burn's
      (the opening date moved) gives way to the gate day. Derived, never
      guessed: no gate day, no day. */
-  const burnEnd = readSunDate(sunEndDate);
-  const days = useMemo(() => burnDays(gateDay, burnEnd), [gateDay, burnEnd]);
+  const lastDay = readSunDate(sunEndDate);
+  const days = useMemo(() => burnDays(gateDay, lastDay), [gateDay, lastDay]);
   const sunDay = pickedDay !== null && days.includes(pickedDay) ? pickedDay : gateDay;
 
   /* Shade by hour (spec §11): the sun at the chosen hour of that day, over
@@ -791,11 +791,14 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
               plotHref={plotHref}
               dateHref={seasonDateHref}
               sunDate={gateDay}
-              endDay={burnEnd}
+              endDay={lastDay}
               day={sunDay}
               onDay={setPickedDay}
               samples={sunSamples}
               hasNets={hasNets}
+              onPickNets={() => {
+                pickIds(store.doc.items.filter((item) => item.kind === 'shade').map((item) => item.id));
+              }}
             />
           ) : null}
           {keysOpen ? <ShortcutsCard onClose={() => { setKeysOpen(false); }} /> : null}

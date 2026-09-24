@@ -141,18 +141,42 @@ export function addDays(day: string, days: number): string | null {
 }
 
 /**
+ * The longest burn the map plays through, in days. Midburn runs about a week;
+ * a last day further off than this is a mistyped date, not a burn — said as
+ * one, never played day by day through hundreds of chips (SIM2 fix round 1).
+ */
+export const MAX_BURN_DAYS = 14;
+
+/**
+ * What the burn's last day says of its length: `known` — a real day, on or
+ * after the gate day and within `MAX_BURN_DAYS` of it; `missing` — none
+ * recorded (today always: `seasons` has no end column yet, SIM3), or none
+ * that is a real day; `early` — before the gate day; `long` — too far after
+ * it. Only `known` is a length to play.
+ */
+export type BurnEnd = 'known' | 'missing' | 'early' | 'long';
+
+export function burnEnd(gateDay: string | null, lastDay: string | null): BurnEnd {
+  const first = readSunDate(gateDay);
+  const last = readSunDate(lastDay);
+  if (first === null || last === null) return 'missing';
+  if (last < first) return 'early';
+  const furthest = addDays(first, MAX_BURN_DAYS - 1);
+  return furthest !== null && last > furthest ? 'long' : 'known';
+}
+
+/**
  * The days of the burn, from the gate day to its last day, each once and in
- * order — what shade by hour can play through (ruling SIM3). The last day is
- * not recorded anywhere yet (`seasons` has no end column), so without one the
- * burn is the gate day alone: its length is never guessed. A last day before
- * the gate day is no last day either. No gate day, no days.
+ * order — what shade by hour can play through (ruling SIM3). Only a last day
+ * `burnEnd` calls `known` gives a length; without one the burn is the gate
+ * day alone: its length is never guessed. No gate day, no days.
  */
 export function burnDays(gateDay: string | null, lastDay: string | null): string[] {
   const first = readSunDate(gateDay);
   if (first === null) return [];
-  const last = readSunDate(lastDay);
   const days = [first];
-  if (last === null) return days;
+  const last = readSunDate(lastDay);
+  if (last === null || burnEnd(first, last) !== 'known') return days;
   for (let next = addDays(first, 1); next !== null && next <= last; next = addDays(next, 1)) days.push(next);
   return days;
 }

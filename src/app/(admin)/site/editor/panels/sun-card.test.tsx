@@ -187,15 +187,28 @@ describe('when there is shade, in words', () => {
     expect(screen.queryByText(/לרובם/)).toBeNull();
   });
 
-  it('says plainly when full shade never reaches most of them, and when part shade does', () => {
-    renderCard({ sunDate: NOV2, day: NOV2, samples: dayOf((hour) => (between(hour, 11, 13) ? [1, 1] : [0, 0])) });
+  it('says plainly when full shade never reaches most of them, and when part shade does — and invites moving a net', () => {
+    const onPickNets = vi.fn();
+    renderCard({ sunDate: NOV2, day: NOV2, samples: dayOf((hour) => (between(hour, 11, 13) ? [1, 1] : [0, 0])), onPickNets });
     expect(paragraph('באף שעה ביום הזה אין צל מלא לרוב הפריטים שמתחת לרשתות.')).toBeTruthy();
     expect(paragraph('צל מלא או חלקי לרובם: 11:00–13:00.')).toBeTruthy();
+    expect(paragraph('הזזה של רשת צל מעל הפריטים תוסיף צל. בחירת רשתות הצל')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'בחירת רשתות הצל' }));
+    expect(onPickNets).toHaveBeenCalledTimes(1);
   });
 
-  it('says plainly when no shade reaches most of them at any hour', () => {
+  it('says plainly when no shade reaches most of them at any hour, and invites moving a net', () => {
     renderCard({ sunDate: NOV2, day: NOV2, samples: dayOf(() => [1, 0]) });
     expect(paragraph('באף שעה ביום הזה אין צל, מלא או חלקי, לרוב הפריטים שמתחת לרשתות.')).toBeTruthy();
+    // With no way to select the nets handed in, the invitation is words alone.
+    expect(paragraph('הזזה של רשת צל מעל הפריטים תוסיף צל.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'בחירת רשתות הצל' })).toBeNull();
+  });
+
+  it('invites nothing more where most of them are in full shade at some hour', () => {
+    renderCard({ sunDate: NOV2, day: NOV2, samples: MIDDAY, onPickNets: vi.fn() });
+    expect(screen.queryByText(/הזזה של רשת צל/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'בחירת רשתות הצל' })).toBeNull();
   });
 
   it('invites a net when the map has none', () => {
@@ -462,26 +475,50 @@ describe('playing the shade through the day', () => {
 });
 
 describe('the scope of playback', () => {
-  it('offers one day only while the burn’s last day is unknown, and invites that date', () => {
+  /* D1: until `seasons.ends_on` exists (SIM3) nothing in the app can record
+     the burn's last day, so no link pretends to: the card says so, plainly. */
+  const noEndLink = () => screen.queryAllByRole('link').filter((link) => link.getAttribute('href') === DATE_HREF
+    && !/^\d/.test(link.textContent ?? ''));
+
+  it('offers one day at a time while the burn’s last day is not recorded, and says so without a link that cannot set it', () => {
     render(<Player />);
+    expect(screen.getByRole('radiogroup', { name: 'טווח ההרצה' })).toBeTruthy();
     expect((screen.getByRole('radio', { name: 'יום אחד' }) as HTMLInputElement).checked).toBe(true);
     expect((screen.getByRole('radio', { name: 'כל ימי הברן' }) as HTMLInputElement).disabled).toBe(true);
-    expect(paragraph('תאריך הסיום של הברן לא נרשם · קביעה')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'קביעה של תאריך הסיום של הברן' }).getAttribute('href')).toBe(DATE_HREF);
+    expect(paragraph('תאריך הסיום של הברן עוד לא נשמר במערכת, ולכן אפשר להריץ יום אחד בכל פעם.')).toBeTruthy();
+    // The one link to the season's dates is the gate day's own.
+    expect(noEndLink()).toEqual([]);
+    expect(screen.queryByText(/קביעה/)).toBeNull();
   });
 
   it('says so when the last day recorded comes before the first, rather than guessing either', () => {
     render(<Player endDay="2026-11-01" />);
     expect((screen.getByRole('radio', { name: 'כל ימי הברן' }) as HTMLInputElement).disabled).toBe(true);
-    expect(paragraph('תאריך הסיום של הברן קודם לתאריך הפתיחה · תיקון')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'תיקון של תאריך הסיום של הברן' }).getAttribute('href')).toBe(DATE_HREF);
+    expect(paragraph('תאריך הסיום של הברן, 1.11.2026, קודם לתאריך הפתיחה, ולכן אפשר להריץ יום אחד בכל פעם.')).toBeTruthy();
+    expect(noEndLink()).toEqual([]);
+  });
+
+  it('says a last day more than two weeks off looks wrong, and offers no chip for each day', () => {
+    render(<Player endDay="2027-11-02" />);
+    expect((screen.getByRole('radio', { name: 'כל ימי הברן' }) as HTMLInputElement).disabled).toBe(true);
+    expect(paragraph('תאריך הסיום של הברן, 2.11.2027, רחוק מתאריך הפתיחה ביותר מ־14 ימים ונראה שגוי, ולכן אפשר להריץ יום אחד בכל פעם.'))
+      .toBeTruthy();
+    expect(within(screen.getByRole('group', { name: 'ימי הברן' })).getAllByRole('button').map((chip) => chip.textContent))
+      .toEqual(['ב׳ 2.11']);
+    expect(noEndLink()).toEqual([]);
+  });
+
+  it('names the speeds as a pace', () => {
+    render(<Player />);
+    const pace = within(screen.getByRole('radiogroup', { name: 'קצב ההרצה' }));
+    expect(pace.getAllByRole('radio').map((radio) => radio.closest('label')?.textContent)).toEqual(['איטי', 'רגיל', 'מהיר']);
   });
 
   it('plays every day of the burn back to back once the last day is known, skipping the nights', () => {
     const onHour = vi.fn();
     const onDay = vi.fn();
     render(<Player hour={16.5} endDay="2026-11-04" onHour={onHour} onDay={onDay} />);
-    expect(screen.queryByText(/לא נרשם/)).toBeNull();
+    expect(screen.queryByText(/תאריך הסיום של הברן/)).toBeNull();
     fireEvent.click(screen.getByRole('radio', { name: 'כל ימי הברן' }));
     fireEvent.click(screen.getByRole('radio', { name: 'מהיר' }));
     fireEvent.click(playButton());

@@ -25,7 +25,7 @@ import { Fragment, useId, useMemo, useState, type ReactElement } from 'react';
 import { cx } from '@/components/ui/cx';
 import { shadeWindows, type ShadeSample, type ShadeWindow } from '@/lib/site/editor/shade-timeline';
 import type { ShadeAtHour } from '@/lib/site/editor/sun';
-import { burnDays } from '@/lib/site/views';
+import { burnDays, burnEnd, MAX_BURN_DAYS } from '@/lib/site/views';
 import { EditorIcon } from './editor-icons';
 import { northText } from './north';
 import {
@@ -184,12 +184,14 @@ function Times({ windows }: { windows: readonly ShadeWindow[] }): ReactElement {
  * When most of what stands under the nets is in shade, through the chosen
  * day: full shade first, then full or part shade when that says something
  * more. With no nets, or nothing under them, an invitation instead — never an
- * empty line.
+ * empty line. When full shade never reaches most of them, the plain statement
+ * comes with an invitation to move a net, and a way to select the nets.
  */
-function ShadeWords({ samples, hasNets, windows }: {
+function ShadeWords({ samples, hasNets, windows, onPickNets }: {
   samples: readonly ShadeSample[];
   hasNets: boolean;
   windows: { full: ShadeWindow[]; any: ShadeWindow[] };
+  onPickNets?: () => void;
 }): ReactElement | null {
   if (!hasNets) {
     return <p className={chrome.invite}>אין עדיין רשתות צל במפה. גרירה של רשת צל מהספרייה תוסיף אחת, וכאן יופיע מתי יש צל.</p>;
@@ -213,7 +215,41 @@ function ShadeWords({ samples, hasNets, windows }: {
       {any.length > 0 && !sameWindows(full, any) ? (
         <p className={chrome.hint}>צל מלא או חלקי לרובם: <Times windows={any} />.</p>
       ) : null}
+      {full.length > 0 ? null : (
+        <p className={chrome.invite}>
+          הזזה של רשת צל מעל הפריטים תוסיף צל.
+          {onPickNets === undefined ? null : (
+            <>
+              {' '}
+              <button type="button" className={chrome.link} onClick={onPickNets}>בחירת רשתות הצל</button>
+            </>
+          )}
+        </p>
+      )}
     </>
+  );
+}
+
+/**
+ * Why the burn plays one day at a time. D1: until `seasons.ends_on` exists
+ * (ruling SIM3) nothing in the app can record the burn's last day, so this is
+ * plain text with no link that would pretend to fix it; the link to the
+ * season's dates comes back with that field. A recorded last day that makes
+ * no burn is said, with the date — never played, never guessed around.
+ */
+function EndNote({ end, endDay }: { end: 'missing' | 'early' | 'long'; endDay: string | null }): ReactElement {
+  const oneAtATime = 'ולכן אפשר להריץ יום אחד בכל פעם.';
+  if (end === 'missing' || endDay === null) {
+    return <p className={chrome.meta}>{`תאריך הסיום של הברן עוד לא נשמר במערכת, ${oneAtATime}`}</p>;
+  }
+  return (
+    <p className={chrome.meta}>
+      {'תאריך הסיום של הברן, '}
+      <bdi>{dayText(endDay)}</bdi>
+      {end === 'early'
+        ? `, קודם לתאריך הפתיחה, ${oneAtATime}`
+        : <>{', רחוק מתאריך הפתיחה ביותר מ־'}<bdi>{MAX_BURN_DAYS}</bdi>{` ימים ונראה שגוי, ${oneAtATime}`}</>}
+    </p>
   );
 }
 
@@ -293,10 +329,14 @@ export interface SunCardProps {
   samples: readonly ShadeSample[];
   /** Whether the map has any shade net at all — the invitation differs. */
   hasNets: boolean;
+  /** Selects the map's nets (the editor's `pickIds`), offered where full shade never reaches most of what is under them. */
+  onPickNets?: () => void;
 }
 
 export function SunCard(props: SunCardProps): ReactElement {
-  const { hour, onHour, summary, northDeg, plotHref, dateHref, sunDate, endDay = null, onDay, samples, hasNets } = props;
+  const {
+    hour, onHour, summary, northDeg, plotHref, dateHref, sunDate, endDay = null, onDay, samples, hasNets, onPickNets,
+  } = props;
   const shown = props.day ?? sunDate;
   const days = useMemo(() => burnDays(sunDate, endDay), [sunDate, endDay]);
   const span = useMemo(() => (shown === null ? null : daySpan(shown)) ?? FALLBACK_SPAN, [shown]);
@@ -306,13 +346,12 @@ export function SunCard(props: SunCardProps): ReactElement {
   const [speed, setSpeed] = useState<SpeedId>('normal');
   const [scope, setScope] = useState<Scope>('day');
   const reduced = useReducedMotion();
-  /* All the burn's days only with a real last day (SIM3): none recorded yet,
-     or one before the first, and the choice is disabled with a way to set it
-     — never a guessed length. */
-  const endState: 'known' | 'missing' | 'early' = endDay === null
-    ? 'missing'
-    : sunDate !== null && endDay < sunDate ? 'early' : 'known';
-  const playScope: Scope = endState === 'known' ? scope : 'day';
+  /* All the burn's days only with a last day that makes a burn (SIM3,
+     `burnEnd`): none recorded yet, one before the first, or one weeks off,
+     and the choice is disabled with the reason beside it — never a guessed
+     length. */
+  const end = burnEnd(sunDate, endDay);
+  const playScope: Scope = end === 'known' ? scope : 'day';
   /* The days playback runs through, as text: the burn's stay the same while
      playback moves from day to day, and any other scope is another key —
      which stops playback (`usePlayback`). */
@@ -401,7 +440,7 @@ export function SunCard(props: SunCardProps): ReactElement {
           <ShadeStrip samples={samples} hour={hour} onPick={setHourByHand} />
           <div className={styles.controls}>
             <Choice<SpeedId>
-              label="מהירות ההרצה"
+              label="קצב ההרצה"
               name={`${id}-speed`}
               options={SPEEDS.map((option) => ({ value: option.id, label: option.label }))}
               value={speed}
@@ -412,27 +451,13 @@ export function SunCard(props: SunCardProps): ReactElement {
               name={`${id}-scope`}
               options={[
                 { value: 'day', label: 'יום אחד' },
-                { value: 'burn', label: 'כל ימי הברן', disabled: endState !== 'known' },
+                { value: 'burn', label: 'כל ימי הברן', disabled: end !== 'known' },
               ]}
               value={playScope}
               onChange={chooseScope}
             />
           </div>
-          {endState === 'known' ? null : (
-            /* SIM3: the burn's last day is the season's, set in the shell's
-               season-dates drawer; the card links there. */
-            <p className={chrome.meta}>
-              {endState === 'missing' ? 'תאריך הסיום של הברן לא נרשם' : 'תאריך הסיום של הברן קודם לתאריך הפתיחה'}
-              {' · '}
-              <Link
-                href={dateHref}
-                className={chrome.link}
-                aria-label={endState === 'missing' ? 'קביעה של תאריך הסיום של הברן' : 'תיקון של תאריך הסיום של הברן'}
-              >
-                {endState === 'missing' ? 'קביעה' : 'תיקון'}
-              </Link>
-            </p>
-          )}
+          {end === 'known' ? null : <EndNote end={end} endDay={endDay} />}
           <div className={styles.days} role="group" aria-label="ימי הברן">
             {days.map((day) => (
               <button
@@ -447,7 +472,7 @@ export function SunCard(props: SunCardProps): ReactElement {
             ))}
           </div>
           <p className={chrome.hint}><bdi>{summaryText(hour, summary)}</bdi></p>
-          <ShadeWords samples={samples} hasNets={hasNets} windows={windows} />
+          <ShadeWords samples={samples} hasNets={hasNets} windows={windows} onPickNets={onPickNets} />
           {shown === sunDate ? (
             <p className={chrome.meta}>
               {'ביום פתיחת השער, '}

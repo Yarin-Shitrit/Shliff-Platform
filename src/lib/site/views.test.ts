@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  addDays, burnDays, copyHref, itemHref, parseSiteQuery, plotHref, readSunDate, removeItemHref, seasonDateHref, siteHref,
-  sunDateOf,
+  addDays, burnDays, burnEnd, copyHref, itemHref, MAX_BURN_DAYS, parseSiteQuery, plotHref, readSunDate, removeItemHref,
+  seasonDateHref, siteHref, sunDateOf,
 } from './views';
 
 describe('the camp map’s address', () => {
@@ -103,5 +103,24 @@ describe('the days of the burn', () => {
   it('has no days without a gate day', () => {
     expect(burnDays(null, '2026-11-07')).toEqual([]);
     expect(burnDays('2026-02-30', '2026-11-07')).toEqual([]);
+  });
+
+  /* A burn runs about a week. A last day weeks away is a mistyped date, and
+     hundreds of days would be hundreds of chips: it is said, never played. */
+  it('is the gate day alone when the last day would make the burn longer than two weeks', () => {
+    expect(MAX_BURN_DAYS).toBe(14);
+    expect(burnDays('2026-11-02', '2026-11-15')).toHaveLength(14);
+    expect(burnDays('2026-11-02', '2026-11-16')).toEqual(['2026-11-02']);
+    expect(burnDays('2026-11-02', '2027-11-02')).toEqual(['2026-11-02']);
+  });
+
+  it('says what the last day tells about the burn’s length', () => {
+    expect(burnEnd('2026-11-02', '2026-11-07')).toBe('known');
+    expect(burnEnd('2026-11-02', '2026-11-02')).toBe('known');
+    expect(burnEnd('2026-11-02', '2026-11-15')).toBe('known');
+    expect(burnEnd('2026-11-02', null)).toBe('missing');
+    expect(burnEnd('2026-11-02', 'soon')).toBe('missing');
+    expect(burnEnd('2026-11-02', '2026-11-01')).toBe('early');
+    expect(burnEnd('2026-11-02', '2026-11-16')).toBe('long');
   });
 });

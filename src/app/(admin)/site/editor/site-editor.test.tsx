@@ -973,6 +973,20 @@ describe('shade by hour', () => {
     expect(screen.getByText(/^אין עדיין רשתות צל במפה\./)).toBeTruthy();
     expect(container.querySelector('[data-strip]')).toBeNull();
   });
+
+  it('selects the nets from the invitation when full shade never reaches what is under them', async () => {
+    /* A 10 × 10 m tent half under an 8 × 8 m net: the net's shaded ground is
+       7 × 7 m, so the tent is never wholly in its shade. */
+    const tent = siteItem({ id: 'big', label: 'אוהל גדול', xCm: 0, yCm: 0, widthCm: 1000, depthCm: 1000 });
+    const net = siteItem({ id: 'n', kind: 'shade', label: 'רשת 1', xCm: 400, yCm: 400, widthCm: 800, depthCm: 800, insetCm: 50 });
+    renderEditor({ initial: { doc: siteDoc([tent, net]), version: 0 }, initialSelection: null });
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    expect(screen.getByText(/^באף שעה ביום הזה אין צל/)).toBeTruthy();
+    fireEvent.click(button('בחירת רשתות הצל'));
+    expect(lastScene().store.selection).toEqual(['n']);
+    expect(scene.handle.fitIds).toHaveBeenLastCalledWith(['n']);
+  });
 });
 
 /*
@@ -1039,16 +1053,10 @@ describe('shade by hour, played', () => {
     commits.length = 0;
     const scenesBefore = scene.props.mock.calls.length;
 
-    const started = performance.now();
     const frames = runFrames(2000);
-    const wall = performance.now() - started;
     const sceneRenders = scene.props.mock.calls.length - scenesBefore;
-    const mean = commits.reduce((sum, each) => sum + each, 0) / Math.max(1, commits.length);
-    console.info(
-      `playback, 2 s at ${frames} frames: ${commits.length} editor commits, ${sceneRenders} scene renders, `
-      + `mean commit ${mean.toFixed(2)} ms (jsdom), ${wall.toFixed(0)} ms wall`,
-    );
 
+    // Measured at c2b1e38: 17 commits for 125 frames; 124 with the throttle taken out (sim-2-report.md).
     expect(frames).toBe(125);
     expect(commits.length).toBeLessThanOrEqual(20);
     expect(sceneRenders).toBeLessThanOrEqual(20);
