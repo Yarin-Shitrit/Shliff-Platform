@@ -329,16 +329,11 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
         let op: SiteOp = raw;
 
         // S2: an add whose id the server already has becomes an update of
-        // that item, reduced (ruling 6) to only the fields that actually
-        // differ — nothing at all when the add already landed and only the
-        // reply was lost.
+        // that item — reduced below, with every other update, to only the
+        // fields that actually differ.
         if (raw.type === 'add') {
           const existingEntry = findItem(merging, raw.item.id);
-          if (existingEntry !== undefined) {
-            const reduced = changedUpdate(existingEntry, itemPatch(raw.item));
-            if (reduced === null) continue;
-            op = reduced;
-          }
+          if (existingEntry !== undefined) op = { type: 'update', id: raw.item.id, patch: itemPatch(raw.item) };
         }
 
         // S2: a remove of an item already gone does the same thing either
@@ -356,12 +351,21 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
             goneNames.push(findItem(current.doc, op.id)?.label ?? 'פריט');
             continue;
           }
+          // Ruling 6: reduced against the doc this op is about to touch —
+          // an already-pending update (or an add just turned into one,
+          // above) may by now match the server's own value exactly, and
+          // `lockRefusal` refuses on field presence, not value, so this must
+          // happen *before* that check: a no-op must never be reported as a
+          // lock refusal, and must never be resent as if it were real.
+          const reduced = changedUpdate(entry, op.patch);
+          if (reduced === null) continue;
           // S1: a lock another lead applied refuses this op the same as a
           // missing item would refuse it — but it is named separately.
-          if (lockRefusal(entry.locked, op.patch) !== null) {
+          if (lockRefusal(entry.locked, reduced.patch) !== null) {
             lockedNames.push(entry.label);
             continue;
           }
+          op = reduced;
         }
 
         merging = applyOps(merging, [op]).doc;

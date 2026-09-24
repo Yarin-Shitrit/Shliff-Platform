@@ -421,13 +421,61 @@ describe('the editor store', () => {
       await act(async () => { await result.current.resolveConflict('mine'); });
       expect(result.current.doc.items.find((entry) => entry.id === A)?.xCm).toBe(400);
       expect(result.current.canRedo).toBe(true);
+      // The pending update (back to 100) really did differ from the server's
+      // 400 — a genuine lock refusal, not a no-op — so it is named here.
+      expect(result.current.notice).toBe(lockedNotice('אוהל 1'));
 
       act(() => { expect(result.current.redo()).toBe('הזזה'); });
       expect(result.current.canRedo).toBe(false); // history still advances
       expect(result.current.doc.items.find((entry) => entry.id === A)?.xCm).toBe(400);
+      // The redo itself found nothing left to do (already 400) and is not a
+      // skip, so it does not touch the notice left by 'mine'.
+      expect(result.current.notice).toBe(lockedNotice('אוהל 1'));
 
       await waitForSave();
       expect(saveFn).toHaveBeenCalledTimes(1); // only the original conflicting send
+    });
+
+    // Fix round 2 (ruling 6, still not applied to the 'mine' loop's plain
+    // `update` branch): a pending update whose patch already matches the
+    // server's current value must be reduced through `changedUpdate` before
+    // anything else, exactly like `applyEach` already does — otherwise it is
+    // sent again even though nothing needs to change.
+    it('drops a pending update that already matches the server, on an unlocked item', async () => {
+      const save = conflicting();
+      const theirs = doc([item({ id: A, label: 'אוהל 1', xCm: 400 }), item({ id: B, label: 'אוהל 2', xCm: 600 })]);
+      const load = vi.fn<EditorStoreInit['load']>(async () => ({ ok: true, value: { doc: theirs, version: 5 } }));
+      const { result, save: saveFn } = setup({ save, load });
+      act(() => { result.current.run('הזזה', [moveTo(A, 400)]); }); // A starts at 100 locally
+      await waitForSave();
+      expect(result.current.conflict).toEqual({ version: 5 });
+
+      await act(async () => { await result.current.resolveConflict('mine'); });
+
+      expect(result.current.doc.items.find((entry) => entry.id === A)?.xCm).toBe(400);
+      expect(result.current.notice).toBeNull();
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      expect(saveFn).toHaveBeenCalledTimes(1); // only the original conflicting send — not resent
+    });
+
+    // Fix round 2: the same no-op, but on a locked item — `lockRefusal`
+    // refuses on field presence, not value, so an un-reduced patch would be
+    // reported as a lock refusal even though nothing needed to change.
+    it('drops a pending update that already matches the server, on a locked item, without a notice', async () => {
+      const save = conflicting();
+      const theirs = doc([item({ id: A, label: 'אוהל 1', xCm: 400, locked: true }), item({ id: B, label: 'אוהל 2', xCm: 600 })]);
+      const load = vi.fn<EditorStoreInit['load']>(async () => ({ ok: true, value: { doc: theirs, version: 5 } }));
+      const { result, save: saveFn } = setup({ save, load });
+      act(() => { result.current.run('הזזה', [moveTo(A, 400)]); }); // A starts at 100 locally
+      await waitForSave();
+      expect(result.current.conflict).toEqual({ version: 5 });
+
+      await act(async () => { await result.current.resolveConflict('mine'); });
+
+      expect(result.current.doc.items.find((entry) => entry.id === A)?.xCm).toBe(400);
+      expect(result.current.notice).toBeNull();
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      expect(saveFn).toHaveBeenCalledTimes(1);
     });
 
     // Fix round 1, findings 1 and 2 together, plus the minor finding: a
