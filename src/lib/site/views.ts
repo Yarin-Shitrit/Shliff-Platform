@@ -20,6 +20,12 @@ export interface SiteQuery {
   plot: boolean;
   copy: boolean;
   removing: boolean;
+  /**
+   * `?editor=3d`: the bare 3D map instead of the board — temporary, so the
+   * scene can be checked in a browser before the panels exist (plan 03,
+   * Task 20). Task 26 makes the editor the page and removes the flag.
+   */
+  editor3d: boolean;
 }
 
 function one(value: string | string[] | undefined): string {
@@ -36,6 +42,7 @@ export function parseSiteQuery(params: RawParams): SiteQuery {
     plot: act === PLOT_ACT,
     copy: act === COPY_ACT,
     removing: peek !== null && act === REMOVE_ACT,
+    editor3d: one(params.editor) === '3d',
   };
 }
 

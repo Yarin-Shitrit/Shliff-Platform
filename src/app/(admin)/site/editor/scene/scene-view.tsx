@@ -1,0 +1,151 @@
+'use client';
+
+import { forwardRef, useCallback, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
+import type { SiteItemKind } from '@/db/schema/site';
+import type { ScreenBox, ViewMode } from '@/lib/site/editor/camera';
+import type { SiteKindGroup } from '@/lib/site/kinds';
+import type { EditorStore } from '../use-editor-store';
+import { SceneEngine } from './engine';
+import { LabelsLayer, type LabelsLayerHandle } from './labels-layer';
+import type { SceneTheme } from './palette';
+import styles from './scene.module.css';
+
+export interface EditorUi {
+  tool: 'select' | 'measure';
+  mode: ViewMode;
+  labels: boolean;
+  sun: boolean;
+  netsHidden: boolean;
+  snap: boolean;
+  hiddenGroups: SiteKindGroup[];
+  hour: number;
+  theme: SceneTheme;
+}
+
+export interface ViewInfo {
+  yaw: number;
+  zoomPct: number;
+  pxPerM: number;
+  groundCorners: Array<[number, number]>;
+  /** Null while the view or a drag is moving (the selection bar hides meanwhile). */
+  selectionBox: ScreenBox | null;
+  moving: boolean;
+}
+
+/** How much of the scene the floating panels cover; fit and labels keep out from under them. */
+export interface Insets { left: number; right: number; top: number; bottom: number }
+
+export interface SceneHandle {
+  fitAll(): void;
+  fitIds(ids: readonly string[]): void;
+  zoomBy(factor: number): void;
+  rotateView(dir: 1 | -1): void;
+  northUp(): void;
+  centreGround(): [number, number] | null;
+  groundAtClient(clientX: number, clientY: number): [number, number] | null;
+  setGhost(ghost: { kind: SiteItemKind; xCm: number; yCm: number } | null): void;
+  jumpTo(xCm: number, yCm: number): void;
+  exportPng(): string | null;
+}
+
+export interface SceneViewProps {
+  store: EditorStore;
+  ui: EditorUi;
+  insets: Insets;
+  /** The season's gate date, 'YYYY-MM-DD'; the sun is modelled only when there is one. */
+  sunDate: string | null;
+  onView: (info: ViewInfo) => void;
+  onNotice: (message: string) => void;
+  onModeSettled?: (mode: ViewMode) => void;
+}
+
+/** What a browser without WebGL shows where the map would be (spec §7). */
+export const NO_WEBGL = 'המפה צריכה דפדפן עם גרפיקה תלת־ממדית פעילה.';
+
+const ENGINE_CLASSES = {
+  canvas: styles.canvas,
+  overlay: styles.overlay,
+  handle: styles.handle,
+  guide: styles.guide,
+  gap: styles.gap,
+  measure: styles.measure,
+  marquee: styles.marquee,
+  dot: styles.dot,
+  member: styles.member,
+  pills: styles.pills,
+  pill: styles.pill,
+  pillGuide: styles.pillGuide,
+  pillFocus: styles.pillFocus,
+  pillBad: styles.pillBad,
+};
+
+/**
+ * The 3D map (spec §4, §7). The only component that reaches `three`, through
+ * `engine.ts`; loaded with `next/dynamic` and `ssr: false`, so no other page
+ * carries the library and the server never tries to draw.
+ *
+ * React renders three nodes and then stays out of the way: the engine is
+ * created on the stage node, reads the latest props on every render through
+ * a ref, and draws frames itself. A browser that cannot give WebGL makes the
+ * engine throw; the component then says so, in Hebrew, instead of the map.
+ */
+export const SceneView = forwardRef<SceneHandle, SceneViewProps>(function SceneView(props, ref) {
+  const propsRef = useRef(props);
+  const engineRef = useRef<SceneEngine | null>(null);
+  const labelsRef = useRef<LabelsLayerHandle | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useLayoutEffect(() => {
+    propsRef.current = props;
+    engineRef.current?.update();
+  });
+
+  /* The engine lives exactly as long as the stage node: created when React
+     attaches it, disposed by the cleanup React 19 runs when it detaches. */
+  const attachStage = useCallback((stage: HTMLDivElement | null) => {
+    if (stage === null) return undefined;
+    let engine: SceneEngine;
+    try {
+      engine = new SceneEngine(stage, {
+        props: () => propsRef.current,
+        labels: () => labelsRef.current,
+        classes: ENGINE_CLASSES,
+      });
+    } catch {
+      setFailed(true);
+      return undefined;
+    }
+    engineRef.current = engine;
+    return () => {
+      engine.dispose();
+      if (engineRef.current === engine) engineRef.current = null;
+    };
+  }, []);
+
+  useImperativeHandle(ref, () => ({
+    fitAll: () => engineRef.current?.fitAll(),
+    fitIds: (ids) => engineRef.current?.fitIds(ids),
+    zoomBy: (factor) => engineRef.current?.zoomBy(factor),
+    rotateView: (dir) => engineRef.current?.rotateView(dir),
+    northUp: () => engineRef.current?.northUp(),
+    centreGround: () => engineRef.current?.centreGround() ?? null,
+    groundAtClient: (clientX, clientY) => engineRef.current?.groundAtClient(clientX, clientY) ?? null,
+    setGhost: (ghost) => engineRef.current?.setGhost(ghost),
+    jumpTo: (xCm, yCm) => engineRef.current?.jumpTo(xCm, yCm),
+    exportPng: () => engineRef.current?.exportPng() ?? null,
+  }), []);
+
+  if (failed) {
+    return (
+      <div className={styles.scene}>
+        <p className={styles.fallback} role="status">{NO_WEBGL}</p>
+      </div>
+    );
+  }
+  return (
+    <div className={styles.scene}>
+      <div className={styles.stage} ref={attachStage} />
+      <LabelsLayer ref={labelsRef} />
+    </div>
+  );
+});
