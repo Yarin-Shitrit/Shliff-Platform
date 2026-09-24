@@ -325,7 +325,7 @@ export const LabelsLayer: React.ForwardRefExoticComponent<React.RefAttributes<La
 export type Shortcut = 'undo' | 'redo' | 'duplicate' | 'selectAll' | 'escape' | 'remove' | 'turn' | 'lock'
   | 'toolSelect' | 'toolMeasure' | 'fit' | 'plan' | '3d' | 'viewLeft' | 'viewRight' | 'zoomIn' | 'zoomOut' | 'keys'
   | { arrow: 'ArrowLeft' | 'ArrowRight' | 'ArrowUp' | 'ArrowDown'; big: boolean };
-export function shortcutFor(event: { code: string; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean }): Shortcut | null;
+export function shortcutFor(event: { code: string; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }): Shortcut | null; // null whenever Alt is held — Alt combinations stay the browser's (Task 21 review)
 
 // site-editor.tsx — Task 21 (client; the only importer of SceneView, via next/dynamic ssr:false)
 export interface SiteEditorProps { initial: { doc: EditorDoc; version: number }; initialSelection: string | null;
