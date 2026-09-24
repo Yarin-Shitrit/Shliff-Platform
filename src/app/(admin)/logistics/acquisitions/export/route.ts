@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 
   const rows = await listAcquisitions(db, current.id, query);
 
-  return new NextResponse(csvDocument(acquisitionsCsvRows(rows)), {
+  return new NextResponse(csvDocument(acquisitionsCsvRows(rows, current.name)), {
     headers: {
       'content-type': 'text/csv; charset=utf-8',
       'content-disposition': `attachment; filename="shliff-acquisitions-${current.year}.csv"`,

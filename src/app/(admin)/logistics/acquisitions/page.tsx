@@ -188,6 +188,7 @@ export default async function AcquisitionsPage(
             <bdi>{`${counts.remainingRows} פריטים חסרים ל${current.name}`}</bdi>
             {' · '}
             <bdi>{`${counts.byStatus.arrived} כבר הגיעו`}</bdi>
+            {counts.campWide > 0 ? <>{' · '}<bdi>{`${counts.campWide} כלל־קאמפיים, מופיעים בכל שנה`}</bdi></> : null}
             {seasons.length > 1 ? <>{' · '}<bdi>{`${seasons.length} שנים במערכת`}</bdi></> : null}
           </p>
         </div>

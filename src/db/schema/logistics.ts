@@ -52,10 +52,15 @@ export const inventoryItems = pgTable('inventory_items', {
 /**
  * What is missing for one season and has to be bought, found or borrowed.
  *
- * Season-scoped, unlike the warehouse: what the camp still needs is a fact
- * about this year. Stock and want are separate rows on purpose — the camp can
- * need four more of something it already has two of, and folding them into one
- * row would make the warehouse count absorb an order that has not arrived.
+ * Season-scoped, unlike the warehouse: what the camp still needs is usually a
+ * fact about this year. `seasonId` is nullable for the exception — a thing the
+ * camp needs whichever burn comes next (a generator, a water pump). A null
+ * season means camp-wide: the row is listed under every season and says so on
+ * screen, rather than being copied into each year by hand and drifting.
+ *
+ * Stock and want are separate rows on purpose — the camp can need four more
+ * of something it already has two of, and folding them into one row would
+ * make the warehouse count absorb an order that has not arrived.
  *
  * Amounts are `numeric(12,2)` to match `budget_lines`; the code works in
  * agorot via `toAgorot` / `formatILS`. Both are nullable because "not bought
@@ -63,7 +68,8 @@ export const inventoryItems = pgTable('inventory_items', {
  */
 export const acquisitionItems = pgTable('acquisition_items', {
   id: uuid('id').defaultRandom().primaryKey(),
-  seasonId: uuid('season_id').notNull()
+  /** Null is camp-wide: needed regardless of which burn is next. */
+  seasonId: uuid('season_id')
     .references(() => seasons.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   category: text('category').$type<LogisticsCategory>().notNull().default('general'),

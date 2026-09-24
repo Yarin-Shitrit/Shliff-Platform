@@ -23,13 +23,13 @@ import { acquisitionFailureMessage, arrivalFailureMessage } from './failure-mess
  */
 
 export async function createAcquisitionAction(
-  seasonId: string, input: AcquisitionInput,
+  input: AcquisitionInput,
 ): Promise<ActionResult<string>> {
   const admin = await requireAdmin();
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   try {
-    const id = await createAcquisition(db, seasonId, input, admin.email);
+    const id = await createAcquisition(db, input, admin.email);
     revalidatePath(ACQUISITIONS_PATH);
     return { ok: true, value: id };
   } catch (error) {

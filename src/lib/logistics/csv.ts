@@ -2,7 +2,7 @@ import { fromAgorot } from '@/lib/money';
 import type { WarehouseRow } from './warehouse';
 import type { AcquisitionRow } from './acquisitions';
 import {
-  CATEGORY_LABELS, CONDITION_LABELS, SOURCE_LABELS, STATUS_LABELS,
+  CAMP_WIDE_LABEL, CATEGORY_LABELS, CONDITION_LABELS, SOURCE_LABELS, STATUS_LABELS,
 } from './labels';
 
 /**
@@ -65,11 +65,18 @@ export function warehouseCsvRows(items: readonly WarehouseRow[]): string[][] {
   ];
 }
 
-export function acquisitionsCsvRows(rows: readonly AcquisitionRow[]): string[][] {
+/**
+ * `seasonName` is the season the file was exported for. A camp-wide row is in
+ * that file because it belongs to every season, and the column says which
+ * rows those are — otherwise a generator needed every year reads as one more
+ * thing this year's list asked for.
+ */
+export function acquisitionsCsvRows(rows: readonly AcquisitionRow[], seasonName: string): string[][] {
   return [
-    ['שם הפריט', 'קטגוריה', 'כמות דרושה', 'דרך ההשגה', 'אומדן', 'בפועל', 'אחראי', 'משאיל', 'סטטוס', 'מקור הנתון'],
+    ['שם הפריט', 'שייך ל', 'קטגוריה', 'כמות דרושה', 'דרך ההשגה', 'אומדן', 'בפועל', 'אחראי', 'משאיל', 'סטטוס', 'מקור הנתון'],
     ...rows.map((row) => [
       row.name,
+      row.seasonId === null ? CAMP_WIDE_LABEL : seasonName,
       CATEGORY_LABELS[row.category],
       String(row.quantityNeeded),
       SOURCE_LABELS[row.source],

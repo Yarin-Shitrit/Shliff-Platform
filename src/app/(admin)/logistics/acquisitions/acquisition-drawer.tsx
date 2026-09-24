@@ -14,14 +14,14 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Drawer } from '@/components/ui/drawer';
-import { Field, MoneyInput, Select, TextInput } from '@/components/ui/field';
+import { Checkbox, Field, MoneyInput, Select, TextInput } from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
 import { Banner } from '@/components/ui/banner';
 import { useToast } from '@/components/ui/toaster';
 import { isBlank } from '@/lib/text/normalize';
 import { formatShekels } from '@/lib/money';
 import type { AcquisitionRow } from '@/lib/logistics/acquisitions';
-import { CATEGORY_LABELS, SOURCE_LABELS } from '@/lib/logistics/labels';
+import { CAMP_WIDE_LABEL, CATEGORY_LABELS, SOURCE_LABELS } from '@/lib/logistics/labels';
 import type {
   AcquisitionSource, LogisticsCategory,
 } from '@/db/schema/logistics';
@@ -67,6 +67,9 @@ export function AcquisitionDrawer({
   const [assignee, setAssignee] = useState(row?.assignee?.id ?? '');
   const [lender, setLender] = useState(row?.lender?.id ?? '');
   const [budgetLineId, setBudgetLineId] = useState(row?.budgetLineId ?? '');
+  /* A new row starts as this season's; only an explicit tick makes it
+     camp-wide. An existing row keeps whichever it already is. */
+  const [campWide, setCampWide] = useState(row !== null && row.seasonId === null);
   const [pending, setPending] = useState(false);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
 
@@ -91,6 +94,7 @@ export function AcquisitionDrawer({
     }
 
     const input = {
+      seasonId: campWide ? null : seasonId,
       name,
       category,
       quantityNeeded: needed,
@@ -105,7 +109,7 @@ export function AcquisitionDrawer({
     setPending(true);
     try {
       const result = row === null
-        ? await createAcquisitionAction(seasonId, input)
+        ? await createAcquisitionAction(input)
         : await updateAcquisitionAction(row.id, input);
 
       if (!result.ok) { setRefusal({ where: 'form', message: result.error }); return; }
@@ -123,7 +127,7 @@ export function AcquisitionDrawer({
   return (
     <Drawer
       title={creating ? 'הוספת פריט לרכש' : row.name}
-      subtitle={seasonName}
+      subtitle={campWide ? `${CAMP_WIDE_LABEL} · לא משויך לשנה` : seasonName}
       closeHref={closeHref}
       width={500}
       phone="full"
@@ -139,6 +143,21 @@ export function AcquisitionDrawer({
       <form className={styles.form} onSubmit={save}>
         <Field id="acq-name" label="מה צריך" required error={errorFor('name')}>
           <TextInput id="acq-name" value={name} onChange={setName} />
+        </Field>
+
+        <Field
+          id="acq-camp-wide"
+          label="שיוך לשנה"
+          hint={campWide
+            ? 'יופיע ברשימת הרכש של כל שנה, עד שיגיע. מתאים לדבר שהקאמפ צריך בכל ברן.'
+            : `שייך ל${seasonName} בלבד. סימון התיבה הופך אותו לכלל־קאמפי — צורך של כל ברן, לא רק של השנה הזו.`}
+        >
+          <Checkbox
+            id="acq-camp-wide"
+            label="לא שייך לברן מסוים"
+            checked={campWide}
+            onChange={setCampWide}
+          />
         </Field>
 
         <div className={styles.pair}>

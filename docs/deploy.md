@@ -225,6 +225,35 @@ each `UNIQUE (source_block_id, source_row)`. `promote.ts` upserts with
 `onConflictDoUpdate` on exactly those columns, so without them Postgres raises
 `42P10` and block promotion fails outright.
 
+### Migration `0011` — **not yet applied** to Railway
+
+`0011_faithful_starjammers` is one statement:
+`ALTER TABLE "acquisition_items" ALTER COLUMN "season_id" DROP NOT NULL;`
+It lets a רכש row belong to no season (camp-wide, listed under every year).
+Not additive like `0009`/`0010` — it is an `ALTER` — but it touches no row and
+loosens a constraint rather than adding one, so the same `psql -f` procedure
+applies. Until it is applied, saving a row with «לא שייך לברן מסוים» ticked
+fails in production with a `23502` not-null violation; every other רכש path
+keeps working. Applying it is the camp lead's decision, like the two above.
+
+Read-only check that it is genuinely missing (expected before: `NO`):
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" postgres:18-alpine   psql "$R" -tAc "select is_nullable from information_schema.columns
+    where table_name='acquisition_items' and column_name='season_id'"
+```
+
+Then:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine sh -euc '
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0011_faithful_starjammers.sql
+'
+```
+
+Afterwards the query above prints `YES`, and the parity check comes back empty
+against a local database that also carries `0011`.
+
 ### Copying the laptop's database up
 
 The local container is Postgres **16**; Railway is **18**. Dump with the

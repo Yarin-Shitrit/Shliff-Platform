@@ -40,6 +40,13 @@ export const CONDITION_LABELS: Record<ItemCondition, string> = {
   retired: 'יצא משימוש',
 };
 
+/**
+ * What a row with no season is called, everywhere it is called anything: the
+ * table's pill, the drawer's subtitle, the export column. One string, so the
+ * file a lead downloads uses the word the screen taught them.
+ */
+export const CAMP_WIDE_LABEL = 'כלל־קאמפי';
+
 export const SOURCE_LABELS: Record<AcquisitionSource, string> = {
   buy_new: 'לקנות חדש',
   second_hand: 'יד שנייה',

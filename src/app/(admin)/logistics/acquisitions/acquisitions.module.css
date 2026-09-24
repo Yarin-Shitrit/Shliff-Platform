@@ -53,6 +53,14 @@
   gap: 6px;
 }
 
+/* The name and, for a camp-wide row, the pill that says so beside it. */
+.name {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 /* The status menu's panel: four states stacked, each a full-width target. */
 .menu {
   display: flex;
