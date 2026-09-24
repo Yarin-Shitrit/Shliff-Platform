@@ -916,6 +916,62 @@ describe('shade by hour', () => {
     fireEvent.click(button('צל לפי שעה'));
     expect(within(screen.getByRole('group', { name: 'צל לפי שעה' })).getByText(/עוד לא נרשם תאריך פתיחה/)).toBeTruthy();
   });
+
+  it('lights the day a chip picks, once the burn’s last day is known', async () => {
+    renderEditor({ sunEndDate: '2026-06-06' });
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    const days = within(screen.getByRole('group', { name: 'ימי הברן' }));
+    expect(days.getAllByRole('button').map((chip) => chip.textContent)).toEqual(['ה׳ 4.6', 'ו׳ 5.6', 'ש׳ 6.6']);
+    fireEvent.click(days.getByRole('button', { name: 'ו׳ 5.6' }));
+    expect(lastScene().sunDate).toBe('2026-06-05');
+    expect(days.getByRole('button', { name: 'ו׳ 5.6' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByText((_, element) => element?.tagName === 'P' && element.textContent?.startsWith('ביום 5.6.2026 של הברן') === true))
+      .toBeTruthy();
+  });
+
+  it('has the gate day alone, and lights it, while the burn’s last day is unknown', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    const chips = within(screen.getByRole('group', { name: 'ימי הברן' })).getAllByRole('button');
+    expect(chips.map((chip) => chip.textContent)).toEqual(['ה׳ 4.6']);
+    fireEvent.click(chips[0]);
+    expect(lastScene().sunDate).toBe('2026-06-04');
+  });
+
+  it('goes back to the gate day when a picked day is no longer one of the burn’s', async () => {
+    const { rerenderWith } = renderEditor({ sunEndDate: '2026-06-06' });
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    fireEvent.click(button('ש׳ 6.6'));
+    expect(lastScene().sunDate).toBe('2026-06-06');
+    // The season's opening date moved in its drawer, and the page refreshed.
+    rerenderWith({ sunDate: '2026-07-01', sunEndDate: '2026-07-02' });
+    expect(lastScene().sunDate).toBe('2026-07-01');
+  });
+
+  it('pictures the day’s shade from the map on screen, a column a quarter hour', async () => {
+    const net = siteItem({ id: 'n', kind: 'shade', label: 'רשת 1', xCm: 400, yCm: 400, widthCm: 800, depthCm: 800, insetCm: 50 });
+    const { container } = renderEditor({ initial: { doc: siteDoc([siteItem({ id: 'a' }), net]), version: 0 } });
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    // 4 June at the camp: sunrise 05:39:37, sunset 19:38:51 (the almanac) — 05:45 to 19:30, 56 quarter hours.
+    expect(container.querySelectorAll('[data-strip] [data-hour]')).toHaveLength(56);
+    const slider = screen.getByRole('slider', { name: 'שעה ביום' }) as HTMLInputElement;
+    expect([slider.min, slider.max]).toEqual(['5.75', '19.5']);
+    // Clicking the strip moves the hour the scene lights.
+    fireEvent.click(container.querySelector('[data-strip] [data-hour="10.25"]')!);
+    expect(lastScene().ui.hour).toBe(10.25);
+  });
+
+  it('invites a net when the map has none, instead of an empty picture', async () => {
+    const { container } = renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    expect(screen.getByText(/^אין עדיין רשתות צל במפה\./)).toBeTruthy();
+    expect(container.querySelector('[data-strip]')).toBeNull();
+  });
 });
 
 /* The plot drawer's save bumps the plan's version and refreshes the page; the

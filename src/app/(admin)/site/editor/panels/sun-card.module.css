@@ -1,9 +1,10 @@
 /*
- * The sun card (spec §11): its width, the hour row and the slider. The card
- * itself, the hint and meta lines and the links are the shared
- * `panel.module.css` — `.card` came from Task 24's brief, `.hint` from Task
- * 22's, `.meta` and `.link` from Task 23's; integration folded the copies the
- * lanes made into that one module (ruling W10).
+ * The sun card (spec §11): its width, the hour row and the slider, the shade
+ * strip with its legend, and the burn's day chips. The card itself, the hint,
+ * meta and invitation lines and the links are the shared `panel.module.css`
+ * — `.card` came from Task 24's brief, `.hint` from Task 22's, `.meta` and
+ * `.link` from Task 23's; integration folded the copies the lanes made into
+ * that one module (ruling W10).
  *
  * Tokens only, logical properties throughout (A10).
  */
@@ -20,4 +21,88 @@
 .range {
   flex: 1;
   accent-color: var(--brand);
+}
+
+/* ---- the shade strip ------------------------------------------------------ */
+
+/*
+ * One hue for one measure (SIM2): the share of what stands under the nets
+ * that is shaded — full shade the token's full strength, part shade the same
+ * hue mixed 55% over the track, the rest the track itself. Checked with the
+ * dataviz validator as an ordinal ramp against the track in both themes:
+ * light #7F9AD4 → #2458C6 on #EEEAE5 (lightest step 2.35:1), dark #596E97 →
+ * #7FA8F5 on #2B2724 (2.89:1). The strip is drawn in the SVG's own units, one
+ * per column, stretched to the card's width.
+ */
+.strip {
+  display: block;
+  inline-size: 100%;
+  block-size: 22px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.sunMark { fill: var(--viz-track); }
+.column:hover .sunMark { fill: var(--line-strong); }
+.fullMark { fill: var(--info); }
+.partialMark { fill: color-mix(in srgb, var(--info) 55%, var(--viz-track)); }
+
+/* The playhead, ringed in the card's own surface so it reads over any mark. */
+.playheadRing { stroke: var(--panel); stroke-width: 4px; }
+.playhead { stroke: var(--ink); stroke-width: 2px; }
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-label);
+}
+
+.key {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.swatch {
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: 2px;
+}
+
+.fullKey { background: var(--info); }
+.partialKey { background: color-mix(in srgb, var(--info) 55%, var(--viz-track)); }
+.sunKey { background: var(--viz-track); box-shadow: inset 0 0 0 1px var(--line-strong); }
+
+/* ---- the burn's days ---------------------------------------------------------- */
+
+.days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.chip {
+  block-size: 26px;
+  padding-inline: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--panel);
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+  cursor: pointer;
+}
+.chip:hover { background: var(--sunken); color: var(--ink); }
+.chip[aria-pressed='true'] {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand-text);
+  font-weight: 600;
+}
+
+/* Phone targets are at least 44px (A8). */
+@media (pointer: coarse) {
+  .chip { block-size: var(--tap-min); }
 }
