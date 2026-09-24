@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
-import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import type { ActionResult } from '@/lib/action-result';
 
 const route = vi.hoisted(() => ({ pathname: '/fees', search: '' }));
@@ -20,7 +20,7 @@ vi.mock('next/navigation', () => ({
 /** `./actions` is a `'use server'` module whose graph reaches `@/db`. */
 vi.mock('./actions', () => ({ setSeasonStartsOnAction }));
 
-import { SeasonDateDrawer } from './season-date-drawer';
+import { SeasonDateDrawer, SAVED_DWELL_MS } from './season-date-drawer';
 
 /**
  * b26's stored instant is 22:30 UTC on 3 June — 01:30 on 4 June in Israel.
@@ -30,6 +30,8 @@ const SEASONS = [
   { id: 'b26', name: 'ברן 26', startsOn: new Date('2026-06-03T22:30:00Z') },
   { id: 'b25', name: 'ברן 25', startsOn: null },
 ];
+
+const INVALID = 'תאריך פתיחת השער אינו תקין.';
 
 /**
  * This box runs on Israel time, where reading the instant in the process's
@@ -49,6 +51,24 @@ afterAll(() => {
 
 function dateInput(): HTMLInputElement {
   return screen.getByLabelText('תאריך הפתיחה') as HTMLInputElement;
+}
+
+/**
+ * What Chromium reports for a half-typed or impossible date (31/02, or a
+ * year still being typed): `value` is `''` and `validity.badInput` is true.
+ * jsdom never sets `badInput`, so it is stubbed on the element.
+ */
+function typeHalfADate(input: HTMLInputElement) {
+  fireEvent.change(input, { target: { value: '' } });
+  Object.defineProperty(input, 'validity', {
+    configurable: true,
+    value: { ...input.validity, badInput: true, valid: false },
+  });
+}
+
+/** Lets the mocked action resolve and React commit what follows it. */
+async function settle(ms = 0) {
+  await act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 }
 
 describe('SeasonDateDrawer', () => {
@@ -78,6 +98,21 @@ describe('SeasonDateDrawer', () => {
     expect(within(dialog).getByText('ברן 26')).toBeTruthy();
   });
 
+  /**
+   * The rail hosts this drawer, and below 1024px a closed rail is moved
+   * off-screen with a `transform` — which makes it the containing block of
+   * every `position: fixed` element inside it. A drawer opened from a page
+   * link (/tasks, the camp map) would open inside that off-screen box while
+   * its focus trap made the page behind it inert.
+   */
+  it('renders outside whatever hosts it, so a closed phone rail cannot carry it off-screen', () => {
+    route.search = 'act=season-date';
+    const { container } = render(<div data-rail><SeasonDateDrawer seasons={SEASONS} /></div>);
+    const dialog = screen.getByRole('dialog');
+    expect(container.contains(dialog)).toBe(false);
+    expect(dialog.parentElement).toBe(document.body);
+  });
+
   it('is prefilled with the calendar day in Israel, not the UTC day', () => {
     expect(new Date('2026-06-03T22:30:00Z').getDate()).toBe(3); // the pin above took hold
     route.search = 'act=season-date';
@@ -99,51 +134,117 @@ describe('SeasonDateDrawer', () => {
     expect(within(screen.getByRole('dialog')).getByText('ברן 26')).toBeTruthy();
   });
 
-  it('says in one line why the date matters, tied to the field', () => {
+  it('says in one line what the date drives — the tasks countdown and the shade by hour', () => {
     route.search = 'act=season-date';
     render(<SeasonDateDrawer seasons={SEASONS} />);
-    const why = screen.getByText('הצל לפי שעה במפת הקאמפ מחושב ליום הזה.');
+    const why = screen.getByText('הספירה לאחור במשימות והצל לפי שעה במפת הקאמפ מחושבים לפי היום הזה.');
     expect(dateInput().getAttribute('aria-describedby')).toBe(why.id);
   });
 
-  it('saves the typed date for that season and closes back to where it was', async () => {
-    route.pathname = '/tasks';
-    route.search = 'season=b26&act=season-date';
-    render(<SeasonDateDrawer seasons={SEASONS} />);
+  describe('refusing before anything is sent', () => {
+    it('refuses a half-typed or impossible date, rather than sending the empty value it leaves', () => {
+      route.search = 'act=season-date';
+      render(<SeasonDateDrawer seasons={SEASONS} />);
 
-    fireEvent.change(dateInput(), { target: { value: '2026-06-11' } });
-    fireEvent.click(screen.getByRole('button', { name: 'שמירה' }));
+      typeHalfADate(dateInput());
+      fireEvent.click(screen.getByRole('button', { name: 'שמירה' }));
 
-    expect(setSeasonStartsOnAction).toHaveBeenCalledWith('b26', '2026-06-11');
-    await waitFor(() => expect(replace).toHaveBeenCalledWith('/tasks?season=b26'));
+      expect(screen.getByRole('alert').textContent).toBe(INVALID);
+      expect(setSeasonStartsOnAction).not.toHaveBeenCalled();
+      expect(screen.getByRole('dialog')).toBeTruthy();
+    });
+
+    it('refuses an empty save when a date exists — clearing is the button\'s job, never save\'s', () => {
+      route.search = 'act=season-date';
+      render(<SeasonDateDrawer seasons={SEASONS} />);
+
+      fireEvent.change(dateInput(), { target: { value: '' } });
+      fireEvent.click(screen.getByRole('button', { name: 'שמירה' }));
+
+      expect(screen.getByRole('alert').textContent).toBe('יש לבחור תאריך, או ללחוץ על "הסרת התאריך".');
+      expect(setSeasonStartsOnAction).not.toHaveBeenCalled();
+    });
+
+    it('refuses an empty save when there is no date either', () => {
+      route.search = 'season=b25&act=season-date';
+      render(<SeasonDateDrawer seasons={SEASONS} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'שמירה' }));
+
+      expect(screen.getByRole('alert').textContent).toBe('יש לבחור תאריך.');
+      expect(setSeasonStartsOnAction).not.toHaveBeenCalled();
+    });
   });
 
-  it('offers to clear a date that exists, sending an explicit blank', async () => {
-    route.search = 'act=season-date';
-    render(<SeasonDateDrawer seasons={SEASONS} />);
+  describe('after the action answers', () => {
+    beforeEach(() => { vi.useFakeTimers(); });
+    afterEach(() => { vi.useRealTimers(); });
 
-    fireEvent.click(screen.getByRole('button', { name: 'הסרת התאריך' }));
+    it('shows the day it saved, then closes back to where it was', async () => {
+      route.pathname = '/tasks';
+      route.search = 'season=b26&act=season-date';
+      render(<SeasonDateDrawer seasons={SEASONS} />);
+      // A live region that exists before it speaks: one inserted together
+      // with its sentence is not reliably announced.
+      expect(screen.getByRole('status').textContent).toBe('');
 
-    expect(setSeasonStartsOnAction).toHaveBeenCalledWith('b26', '');
-    await waitFor(() => expect(replace).toHaveBeenCalledWith('/fees'));
+      fireEvent.change(dateInput(), { target: { value: '2026-06-11' } });
+      fireEvent.click(screen.getByRole('button', { name: 'שמירה' }));
+      await settle();
+
+      expect(setSeasonStartsOnAction).toHaveBeenCalledWith('b26', '2026-06-11');
+      expect(screen.getByRole('status').textContent).toBe('נשמר: 11 ביוני 2026');
+      expect(replace).not.toHaveBeenCalled();
+
+      await settle(SAVED_DWELL_MS);
+      expect(replace).toHaveBeenCalledWith('/tasks?season=b26');
+    });
+
+    it('clears through its own button, says so, then closes', async () => {
+      route.search = 'act=season-date';
+      render(<SeasonDateDrawer seasons={SEASONS} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'הסרת התאריך' }));
+      await settle();
+
+      expect(setSeasonStartsOnAction).toHaveBeenCalledWith('b26', '');
+      expect(screen.getByRole('status').textContent).toBe('התאריך הוסר.');
+
+      await settle(SAVED_DWELL_MS);
+      expect(replace).toHaveBeenCalledWith('/fees');
+    });
+
+    it('does not navigate later if the drawer was closed while it showed the saved day', async () => {
+      route.search = 'act=season-date';
+      const { unmount } = render(<SeasonDateDrawer seasons={SEASONS} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'שמירה' }));
+      await settle();
+      unmount();
+
+      await settle(SAVED_DWELL_MS * 2);
+      expect(replace).not.toHaveBeenCalled();
+    });
+
+    it('shows the refusal in Hebrew and keeps the drawer open', async () => {
+      route.search = 'act=season-date';
+      setSeasonStartsOnAction.mockResolvedValueOnce({ ok: false, error: INVALID });
+      render(<SeasonDateDrawer seasons={SEASONS} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'שמירה' }));
+      await settle(SAVED_DWELL_MS * 2);
+
+      expect(screen.getByRole('alert').textContent).toBe(INVALID);
+      expect(screen.getByRole('status').textContent).toBe('');
+      expect(replace).not.toHaveBeenCalled();
+      expect(screen.getByRole('dialog')).toBeTruthy();
+    });
   });
 
   it('offers no clear when there is nothing to clear', () => {
     route.search = 'season=b25&act=season-date';
     render(<SeasonDateDrawer seasons={SEASONS} />);
     expect(screen.queryByRole('button', { name: 'הסרת התאריך' })).toBeNull();
-  });
-
-  it('shows the refusal in Hebrew and keeps the drawer open', async () => {
-    route.search = 'act=season-date';
-    setSeasonStartsOnAction.mockResolvedValueOnce({ ok: false, error: 'תאריך פתיחת השער אינו תקין.' });
-    render(<SeasonDateDrawer seasons={SEASONS} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'שמירה' }));
-
-    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'תאריך פתיחת השער אינו תקין.');
-    expect(replace).not.toHaveBeenCalled();
-    expect(screen.getByRole('dialog')).toBeTruthy();
   });
 
   it('with no seasons at all, invites creating one instead of editing nothing', () => {
@@ -157,9 +258,9 @@ describe('SeasonDateDrawer', () => {
 
   it('draws no Latin letter, in its text or in any name, title or placeholder', () => {
     route.search = 'act=season-date';
-    const { container } = render(<SeasonDateDrawer seasons={SEASONS} />);
-    expect(container.ownerDocument.body.textContent).not.toMatch(/[A-Za-z]/);
-    const named = [...container.ownerDocument.body.querySelectorAll('[aria-label],[title],[placeholder]')]
+    render(<SeasonDateDrawer seasons={SEASONS} />);
+    expect(document.body.textContent).not.toMatch(/[A-Za-z]/);
+    const named = [...document.body.querySelectorAll('[aria-label],[title],[placeholder]')]
       .flatMap((el) => ['aria-label', 'title', 'placeholder'].map((attr) => el.getAttribute(attr) ?? ''));
     expect(named.filter((text) => /[A-Za-z]/.test(text))).toEqual([]);
   });

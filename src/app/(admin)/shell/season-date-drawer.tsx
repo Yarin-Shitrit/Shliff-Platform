@@ -11,16 +11,24 @@
  * season list comes down from the rail as a prop, and the choice is resolved
  * with the same `pickSeason` the switcher and every page use, so the drawer
  * cannot edit a season other than the one on screen.
+ *
+ * Unlike `NewSeasonDrawer`, it is portalled to `document.body`. Below 1024px
+ * a closed rail is moved off-screen with a `transform`, which makes the rail
+ * the containing block of every `position: fixed` element inside it — so a
+ * drawer opened from a page link (/tasks, the camp map), with the rail
+ * closed, would open off-screen while its focus trap made the page inert.
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Drawer } from '@/components/ui/drawer';
 import { Field } from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
 import { ACT_PARAM, closePeekHref, openActHref } from '@/components/ui/drawer-url';
-import { formatDateFull } from '@/lib/dates';
+import { DateText } from '@/components/format';
+import { formatDateFull, parseDateInput } from '@/lib/dates';
 import { pickSeason } from '@/lib/seasons/pick';
 import { setSeasonStartsOnAction } from './actions';
 import { SEASON_DATE_ACT } from './season-href';
@@ -28,6 +36,11 @@ import type { SwitchSeason } from './season-switch';
 import styles from './season-date-drawer.module.css';
 
 export type DatedSeason = Pick<SwitchSeason, 'id' | 'name' | 'startsOn'>;
+
+/** How long the saved day stays on screen before the drawer closes itself. */
+export const SAVED_DWELL_MS = 1_500;
+
+const INVALID = 'תאריך פתיחת השער אינו תקין.';
 
 /**
  * `2026-06-04`, the only form `<input type="date">` takes, for the day the
@@ -41,40 +54,68 @@ function campDay(at: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+/**
+ * True once the browser is running this component. A portal needs
+ * `document.body`, which the server does not have, and the first client
+ * render must match the server's — so the drawer appears one commit after
+ * hydration rather than being guessed at on the server.
+ */
+const never = () => () => {};
+function useInBrowser(): boolean {
+  return useSyncExternalStore(never, () => true, () => false);
+}
+
 export function SeasonDateDrawer({ seasons }: { seasons: DatedSeason[] }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const inBrowser = useInBrowser();
 
-  if (searchParams.get(ACT_PARAM) !== SEASON_DATE_ACT) return null;
+  if (searchParams.get(ACT_PARAM) !== SEASON_DATE_ACT || !inBrowser) return null;
 
   const closeHref = closePeekHref(pathname, searchParams);
   const season = pickSeason(seasons, searchParams.get('season'));
 
   if (season === null) {
-    return (
+    return createPortal(
       <Drawer title="פתיחת השער" closeHref={closeHref}>
         <p className={styles.empty}>
           עדיין אין שנים.{' '}
           <Link href={openActHref(pathname, searchParams, 'season')}>שנה חדשה</Link>
         </p>
-      </Drawer>
+      </Drawer>,
+      document.body,
     );
   }
 
-  return (
+  return createPortal(
     <Drawer title="פתיחת השער" subtitle={season.name} closeHref={closeHref}>
       {/* Keyed so a different season, or a reopened drawer, starts from its
           own stored date rather than from what was last typed. */}
       <SeasonDateForm key={season.id} season={season} closeHref={closeHref} />
-    </Drawer>
+    </Drawer>,
+    document.body,
   );
 }
 
+/** What the drawer says between a successful save and closing. */
+type Saved = { kind: 'set'; day: Date } | { kind: 'cleared' };
+
 function SeasonDateForm({ season, closeHref }: { season: DatedSeason; closeHref: string }) {
   const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState(season.startsOn === null ? '' : campDay(season.startsOn));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<Saved | null>(null);
+
+  // Closes a moment after the saved day is on screen. The timer belongs to
+  // this mount: a drawer closed by hand (or navigated away from) meanwhile
+  // must not pull the lead back to `closeHref` a second later.
+  useEffect(() => {
+    if (saved === null) return;
+    const timer = setTimeout(() => router.replace(closeHref), SAVED_DWELL_MS);
+    return () => clearTimeout(timer);
+  }, [saved, router, closeHref]);
 
   async function save(startsOn: string) {
     setError(null);
@@ -82,9 +123,10 @@ function SeasonDateForm({ season, closeHref }: { season: DatedSeason; closeHref:
     try {
       const result = await setSeasonStartsOnAction(season.id, startsOn);
       if (result.ok) {
-        // The action revalidated the layout, so the switcher behind this
-        // drawer already carries the new date when it closes.
-        router.replace(closeHref);
+        // The action already read `startsOn` with the same `parseDateInput`,
+        // so a date it accepted parses here too; blank is the clear button.
+        const day = parseDateInput(startsOn);
+        setSaved(day === null ? { kind: 'cleared' } : { kind: 'set', day });
       } else {
         setError(result.error);
       }
@@ -95,17 +137,35 @@ function SeasonDateForm({ season, closeHref }: { season: DatedSeason; closeHref:
 
   function submit(event: FormEvent) {
     event.preventDefault();
+    // A half-typed or impossible date (31/02, a year still being typed)
+    // leaves the control's value empty and sets `badInput`. Sending that
+    // empty value would be read as "clear" and delete the stored date.
+    if (inputRef.current?.validity.badInput === true) {
+      setError(INVALID);
+      return;
+    }
+    // Save never clears. Only `הסרת התאריך` sends blank, so an emptied field
+    // is a question to answer, not an instruction to delete.
+    if (value === '') {
+      setError(season.startsOn === null
+        ? 'יש לבחור תאריך.'
+        : 'יש לבחור תאריך, או ללחוץ על "הסרת התאריך".');
+      return;
+    }
     void save(value);
   }
+
+  const busy = pending || saved !== null;
 
   return (
     <form onSubmit={submit} className={styles.form}>
       <Field
         id="season-date-starts-on"
         label="תאריך הפתיחה"
-        hint="הצל לפי שעה במפת הקאמפ מחושב ליום הזה."
+        hint="הספירה לאחור במשימות והצל לפי שעה במפת הקאמפ מחושבים לפי היום הזה."
       >
         <input
+          ref={inputRef}
           type="date"
           id="season-date-starts-on"
           className={styles.date}
@@ -117,12 +177,19 @@ function SeasonDateForm({ season, closeHref }: { season: DatedSeason; closeHref:
       {error !== null ? <p className={styles.error} role="alert">{error}</p> : null}
 
       <div className={styles.actions}>
+        {/* Mounted empty from the start: a live region inserted together
+            with its sentence is not reliably announced. */}
+        <p className={styles.saved} role="status">
+          {saved === null ? null : saved.kind === 'cleared'
+            ? 'התאריך הוסר.'
+            : <>נשמר: <DateText at={saved.day} form="prose" /></>}
+        </p>
         {season.startsOn === null ? null : (
-          <Button tone="ghost" disabled={pending} onClick={() => { void save(''); }}>
+          <Button tone="ghost" disabled={busy} onClick={() => { void save(''); }}>
             הסרת התאריך
           </Button>
         )}
-        <Button type="submit" tone="primary" disabled={pending}>שמירה</Button>
+        <Button type="submit" tone="primary" disabled={busy}>שמירה</Button>
       </div>
     </form>
   );

@@ -23,7 +23,18 @@
 
 .actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
   margin-block-start: 4px;
+}
+
+/* The saved day, at the start of the button row while the drawer closes
+   itself. Empty (and zero-width) until a save succeeds. */
+.saved {
+  margin: 0;
+  margin-inline-end: auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ok);
 }
