@@ -124,6 +124,8 @@ export class SceneEngine {
   private lastCameraKey = '';
   /** A drag past the click threshold is under way: the view counts as moving until it ends. */
   private dragging = false;
+  /** The pointer the open gesture belongs to; only its events feed it. Null when no gesture is open. */
+  private gesturePointer: number | null = null;
   private viewDirty = true;
   private sceneDirty = true;
   private labelsDirty = true;
@@ -204,8 +206,7 @@ export class SceneEngine {
       canvas.addEventListener('contextmenu', this.onContextMenu);
       canvas.addEventListener('webglcontextlost', this.onContextLost);
       canvas.addEventListener('webglcontextrestored', this.onContextRestored);
-      // A drag whose window loses focus never sees its release.
-      window.addEventListener('blur', this.onPointerCancel);
+      window.addEventListener('blur', this.onBlur);
 
       this.resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => { this.resize(); });
       this.resizeObserver?.observe(stage);
@@ -299,7 +300,7 @@ export class SceneEngine {
     canvas.removeEventListener('contextmenu', this.onContextMenu);
     canvas.removeEventListener('webglcontextlost', this.onContextLost);
     canvas.removeEventListener('webglcontextrestored', this.onContextRestored);
-    window.removeEventListener('blur', this.onPointerCancel);
+    window.removeEventListener('blur', this.onBlur);
     this.sync.dispose();
     if (this.ground !== null) disposeObject(this.ground);
     this.setGhost(null);
@@ -1072,6 +1073,7 @@ export class SceneEngine {
    * Nothing is saved, and nothing it previewed stays on the map.
    */
   private abandon(): void {
+    this.gesturePointer = null;
     const open = this.gestures.active || this.preview.size > 0 || this.marquee !== null || this.guides.length > 0;
     if (!open) return;
     this.apply(this.gestures.cancel());
@@ -1149,43 +1151,68 @@ export class SceneEngine {
     return { x, y, button: event.button, shift: event.shiftKey, meta: event.metaKey, ctrl: event.ctrlKey, alt: event.altKey };
   }
 
-  /* The map follows one pointer: the mouse, the pen or the first finger
-     (`isPrimary`). Any other pointer is ignored, except that one landing
-     mid-gesture ends that gesture unsaved — a second finger is a pinch or a
-     slip, and neither is the drop of what the first finger was dragging. */
+  /* The map follows one pointer at a time. A gesture belongs to the pointer
+     that started it (its `pointerId`): only that pointer's moves and release
+     feed it. `isPrimary` alone is not enough, because a mouse, a pen and a
+     touch are each primary for their own type at once. With no gesture
+     open, the primary pointer of any type hovers and may start one.
+
+     Another pointer pressing mid-gesture ends that gesture unsaved and
+     starts nothing of its own. A second finger is a pinch or a slip, a
+     touch during a pen drag is a palm or a slip, and none of them is the
+     drop of what was being dragged. */
+
+  /** Whether this event is the map's to follow: the open gesture's pointer, or, with none open, a primary one. */
+  private follows(event: PointerEvent): boolean {
+    return this.gesturePointer === null ? event.isPrimary : event.pointerId === this.gesturePointer;
+  }
 
   private readonly onPointerDown = (event: PointerEvent): void => {
     if (this.cam === null) return;
-    // A second finger, or a press while a gesture is open (its release never came): that gesture ends here.
+    const open = this.gesturePointer;
+    // Any press while a gesture is open ends it: another pointer's, or its own again (its release never came).
     this.abandon();
+    if (open !== null && event.pointerId !== open) return;
     if (!event.isPrimary) return;
+    this.stopAnimation();
+    this.apply(this.gestures.down(this.pointer(event)));
+    if (!this.gestures.active) return;
+    this.gesturePointer = event.pointerId;
     try {
       this.canvas.setPointerCapture(event.pointerId);
     } catch {
       // A synthetic pointer cannot be captured; the drag still works inside the canvas.
     }
-    this.stopAnimation();
-    this.apply(this.gestures.down(this.pointer(event)));
   };
 
   private readonly onPointerMove = (event: PointerEvent): void => {
-    if (this.cam === null || !event.isPrimary) return;
+    if (this.cam === null || !this.follows(event)) return;
     this.apply(this.gestures.move(this.pointer(event)));
   };
 
   private readonly onPointerUp = (event: PointerEvent): void => {
-    if (!event.isPrimary) return;
+    if (!this.follows(event)) return;
+    // The gesture ends — and commits — before the capture is let go: a browser
+    // may fire lostpointercapture inside releasePointerCapture, and that must
+    // find nothing open to abandon. (It lets go after pointerup anyway.)
+    this.apply(this.gestures.up(this.pointer(event)));
+    this.gesturePointer = null;
+    this.endDrag();
     try {
       this.canvas.releasePointerCapture(event.pointerId);
     } catch {
-      // Already released.
+      // Already released, or never captured.
     }
-    this.apply(this.gestures.up(this.pointer(event)));
-    this.endDrag();
   };
 
-  /** `pointercancel`, `lostpointercapture` and the window's `blur`: the gesture will not finish. */
-  private readonly onPointerCancel = (): void => {
+  /** `pointercancel` and `lostpointercapture` of the gesture's own pointer: the gesture will not finish. */
+  private readonly onPointerCancel = (event: PointerEvent): void => {
+    if (this.gesturePointer !== null && event.pointerId !== this.gesturePointer) return;
+    this.abandon();
+  };
+
+  /** A drag whose window loses focus never sees its release. */
+  private readonly onBlur = (): void => {
     this.abandon();
   };
 

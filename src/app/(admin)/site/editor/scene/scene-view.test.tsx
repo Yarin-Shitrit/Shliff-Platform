@@ -543,6 +543,84 @@ describe('the 3D map with WebGL', () => {
     it('drops the preview, saving nothing, when the pointer is captured away', async () => {
       await abandonedDrag((canvas) => { fireEvent.lostPointerCapture(canvas, { pointerId: 1, isPrimary: true }); });
     });
+
+    it('saves the drop even where letting go of the capture reports it lost at once', async () => {
+      const { container, onView, store } = renderScene(fakeStore(), PLAN);
+      await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+      const canvas = canvasOf(container);
+      // A browser that fires lostpointercapture inside releasePointerCapture, before it returns.
+      const released = vi.fn((pointerId: number) => {
+        fireEvent.lostPointerCapture(canvas, { pointerId, isPrimary: true });
+      });
+      Object.assign(canvas, { setPointerCapture: vi.fn(), releasePointerCapture: released });
+
+      drag(canvas, ON_TENT, THERE);
+      expect(released).toHaveBeenCalledWith(1);
+      expect(store.run).toHaveBeenCalledTimes(1);
+      expect(store.run).toHaveBeenCalledWith('הזזה', [{ type: 'update', id: 'tent', patch: { xCm: 1500, yCm: 1150 } }]);
+    });
+
+    /* The gesture belongs to the pointer that started it (its pointerId), not
+       to whichever pointer type is primary: a mouse, a pen and a touch are
+       each primary for their own type at once. */
+    const PEN = { button: 0, pointerId: 3, isPrimary: true, pointerType: 'pen' };
+    const TOUCH = { button: 0, pointerId: 7, isPrimary: true, pointerType: 'touch' };
+    /** The tent's label while its preview is at THERE. */
+    const MOVED = 'translate(572px, 368px)';
+
+    it('is not steered by a pen passing over the map while the mouse drags', async () => {
+      const { container, onView, store } = renderScene(fakeStore(), PLAN);
+      await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+      const canvas = canvasOf(container);
+      press(canvas, ON_TENT, { pointerType: 'mouse' });
+      slide(canvas, THERE, { pointerType: 'mouse' });
+      await frames();
+      expect(screen.getByText('אוהל 1').style.transform).toBe(MOVED);
+
+      fireEvent.pointerMove(canvas, { clientX: 200, clientY: 600, ...PEN });
+      await frames();
+      expect(screen.getByText('אוהל 1').style.transform).toBe(MOVED);
+
+      lift(canvas, THERE, { pointerType: 'mouse' });
+      expect(store.run).toHaveBeenCalledTimes(1);
+      expect(store.run).toHaveBeenCalledWith('הזזה', [{ type: 'update', id: 'tent', patch: { xCm: 1500, yCm: 1150 } }]);
+    });
+
+    it('keeps the mouse’s drag when another pointer is cancelled or loses its capture', async () => {
+      const { container, onView, store } = renderScene(fakeStore(), PLAN);
+      await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+      const canvas = canvasOf(container);
+      press(canvas, ON_TENT, { pointerType: 'mouse' });
+      slide(canvas, THERE, { pointerType: 'mouse' });
+      fireEvent.pointerCancel(canvas, PEN);
+      fireEvent.lostPointerCapture(canvas, TOUCH);
+      await frames();
+      expect(screen.getByText('אוהל 1').style.transform).toBe(MOVED);
+      lift(canvas, THERE, { pointerType: 'mouse' });
+      expect(store.run).toHaveBeenCalledTimes(1);
+    });
+
+    it('ends a mouse drag unsaved when a touch lands, and lets neither pointer start anything after', async () => {
+      const { container, onView, store } = renderScene(fakeStore(), PLAN);
+      await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+      const canvas = canvasOf(container);
+      press(canvas, ON_TENT, { pointerType: 'mouse' });
+      slide(canvas, THERE, { pointerType: 'mouse' });
+      await frames();
+      expect(screen.getByText('אוהל 1').style.transform).toBe(MOVED);
+
+      // A touch on bare ground: were it to start a gesture, it would be a pan that a click clears the selection with.
+      fireEvent.pointerDown(canvas, { clientX: 5, clientY: 690, ...TOUCH });
+      slide(canvas, [650, 350], { pointerType: 'mouse' }); // the mouse goes on moving…
+      lift(canvas, [650, 350], { pointerType: 'mouse' }); // …and lets go
+      fireEvent.pointerUp(canvas, { clientX: 5, clientY: 690, ...TOUCH });
+      await frames();
+
+      // No preview left, and the view did not pan: the label is back where it rests.
+      expect(screen.getByText('אוהל 1').style.transform).toBe(RESTING);
+      expect(store.run).not.toHaveBeenCalled();
+      expect(store.select).not.toHaveBeenCalledWith([]);
+    });
   });
 
   describe('the handles of the one selected item', () => {
