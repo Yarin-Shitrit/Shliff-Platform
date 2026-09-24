@@ -301,6 +301,22 @@ describe('the stored patch', () => {
     expect(storedPatch(item(), { label: '  אוהל 1  ' }).label).toBe('אוהל 1');
   });
 
+  it('trims non-blank notes rather than clearing them', () => {
+    expect(storedPatch(item(), { notes: '  יש להביא עוד יתדות  ' }).notes).toBe('יש להביא עוד יתדות');
+  });
+
+  it('keeps an explicit null for notes', () => {
+    expect(storedPatch(item(), { notes: null }).notes).toBeNull();
+  });
+
+  it('keeps a net’s own explicit inset', () => {
+    expect(storedPatch(item({ kind: 'shade', insetCm: 50 }), { insetCm: 80 }).insetCm).toBe(80);
+  });
+
+  it('clears the inset when a net becomes a sofa', () => {
+    expect(storedPatch(item({ kind: 'shade', insetCm: 50 }), { kind: 'sofa' }).insetCm).toBeNull();
+  });
+
   it('clears notes made only of marks that trim() does not remove', () => {
     expect(storedPatch(item(), { notes: '‏' }).notes).toBeNull();
   });

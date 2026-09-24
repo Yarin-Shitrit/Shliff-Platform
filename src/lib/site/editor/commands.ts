@@ -1,0 +1,345 @@
+import type { SiteItemKind } from '@/db/schema/site';
+import { effectiveSize, itemHeight, type KindSize } from '../defaults';
+import { contains, overlap, turnAboutCentre, unionRect, wholeCm, type Rect } from '../geometry';
+import { DEFAULT_SHADE_INSET_CM } from '../kinds';
+import { findItem, nextLabel, rectOf, type EditorDoc, type EditorItem } from './model';
+import { lockRefusal, storedPatch, type ItemPatch, type SiteOp } from './ops';
+
+/**
+ * Every edit a lead can make, as a pure function from the doc to the ops that
+ * make it (spec §6.2). The store applies the ops with `applyOps`, records
+ * `invertOps` of them as the undo, and queues them for saving; nothing here
+ * touches the doc itself.
+ *
+ * Three rules hold for every command:
+ * - Nothing to do answers `[]`, so an edit that changes nothing is neither
+ *   saved nor an undo step.
+ * - A locked item is skipped by anything that moves, resizes, turns or
+ *   removes it (spec §5). The lock is the lead's statement that the thing is
+ *   where it goes; only unlocking changes that.
+ * - An update carries only the fields that change, so two leads editing
+ *   different fields of one tent never overwrite each other's field.
+ */
+
+type UpdateOp = Extract<SiteOp, { type: 'update' }>;
+
+/** The items named, once each, in the order named. Ids that are gone are left out. */
+function itemsOf(doc: EditorDoc, ids: readonly string[]): EditorItem[] {
+  const seen = new Set<string>();
+  const out: EditorItem[] = [];
+  for (const id of ids) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const entry = findItem(doc, id);
+    if (entry) out.push(entry);
+  }
+  return out;
+}
+
+function unlockedOf(doc: EditorDoc, ids: readonly string[]): EditorItem[] {
+  return itemsOf(doc, ids).filter((entry) => !entry.locked);
+}
+
+/** An update holding only what differs from the item; null when nothing does. */
+function update(entry: EditorItem, patch: ItemPatch): UpdateOp | null {
+  const changed: ItemPatch = {};
+  for (const key of Object.keys(patch) as Array<keyof ItemPatch>) {
+    const value = patch[key];
+    if (value !== undefined && value !== entry[key]) (changed as Record<string, unknown>)[key] = value;
+  }
+  return Object.keys(changed).length === 0 ? null : { type: 'update', id: entry.id, patch: changed };
+}
+
+function place(entry: EditorItem, rect: Rect): UpdateOp | null {
+  return update(entry, { xCm: rect.x, yCm: rect.y, widthCm: rect.width, depthCm: rect.depth });
+}
+
+function present(ops: ReadonlyArray<SiteOp | null>): SiteOp[] {
+  return ops.filter((op): op is SiteOp => op !== null);
+}
+
+/** New sides about the same middle, in whole centimetres (the rounding `turnAboutCentre` uses). */
+function resizedAboutCentre(entry: EditorItem, widthCm: number, depthCm: number): Rect {
+  return {
+    x: Math.round((entry.xCm * 2 + entry.widthCm - widthCm) / 2),
+    y: Math.round((entry.yCm * 2 + entry.depthCm - depthCm) / 2),
+    width: widthCm,
+    depth: depthCm,
+  };
+}
+
+/** One past the highest `sort`: drawn on top of everything, like `addItem` always did. */
+function nextSort(items: readonly EditorItem[]): number {
+  return items.reduce((top, entry) => Math.max(top, entry.sort), -1) + 1;
+}
+
+export function moveOps(doc: EditorDoc, ids: readonly string[], dxCm: number, dyCm: number): SiteOp[] {
+  const dx = wholeCm(dxCm);
+  const dy = wholeCm(dyCm);
+  if (dx === 0 && dy === 0) return [];
+  return present(unlockedOf(doc, ids).map((entry) => update(entry, { xCm: entry.xCm + dx, yCm: entry.yCm + dy })));
+}
+
+/** A handle drag or typed position and sides, for one item. */
+export function setRectOps(
+  doc: EditorDoc, id: string, rect: { xCm: number; yCm: number; widthCm: number; depthCm: number },
+): SiteOp[] {
+  const entry = findItem(doc, id);
+  if (!entry || entry.locked) return [];
+  return present([update(entry, {
+    xCm: wholeCm(rect.xCm), yCm: wholeCm(rect.yCm), widthCm: wholeCm(rect.widthCm), depthCm: wholeCm(rect.depthCm),
+  })]);
+}
+
+/** A quarter turn each, about each item's own middle (spec D5). A square turns into itself: no op. */
+export function turnOps(doc: EditorDoc, ids: readonly string[]): SiteOp[] {
+  return present(unlockedOf(doc, ids).map((entry) => place(entry, turnAboutCentre(rectOf(entry)))));
+}
+
+/**
+ * A new item of `kind` with its north-west corner at `at`, at the kind's
+ * effective size (the camp's own default, else the preset). Its height is
+ * the kind's (null); a net gets the kind's unshaded strip, or the standard
+ * one, exactly as the server would give it (`applySiteOps`).
+ */
+export function addOps(
+  doc: EditorDoc, kind: SiteItemKind, at: { xCm: number; yCm: number }, id: string,
+): SiteOp[] {
+  if (findItem(doc, id)) return [];
+  const size = effectiveSize(kind, doc.defaults);
+  return [{
+    type: 'add',
+    item: {
+      id, kind, label: nextLabel(doc.items, kind),
+      xCm: wholeCm(at.xCm), yCm: wholeCm(at.yCm), widthCm: size.widthCm, depthCm: size.depthCm,
+      heightCm: null, insetCm: kind === 'shade' ? (size.insetCm ?? DEFAULT_SHADE_INSET_CM) : null,
+      sort: nextSort(doc.items), taskId: null, notes: null, locked: false,
+    },
+  }];
+}
+
+export function removeOps(doc: EditorDoc, ids: readonly string[]): SiteOp[] {
+  return unlockedOf(doc, ids).map((entry): SiteOp => ({ type: 'remove', id: entry.id }));
+}
+
+/** Whether a copy could land here: inside the fence, and on nothing solid unless it is a net. */
+function landsClear(doc: EditorDoc, kind: SiteItemKind, rect: Rect): boolean {
+  if (!contains(doc.plot, rect)) return false;
+  if (kind === 'shade') return true;
+  return !doc.items.some((other) => other.kind !== 'shade' && overlap(rectOf(other), rect));
+}
+
+/**
+ * Copies of the items, placed together beside the originals: east of them by
+ * the group's width and a metre, else south, west, north, and when none of
+ * those is clear, a metre east and south — on top of something, which the
+ * overlap flag then says, rather than nowhere. A locked item may be copied;
+ * its copy is unlocked, because the lock was about where the original goes.
+ * Each copy gets the kind's next label, so no two items share a name.
+ */
+export function duplicateOps(
+  doc: EditorDoc, ids: readonly string[], newId: () => string,
+): { ops: SiteOp[]; ids: string[] } {
+  const sources = itemsOf(doc, ids);
+  const group = unionRect(sources.map(rectOf));
+  if (group === null) return { ops: [], ids: [] };
+  const shifts: Array<[number, number]> = [
+    [group.width + 100, 0], [0, group.depth + 100], [-(group.width + 100), 0], [0, -(group.depth + 100)],
+  ];
+  const clear = ([dx, dy]: [number, number]) => sources.every((source) => landsClear(
+    doc, source.kind, { ...rectOf(source), x: source.xCm + dx, y: source.yCm + dy },
+  ));
+  const [dx, dy] = shifts.find(clear) ?? [100, 100];
+  const made: EditorItem[] = [];
+  let sort = nextSort(doc.items);
+  for (const source of sources) {
+    made.push({
+      ...source,
+      id: newId(),
+      label: nextLabel([...doc.items, ...made], source.kind),
+      xCm: source.xCm + dx,
+      yCm: source.yCm + dy,
+      sort,
+      locked: false,
+    });
+    sort += 1;
+  }
+  return { ops: made.map((entry): SiteOp => ({ type: 'add', item: entry })), ids: made.map((entry) => entry.id) };
+}
+
+export function lockOps(doc: EditorDoc, ids: readonly string[], locked: boolean): SiteOp[] {
+  return present(itemsOf(doc, ids).map((entry) => update(entry, { locked })));
+}
+
+/** A patch's width, depth and (non-null) height rounded to whole centimetres, so a typed 350.4 becomes 350. */
+function roundedPatch(patch: ItemPatch): ItemPatch {
+  const out: ItemPatch = { ...patch };
+  if (out.widthCm !== undefined) out.widthCm = wholeCm(out.widthCm);
+  if (out.depthCm !== undefined) out.depthCm = wholeCm(out.depthCm);
+  if (out.heightCm !== undefined && out.heightCm !== null) out.heightCm = wholeCm(out.heightCm);
+  return out;
+}
+
+/**
+ * Whatever the inspector typed for one item, built through `storedPatch` (the
+ * same helper `plan.ts`'s `patchSet` uses), so the screen shows what gets
+ * saved: a trimmed label, blank notes as none, and a net that always has an
+ * unshaded strip while nothing else ever does — explicit in the op, so an
+ * undo of a kind change restores the item's own inset, not the default.
+ * Fields equal to the item's own are dropped first, so a form that sends its
+ * unchanged position with a new name renames a locked tent. What is left may
+ * not move, resize or re-kind a locked item unless the same patch unlocks it
+ * — `lockRefusal`, the one rule the client and the server both run.
+ */
+export function patchOps(doc: EditorDoc, id: string, patch: ItemPatch): SiteOp[] {
+  const entry = findItem(doc, id);
+  if (!entry) return [];
+  const op = update(entry, storedPatch(entry, roundedPatch(patch)));
+  if (op === null) return [];
+  if (lockRefusal(entry.locked, op.patch) !== null) return [];
+  return [op];
+}
+
+/**
+ * One kind's row in the several-items inspector (spec §10): each unlocked
+ * item of that kind takes the sides it was given, about its own middle. A
+ * height equal to the one the item already shows is not written, so an item
+ * still on its kind's height stays on it ("ברירת מחדל").
+ */
+export function resizeKindOps(
+  doc: EditorDoc, ids: readonly string[], kind: SiteItemKind,
+  size: { widthCm?: number; depthCm?: number; heightCm?: number },
+): SiteOp[] {
+  return present(unlockedOf(doc, ids).filter((entry) => entry.kind === kind).map((entry) => {
+    const widthCm = size.widthCm !== undefined ? wholeCm(size.widthCm) : entry.widthCm;
+    const depthCm = size.depthCm !== undefined ? wholeCm(size.depthCm) : entry.depthCm;
+    const rect = resizedAboutCentre(entry, widthCm, depthCm);
+    const patch: ItemPatch = { xCm: rect.x, yCm: rect.y, widthCm: rect.width, depthCm: rect.depth };
+    if (size.heightCm !== undefined) {
+      const heightCm = wholeCm(size.heightCm);
+      if (heightCm !== itemHeight(entry, doc.defaults)) patch.heightCm = heightCm;
+    }
+    return update(entry, patch);
+  }));
+}
+
+/** "Back to the default": the kind's effective size about the item's middle, its height the kind's again, a net's strip the kind's. */
+export function resetSizeOps(doc: EditorDoc, ids: readonly string[]): SiteOp[] {
+  return present(unlockedOf(doc, ids).map((entry) => {
+    const size = effectiveSize(entry.kind, doc.defaults);
+    const rect = resizedAboutCentre(entry, size.widthCm, size.depthCm);
+    const patch: ItemPatch = { xCm: rect.x, yCm: rect.y, widthCm: rect.width, depthCm: rect.depth, heightCm: null };
+    if (entry.kind === 'shade') patch.insetCm = size.insetCm ?? DEFAULT_SHADE_INSET_CM;
+    return update(entry, patch);
+  }));
+}
+
+function sameSize(a: KindSize | null, b: KindSize | null): boolean {
+  if (a === null || b === null) return a === b;
+  return a.widthCm === b.widthCm && a.depthCm === b.depthCm && a.heightCm === b.heightCm && a.insetCm === b.insetCm;
+}
+
+/**
+ * The camp's own size for a kind (spec D4); null goes back to the preset.
+ * Sides and height are rounded to whole centimetres; a non-net kind never
+ * carries an inset — the server stores null for one regardless of what was
+ * passed in.
+ */
+export function setKindDefaultOps(doc: EditorDoc, kind: SiteItemKind, size: KindSize | null): SiteOp[] {
+  const rounded: KindSize | null = size === null ? null : {
+    widthCm: wholeCm(size.widthCm),
+    depthCm: wholeCm(size.depthCm),
+    heightCm: wholeCm(size.heightCm),
+    insetCm: kind === 'shade' ? size.insetCm : null,
+  };
+  if (sameSize(doc.defaults[kind] ?? null, rounded)) return [];
+  return [{ type: 'setKindDefault', kind, size: rounded }];
+}
+
+export type Alignment = 'west' | 'centreX' | 'east' | 'north' | 'centreY' | 'south';
+
+function aligned(entry: EditorItem, group: Rect, how: Alignment): ItemPatch {
+  switch (how) {
+    case 'west': return { xCm: group.x };
+    case 'east': return { xCm: group.x + group.width - entry.widthCm };
+    case 'centreX': return { xCm: Math.round((group.x * 2 + group.width - entry.widthCm) / 2) };
+    case 'north': return { yCm: group.y };
+    case 'south': return { yCm: group.y + group.depth - entry.depthCm };
+    case 'centreY': return { yCm: Math.round((group.y * 2 + group.depth - entry.depthCm) / 2) };
+  }
+}
+
+/** Lines up two or more unlocked items on an edge or middle of the box around them. */
+export function alignOps(doc: EditorDoc, ids: readonly string[], how: Alignment): SiteOp[] {
+  const movable = unlockedOf(doc, ids);
+  const group = unionRect(movable.map(rectOf));
+  if (movable.length < 2 || group === null) return [];
+  return present(movable.map((entry) => update(entry, aligned(entry, group, how))));
+}
+
+/**
+ * Equal gaps between three or more unlocked items along one axis. The first
+ * and the last, by their middles, stay where they are; the ones between move.
+ */
+export function distributeOps(doc: EditorDoc, ids: readonly string[], axis: 'x' | 'y'): SiteOp[] {
+  const movable = unlockedOf(doc, ids);
+  if (movable.length < 3) return [];
+  const start = (entry: EditorItem) => (axis === 'x' ? entry.xCm : entry.yCm);
+  const side = (entry: EditorItem) => (axis === 'x' ? entry.widthCm : entry.depthCm);
+  const sorted = [...movable].sort((a, b) => (start(a) * 2 + side(a)) - (start(b) * 2 + side(b)));
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  const inner = sorted.slice(1, -1);
+  const taken = inner.reduce((sum, entry) => sum + side(entry), 0);
+  const gap = (start(last) - (start(first) + side(first)) - taken) / (sorted.length - 1);
+  let cursor = start(first) + side(first) + gap;
+  const ops: Array<SiteOp | null> = [];
+  for (const entry of inner) {
+    const at = Math.round(cursor);
+    ops.push(update(entry, axis === 'x' ? { xCm: at } : { yCm: at }));
+    cursor += side(entry) + gap;
+  }
+  return present(ops);
+}
+
+/**
+ * Two or more unlocked items in one row, west to east, from the north-west
+ * corner of the box around them, `gapCm` apart. The order is the one they
+ * already stand in — west first, then north first — so a row keeps its
+ * sequence.
+ */
+export function rowOps(doc: EditorDoc, ids: readonly string[], gapCm: number): SiteOp[] {
+  const movable = unlockedOf(doc, ids);
+  const group = unionRect(movable.map(rectOf));
+  if (movable.length < 2 || group === null) return [];
+  const gap = wholeCm(gapCm);
+  const sorted = [...movable].sort((a, b) => a.xCm - b.xCm || a.yCm - b.yCm);
+  let cursor = group.x;
+  const ops: Array<SiteOp | null> = [];
+  for (const entry of sorted) {
+    ops.push(update(entry, { xCm: cursor, yCm: group.y }));
+    cursor += entry.widthCm + gap;
+  }
+  return present(ops);
+}
+
+/**
+ * One kind's sizes across a selection, for the several-items inspector: a
+ * number where every item of the kind agrees, null where they differ, which
+ * the inspector shows as "מעורב" rather than inventing a number (spec §13).
+ * Locked items count: they are in the selection and on screen. Heights are
+ * the ones the items show, their own or their kind's.
+ */
+export function uniformSize(
+  doc: EditorDoc, ids: readonly string[], kind: SiteItemKind,
+): { widthCm: number | null; depthCm: number | null; heightCm: number | null } {
+  const ofKind = itemsOf(doc, ids).filter((entry) => entry.kind === kind);
+  const agreed = (values: number[]): number | null => (
+    values.length > 0 && values.every((value) => value === values[0]) ? values[0] : null
+  );
+  return {
+    widthCm: agreed(ofKind.map((entry) => entry.widthCm)),
+    depthCm: agreed(ofKind.map((entry) => entry.depthCm)),
+    heightCm: agreed(ofKind.map((entry) => itemHeight(entry, doc.defaults))),
+  };
+}
