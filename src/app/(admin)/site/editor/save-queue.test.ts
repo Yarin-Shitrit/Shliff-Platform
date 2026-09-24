@@ -57,7 +57,7 @@ describe('the save queue', () => {
 
     expect(clock.waitingMs()).toBe(500);
     expect(send).not.toHaveBeenCalled();
-    expect(queue.snapshot).toEqual({ status: 'pending', version: 0, pending: 2, error: null });
+    expect(queue.snapshot).toEqual({ status: 'pending', version: 0, pending: 2, error: null, errorKind: null });
 
     clock.fire();
     expect(send).toHaveBeenCalledWith(0, [move('a', 150), move('b', 20)]);
@@ -65,7 +65,7 @@ describe('the save queue', () => {
 
     replies[0].resolve({ ok: true, version: 1 });
     await settle();
-    expect(queue.snapshot).toEqual({ status: 'saved', version: 1, pending: 0, error: null });
+    expect(queue.snapshot).toEqual({ status: 'saved', version: 1, pending: 0, error: null, errorKind: null });
   });
 
   it('sends nothing for an item added and removed before the save', () => {
@@ -99,7 +99,7 @@ describe('the save queue', () => {
 
     replies[1].resolve({ ok: true, version: 6 });
     await flushing;
-    expect(queue.snapshot).toEqual({ status: 'saved', version: 6, pending: 0, error: null });
+    expect(queue.snapshot).toEqual({ status: 'saved', version: 6, pending: 0, error: null, errorKind: null });
     expect(send).toHaveBeenCalledTimes(2);
   });
 
@@ -111,7 +111,7 @@ describe('the save queue', () => {
     replies[0].resolve({ ok: false, reason: 'conflict', version: 9 });
     await settle();
 
-    expect(queue.snapshot).toEqual({ status: 'conflict', version: 9, pending: 2, error: null });
+    expect(queue.snapshot).toEqual({ status: 'conflict', version: 9, pending: 2, error: null, errorKind: null });
     expect(queue.pendingOps()).toEqual([move('a', 100), move('b', 20)]);
 
     // Nothing more goes out until the lead decides.
@@ -130,14 +130,15 @@ describe('the save queue', () => {
     await settle();
 
     expect(queue.snapshot).toEqual({
-      status: 'error', version: 2, pending: 1, error: 'הפריט נעול. אפשר לשחרר את הנעילה ואז לשנות אותו',
+      status: 'error', version: 2, pending: 1,
+      error: 'הפריט נעול. אפשר לשחרר את הנעילה ואז לשנות אותו', errorKind: 'refused',
     });
 
     const retrying = queue.retry();
     expect(send).toHaveBeenLastCalledWith(2, [move('a', 100)]);
     replies[1].resolve({ ok: true, version: 3 });
     await retrying;
-    expect(queue.snapshot).toEqual({ status: 'saved', version: 3, pending: 0, error: null });
+    expect(queue.snapshot).toEqual({ status: 'saved', version: 3, pending: 0, error: null, errorKind: null });
   });
 
   it('says in Hebrew that the save failed when no answer came, and loses nothing', async () => {
@@ -148,13 +149,47 @@ describe('the save queue', () => {
     replies[0].reject(new TypeError('Failed to fetch'));
     await settle();
 
-    expect(queue.snapshot).toEqual({ status: 'error', version: 0, pending: 2, error: NETWORK_FAILURE });
+    expect(queue.snapshot).toEqual({
+      status: 'error', version: 0, pending: 2, error: NETWORK_FAILURE, errorKind: 'network',
+    });
     expect(NETWORK_FAILURE).toBe('השמירה נכשלה, אולי אין חיבור. אפשר לנסות שוב.');
-    // The failed batch stays ahead of what arrived while it was out.
+    // The failed batch stays apart from what arrived while it was out — never merged.
     expect(queue.pendingOps()).toEqual([move('a', 100), move('b', 7)]);
 
     void queue.retry();
-    expect(send).toHaveBeenLastCalledWith(0, [move('a', 100), move('b', 7)]);
+    // Resent unchanged, alone, against the version it was originally sent with —
+    // never combined with 'b', which goes out only once 'a' has an answer.
+    expect(send).toHaveBeenLastCalledWith(0, [move('a', 100)]);
+  });
+
+  it('keeps a network-failed batch apart from later edits, and sends it first on retry', async () => {
+    const { queue, send, replies, clock } = setup(7);
+    queue.enqueue([{ type: 'add', item: tent('n1') }]);
+    clock.fire();
+    expect(send).toHaveBeenLastCalledWith(7, [{ type: 'add', item: tent('n1') }]);
+    replies[0].reject(new TypeError('Failed to fetch'));
+    await settle();
+
+    // Enqueued only after the network failure is already known.
+    queue.enqueue([{ type: 'remove', id: 'n1' }]);
+    expect(queue.snapshot).toMatchObject({ status: 'error', pending: 2, errorKind: 'network' });
+    // Not coalesced: an add-then-remove of the same id would otherwise cancel to nothing.
+    expect(queue.pendingOps()).toEqual([{ type: 'add', item: tent('n1') }, { type: 'remove', id: 'n1' }]);
+
+    void queue.retry();
+    // The stranded batch first, unchanged, against its original base version (7) —
+    // if the server had actually applied it, this comes back a conflict.
+    expect(send).toHaveBeenLastCalledWith(7, [{ type: 'add', item: tent('n1') }]);
+
+    replies[1].resolve({ ok: true, version: 8 });
+    await settle();
+    // Then, and only then, the later edit — against the version retry returned.
+    expect(send).toHaveBeenLastCalledWith(8, [{ type: 'remove', id: 'n1' }]);
+    expect(queue.snapshot).toMatchObject({ status: 'saving', version: 8 });
+
+    replies[2].resolve({ ok: true, version: 9 });
+    await settle();
+    expect(queue.snapshot).toEqual({ status: 'saved', version: 9, pending: 0, error: null, errorKind: null });
   });
 
   it('drops the unsent changes and adopts the server’s version on reset', async () => {
@@ -165,7 +200,7 @@ describe('the save queue', () => {
     await settle();
 
     queue.reset(8);
-    expect(queue.snapshot).toEqual({ status: 'saved', version: 8, pending: 0, error: null });
+    expect(queue.snapshot).toEqual({ status: 'saved', version: 8, pending: 0, error: null, errorKind: null });
     queue.enqueue([move('z', 1)]);
     clock.fire();
     expect(send).toHaveBeenLastCalledWith(8, [move('z', 1)]);
@@ -183,7 +218,7 @@ describe('the save queue', () => {
     expect(queue.snapshot.status).toBe('saving');
     replies[1].resolve({ ok: true, version: 9 });
     await settle();
-    expect(queue.snapshot).toEqual({ status: 'saved', version: 9, pending: 0, error: null });
+    expect(queue.snapshot).toEqual({ status: 'saved', version: 9, pending: 0, error: null, errorKind: null });
   });
 
   it('ignores a reply to a batch that a reset replaced', async () => {
@@ -193,7 +228,7 @@ describe('the save queue', () => {
     queue.reset(20);
     replies[0].resolve({ ok: true, version: 1 });
     await settle();
-    expect(queue.snapshot).toEqual({ status: 'saved', version: 20, pending: 0, error: null });
+    expect(queue.snapshot).toEqual({ status: 'saved', version: 20, pending: 0, error: null, errorKind: null });
   });
 
   it('reports every change of state', async () => {
@@ -215,5 +250,124 @@ describe('the save queue', () => {
     await queue.flush();
     expect(send).not.toHaveBeenCalled();
     expect(seen).toHaveLength(reports);
+  });
+
+  it('dispose() while a send is out: the late reply changes nothing and reports nothing', async () => {
+    const { queue, send, replies, clock, seen } = setup();
+    queue.enqueue([move('a', 100)]);
+    clock.fire();
+    expect(send).toHaveBeenCalledTimes(1);
+
+    const reports = seen.length;
+    queue.dispose();
+    replies[0].resolve({ ok: true, version: 1 });
+    await settle();
+
+    // Nothing was waiting behind this send, so the late reply starts nothing new.
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(seen).toHaveLength(reports);
+  });
+
+  it('a flush begun before dispose still sends what waited behind the flight', async () => {
+    const { queue, send, replies, seen } = setup(4);
+    queue.enqueue([move('a', 100)]);
+    const flushing1 = queue.flush();
+    await settle();
+    expect(send).toHaveBeenCalledTimes(1);
+
+    // Made while the first batch is out.
+    queue.enqueue([move('b', 300)]);
+    const flushing2 = queue.flush();
+    queue.dispose();
+    const reports = seen.length;
+
+    replies[0].resolve({ ok: true, version: 5 });
+    await settle();
+    // 'b' still goes out, against the version the first send returned.
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenLastCalledWith(5, [move('b', 300)]);
+    expect(seen).toHaveLength(reports);
+
+    replies[1].resolve({ ok: true, version: 6 });
+    await Promise.all([flushing1, flushing2]);
+    // No onChange at any point after dispose, even once everything has drained.
+    expect(seen).toHaveLength(reports);
+  });
+
+  it('does not double-count an item moved in flight and again in the queue behind it', async () => {
+    const { queue, clock } = setup();
+    queue.enqueue([move('a', 100)]);
+    clock.fire();
+    queue.enqueue([move('a', 200)]);
+
+    expect(queue.snapshot.pending).toBe(queue.pendingOps().length);
+    expect(queue.pendingOps()).toEqual([move('a', 200)]);
+    expect(queue.snapshot.pending).toBe(1);
+  });
+
+  it('does not start a second request when an onChange handler enqueues and flushes mid-send', async () => {
+    const clock = manualTimers();
+    const replies: Array<ReturnType<typeof deferred>> = [];
+    const send = vi.fn<SaveFn>(() => {
+      const reply = deferred();
+      replies.push(reply);
+      return reply.promise;
+    });
+    let reentered = false;
+    const queue: SaveQueue = new SaveQueue({
+      send, version: 0, timers: clock.timers,
+      onChange: (snapshot) => {
+        if (snapshot.status === 'saving' && !reentered) {
+          reentered = true;
+          queue.enqueue([move('b', 9)]);
+          void queue.flush();
+        }
+      },
+    });
+
+    queue.enqueue([move('a', 1)]);
+    clock.fire();
+    await settle();
+    // Still only the one request, even though onChange tried to start another mid-send.
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith(0, [move('a', 1)]);
+
+    replies[0].resolve({ ok: true, version: 1 });
+    await settle();
+    // The re-entrant enqueue is not lost: it goes out once the first send answers.
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenLastCalledWith(1, [move('b', 9)]);
+
+    replies[1].resolve({ ok: true, version: 2 });
+    await settle();
+    expect(queue.snapshot).toEqual({ status: 'saved', version: 2, pending: 0, error: null, errorKind: null });
+  });
+
+  it('keeps sending later work after an onChange handler that throws once', async () => {
+    const clock = manualTimers();
+    const replies: Array<ReturnType<typeof deferred>> = [];
+    const send = vi.fn<SaveFn>(() => {
+      const reply = deferred();
+      replies.push(reply);
+      return reply.promise;
+    });
+    let calls = 0;
+    const queue = new SaveQueue({
+      send, version: 0, timers: clock.timers,
+      onChange: () => {
+        calls += 1;
+        if (calls === 1) throw new Error('boom');
+      },
+    });
+
+    queue.enqueue([move('a', 1)]);
+    clock.fire();
+    replies[0].resolve({ ok: true, version: 1 });
+    await settle();
+    expect(queue.snapshot).toMatchObject({ status: 'saved', version: 1 });
+
+    queue.enqueue([move('b', 2)]);
+    clock.fire();
+    expect(send).toHaveBeenLastCalledWith(1, [move('b', 2)]);
   });
 });
