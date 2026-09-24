@@ -101,17 +101,18 @@ describe('saving, through the store and the queue', () => {
     expect(await screen.findByText('כל השינויים נשמרו', undefined, WAIT)).toBeTruthy();
   });
 
-  it('keeps a retry on screen when the connection drops, and sends again from it', async () => {
+  it('keeps a retry on screen, with the reason, when the connection drops, and sends again from it', async () => {
     saveSiteChangesAction.mockRejectedValueOnce(new Error('offline'));
     await renderEditor();
     turn();
     const retry = await screen.findByRole('button', { name: 'ניסיון חוזר' }, WAIT);
     expect(screen.getByText('לא נשמר —')).toBeTruthy();
-    // Ruling P8: no reload for a dropped connection — it would throw the edit away.
-    expect(screen.queryByText(NETWORK_FAILURE)).toBeNull();
+    expect(screen.getByText(NETWORK_FAILURE)).toBeTruthy();
+    // Ruling P8: the reason, but no reload for a dropped connection — it would throw the edit away.
     expect(screen.queryByRole('button', { name: 'טעינת הגרסה העדכנית' })).toBeNull();
     fireEvent.click(retry);
     expect(await screen.findByText('כל השינויים נשמרו', undefined, WAIT)).toBeTruthy();
+    expect(screen.queryByText(NETWORK_FAILURE)).toBeNull();
     expect(saveSiteChangesAction).toHaveBeenCalledTimes(2);
   });
 

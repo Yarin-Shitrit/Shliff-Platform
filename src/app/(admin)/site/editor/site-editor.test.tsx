@@ -300,11 +300,15 @@ describe('saving', () => {
     expect(screen.queryByRole('button', { name: 'ניסיון חוזר' })).toBeNull();
   });
 
-  it('keeps a retry on screen when the connection drops, and never only a reload', async () => {
+  it('keeps a retry on screen, with the reason, when the connection drops — and no reload', async () => {
     renderEditor();
     await screen.findByTestId('scene');
     saving({ status: 'error', errorKind: 'network', error: NO_ANSWER, pending: 1 });
     expect(screen.getByText('לא נשמר —')).toBeTruthy();
+    // Ruling P8 took the reload away from a dropped connection, not the reason.
+    expect(screen.getByText(NO_ANSWER)).toBeTruthy();
+    // The retry is read with the reason, though they sit in two places.
+    expect(screen.getByRole('button', { name: 'ניסיון חוזר', description: NO_ANSWER })).toBeTruthy();
     fireEvent.click(button('ניסיון חוזר'));
     expect(fake.retrySave).toHaveBeenCalledTimes(1);
     // A reload would throw away what the lead did while offline (ruling P8).
@@ -323,8 +327,13 @@ describe('saving', () => {
     fireEvent.click(button('טעינת הגרסה העדכנית'));
     expect(fake.resolveConflict).toHaveBeenCalledWith('theirs');
     expect(button('טעינת הגרסה העדכנית').disabled).toBe(true);
+    // While the map reloads, a retry would resend what the reload is about to drop.
+    expect(button('ניסיון חוזר').disabled).toBe(true);
+    fireEvent.click(button('ניסיון חוזר'));
+    expect(fake.retrySave).not.toHaveBeenCalled();
     await act(async () => { loading.settle(); await loading.promise; });
     expect(button('טעינת הגרסה העדכנית').disabled).toBe(false);
+    expect(button('ניסיון חוזר').disabled).toBe(false);
   });
 
   it('turns a stale version into a choice, and takes the other lead’s map only when chosen', async () => {
@@ -387,6 +396,19 @@ describe('the keyboard', () => {
     fireEvent(stage(), reload);
     expect(reload.defaultPrevented).toBe(false);
     expect(firstItem().widthCm).toBe(300);
+  });
+
+  it('leaves the browser its own Alt keys — Back, and the menus', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    const back = createEvent.keyDown(stage(), { code: 'ArrowLeft', altKey: true });
+    fireEvent(stage(), back);
+    expect(back.defaultPrevented).toBe(false);
+    expect(firstItem().xCm).toBe(500);
+    const menu = createEvent.keyDown(stage(), { code: 'KeyE', altKey: true });
+    fireEvent(stage(), menu);
+    expect(menu.defaultPrevented).toBe(false);
+    expect(scene.handle.rotateView).not.toHaveBeenCalled();
   });
 
   it('leaves a key typed in a box to the box', async () => {

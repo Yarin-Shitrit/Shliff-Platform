@@ -4,7 +4,10 @@
  * where that key types ר. Pure: `SiteEditor` decides what each shortcut does.
  *
  * With ⌘ or Ctrl held, only the editor's four combinations are taken. Every
- * other one — ⌘R, ⌘L, ⌘F, ⌘+ — stays the browser's.
+ * other one — ⌘R, ⌘L, ⌘F, ⌘+ — stays the browser's. With Alt held, nothing is
+ * taken: Alt + ← is Back and Alt + a letter opens a menu on Windows, and AltGr
+ * (Ctrl + Alt) types letters. No shortcut in spec §8 uses Alt; Alt + drag is a
+ * pointer gesture (`scene/gestures.ts`), not a key.
  */
 
 export type Arrow = 'ArrowLeft' | 'ArrowRight' | 'ArrowUp' | 'ArrowDown';
@@ -35,8 +38,9 @@ const PLAIN = new Map<string, Shortcut>([
 ]);
 
 export function shortcutFor(
-  event: { code: string; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean },
+  event: { code: string; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean },
 ): Shortcut | null {
+  if (event.altKey) return null;
   if (event.metaKey || event.ctrlKey) {
     switch (event.code) {
       case 'KeyZ': return event.shiftKey ? 'redo' : 'undo';

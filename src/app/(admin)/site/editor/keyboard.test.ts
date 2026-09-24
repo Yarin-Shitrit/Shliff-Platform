@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { shortcutFor } from './keyboard';
 
-function key(code: string, mods: Partial<{ metaKey: boolean; ctrlKey: boolean; shiftKey: boolean }> = {}) {
-  return shortcutFor({ code, metaKey: false, ctrlKey: false, shiftKey: false, ...mods });
+function key(code: string, mods: Partial<{ metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }> = {}) {
+  return shortcutFor({ code, metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, ...mods });
 }
 
 describe('the editor’s shortcuts', () => {
@@ -29,6 +29,14 @@ describe('the editor’s shortcuts', () => {
     expect(key('KeyL', { metaKey: true })).toBeNull(); // the address bar
     expect(key('KeyF', { ctrlKey: true })).toBeNull(); // find
     expect(key('Equal', { metaKey: true })).toBeNull(); // page zoom
+  });
+
+  it('leave every Alt combination to the browser: Back, the menus, and AltGr’s letters', () => {
+    expect(key('ArrowLeft', { altKey: true })).toBeNull(); // Back, on Windows
+    expect(key('KeyF', { altKey: true })).toBeNull(); // the File menu
+    expect(key('KeyE', { altKey: true })).toBeNull(); // the Edit menu
+    expect(key('KeyR', { altKey: true, shiftKey: true })).toBeNull();
+    expect(key('KeyZ', { altKey: true, ctrlKey: true })).toBeNull(); // AltGr is Ctrl + Alt
   });
 
   it('move by a grid step on an arrow, and by a metre with shift', () => {

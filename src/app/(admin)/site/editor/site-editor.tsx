@@ -17,7 +17,7 @@
 
 import dynamic from 'next/dynamic';
 import {
-  useCallback, useMemo, useRef, useState, useSyncExternalStore,
+  useCallback, useId, useMemo, useRef, useState, useSyncExternalStore,
   type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactElement, type RefAttributes,
 } from 'react';
 import { SeasonChip, TopBar } from '@/components/shell/top-bar';
@@ -160,6 +160,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
   const [view, setView] = useState<ViewInfo>(INITIAL_VIEW);
   const [keysOpen, setKeysOpen] = useState(false);
   const [resolving, setResolving] = useState(false);
+  const reasonId = useId();
   const sceneRef = useRef<SceneHandle>(null);
   const flownToPeek = useRef(false);
 
@@ -309,10 +310,12 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     }
   }
 
-  /* A refused batch (`errorKind: 'refused'`) gets its reason and the reload.
-     A lost connection gets only the top bar's retry (ruling P8): a reload
-     would throw away what was done offline. */
-  const refused = store.save.status === 'error' && store.save.errorKind === 'refused' ? store.save.error : null;
+  /* When a save stops, the lead is told why, in Hebrew, beside the top bar's
+     retry. Only a refused batch (`errorKind: 'refused'`) also offers the
+     reload; a lost connection never does (ruling P8): a reload would throw
+     away what was done offline. */
+  const saveError = store.save.status === 'error' ? store.save.error : null;
+  const refused = store.save.errorKind === 'refused';
 
   const editor = (
     <div className={styles.editorArea}>
@@ -323,11 +326,12 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
           onMine={() => { void resolve('mine'); }}
         />
       )}
-      {refused === null ? null : (
+      {saveError === null ? null : (
         <SaveErrorBanner
-          message={refused}
+          id={reasonId}
+          message={saveError}
           busy={resolving}
-          onReload={() => { void resolve('theirs'); }}
+          onReload={refused ? () => { void resolve('theirs'); } : undefined}
         />
       )}
       {store.notice === null ? null : (
@@ -368,7 +372,12 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
         chip={<SeasonChip seasonName={seasonName} />}
         actions={(
           <>
-            <SaveStatus snapshot={store.save} onRetry={() => { store.retrySave(); }} />
+            <SaveStatus
+              snapshot={store.save}
+              busy={resolving}
+              reasonId={saveError === null ? undefined : reasonId}
+              onRetry={() => { store.retrySave(); }}
+            />
             <ButtonLink size="sm" href={plotHref}>
               <Icon name="grid" size={14} />
               הגדרות המגרש

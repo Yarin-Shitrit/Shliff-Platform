@@ -2,10 +2,10 @@
 
 /**
  * Whether the map is saved. The top bar always says one of three things
- * (spec §6.3) — never nothing — and when saving stops, it says what to do:
- * a lost connection is retried from the top bar itself; a conflict with
- * another lead is a choice between two maps (§6.4); a refusal is a Hebrew
- * reason and a way back, in a banner under the bar.
+ * (spec §6.3) — never nothing — and when saving stops, a banner under it says
+ * why: a lost connection is a Hebrew reason, retried from the top bar; a
+ * refusal is a Hebrew reason and a way back; a conflict with another lead is
+ * a choice between two maps (§6.4).
  */
 
 import type { ReactElement } from 'react';
@@ -21,9 +21,13 @@ const SAID: Record<QueueStatus, string> = {
   conflict: 'לא נשמר — המפה שונתה ממקום אחר',
 };
 
-export function SaveStatus({ snapshot, onRetry }: {
+export function SaveStatus({ snapshot, onRetry, busy = false, reasonId }: {
   snapshot: QueueSnapshot;
   onRetry: () => void;
+  /** A reload is under way: a retry now would resend what it is about to drop. */
+  busy?: boolean;
+  /** The id of the sentence saying why the save stopped (`SaveErrorBanner`), read with the retry. */
+  reasonId?: string;
 }): ReactElement {
   return (
     <span className={styles.saveState} data-status={snapshot.status}>
@@ -32,7 +36,9 @@ export function SaveStatus({ snapshot, onRetry }: {
         {SAID[snapshot.status]}
       </span>
       {snapshot.status === 'error' ? (
-        <Button size="sm" tone="ghost" onClick={onRetry}>ניסיון חוזר</Button>
+        <Button size="sm" tone="ghost" onClick={onRetry} disabled={busy} aria-describedby={reasonId}>
+          ניסיון חוזר
+        </Button>
       ) : null}
     </span>
   );
@@ -58,24 +64,29 @@ export function ConflictBanner({ busy, onTheirs, onMine }: {
 }
 
 /**
- * The server refused the batch (`errorKind: 'refused'`). `message` is already
- * Hebrew — the server's refusal, mapped by `failure-messages.ts`. The retry
- * stays in the top bar's status; this offers the way back.
+ * Why the batch did not go through. `message` is already Hebrew — the queue's
+ * own network sentence, or the server's refusal mapped by
+ * `failure-messages.ts`. The retry stays in the top bar's status, described
+ * by this sentence (`id`).
  *
- * Never for a lost connection (plan 04, ruling P8): a reload must not be the
- * only way out of a dropped connection, so that case gets the retry alone.
+ * `onReload` — the way back — only for a refusal. A lost connection gets the
+ * reason and the retry, never a reload (plan 04, ruling P8): a reload must not
+ * be the only way out of a dropped connection.
  */
-export function SaveErrorBanner({ message, busy, onReload }: {
+export function SaveErrorBanner({ message, busy, onReload, id }: {
   message: string;
   busy: boolean;
-  onReload: () => void;
+  onReload?: () => void;
+  id?: string;
 }): ReactElement {
   return (
     <div className={styles.banner} data-tone="bad" role="alert">
-      <p className={styles.bannerText}>{message}</p>
-      <span className={styles.bannerActions}>
-        <Button size="sm" onClick={onReload} disabled={busy}>טעינת הגרסה העדכנית</Button>
-      </span>
+      <p className={styles.bannerText} id={id}>{message}</p>
+      {onReload === undefined ? null : (
+        <span className={styles.bannerActions}>
+          <Button size="sm" onClick={onReload} disabled={busy}>טעינת הגרסה העדכנית</Button>
+        </span>
+      )}
     </div>
   );
 }
