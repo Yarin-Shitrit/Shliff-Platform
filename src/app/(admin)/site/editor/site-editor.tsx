@@ -48,6 +48,10 @@ import { PlotInspector } from './panels/inspector-plot';
 import { ItemInspector } from './panels/inspector-item';
 import { MultiInspector } from './panels/inspector-multi';
 import { SelectionActions } from './panels/selection-actions';
+import { ChecksBar } from './panels/checks-bar';
+import { Minimap } from './panels/minimap';
+import { ViewControls } from './panels/view-controls';
+import { ShortcutsCard } from './panels/shortcuts-card';
 import inspectorStyles from './panels/inspector.module.css';
 import styles from './editor.module.css';
 
@@ -574,6 +578,27 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
         <section className={inspectorStyles.inspector} aria-label="מאפיינים" data-panel="true">
           {renderInspector()}
         </section>
+        <ChecksBar doc={store.doc} flags={store.flags} onGo={pickIds} />
+        <Minimap
+          doc={store.doc}
+          flags={store.flags}
+          selection={store.selection}
+          info={view}
+          onJump={(xCm, yCm) => { sceneRef.current?.jumpTo(xCm, yCm); }}
+        />
+        <ViewControls
+          info={view}
+          northDeg={store.doc.plot.northDeg}
+          keysOpen={keysOpen}
+          onZoom={(factor) => { sceneRef.current?.zoomBy(factor); }}
+          onFit={fit}
+          onRotate={(dir) => { sceneRef.current?.rotateView(dir); }}
+          onNorth={() => { sceneRef.current?.northUp(); }}
+          onKeys={() => { setKeysOpen((open) => !open); }}
+        />
+        <div className={styles.cards}>
+          {keysOpen ? <ShortcutsCard onClose={() => { setKeysOpen(false); }} /> : null}
+        </div>
         {/* floating panels, over the scene */}
       </section>
     </div>

@@ -102,9 +102,23 @@ const fake = vi.hoisted(() => {
 });
 
 vi.mock('./use-editor-store', async () => {
-  const { useRef, useState, useSyncExternalStore } = await import('react');
+  const { useMemo, useRef, useState, useSyncExternalStore } = await import('react');
   const { applyOps, invertOps } = await import('@/lib/site/editor/ops');
   const history = await import('@/lib/site/editor/history');
+  const { derive } = await import('@/lib/site/derive');
+
+  /* The flags as the real store works them out — from `derive`, the server's
+     own rule — so the checks bar and the list see a real problem. */
+  function flagsOf(doc: EditorDoc): EditorStore['flags'] {
+    const derived = derive(doc.plot, doc.items);
+    const flags: EditorStore['flags'] = { outside: new Set(), overlapping: new Set(), partly: new Set(), pairs: derived.pairs };
+    for (const item of derived.items) {
+      if (item.outside) flags.outside.add(item.id);
+      if (item.overlapping) flags.overlapping.add(item.id);
+      if (item.shade === 'partly') flags.partly.add(item.id);
+    }
+    return flags;
+  }
 
   type Held = { doc: EditorDoc; selection: string[]; past: ReturnType<typeof history.record> };
 
@@ -115,6 +129,7 @@ vi.mock('./use-editor-store', async () => {
     }));
     const latest = useRef(held);
     const { save, notice } = useSyncExternalStore(fake.subscribe, fake.read);
+    const flags = useMemo(() => flagsOf(held.doc), [held.doc]);
 
     function commit(next: Held): void {
       latest.current = next;
@@ -131,7 +146,7 @@ vi.mock('./use-editor-store', async () => {
     return {
       doc: held.doc,
       selection: held.selection,
-      flags: { outside: new Set(), overlapping: new Set(), partly: new Set(), pairs: [] },
+      flags,
       canUndo: held.past.past.length > 0,
       canRedo: held.past.future.length > 0,
       save,
@@ -708,5 +723,63 @@ describe('the inspector', () => {
     expect(lastScene().ui.hiddenGroups).toEqual([]);
     expect(lastScene().store.selection).toEqual(['a']);
     expect(scene.handle.fitIds).toHaveBeenLastCalledWith(['a']);
+  });
+});
+
+describe('the checks, the view controls and the minimap', () => {
+  it('presses a check to select the next case and fly to it', async () => {
+    renderEditor({ initial: { doc: siteDoc([siteItem({ id: 'a', xCm: 2500 })]), version: 0 }, initialSelection: null });
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('button', { name: '1 מחוץ לגדר' }));
+    expect(lastScene().store.selection).toEqual(['a']);
+    expect(scene.handle.fitIds).toHaveBeenLastCalledWith(['a']);
+  });
+
+  it('shows a hidden group before a check selects a case in it — the one pickIds', async () => {
+    renderEditor({ initial: { doc: siteDoc([siteItem({ id: 'a', xCm: 2500 })]), version: 0 }, initialSelection: null });
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('tab', { name: /במפה/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'הסתרת לינה וצל' }));
+    fireEvent.click(screen.getByRole('button', { name: '1 מחוץ לגדר' }));
+    expect(lastScene().ui.hiddenGroups).toEqual([]);
+    expect(lastScene().store.selection).toEqual(['a']);
+  });
+
+  it('zooms and brings north up from the view controls, by the keys’ step', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('button', { name: 'התקרבות' }));
+    expect(scene.handle.zoomBy).toHaveBeenLastCalledWith(0.8);
+    fireEvent.click(screen.getByRole('button', { name: 'צפון למעלה' }));
+    expect(scene.handle.northUp).toHaveBeenCalled();
+  });
+
+  it('points the compass at the plot’s own north', async () => {
+    renderEditor({ initial: { doc: siteDoc([siteItem({ id: 'a' })], { northDeg: 90 }), version: 0 } });
+    await screen.findByTestId('scene');
+    act(() => { lastScene().onView(VIEW); });
+    const needle = button('צפון למעלה').querySelector('svg');
+    expect(needle?.style.transform).toBe('rotate(-90deg)');
+  });
+
+  it('moves the view from the minimap', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    const minimap = screen.getByRole('img', { name: /מפה מוקטנת/ });
+    minimap.getBoundingClientRect = () => ({
+      left: 0, top: 0, width: 168, height: 154, right: 168, bottom: 154, x: 0, y: 0, toJSON: () => ({}),
+    }) as DOMRect;
+    fireEvent.pointerDown(minimap, { pointerId: 1, button: 0, clientX: 84, clientY: 77 });
+    expect(scene.handle.jumpTo).toHaveBeenLastCalledWith(1300, 1200);
+  });
+
+  it('opens the shortcuts card with ?, and esc closes it without letting go of the selection', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'Slash', shiftKey: true });
+    expect(screen.getByRole('dialog', { name: 'קיצורי מקלדת' })).toBeTruthy();
+    fireEvent.keyDown(stage(), { code: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'קיצורי מקלדת' })).toBeNull();
+    expect(lastScene().store.selection).toEqual(['a']);
   });
 });

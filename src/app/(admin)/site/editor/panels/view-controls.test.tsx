@@ -149,7 +149,8 @@ const OTHER_CAPS: Record<string, readonly string[]> = {
 };
 
 function read(event: KeyEvent): Shortcut | null {
-  return shortcutFor({ metaKey: false, ctrlKey: false, shiftKey: false, ...event });
+  // Task 21's fix round made `altKey` part of the input: Alt combinations stay the browser's.
+  return shortcutFor({ metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, ...event });
 }
 
 describe('the shortcuts card', () => {
