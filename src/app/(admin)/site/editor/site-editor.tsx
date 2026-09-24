@@ -24,9 +24,13 @@ import { SeasonChip, TopBar } from '@/components/shell/top-bar';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { useToast } from '@/components/ui/toaster';
-import { KIND_GROUP_ORDER, SITE_KINDS } from '@/lib/site/kinds';
+import type { SiteItemKind } from '@/db/schema/site';
+import { effectiveSize } from '@/lib/site/defaults';
+import { formatSize, snap } from '@/lib/site/geometry';
+import { nearestFreeSpot } from '@/lib/site/editor/placement';
+import { KIND_GROUP_ORDER, SITE_KINDS, type SiteKindGroup } from '@/lib/site/kinds';
 import { findItem, type EditorDoc, type EditorItem } from '@/lib/site/editor/model';
-import { duplicateOps, lockOps, moveOps, removeOps, turnOps } from '@/lib/site/editor/commands';
+import { addOps, duplicateOps, lockOps, moveOps, removeOps, turnOps } from '@/lib/site/editor/commands';
 import { screenArrowToMap } from '@/lib/site/editor/camera';
 import { readSunDate } from '@/lib/site/views';
 import { loadSiteDocAction, saveSiteChangesAction } from '../actions';
@@ -36,6 +40,9 @@ import type { EditorUi, Insets, SceneHandle, SceneViewProps, ViewInfo } from './
 import { shortcutFor, ZOOM_IN, type Arrow, type Shortcut } from './keyboard';
 import { Toolbar } from './panels/toolbar';
 import { ConflictBanner, SaveErrorBanner, SaveStatus } from './panels/save-status';
+import { LibraryPanel } from './panels/library-panel';
+import { ObjectsPanel } from './panels/objects-panel';
+import { SidePanel, type SideTab } from './panels/side-panel';
 import styles from './editor.module.css';
 
 const SceneView = dynamic<SceneViewProps & RefAttributes<SceneHandle>>(
@@ -160,6 +167,8 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
   const [view, setView] = useState<ViewInfo>(INITIAL_VIEW);
   const [keysOpen, setKeysOpen] = useState(false);
   const [resolving, setResolving] = useState(false);
+  const [tab, setTab] = useState<SideTab>('library');
+  const stageRef = useRef<HTMLElement>(null);
   const reasonId = useId();
   const sceneRef = useRef<SceneHandle>(null);
   const flownToPeek = useRef(false);
@@ -240,7 +249,125 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     if (ops.length === 0) return;
     store.run('הזזה', ops);
   }
+
+  /** A new item of `kind` with its north-west corner at `at`, selected once it lands. */
+  function addAt(kind: SiteItemKind, at: { xCm: number; yCm: number }): void {
+    const id = crypto.randomUUID();
+    const ops = addOps(store.doc, kind, at, id);
+    if (ops.length === 0) return;
+    // Through a fixed noun: "הוספת" + the kind's name would read "הוספת אחר" for the kind אחר.
+    store.run(`הוספת פריט מסוג ${SITE_KINDS[kind].label}`, ops, [id]);
+  }
   // ── end of edits ──────────────────────────────────────────────────────
+
+  /** Over the scene itself, and not over a panel floating on it (`data-panel`). */
+  function overScene(clientX: number, clientY: number): boolean {
+    const hit = document.elementFromPoint(clientX, clientY);
+    return hit !== null && stageRef.current !== null && stageRef.current.contains(hit)
+      && hit.closest('[data-panel]') === null;
+  }
+
+  /** Where a kind dragged to this point lands: centred on the pointer, on the grid unless snapping is off. */
+  function placeAt(kind: SiteItemKind, clientX: number, clientY: number): { xCm: number; yCm: number } | null {
+    if (!overScene(clientX, clientY)) return null;
+    const ground = sceneRef.current?.groundAtClient(clientX, clientY) ?? null;
+    if (ground === null) return null;
+    const size = effectiveSize(kind, store.doc.defaults);
+    const step = ui.snap ? store.doc.plot.gridCm : 0;
+    return { xCm: snap(ground[0] - size.widthCm / 2, step), yCm: snap(ground[1] - size.depthCm / 2, step) };
+  }
+
+  function dragKind(kind: SiteItemKind, clientX: number, clientY: number): void {
+    const at = placeAt(kind, clientX, clientY);
+    sceneRef.current?.setGhost(at === null ? null : { kind, ...at });
+  }
+
+  function dropKind(kind: SiteItemKind, clientX: number, clientY: number): void {
+    sceneRef.current?.setGhost(null);
+    const at = placeAt(kind, clientX, clientY);
+    if (at !== null) addAt(kind, at);
+  }
+
+  /** A click in the library: the free spot nearest the middle of the view (§8). None free: say so, add nothing. */
+  function activateKind(kind: SiteItemKind): void {
+    const size = effectiveSize(kind, store.doc.defaults);
+    const centre = sceneRef.current?.centreGround() ?? null;
+    const near = centre === null
+      ? { xCm: store.doc.plot.widthCm / 2, yCm: store.doc.plot.depthCm / 2 }
+      : { xCm: centre[0], yCm: centre[1] };
+    const spot = nearestFreeSpot(store.doc, kind, size, near);
+    if (spot === null) {
+      show({
+        // Through a fixed noun: "ל" + the kind's name would read "לאחר" for the kind אחר.
+        message: `אין במגרש מקום פנוי לפריט מסוג ${SITE_KINDS[kind].label} במידות ${formatSize(size.widthCm, size.depthCm)}.`,
+        tone: 'bad',
+      });
+      return;
+    }
+    addAt(kind, spot);
+  }
+
+  /**
+   * A hidden item is never selected — the rule `patchUi` keeps for the nets
+   * (ruling G2). Anything about to select items shows their group, or the
+   * nets, first.
+   */
+  function revealFor(ids: readonly string[]): void {
+    const items = ids
+      .map((id) => findItem(store.doc, id))
+      .filter((item): item is EditorItem => item !== undefined);
+    const groups = new Set(items.map((item) => SITE_KINDS[item.kind].group));
+    const patch: Partial<EditorUi> = {};
+    if (ui.hiddenGroups.some((group) => groups.has(group))) {
+      patch.hiddenGroups = ui.hiddenGroups.filter((group) => !groups.has(group));
+    }
+    if (ui.netsHidden && items.some((item) => item.kind === 'shade')) patch.netsHidden = false;
+    if (patch.hiddenGroups !== undefined || patch.netsHidden !== undefined) patchUi(patch);
+  }
+
+  /**
+   * The one way a figure or a problem selects the items it names (§13):
+   * shown first (G2), then selected and flown to. The list's group counts,
+   * the inspectors and the checks bar all come through here, so no path can
+   * select a hidden item. An empty list clears the selection.
+   */
+  function pickIds(ids: string[]): void {
+    revealFor(ids);
+    store.select(ids);
+    if (ids.length > 0) sceneRef.current?.fitIds(ids);
+  }
+
+  /**
+   * A row in the list: selects its item and flies to it; shift or ⌘ adds it
+   * to the selection instead, or takes it out when it is already in. An item
+   * about to be selected is shown first.
+   */
+  function pickRow(id: string, additive: boolean): void {
+    if (additive && store.selection.includes(id)) {
+      store.select(store.selection.filter((other) => other !== id));
+      return;
+    }
+    if (additive) {
+      revealFor([id]);
+      store.select([...store.selection, id]);
+      return;
+    }
+    pickIds([id]);
+  }
+
+  /** A hidden group cannot stay selected, for the same reason a hidden net cannot. */
+  function toggleGroup(group: SiteKindGroup): void {
+    const hiding = !ui.hiddenGroups.includes(group);
+    patchUi({
+      hiddenGroups: hiding ? [...ui.hiddenGroups, group] : ui.hiddenGroups.filter((other) => other !== group),
+    });
+    if (hiding) {
+      store.select(store.selection.filter((id) => {
+        const item = findItem(store.doc, id);
+        return item !== undefined && SITE_KINDS[item.kind].group !== group;
+      }));
+    }
+  }
 
   function fit(): void {
     if (store.selection.length > 0) sceneRef.current?.fitIds(store.selection);
@@ -348,7 +475,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
         onUndo={() => { store.undo(); }}
         onRedo={() => { store.redo(); }}
       />
-      <section className={styles.stage} aria-label="מפת הקאמפ" tabIndex={-1}>
+      <section className={styles.stage} aria-label="מפת הקאמפ" tabIndex={-1} ref={stageRef}>
         <div className={styles.scene}>
           <SceneView
             ref={sceneRef}
@@ -360,6 +487,33 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
             onNotice={onNotice}
           />
         </div>
+        <SidePanel
+          tab={tab}
+          onTab={setTab}
+          count={store.doc.items.length}
+          library={(
+            <LibraryPanel
+              defaults={store.doc.defaults}
+              onActivate={activateKind}
+              onDragMove={dragKind}
+              onDrop={dropKind}
+              onDragCancel={() => { sceneRef.current?.setGhost(null); }}
+            />
+          )}
+          objects={(
+            <ObjectsPanel
+              items={store.doc.items}
+              selection={store.selection}
+              flags={store.flags}
+              hiddenGroups={ui.hiddenGroups}
+              netsHidden={ui.netsHidden}
+              onPick={pickRow}
+              onPickIds={pickIds}
+              onToggleGroup={toggleGroup}
+              onShowLibrary={() => { setTab('library'); }}
+            />
+          )}
+        />
         {/* floating panels, over the scene */}
       </section>
     </div>

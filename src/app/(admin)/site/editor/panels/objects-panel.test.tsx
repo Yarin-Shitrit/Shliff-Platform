@@ -146,24 +146,25 @@ describe('the list of what is on the map', () => {
       item({ id: 's', kind: 'shade', label: 'רשת צל 1', xCm: 1200, widthCm: 800, depthCm: 800, insetCm: 50 }),
       item({ id: 'k', kind: 'kitchen', label: 'מטבח 1', xCm: 500, yCm: 1500, widthCm: 400, depthCm: 300 }),
     ]);
-    const count = () => screen.getByRole('button', { name: 'בחירת הפריטים בקבוצה לינה וצל' });
+    // Label-in-name (ruling G1, integration II): the name carries the number the button shows.
+    const count = (n: number) => screen.getByRole('button', { name: `בחירת הפריטים בקבוצה לינה וצל (${n})` });
     const picked = (): string[] => {
       const call = onPickIds.mock.lastCall;
       if (call === undefined) throw new Error('the count selected nothing');
       return call[0];
     };
 
-    fireEvent.click(count());
+    fireEvent.click(count(3));
     expect(picked()).toEqual(['t2', 't10', 's']);
     // The number on the button is the set it selects.
-    expect(count().textContent).toBe(String(picked().length));
-    fireEvent.click(screen.getByRole('button', { name: 'בחירת הפריטים בקבוצה מגורים' }));
+    expect(count(3).textContent).toBe(String(picked().length));
+    fireEvent.click(screen.getByRole('button', { name: 'בחירת הפריטים בקבוצה מגורים (1)' }));
     expect(picked()).toEqual(['k']);
 
     fireEvent.change(screen.getByRole('searchbox', { name: 'חיפוש במפה' }), { target: { value: 'אוהל' } });
-    fireEvent.click(count());
+    fireEvent.click(count(2));
     expect(picked()).toEqual(['t2', 't10']);
-    expect(count().textContent).toBe(String(picked().length));
+    expect(count(2).textContent).toBe(String(picked().length));
   });
 
   it('finds an item by name, and when there is none offers the whole list back', () => {

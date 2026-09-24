@@ -105,11 +105,13 @@ export function ObjectsPanel({
             <div className={styles.groupHead}>
               <span className={cx(styles.swatch, styles[`g_${group}`])} aria-hidden="true" />
               <span>{KIND_GROUP_LABELS[group]}</span>
-              {/* The number and what it selects are one set: the rows shown under it. */}
+              {/* The number and what it selects are one set: the rows shown under it.
+                  Its name carries the number it shows (label-in-name), so a
+                  voice user saying the number reaches it. */}
               <button
                 type="button"
                 className={styles.count}
-                aria-label={`בחירת הפריטים בקבוצה ${KIND_GROUP_LABELS[group]}`}
+                aria-label={`בחירת הפריטים בקבוצה ${KIND_GROUP_LABELS[group]} (${rows.length})`}
                 onClick={() => { onPickIds(rows.map((item) => item.id)); }}
               >
                 <bdi>{rows.length}</bdi>

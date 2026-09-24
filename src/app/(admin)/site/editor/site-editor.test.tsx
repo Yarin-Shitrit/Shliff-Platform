@@ -5,6 +5,8 @@ import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { act, createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ToastProvider } from '@/components/ui/toaster';
 import { unnamedControls } from '@/test/a11y';
+import { contains, overlap } from '@/lib/site/geometry';
+import { rectOf } from '@/lib/site/editor/model';
 import type { EditorDoc, EditorItem, EditorPlot } from '@/lib/site/editor/model';
 import type { SiteOp } from '@/lib/site/editor/ops';
 import { NETWORK_FAILURE, type QueueSnapshot } from './save-queue';
@@ -179,6 +181,9 @@ function stubMedia({ wide = true, dark = false }: { wide?: boolean; dark?: boole
 
 beforeAll(() => {
   stubMedia();
+  // jsdom captures no pointer; the library's tiles only need the calls to exist.
+  Element.prototype.setPointerCapture = () => {};
+  Element.prototype.releasePointerCapture = () => {};
 });
 
 beforeEach(() => {
@@ -476,5 +481,165 @@ describe('the keyboard', () => {
     expect(redo.disabled).toBe(false);
     fireEvent.click(redo);
     expect(firstItem().widthCm).toBe(200);
+  });
+});
+
+describe('placing from the library', () => {
+  it('puts a clicked kind at the free spot nearest the middle of the view, and selects it', async () => {
+    scene.handle.centreGround.mockReturnValue([1300, 1200]);
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('button', { name: /^הוספת מטבח,/ }));
+    const items = lastScene().store.doc.items;
+    expect(items).toHaveLength(2);
+    const kitchen = items.find((entry) => entry.kind === 'kitchen');
+    if (kitchen === undefined) throw new Error('no kitchen was added');
+    expect(lastScene().store.selection).toEqual([kitchen.id]);
+    // Free and on the plot, by the geometry the server uses — not by the placement code under test.
+    expect(overlap(rectOf(kitchen), rectOf(items[0]))).toBe(false);
+    expect(contains({ widthCm: 2600, depthCm: 2400 }, rectOf(kitchen))).toBe(true);
+    // Its middle is within a grid step of the middle of the view.
+    expect(Math.abs(kitchen.xCm + kitchen.widthCm / 2 - 1300)).toBeLessThanOrEqual(50);
+    expect(Math.abs(kitchen.yCm + kitchen.depthCm / 2 - 1200)).toBeLessThanOrEqual(50);
+  });
+
+  it('records an add under a fixed noun, so the kind אחר never reads "הוספת אחר"', async () => {
+    scene.handle.centreGround.mockReturnValue([1300, 1200]);
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('button', { name: /^הוספת אחר,/ }));
+    let label: string | null = null;
+    act(() => { label = lastScene().store.undo(); });
+    expect(label).toBe('הוספת פריט מסוג אחר');
+    expect(lastScene().store.doc.items).toHaveLength(1);
+  });
+
+  it('says there is no room instead of guessing a spot', async () => {
+    renderEditor({
+      initial: {
+        doc: siteDoc([siteItem({ id: 'a', xCm: 0, yCm: 0, widthCm: 300, depthCm: 300 })], { widthCm: 300, depthCm: 300 }),
+        version: 0,
+      },
+    });
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('button', { name: /^הוספת אוהל,/ }));
+    expect(await screen.findByText('אין במגרש מקום פנוי לפריט מסוג אוהל במידות 3 × 3 מ׳.')).toBeTruthy();
+    expect(lastScene().store.doc.items).toHaveLength(1);
+  });
+
+  it('drags a kind onto the ground with a ghost, and lands it centred on the pointer, on the grid', async () => {
+    scene.handle.groundAtClient.mockReturnValue([1010, 790]);
+    renderEditor();
+    const sceneElement = await screen.findByTestId('scene');
+    document.elementFromPoint = () => sceneElement;
+    const tent = screen.getByRole('button', { name: /^הוספת אוהל,/ });
+    fireEvent.pointerDown(tent, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(tent, { pointerId: 1, clientX: 400, clientY: 300 });
+    // A 3 × 3 m tent centred on (10.1 m, 7.9 m), snapped to the 50 cm grid.
+    expect(scene.handle.setGhost).toHaveBeenLastCalledWith({ kind: 'tent', xCm: 850, yCm: 650 });
+    fireEvent.pointerUp(tent, { pointerId: 1, clientX: 400, clientY: 300 });
+    fireEvent.click(tent, { detail: 1 }); // the click a browser sends after the drop — a pointer's, so it counts one press
+    expect(scene.handle.setGhost).toHaveBeenLastCalledWith(null);
+    const items = lastScene().store.doc.items;
+    expect(items).toHaveLength(2);
+    expect(items.find((entry) => entry.id !== 'a')).toMatchObject({ kind: 'tent', xCm: 850, yCm: 650 });
+  });
+
+  it('lands nothing when the drag ends back over a panel', async () => {
+    scene.handle.groundAtClient.mockReturnValue([1000, 800]);
+    renderEditor();
+    await screen.findByTestId('scene');
+    const panel = screen.getByRole('region', { name: 'הוספה ורשימת הפריטים' });
+    document.elementFromPoint = () => panel;
+    const tent = screen.getByRole('button', { name: /^הוספת אוהל,/ });
+    fireEvent.pointerDown(tent, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(tent, { pointerId: 1, clientX: 60, clientY: 60 });
+    expect(scene.handle.setGhost).toHaveBeenLastCalledWith(null);
+    fireEvent.pointerUp(tent, { pointerId: 1, clientX: 60, clientY: 60 });
+    expect(lastScene().store.doc.items).toHaveLength(1);
+  });
+});
+
+describe('the list of what is on the map', () => {
+  it('selects a row and flies to it; shift adds a row', async () => {
+    renderEditor({
+      initial: { doc: siteDoc([siteItem({ id: 'a' }), siteItem({ id: 'b', label: 'אוהל 2', xCm: 1500 })]), version: 0 },
+      initialSelection: null,
+    });
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('tab', { name: /במפה/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^אוהל 1/ }));
+    expect(lastScene().store.selection).toEqual(['a']);
+    expect(scene.handle.fitIds).toHaveBeenLastCalledWith(['a']);
+    fireEvent.click(screen.getByRole('button', { name: /^אוהל 2/ }), { shiftKey: true });
+    expect(lastScene().store.selection).toEqual(['a', 'b']);
+  });
+
+  it('hides a group from the scene and lets go of its items', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('tab', { name: /במפה/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'הסתרת לינה וצל' }));
+    expect(lastScene().ui.hiddenGroups).toEqual(['sleep']);
+    expect(lastScene().store.selection).toEqual([]);
+  });
+
+  /* Rulings G1, G2: a hidden item is never selected, and a group's count selects what it counts. */
+
+  it('shows a hidden group before it selects a row in it', async () => {
+    renderEditor({ initialSelection: null });
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('tab', { name: /במפה/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'הסתרת לינה וצל' }));
+    expect(lastScene().ui.hiddenGroups).toEqual(['sleep']);
+    fireEvent.click(screen.getByRole('button', { name: 'אוהל 1, בהסתרה, 3 × 2 מ׳' }));
+    expect(lastScene().ui.hiddenGroups).toEqual([]);
+    expect(lastScene().store.selection).toEqual(['a']);
+    expect(scene.handle.fitIds).toHaveBeenLastCalledWith(['a']);
+  });
+
+  it('shows the nets before it selects a net’s row while they are hidden', async () => {
+    const net = siteItem({ id: 's', kind: 'shade', label: 'רשת צל 1', xCm: 1200, widthCm: 800, depthCm: 800, insetCm: 50 });
+    renderEditor({ initial: { doc: siteDoc([siteItem({ id: 'a' }), net]), version: 0 }, initialSelection: null });
+    await screen.findByTestId('scene');
+    fireEvent.click(button('הסתרת רשתות צל'));
+    expect(lastScene().ui.netsHidden).toBe(true);
+    fireEvent.click(screen.getByRole('tab', { name: /במפה/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'רשת צל 1, בהסתרה, 8 × 8 מ׳' }), { shiftKey: true });
+    expect(lastScene().ui.netsHidden).toBe(false);
+    expect(lastScene().store.selection).toEqual(['s']);
+  });
+
+  it('selects every row a group counts and flies to them, showing the group first', async () => {
+    renderEditor({
+      initial: {
+        doc: siteDoc([
+          siteItem({ id: 'a' }),
+          siteItem({ id: 'b', label: 'אוהל 2', xCm: 1500 }),
+          siteItem({ id: 'k', kind: 'kitchen', label: 'מטבח 1', yCm: 1500, widthCm: 400, depthCm: 300 }),
+        ]),
+        version: 0,
+      },
+      initialSelection: null,
+    });
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('tab', { name: /במפה/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'הסתרת לינה וצל' }));
+    fireEvent.click(screen.getByRole('button', { name: 'בחירת הפריטים בקבוצה לינה וצל (2)' }));
+    expect(lastScene().ui.hiddenGroups).toEqual([]);
+    expect(lastScene().store.selection).toEqual(['a', 'b']);
+    expect(scene.handle.fitIds).toHaveBeenLastCalledWith(['a', 'b']);
+  });
+
+  it('takes an empty list to the library, and the focus with it', async () => {
+    renderEditor({ initial: { doc: siteDoc([]), version: 0 }, initialSelection: null });
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('tab', { name: 'במפה 0' }));
+    const go = button('מעבר להוספה למפה');
+    go.focus();
+    fireEvent.click(go);
+    const library = screen.getByRole('tab', { name: 'הוספה למפה' });
+    expect(library.getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(library);
   });
 });
