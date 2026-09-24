@@ -113,6 +113,14 @@ export class SceneEngine {
 
   private viewport: Viewport = { width: 0, height: 0 };
   private cam: CameraState | null = null;
+  /**
+   * The view is the automatic whole-plot fit — the first one, or the last F —
+   * and nobody has framed it since. While it is, a resize fits the plot to
+   * the new stage (Ruling X1: fully fit). Any hand on the camera (orbit, pan,
+   * zoom, turn, a jump, a fly-to) clears it, and then a resize keeps the
+   * lead's view. A switch between plan and 3D is not framing and keeps it.
+   */
+  private autoFit = true;
   /** What the editor asked for, and what is drawn — 3D while the switch to plan animates. */
   private mode: ViewMode;
   private drawMode: ViewMode;
@@ -329,6 +337,7 @@ export class SceneEngine {
   fitAll(): void {
     if (this.cam === null) return;
     this.stopAnimation();
+    this.autoFit = true;
     const pitch = this.drawMode === 'plan' ? 90 : this.cam.pitch;
     this.animate(fitRect(null, this.cam.yaw, pitch, this.viewport, this.drawMode, this.safe(), this.plot()), 420);
   }
@@ -336,6 +345,7 @@ export class SceneEngine {
   fitIds(ids: readonly string[]): void {
     if (this.cam === null) return;
     this.stopAnimation();
+    this.autoFit = false;
     const { doc } = this.options.props().store;
     const rect = unionRect(doc.items.filter((entry) => ids.includes(entry.id)).map(rectOf));
     if (rect === null) return;
@@ -349,6 +359,7 @@ export class SceneEngine {
   zoomBy(factor: number): void {
     if (this.cam === null) return;
     this.stopAnimation();
+    this.autoFit = false;
     const safe = this.safe();
     this.animate(zoomAt(this.cam, this.viewport, this.drawMode, (safe.l + safe.r) / 2, (safe.t + safe.b) / 2, factor), 200);
   }
@@ -357,6 +368,7 @@ export class SceneEngine {
   rotateView(dir: 1 | -1): void {
     if (this.cam === null) return;
     this.stopAnimation();
+    this.autoFit = false;
     const step = this.drawMode === 'plan' ? 90 : 45;
     this.animate({ ...this.cam, yaw: Math.round(this.cam.yaw / step) * step + dir * step }, 380);
   }
@@ -376,6 +388,7 @@ export class SceneEngine {
   northUp(): void {
     if (this.cam === null) return;
     this.stopAnimation();
+    this.autoFit = false;
     const { northDeg } = this.options.props().store.doc.plot;
     this.animate({ ...this.cam, yaw: ((northDeg % 360) + 360) % 360 }, 380);
   }
@@ -555,6 +568,8 @@ export class SceneEngine {
     if (this.cam === null) {
       const plan = this.drawMode === 'plan';
       this.cam = fitRect(null, plan ? 0 : -26, plan ? 90 : 50, this.viewport, this.drawMode, this.safe(), this.plot());
+    } else if (this.autoFit) {
+      this.refit();
     }
     this.labelsDirty = true;
     this.viewDirty = true;
@@ -591,9 +606,26 @@ export class SceneEngine {
     return { widthCm: plot.widthCm, depthCm: plot.depthCm };
   }
 
+  /** The camera set directly — a pan, an orbit, a wheel, a jump: always a hand on the view. */
   private setCamera(next: CameraState): void {
     this.cam = next;
+    this.autoFit = false;
     this.requestFrame();
+  }
+
+  /**
+   * The automatic fit again, for the stage as it is now, at the angle the view
+   * has or is heading to. An animation under way (the first F, a switch of
+   * mode) keeps running and lands on the new fit instead of the old one.
+   */
+  private refit(): void {
+    const running = this.animation;
+    const from = running?.to ?? this.cam;
+    if (from === null) return;
+    const pitch = this.drawMode === 'plan' ? 90 : from.pitch;
+    const fit = fitRect(null, from.yaw, pitch, this.viewport, this.drawMode, this.safe(), this.plot());
+    if (running !== null) this.animation = { ...running, to: fit };
+    else this.cam = fit;
   }
 
   private animate(to: CameraState, duration: number, then?: () => void): void {

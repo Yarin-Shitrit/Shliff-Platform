@@ -67,8 +67,9 @@ export default async function SitePage(
 
   /* The URL the sidebar wrote may carry no `season`; every link this page
      builds carries the one it resolved, so a switch of year survives a
-     drawer (R5). */
-  const here: RawParams = { season: current.id };
+     drawer (R5). `?editor=3d` rides along while the flag exists, so the
+     editor's drawers close back into the editor (`carried`, views.ts). */
+  const here: RawParams = query.editor3d ? { season: current.id, editor: '3d' } : { season: current.id };
   const closeHref = siteHref(here);
   const view = await siteView(db, current.id);
   const others = (await seasonsWithPlans(db)).filter((plan) => plan.seasonId !== current.id);

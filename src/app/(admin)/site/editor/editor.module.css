@@ -170,12 +170,28 @@
 
 /* ---- the stage --------------------------------------------------------- */
 
+/* The stage reaches the panel's edges, and the panel clips what overflows
+   it: the focus ring (A9) is drawn inside the stage, so it shows whole. */
 .stage {
   position: relative;
   flex: 1;
   min-block-size: 0;
   overflow: hidden;
   background: var(--sunken);
+  outline-offset: -2px;
+}
+
+/* Inside the stage, its own outline paints under the scene, which covers it
+   edge to edge. So the same ring is drawn again by a layer that comes after
+   the scene in paint order, lets every pointer through, and sits clear of the
+   floating panels (12px in from every edge). */
+.stage:focus-visible::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
 }
 
 .scene {
