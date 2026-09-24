@@ -6,9 +6,11 @@ import { requireAdmin } from '@/lib/auth/guard';
 import type { ActionResult } from '@/lib/action-result';
 import type { SiteItemKind } from '@/db/schema/site';
 import {
-  addItem, copyPlan, createPlan, removeItem, setPlot, updateItem,
+  addItem, applySiteOps, copyPlan, createPlan, loadDoc, removeItem, setPlot, updateItem,
   type ItemPatch, type PlotInput,
 } from '@/lib/site/plan';
+import type { EditorDoc } from '@/lib/site/editor/model';
+import type { SaveResult, SiteOp } from '@/lib/site/editor/ops';
 import { SITE_PATH } from '@/lib/site/views';
 import { siteFailureMessage } from './failure-messages';
 
@@ -100,6 +102,42 @@ export async function removeItemAction(id: string): Promise<ActionResult> {
     await removeItem(db, id);
     revalidatePath(SITE_PATH);
     return { ok: true };
+  } catch (error) {
+    return { ok: false, error: siteFailureMessage(error) };
+  }
+}
+
+/**
+ * One batch of the editor's edits against the version it last saw (spec
+ * §6.4). A conflict is an answer, not an error: the editor shows it as a
+ * choice. No `router.refresh()` follows on the client — the editor's store is
+ * the truth once the page has loaded, which is what stops items jumping.
+ */
+export async function saveSiteChangesAction(
+  planId: string, baseVersion: number, ops: SiteOp[],
+): Promise<SaveResult> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, reason: 'refused', error: NO_ACCESS };
+  try {
+    const result = await applySiteOps(db, planId, baseVersion, ops, admin.email);
+    if (result.status === 'conflict') return { ok: false, reason: 'conflict', version: result.version };
+    revalidatePath(SITE_PATH);
+    return { ok: true, version: result.version };
+  } catch (error) {
+    return { ok: false, reason: 'refused', error: siteFailureMessage(error) };
+  }
+}
+
+/** The whole map again — after a conflict, when the lead chooses the other lead's version. */
+export async function loadSiteDocAction(
+  planId: string,
+): Promise<ActionResult<{ doc: EditorDoc; version: number }>> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: NO_ACCESS };
+  try {
+    const loaded = await loadDoc(db, planId);
+    if (loaded === null) return { ok: false, error: siteFailureMessage(new Error(`unknown site plan ${planId}`)) };
+    return { ok: true, value: loaded };
   } catch (error) {
     return { ok: false, error: siteFailureMessage(error) };
   }

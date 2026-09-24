@@ -4,9 +4,10 @@ import { createTestDb, type TestDb } from '@/test/db';
 import { seasons, tasks } from '@/db/schema/camp';
 import { siteItems, siteKindDefaults } from '@/db/schema/site';
 import {
-  addItem, copyPlan, createPlan, deriveView, itemById, kindDefaults, listItems, loadDoc, planForSeason,
-  removeItem, seasonsWithPlans, setPlot, siteView, updateItem,
+  addItem, applySiteOps, copyPlan, createPlan, deriveView, itemById, kindDefaults, listItems, loadDoc,
+  planForSeason, removeItem, seasonsWithPlans, setPlot, siteView, updateItem,
 } from './plan';
+import type { EditorItem } from './editor/model';
 
 const LEAD = 'lead@shliff.camp';
 const PLOT = { widthCm: 2600, depthCm: 2400, gridCm: 50 };
@@ -290,6 +291,107 @@ describe('the camp map', () => {
       })]);
       expect(loaded?.doc.defaults).toEqual({});
       expect(await loadDoc(db, '00000000-0000-4000-8000-000000000000')).toBeNull();
+    });
+  });
+
+  describe('saving a batch of edits', () => {
+    const tentOf = (over: Partial<EditorItem> = {}): EditorItem => ({
+      id: crypto.randomUUID(), kind: 'tent', label: 'אוהל 1', xCm: 100, yCm: 100,
+      widthCm: 300, depthCm: 300, heightCm: null, insetCm: null, sort: 0,
+      taskId: null, notes: null, locked: false, ...over,
+    });
+
+    it('applies every op, bumps the version and returns it', async () => {
+      const planId = await createPlan(db, s26, PLOT, LEAD);
+      const tent = tentOf();
+      const result = await applySiteOps(db, planId, 0, [
+        { type: 'add', item: tent },
+        { type: 'update', id: tent.id, patch: { xCm: 400, heightCm: 180 } },
+        { type: 'setKindDefault', kind: 'tent', size: { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: null } },
+      ], LEAD);
+
+      expect(result).toEqual({ status: 'saved', version: 1 });
+      const [row] = await listItems(db, planId);
+      expect(row).toMatchObject({ id: tent.id, xCm: 400, heightCm: 180, sort: 0 });
+      expect(await kindDefaults(db)).toEqual({ tent: { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: null } });
+      expect((await planForSeason(db, s26))?.version).toBe(1);
+    });
+
+    it('answers a stale version with the current one and writes nothing', async () => {
+      const planId = await createPlan(db, s26, PLOT, LEAD);
+      await applySiteOps(db, planId, 0, [{ type: 'add', item: tentOf() }], LEAD);
+      const result = await applySiteOps(db, planId, 0, [{ type: 'add', item: tentOf() }], LEAD);
+      expect(result).toEqual({ status: 'conflict', version: 1 });
+      expect(await listItems(db, planId)).toHaveLength(1);
+    });
+
+    it('refuses a batch whole when one op is bad', async () => {
+      const planId = await createPlan(db, s26, PLOT, LEAD);
+      const tent = tentOf();
+      await expect(applySiteOps(db, planId, 0, [
+        { type: 'add', item: tent },
+        { type: 'update', id: tent.id, patch: { widthCm: 5 } },
+      ], LEAD)).rejects.toThrow('an item side must be');
+      expect(await listItems(db, planId)).toEqual([]);
+      expect((await planForSeason(db, s26))?.version).toBe(0);
+    });
+
+    it('refuses an item that belongs to another season’s map', async () => {
+      const mine = await createPlan(db, s26, PLOT, LEAD);
+      const theirs = await createPlan(db, s25, PLOT, LEAD);
+      const other = await addItem(db, theirs, 'tent', LEAD);
+      await expect(applySiteOps(db, mine, 0, [{ type: 'remove', id: other }], LEAD))
+        .rejects.toThrow('unknown site item');
+    });
+
+    it('refuses an id that is already taken', async () => {
+      const planId = await createPlan(db, s26, PLOT, LEAD);
+      const tent = tentOf();
+      await applySiteOps(db, planId, 0, [{ type: 'add', item: tent }], LEAD);
+      await expect(applySiteOps(db, planId, 1, [{ type: 'add', item: tent }], LEAD))
+        .rejects.toThrow('an item id is already in use');
+    });
+
+    it('keeps a locked item where it is until it is unlocked', async () => {
+      const planId = await createPlan(db, s26, PLOT, LEAD);
+      const tent = tentOf({ locked: true });
+      await applySiteOps(db, planId, 0, [{ type: 'add', item: tent }], LEAD);
+
+      await expect(applySiteOps(db, planId, 1, [{ type: 'update', id: tent.id, patch: { xCm: 900 } }], LEAD))
+        .rejects.toThrow('that item is locked');
+      await expect(applySiteOps(db, planId, 1, [{ type: 'remove', id: tent.id }], LEAD))
+        .rejects.toThrow('that item is locked');
+      // Renaming is not moving.
+      await applySiteOps(db, planId, 1, [{ type: 'update', id: tent.id, patch: { label: 'אוהל הצוות' } }], LEAD);
+      // Unlocking and moving in one patch is allowed.
+      await applySiteOps(db, planId, 2, [{ type: 'update', id: tent.id, patch: { locked: false, xCm: 900 } }], LEAD);
+      const [row] = await listItems(db, planId);
+      expect(row).toMatchObject({ label: 'אוהל הצוות', xCm: 900, locked: false });
+    });
+
+    it('links only a build task of this season', async () => {
+      const planId = await createPlan(db, s26, PLOT, LEAD);
+      const [shift] = await db.insert(tasks).values({ seasonId: s26, kind: 'shift', title: 'משמרת בר' }).returning();
+      await expect(applySiteOps(db, planId, 0, [{ type: 'add', item: tentOf({ taskId: shift.id }) }], LEAD))
+        .rejects.toThrow('that task is not a build task of this season');
+    });
+
+    it('drops a kind default when told to', async () => {
+      const planId = await createPlan(db, s26, PLOT, LEAD);
+      const size = { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: null };
+      await applySiteOps(db, planId, 0, [{ type: 'setKindDefault', kind: 'tent', size }], LEAD);
+      await applySiteOps(db, planId, 1, [{ type: 'setKindDefault', kind: 'tent', size: null }], LEAD);
+      expect(await kindDefaults(db)).toEqual({});
+    });
+
+    it('gives a new net the default inset when it has none, and no other kind one', async () => {
+      const planId = await createPlan(db, s26, PLOT, LEAD);
+      const net = tentOf({ kind: 'shade', label: 'צל', widthCm: 800, depthCm: 800, insetCm: null });
+      const sofa = tentOf({ kind: 'sofa', label: 'ספה', insetCm: 40 });
+      await applySiteOps(db, planId, 0, [{ type: 'add', item: net }, { type: 'add', item: sofa }], LEAD);
+      const rows = await listItems(db, planId);
+      expect(rows.find((row) => row.id === net.id)?.insetCm).toBe(50);
+      expect(rows.find((row) => row.id === sofa.id)?.insetCm).toBeNull();
     });
   });
 });

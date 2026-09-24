@@ -24,6 +24,14 @@ export const SITE_ERRORS: HebrewErrors = [
   ['an item position must be', 'מיקום נמדד במספר שלם של סנטימטרים'],
   ['a shade inset must be', 'הרצועה ללא צל נמדדת במספר שלם של סנטימטרים, אפס או יותר'],
   ['that task is not a build task of this season', 'אפשר לקשר רק משימת הקמה של השנה הזו'],
+  ['an item id must be a uuid', 'לפריט החדש אין מזהה תקין. טעינה מחדש של המפה תסדר את זה'],
+  ['an item id is already in use', 'הפריט הזה כבר נמצא במפה. טעינה מחדש של המפה תסדר את זה'],
+  ['an item height must be', 'גובה של פריט צריך להיות בין 10 סנטימטר ל־20 מטר, במספר שלם של סנטימטרים'],
+  ['a lock must be', 'נעילה היא כן או לא'],
+  ['that item is locked', 'הפריט נעול. אפשר לשחרר את הנעילה ואז לשנות אותו'],
+  ['a kind default must be', 'מידות ברירת המחדל צריכות להיות בין 10 סנטימטר ל־500 מטר, והגובה עד 20 מטר'],
+  ['north must be', 'כיוון הצפון נמדד במעלות שלמות, מ־0 עד 359'],
+  ['unknown operation', 'השינוי הזה לא מוכר למפה. טעינה מחדש של המפה תסדר את זה'],
 ];
 
 export function siteFailureMessage(error: unknown): string {
