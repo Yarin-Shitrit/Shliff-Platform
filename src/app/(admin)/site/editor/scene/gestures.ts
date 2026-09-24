@@ -241,6 +241,18 @@ export class Gestures {
     return drag !== null && drag.type === 'marquee' && drag.moved ? [{ type: 'marqueeEnd' }] : [];
   }
 
+  /**
+   * The pointer left the map. Nothing is under it now, so the hover is cleared
+   * and forgotten: coming back over the same item reports it again. A drag
+   * carries on — its pointer is captured, and its own release ends it.
+   */
+  leave(): GestureIntent[] {
+    if (this.drag !== null) return [];
+    if (this.lastHover.id === null && this.lastHover.cursor === 'default') return [];
+    this.lastHover = { id: null, cursor: 'default' };
+    return [{ type: 'hover', id: null, cursor: 'default' }];
+  }
+
   /** What is under the pointer and how the cursor says so — reported only when it changes. */
   private hover(p: PointerInput): GestureIntent[] {
     const world = this.world;

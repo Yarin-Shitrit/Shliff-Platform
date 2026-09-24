@@ -212,3 +212,22 @@ describe('hovering', () => {
     expect(gestures.move(pointer(150, 150))).toEqual([{ type: 'hover', id: null, cursor: 'crosshair' }]);
   });
 });
+
+describe('leaving the map', () => {
+  it('forgets what was under the pointer, so coming back over the same item says so again', () => {
+    const gestures = new Gestures(fakeWorld().world);
+    expect(gestures.move(pointer(150, 150))).toEqual([{ type: 'hover', id: 'tent', cursor: 'grab' }]);
+    expect(gestures.leave()).toEqual([{ type: 'hover', id: null, cursor: 'default' }]);
+    expect(gestures.leave()).toEqual([]);
+    expect(gestures.move(pointer(150, 150))).toEqual([{ type: 'hover', id: 'tent', cursor: 'grab' }]);
+  });
+
+  it('does not end a drag: a captured pointer is still dragging', () => {
+    const gestures = new Gestures(fakeWorld().world);
+    gestures.down(pointer(150, 150));
+    gestures.move(pointer(170, 150));
+    expect(gestures.leave()).toEqual([]);
+    expect(gestures.active).toBe(true);
+    expect(gestures.up(pointer(170, 150))[0]).toEqual({ type: 'moveCommit', ids: ['tent'], dxCm: 200, dyCm: 0, free: false });
+  });
+});

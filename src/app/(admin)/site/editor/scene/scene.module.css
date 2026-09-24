@@ -1,0 +1,139 @@
+/* The 3D map's DOM layers: the canvas, the marks drawn over it, the labels.
+   Colours come from tokens.css only; the scene's own WebGL colours are data
+   in palette.ts, because WebGL cannot read a custom property.
+
+   Screen positions here are physical (left/top, x/y): they are pixels on a
+   picture of the ground, and the map never mirrors for RTL. */
+
+.scene {
+  position: relative;
+  inline-size: 100%;
+  block-size: 100%;
+  min-block-size: 360px;
+  overflow: hidden;
+  background: var(--canvas);
+}
+
+.stage {
+  position: absolute;
+  inset: 0;
+}
+
+/* `touch-action: none` on the canvas only: a finger on the map moves the
+   map, a finger on the panels still scrolls them. */
+.canvas {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  outline: none;
+}
+
+.overlay,
+.pills,
+.labels,
+.leaders {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.handle { fill: var(--panel); stroke: var(--focus); stroke-width: 1.6; }
+.guide { fill: none; stroke: var(--info); stroke-width: 1.2; stroke-dasharray: 6 4; }
+.gap { fill: none; stroke: var(--info); stroke-width: 1.3; }
+.measure { fill: none; stroke: var(--info); stroke-width: 2; }
+.marquee {
+  fill: color-mix(in srgb, var(--focus) 8%, transparent);
+  stroke: var(--focus);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+.dot { fill: var(--info); }
+.member { fill: var(--ink-3); }
+
+.pill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding-block: 1px;
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-label);
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+  color: var(--panel);
+}
+.pillGuide { background: var(--info); }
+.pillFocus { background: var(--focus); }
+.pillBad { background: var(--bad); }
+
+/* One label. Its box is the one label-layout.ts placed; the engine measures
+   text at this size and weight (`engine.ts`, LABEL_FONT_PX, LABEL_PAD_PX). */
+.label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-inline: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  color: var(--ink);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+.label[data-selected='true'] { border-color: var(--focus); background: var(--brand-soft); }
+.label[data-group='true'] { border-style: dashed; }
+
+.leader { stroke: var(--ink-4); stroke-width: 1; }
+.leaderSelected { stroke: var(--focus); }
+
+/* No WebGL: said in words, where the map would be. */
+.fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: var(--space-6);
+  color: var(--ink-2);
+  font-size: var(--text-body);
+  text-align: center;
+}
+
+/* The temporary /site?editor=3d page (Task 20; Task 26 retires it). */
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-block-size: 0;
+}
+.previewScene {
+  position: relative;
+  block-size: calc(100dvh - 180px);
+  min-block-size: 480px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+}
+.previewStatus {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}

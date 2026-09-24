@@ -6,9 +6,9 @@ import { render, screen, within } from '@testing-library/react';
 import { ToastProvider } from '@/components/ui/toaster';
 import type { SiteItemView, SitePlan } from '@/lib/site/plan';
 
-const { requireAdmin, resolveSeason, siteView, seasonsWithPlans, itemById, listTasks } = vi.hoisted(() => ({
+const { requireAdmin, resolveSeason, siteView, seasonsWithPlans, itemById, listTasks, loadDoc } = vi.hoisted(() => ({
   requireAdmin: vi.fn(), resolveSeason: vi.fn(), siteView: vi.fn(),
-  seasonsWithPlans: vi.fn(), itemById: vi.fn(), listTasks: vi.fn(),
+  seasonsWithPlans: vi.fn(), itemById: vi.fn(), listTasks: vi.fn(), loadDoc: vi.fn(),
 }));
 const { replace } = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock('next/navigation', async (importOriginal) => ({
@@ -22,12 +22,18 @@ vi.mock('@/lib/work/tasks', () => ({ listTasks }));
 /* Only the readers are replaced; the geometry the screen draws stays real. */
 vi.mock('@/lib/site/plan', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/site/plan')>()),
-  siteView, seasonsWithPlans, itemById,
+  siteView, seasonsWithPlans, itemById, loadDoc,
 }));
 /* The board reaches `useToast`, which needs a provider the page does not
    render (the admin layout does). The board has its own test. */
 vi.mock('./site-board', () => ({
   SiteBoard: ({ items }: { items: unknown[] }) => <div data-testid="board">{`board:${items.length}`}</div>,
+}));
+/* The 3D map has its own tests (editor/scene/*.test.tsx); here only what the page hands it. */
+vi.mock('./editor/scene-preview', () => ({
+  ScenePreview: ({ initial }: { initial: { doc: { items: unknown[] }; version: number } }) => (
+    <div data-testid="scene-preview">{`preview:${initial.doc.items.length}:v${initial.version}`}</div>
+  ),
 }));
 
 import SitePage from './page';
@@ -69,6 +75,7 @@ beforeEach(() => {
   seasonsWithPlans.mockResolvedValue([]);
   itemById.mockResolvedValue(null);
   listTasks.mockResolvedValue([]);
+  loadDoc.mockResolvedValue(null);
 });
 
 /* The admin layout mounts the `ToastProvider` the drawers report through. */
@@ -196,6 +203,52 @@ describe('the camp map screen', () => {
     itemById.mockResolvedValue(item({ id: 'z', planId: 'p-other' }));
     await renderPage({ peek: 'z' });
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  describe('behind ?editor=3d', () => {
+    const LOADED = {
+      version: 4,
+      doc: {
+        plot: { id: 'p1', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0 },
+        items: [{ id: 'a' }, { id: 'b' }],
+        defaults: {},
+      },
+    };
+
+    it('mounts the 3D map with the document the editor saves against, instead of the board', async () => {
+      siteView.mockResolvedValue(view([item({ id: 'a' }), item({ id: 'b', label: 'אוהל 2' })]));
+      loadDoc.mockResolvedValue(LOADED);
+      await renderPage({ editor: '3d' });
+
+      expect(loadDoc).toHaveBeenCalledWith({}, 'p1');
+      expect(screen.getByTestId('scene-preview').textContent).toBe('preview:2:v4');
+      expect(screen.queryByTestId('board')).toBeNull();
+      expect(screen.queryByRole('table', { name: 'הפריטים במפה' })).toBeNull();
+      expect(screen.getByRole('link', { name: /גודל המגרש/ }).getAttribute('href')).toBe('/site?season=s26&act=plot');
+    });
+
+    it('still opens the plot drawer over it', async () => {
+      siteView.mockResolvedValue(view([item({ id: 'a' })]));
+      loadDoc.mockResolvedValue(LOADED);
+      await renderPage({ editor: '3d', act: 'plot' });
+      expect(screen.getByTestId('scene-preview')).toBeTruthy();
+      expect(screen.getByRole('dialog')).toBeTruthy();
+    });
+
+    it('keeps the board for any other value of ?editor', async () => {
+      siteView.mockResolvedValue(view([item({ id: 'a' })]));
+      await renderPage({ editor: '2d' });
+      expect(screen.getByTestId('board')).toBeTruthy();
+      expect(loadDoc).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the board when the plan vanished between the two reads', async () => {
+      siteView.mockResolvedValue(view([item({ id: 'a' })]));
+      loadDoc.mockResolvedValue(null);
+      await renderPage({ editor: '3d' });
+      expect(screen.queryByTestId('scene-preview')).toBeNull();
+      expect(screen.getByTestId('board')).toBeTruthy();
+    });
   });
 
   it('is not found for a signed-in non-admin', async () => {

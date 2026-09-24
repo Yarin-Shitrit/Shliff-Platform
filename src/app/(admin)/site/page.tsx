@@ -4,7 +4,7 @@ import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import { resolveSeason } from '@/lib/seasons/current';
 import { listTasks } from '@/lib/work/tasks';
-import { itemById, seasonsWithPlans, siteView } from '@/lib/site/plan';
+import { itemById, loadDoc, seasonsWithPlans, siteView } from '@/lib/site/plan';
 import { formatArea, formatSize } from '@/lib/site/geometry';
 import {
   copyHref, itemHref, parseSiteQuery, plotHref, removeItemHref, siteHref, type RawParams,
@@ -21,6 +21,7 @@ import { ItemDrawer } from './item-drawer';
 import { PlotDrawer } from './plot-drawer';
 import { CopyDrawer } from './copy-drawer';
 import { RemoveItem } from './remove-item';
+import { ScenePreview } from './editor/scene-preview';
 import styles from './site.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -112,21 +113,63 @@ export default async function SitePage(
   const buildTasks = peeked === null ? [] : (await listTasks(db, current.id, { kind: 'build' }))
     .map((task) => ({ id: task.taskId, title: task.title }));
 
+  const plotLink = (
+    <ButtonLink size="sm" href={plotHref(here)}>
+      <Icon name="grid" size={14} />
+      גודל המגרש
+    </ButtonLink>
+  );
+
+  const drawers = (
+    <>
+      {peeked !== null && !query.removing ? (
+        <ItemDrawer
+          item={peeked}
+          buildTasks={buildTasks}
+          closeHref={closeHref}
+          removeHref={removeItemHref(here, peeked.id)}
+        />
+      ) : null}
+      {peeked !== null && query.removing ? (
+        <RemoveItem item={{ id: peeked.id, label: peeked.label }} cancelHref={closeHref} />
+      ) : null}
+      {query.plot ? (
+        <PlotDrawer
+          seasonId={current.id}
+          seasonName={current.name}
+          plan={{ id: plan.id, widthCm: plan.widthCm, depthCm: plan.depthCm, gridCm: plan.gridCm, notes: plan.notes }}
+          items={items}
+          closeHref={closeHref}
+        />
+      ) : null}
+    </>
+  );
+
+  /* TEMPORARY (plan 03, Task 20): the bare 3D map behind `?editor=3d`, so the
+     scene is checked in a browser before any panel is built on it. Task 26
+     makes the editor the page and deletes this branch. `loadDoc` answers
+     null only if the plan vanished since `siteView` read it; the board below
+     is then the honest fallback. */
+  if (query.editor3d) {
+    const loaded = await loadDoc(db, plan.id);
+    if (loaded !== null) {
+      return (
+        <main className={styles.page}>
+          <TopBar crumbs={crumbs} chip={<SeasonChip seasonName={current.name} />} actions={plotLink} />
+          <h1>מפת הקאמפ</h1>
+          <ScenePreview initial={loaded} />
+          {drawers}
+        </main>
+      );
+    }
+  }
+
   const firstOutside = items.find((item) => item.outside) ?? null;
   const shadeAttention = counts.shade.partly + counts.shade.unshaded;
 
   return (
     <main className={styles.page}>
-      <TopBar
-        crumbs={crumbs}
-        chip={<SeasonChip seasonName={current.name} />}
-        actions={(
-          <ButtonLink size="sm" href={plotHref(here)}>
-            <Icon name="grid" size={14} />
-            גודל המגרש
-          </ButtonLink>
-        )}
-      />
+      <TopBar crumbs={crumbs} chip={<SeasonChip seasonName={current.name} />} actions={plotLink} />
 
       <div className={styles.head}>
         <div>
@@ -215,26 +258,7 @@ export default async function SitePage(
         )}
       />
 
-      {peeked !== null && !query.removing ? (
-        <ItemDrawer
-          item={peeked}
-          buildTasks={buildTasks}
-          closeHref={closeHref}
-          removeHref={removeItemHref(here, peeked.id)}
-        />
-      ) : null}
-      {peeked !== null && query.removing ? (
-        <RemoveItem item={{ id: peeked.id, label: peeked.label }} cancelHref={closeHref} />
-      ) : null}
-      {query.plot ? (
-        <PlotDrawer
-          seasonId={current.id}
-          seasonName={current.name}
-          plan={{ id: plan.id, widthCm: plan.widthCm, depthCm: plan.depthCm, gridCm: plan.gridCm, notes: plan.notes }}
-          items={items}
-          closeHref={closeHref}
-        />
-      ) : null}
+      {drawers}
     </main>
   );
 }
