@@ -22,7 +22,8 @@ function highestOn(date: string): { at: Date; sun: SunPosition } {
 /** The day's highest sun, sampled through Jerusalem clock hours 10–14 at one-minute resolution. */
 function highestByClock(date: string): SunPosition {
   let best: SunPosition | null = null;
-  for (let h = 10; h <= 14; h += 1 / 60) {
+  for (let i = 0; i <= 240; i += 1) {
+    const h = 10 + i / 60;
     const sun = sunPosition(jerusalemInstant(date, h), latitude, longitude);
     if (best === null || sun.elevationDeg > best.elevationDeg) best = sun;
   }
@@ -97,23 +98,26 @@ describe('the sun over the camp', () => {
 /*
  * Controller ruling: fixed astronomical checks at CAMP_SITE, against
  * published constants independent of this implementation — not ranges
- * derived from the code under test. "The day's highest elevation" is found
- * by sampling Jerusalem clock hours 10–14 at one-minute resolution, exactly
- * as the ruling specifies; `jerusalemInstant` resolves the UTC+3 (June) and
- * UTC+2 (March) offsets on its own.
+ * derived from the code under test. Culmination h = 90° − φ + δ at the camp
+ * (φ = 30.6154°), with the published declination δ = +23.44° at the June
+ * solstice and 0° at the March equinox: 82.82° and 59.38°. Beyond that
+ * derivation this claims no more independence than the ruling states. "The
+ * day's highest elevation" is found by sampling Jerusalem clock hours 10–14
+ * at one-minute resolution, exactly as the ruling specifies; `jerusalemInstant`
+ * resolves the UTC+3 (June) and UTC+2 (March) offsets on its own.
  */
 describe('against published values', () => {
   it('June solstice 2026-06-21: elevation 82.82° ± 0.5°, azimuth 180° ± 2°', () => {
     const sun = highestByClock('2026-06-21');
-    expect(sun.elevationDeg).toBeGreaterThan(90 - 30.6154 + 23.44 - 0.5);
-    expect(sun.elevationDeg).toBeLessThan(90 - 30.6154 + 23.44 + 0.5);
+    expect(sun.elevationDeg).toBeGreaterThan(82.82 - 0.5);
+    expect(sun.elevationDeg).toBeLessThan(82.82 + 0.5);
     expect(Math.abs(sun.azimuthDeg - 180)).toBeLessThan(2);
   });
 
   it('March equinox 2026-03-20: elevation 59.38° ± 0.6°, azimuth 180° ± 2°', () => {
     const sun = highestByClock('2026-03-20');
-    expect(sun.elevationDeg).toBeGreaterThan(90 - 30.6154 - 0.6);
-    expect(sun.elevationDeg).toBeLessThan(90 - 30.6154 + 0.6);
+    expect(sun.elevationDeg).toBeGreaterThan(59.38 - 0.6);
+    expect(sun.elevationDeg).toBeLessThan(59.38 + 0.6);
     expect(Math.abs(sun.azimuthDeg - 180)).toBeLessThan(2);
   });
 });
