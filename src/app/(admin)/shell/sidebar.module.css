@@ -113,6 +113,14 @@
   outline-offset: -2px;
 }
 .menumeta { margin-inline-start: auto; font-size: 12px; color: var(--ink-3); }
+/* The gate date's empty state: the verb that sets it, in the link colour, so
+   the row reads as an invitation rather than as a missing value. */
+.menuInvite {
+  margin-inline-start: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--brand-text);
+}
 .menuGutter { inline-size: 16px; }
 .divider { block-size: 1px; background: var(--line); }
 .menunote {

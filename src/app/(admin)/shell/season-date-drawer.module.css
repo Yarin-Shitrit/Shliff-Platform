@@ -1,0 +1,29 @@
+.form { display: flex; flex-direction: column; gap: 16px; }
+
+/*
+ * The same native date control as `new-season-drawer.module.css`'s `.date`,
+ * and for the same reason: the kit has no date control, so this mirrors
+ * `field.module.css`'s `.box` sizing and tokens to read as part of the kit.
+ */
+.date {
+  block-size: 36px;
+  inline-size: 100%;
+  padding-inline: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+}
+
+/* Not routed through `Field`'s error slot: a refusal here can be about the
+   season or the permission rather than the date typed. */
+.error { font-size: 12px; color: var(--bad); margin: 0; }
+
+.empty { margin: 0; color: var(--ink-2); }
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-block-start: 4px;
+}
