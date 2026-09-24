@@ -32,6 +32,34 @@ export async function createSeason(db: AnyDb, input: NewSeason): Promise<Season>
   return season;
 }
 
+/**
+ * Same guard as `link.ts`: every id here is a uuid column, and Postgres
+ * refuses a malformed one with `invalid input syntax for type uuid` instead
+ * of matching nothing. The id reaches this function from the browser,
+ * through a server action anyone signed in can call with any string.
+ */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Sets or clears one season's gate date. `null` clears it: this function
+ * never picks a date, and deciding what a blank field means is the caller's
+ * job (`setSeasonStartsOnAction`).
+ *
+ * Returns the updated row, or `undefined` when no season has that id — a
+ * malformed id included — so the caller can refuse in its own words rather
+ * than report a database error.
+ */
+export async function setSeasonStartsOn(
+  db: AnyDb, id: string, startsOn: Date | null,
+): Promise<Season | undefined> {
+  if (!UUID.test(id)) return undefined;
+  const [season] = await db.update(seasons)
+    .set({ startsOn })
+    .where(eq(seasons.id, id))
+    .returning();
+  return season;
+}
+
 export async function listSeasons(db: AnyDb): Promise<Season[]> {
   return db.select().from(seasons).orderBy(desc(seasons.year), desc(seasons.name));
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createTestDb, type TestDb } from '@/test/db';
-import { listSeasons } from '@/lib/members/roster';
+import { createSeason, getSeasonByName, listSeasons } from '@/lib/members/roster';
 import type { AdminCheck } from '@/lib/auth/guard';
 import { HEBREW_FALLBACK } from '@/lib/errors/hebrew';
 
@@ -35,7 +35,7 @@ vi.mock('@/db', () => ({ db: dbProxy }));
 vi.mock('@/lib/auth/guard', () => ({ requireAdmin: async () => adminRef.current }));
 vi.mock('next/cache', () => ({ revalidatePath }));
 
-import { createSeasonAction } from './actions';
+import { createSeasonAction, setSeasonStartsOnAction } from './actions';
 
 describe('createSeasonAction', () => {
   beforeEach(async () => {
@@ -140,5 +140,127 @@ describe('createSeasonAction', () => {
 
     expect(result).toEqual({ ok: false, error: HEBREW_FALLBACK });
     expect(await listSeasons(dbRef.current!)).toHaveLength(0);
+  });
+});
+
+describe('setSeasonStartsOnAction', () => {
+  beforeEach(async () => {
+    dbRef.current = await createTestDb();
+    adminRef.current = { ok: true, email: 'admin@example.com' };
+    revalidatePath.mockClear();
+  });
+
+  async function season(startsOn?: Date) {
+    return createSeason(dbRef.current!, { name: 'ברן 26', year: 2026, flatRate: 1200, startsOn });
+  }
+
+  async function stored(): Promise<string | null | undefined> {
+    const row = await getSeasonByName(dbRef.current!, 'ברן 26');
+    return row?.startsOn === null ? null : row?.startsOn.toISOString();
+  }
+
+  it('sets the date on a season that had none, as UTC midnight — the way create stores it', async () => {
+    const { id } = await season();
+
+    const result = await setSeasonStartsOnAction(id, '2026-06-04');
+
+    expect(result).toEqual({ ok: true });
+    expect(await stored()).toBe('2026-06-04T00:00:00.000Z');
+    expect(revalidatePath).toHaveBeenCalledWith('/', 'layout');
+  });
+
+  it('stores the same instant create would for the same typed date', async () => {
+    await createSeasonAction({ name: 'ברן 25', year: '2025', flatRate: '1500', startsOn: '2025-06-05' });
+    const { id } = await season();
+
+    await setSeasonStartsOnAction(id, '2025-06-05');
+
+    const created = await getSeasonByName(dbRef.current!, 'ברן 25');
+    expect(await stored()).toBe(created?.startsOn?.toISOString());
+  });
+
+  it('changes a date that was already set', async () => {
+    const { id } = await season(new Date('2026-06-04'));
+
+    const result = await setSeasonStartsOnAction(id, '2026-06-11');
+
+    expect(result).toEqual({ ok: true });
+    expect(await stored()).toBe('2026-06-11T00:00:00.000Z');
+  });
+
+  it('treats a blank value as an explicit clear', async () => {
+    const { id } = await season(new Date('2026-06-04'));
+
+    const result = await setSeasonStartsOnAction(id, '');
+
+    expect(result).toEqual({ ok: true });
+    expect(await stored()).toBeNull();
+    expect(revalidatePath).toHaveBeenCalledWith('/', 'layout');
+  });
+
+  /**
+   * A server action is a public endpoint and its types are not enforced at
+   * runtime. A call that leaves the value out has not asked for a clear, so
+   * it is not read as one.
+   */
+  it('refuses a missing value rather than reading it as a clear', async () => {
+    const { id } = await season(new Date('2026-06-04'));
+
+    const result = await setSeasonStartsOnAction(id, undefined as unknown as string);
+
+    expect(result).toEqual({ ok: false, error: 'תאריך פתיחת השער אינו תקין.' });
+    expect(await stored()).toBe('2026-06-04T00:00:00.000Z');
+  });
+
+  it('treats whitespace as blank too', async () => {
+    const { id } = await season(new Date('2026-06-04'));
+
+    expect(await setSeasonStartsOnAction(id, '   ')).toEqual({ ok: true });
+    expect(await stored()).toBeNull();
+  });
+
+  /**
+   * `new Date('2026-02-30')` does not refuse: it rolls over to 2 March and
+   * would store a day nobody typed. `2026-6-4` parses too — as local
+   * midnight, not UTC — so the shape is checked as well as the value.
+   */
+  it.each(['לא תאריך', '2026-02-30', '2026-13-01', '2026-6-4', '4/6/2026'])(
+    'refuses %j in Hebrew and leaves the stored date alone',
+    async (typed) => {
+      const { id } = await season(new Date('2026-06-04'));
+
+      const result = await setSeasonStartsOnAction(id, typed);
+
+      expect(result).toEqual({ ok: false, error: 'תאריך פתיחת השער אינו תקין.' });
+      expect(await stored()).toBe('2026-06-04T00:00:00.000Z');
+      expect(revalidatePath).not.toHaveBeenCalled();
+    },
+  );
+
+  it('refuses a non-admin and writes nothing', async () => {
+    const { id } = await season(new Date('2026-06-04'));
+    adminRef.current = { ok: false };
+
+    const result = await setSeasonStartsOnAction(id, '2026-06-11');
+
+    expect(result).toEqual({ ok: false, error: 'אין הרשאה' });
+    expect(await stored()).toBe('2026-06-04T00:00:00.000Z');
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('refuses a season id that does not exist, in Hebrew', async () => {
+    await season();
+
+    const result = await setSeasonStartsOnAction('00000000-0000-4000-8000-000000000000', '2026-06-04');
+
+    expect(result).toEqual({ ok: false, error: 'השנה לא נמצאה.' });
+    expect(await stored()).toBeNull();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('refuses a malformed id in the same Hebrew, without throwing a database error', async () => {
+    const result = await setSeasonStartsOnAction('not-a-uuid', '2026-06-04');
+
+    expect(result).toEqual({ ok: false, error: 'השנה לא נמצאה.' });
   });
 });

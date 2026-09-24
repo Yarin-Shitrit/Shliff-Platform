@@ -7,7 +7,7 @@ import { signOut } from '@/lib/auth/config';
 import { resolveSeason } from '@/lib/seasons/current';
 import { shellCounts, type ShellCounts } from '@/lib/shell/counts';
 import { searchPalette, type PaletteHit } from '@/lib/search/palette';
-import { createSeason } from '@/lib/members/roster';
+import { createSeason, setSeasonStartsOn } from '@/lib/members/roster';
 import { isBlank } from '@/lib/text/normalize';
 import { toHebrewError, type HebrewConstraints } from '@/lib/errors/hebrew';
 import type { ActionResult } from '@/lib/action-result';
@@ -141,6 +141,58 @@ export async function createSeasonAction(input: NewSeasonInput): Promise<ActionR
   // The switcher renders on every admin page, and a lead who just created a
   // season expects to be able to pick it immediately — not only on the page
   // they happened to be standing on.
+  revalidatePath('/', 'layout');
+  return { ok: true };
+}
+
+/**
+ * What `<input type="date">` submits, and the only shape accepted here. The
+ * shape is checked as well as the value because `new Date` does not refuse
+ * what it cannot read: `2026-02-30` becomes 2 March, and `2026-6-4` parses
+ * as the server's local midnight rather than UTC. Either would store a day
+ * nobody typed.
+ */
+const CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * `SeasonDateDrawer` (`?act=season-date`): sets, changes or clears an
+ * existing season's gate date. `startsOn` is the raw string the date input
+ * holds, and blank means "clear it" — the drawer's own clear button sends
+ * exactly that, so there is one meaning of blank, decided here.
+ *
+ * A typed date is stored the way `createSeasonAction` stores it,
+ * `new Date('YYYY-MM-DD')`, which is UTC midnight — 02:00 or 03:00 the same
+ * day in Israel, so every screen reading it in the camp's timezone shows the
+ * day that was typed.
+ */
+export async function setSeasonStartsOnAction(
+  seasonId: string, startsOn: string,
+): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+
+  if (typeof startsOn !== 'string') return { ok: false, error: 'תאריך פתיחת השער אינו תקין.' };
+
+  let date: Date | null = null;
+  if (!isBlank(startsOn)) {
+    const typed = startsOn.trim();
+    date = new Date(typed);
+    if (!CALENDAR_DATE.test(typed)
+      || Number.isNaN(date.getTime())
+      || date.toISOString().slice(0, 10) !== typed) {
+      return { ok: false, error: 'תאריך פתיחת השער אינו תקין.' };
+    }
+  }
+
+  let updated: Awaited<ReturnType<typeof setSeasonStartsOn>>;
+  try {
+    updated = await setSeasonStartsOn(db, seasonId, date);
+  } catch (error) {
+    return { ok: false, error: toHebrewError(error, []) };
+  }
+  if (updated === undefined) return { ok: false, error: 'השנה לא נמצאה.' };
+
+  // Same reason as create: the switcher on every admin page shows this date.
   revalidatePath('/', 'layout');
   return { ok: true };
 }
