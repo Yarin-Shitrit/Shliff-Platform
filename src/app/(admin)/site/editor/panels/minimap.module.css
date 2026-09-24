@@ -1,8 +1,8 @@
 /*
  * The minimap (spec §10). Tokens only, logical properties throughout. The
  * group colours are the scene's, handed down by SiteEditor as `--group-*`
- * (see `editor.module.css`'s header), so an item here is the colour it is on
- * the map.
+ * (see `editor.module.css`'s header) and turned into `--swatch` by the shared
+ * `panel.module.css` `.g_*`, so an item here is the colour it is on the map.
  */
 
 /* At the inline end, under the inspector — bottom left here. */
@@ -25,13 +25,6 @@
   cursor: pointer;
   touch-action: none;
 }
-
-/* A group's colour: the scene's, handed down by SiteEditor. */
-.g_sleep { --swatch: var(--group-sleep, var(--line-strong)); }
-.g_living { --swatch: var(--group-living, var(--line-strong)); }
-.g_sanitation { --swatch: var(--group-sanitation, var(--line-strong)); }
-.g_utility { --swatch: var(--group-utility, var(--line-strong)); }
-.g_other { --swatch: var(--group-other, var(--line-strong)); }
 
 /* One SVG unit is a centimetre, so every stroke is kept to screen pixels. */
 .mmPlot {

@@ -1,19 +1,9 @@
 /*
  * The side panel (spec §10): a floating card at the inline start of the
- * stage, with two tabs — adding to the map and what is on it. Tokens only,
+ * stage, with two tabs — adding to the map and what is on it. The card, its
+ * body and the invitation are the shared `panel.module.css`. Tokens only,
  * logical properties throughout (A10).
  */
-
-.panel {
-  position: absolute;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  background: var(--panel);
-  box-shadow: var(--shadow-pop);
-}
 
 /* At the inline start — the right edge on this RTL page, as in the mock. */
 .side {
@@ -54,24 +44,4 @@
   color: var(--ink-3);
   font-size: var(--text-label);
   line-height: 17px;
-}
-
-.body {
-  flex: 1;
-  min-block-size: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-block: 10px 12px;
-  padding-inline: 12px;
-}
-
-.invite {
-  margin: 0;
-  padding: var(--space-2);
-  border-radius: var(--radius-control);
-  background: var(--brand-soft);
-  color: var(--ink);
-  font-size: var(--text-meta);
 }

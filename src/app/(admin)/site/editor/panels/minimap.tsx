@@ -15,6 +15,7 @@ import { SITE_KINDS } from '@/lib/site/kinds';
 import { rectOf, type EditorDoc } from '@/lib/site/editor/model';
 import type { EditorFlags } from '../use-editor-store';
 import type { ViewInfo } from '../scene/scene-view';
+import chrome from './panel.module.css';
 import styles from './minimap.module.css';
 
 export interface MinimapBox {
@@ -106,7 +107,7 @@ export function Minimap({ doc, flags, selection, info, onJump }: {
             data-id={item.id}
             data-outside={flags.outside.has(item.id) || undefined}
             data-selected={selected.has(item.id) || undefined}
-            className={cx(styles.mmItem, styles[`g_${SITE_KINDS[item.kind].group}`], item.kind === 'shade' && styles.mmNet)}
+            className={cx(styles.mmItem, chrome[`g_${SITE_KINDS[item.kind].group}`], item.kind === 'shade' && styles.mmNet)}
             x={item.xCm}
             y={item.yCm}
             width={item.widthCm}

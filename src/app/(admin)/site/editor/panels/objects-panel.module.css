@@ -1,50 +1,9 @@
 /*
  * במפה (spec §10): the search box, each kind group with its hide switch, and
- * a row per item. Tokens only, logical properties throughout (A10).
+ * a row per item. The search box, the hint, the invitation, the group
+ * swatches and the problem dot are the shared `panel.module.css`. Tokens
+ * only, logical properties throughout (A10).
  */
-
-.stack {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.search {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  block-size: 32px;
-  padding-inline: 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-control);
-  background: var(--panel);
-  color: var(--ink-3);
-}
-
-.searchInput {
-  flex: 1;
-  min-inline-size: 0;
-  border: 0;
-  background: transparent;
-  color: var(--ink);
-  font-size: var(--text-dense);
-}
-
-.hint {
-  margin: 0;
-  color: var(--ink-3);
-  font-size: var(--text-meta);
-  line-height: 1.45;
-}
-
-.invite {
-  margin: 0;
-  padding: var(--space-2);
-  border-radius: var(--radius-control);
-  background: var(--brand-soft);
-  color: var(--ink);
-  font-size: var(--text-meta);
-}
 
 /* An empty state: the sentence, and the one action it offers under it. */
 .offer {
@@ -52,21 +11,6 @@
   flex-direction: column;
   align-items: start;
   gap: var(--space-2);
-}
-
-/* A group's colour: the scene's, handed down by SiteEditor (see the header of `editor.module.css`). */
-.g_sleep { --swatch: var(--group-sleep, var(--line-strong)); }
-.g_living { --swatch: var(--group-living, var(--line-strong)); }
-.g_sanitation { --swatch: var(--group-sanitation, var(--line-strong)); }
-.g_utility { --swatch: var(--group-utility, var(--line-strong)); }
-.g_other { --swatch: var(--group-other, var(--line-strong)); }
-
-.swatch {
-  inline-size: 8px;
-  block-size: 8px;
-  flex-shrink: 0;
-  border-radius: 2px;
-  background: var(--swatch);
 }
 
 .groupHead {
@@ -152,12 +96,3 @@
   color: var(--ink-3);
   font-size: var(--text-label);
 }
-
-.issueDot {
-  inline-size: 7px;
-  block-size: 7px;
-  flex-shrink: 0;
-  border-radius: var(--radius-pill);
-  background: var(--warn);
-}
-.issueDot[data-tone='bad'] { background: var(--bad); }

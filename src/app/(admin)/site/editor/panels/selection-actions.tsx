@@ -14,6 +14,7 @@ import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { EditorIcon } from './editor-icons';
+import chrome from './panel.module.css';
 import styles from './selection-actions.module.css';
 
 export function SelectionActions({ locked, labelled, onTurn, onDuplicate, onLock, onRemove }: {
@@ -26,7 +27,7 @@ export function SelectionActions({ locked, labelled, onTurn, onDuplicate, onLock
   onRemove: () => void;
 }): ReactElement {
   const lock = (
-    <button type="button" className={styles.iconButton} aria-label="נעילה" aria-pressed={locked} onClick={onLock}>
+    <button type="button" className={chrome.iconButton} aria-label="נעילה" aria-pressed={locked} onClick={onLock}>
       <EditorIcon name="lock" size={14} />
     </button>
   );
@@ -55,14 +56,14 @@ export function SelectionActions({ locked, labelled, onTurn, onDuplicate, onLock
 
   return (
     <>
-      <button type="button" className={styles.iconButton} aria-label="סיבוב ברבע" onClick={onTurn}>
+      <button type="button" className={chrome.iconButton} aria-label="סיבוב ברבע" onClick={onTurn}>
         <EditorIcon name="turn" size={14} />
       </button>
-      <button type="button" className={styles.iconButton} aria-label="שכפול" onClick={onDuplicate}>
+      <button type="button" className={chrome.iconButton} aria-label="שכפול" onClick={onDuplicate}>
         <Icon name="copy" size={14} />
       </button>
       {lock}
-      <button type="button" className={styles.iconButton} aria-label="הסרה" onClick={onRemove}>
+      <button type="button" className={chrome.iconButton} aria-label="הסרה" onClick={onRemove}>
         <Icon name="trash" size={14} />
       </button>
     </>

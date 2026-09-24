@@ -18,6 +18,7 @@ import { KIND_GROUP_LABELS, KIND_GROUP_ORDER, SITE_KINDS, type SiteKindGroup } f
 import type { EditorDoc } from '@/lib/site/editor/model';
 import type { EditorFlags } from '../use-editor-store';
 import { northText } from './north';
+import chrome from './panel.module.css';
 import styles from './inspector.module.css';
 
 interface Problem {
@@ -52,7 +53,7 @@ function Count({ name, figure, ids, onPickIds, group }: {
 }): ReactElement {
   return (
     <button type="button" className={styles.groupStat} onClick={() => { onPickIds(ids); }}>
-      {group === undefined ? null : <span className={cx(styles.swatch, styles[`g_${group}`])} aria-hidden="true" />}
+      {group === undefined ? null : <span className={cx(chrome.swatch, chrome[`g_${group}`])} aria-hidden="true" />}
       <span className={styles.groupName}>{name}</span>
       {' '}
       <span className={styles.groupCount}><bdi>{figure}</bdi></span>
@@ -80,16 +81,16 @@ export function PlotInspector({ doc, flags, plotHref, onPickIds }: {
         <h2 className={styles.headTitle}>המגרש</h2>
         <span className={styles.headEnd}><SourceChip source={{ kind: 'manual' }} /></span>
       </header>
-      <div className={styles.body}>
+      <div className={chrome.body}>
         <dl className={styles.kv}>
           <dt>גודל</dt>
-          <dd><Link href={plotHref} className={styles.link}><bdi>{formatSize(plot.widthCm, plot.depthCm)}</bdi></Link></dd>
+          <dd><Link href={plotHref} className={chrome.link}><bdi>{formatSize(plot.widthCm, plot.depthCm)}</bdi></Link></dd>
           <dt>שטח</dt>
-          <dd><Link href={plotHref} className={styles.link}><bdi>{formatArea(areaM2(plot))}</bdi></Link></dd>
+          <dd><Link href={plotHref} className={chrome.link}><bdi>{formatArea(areaM2(plot))}</bdi></Link></dd>
           <dt>רשת הצמדה</dt>
-          <dd><Link href={plotHref} className={styles.link}><bdi>{formatMetres(plot.gridCm)}</bdi></Link></dd>
+          <dd><Link href={plotHref} className={chrome.link}><bdi>{formatMetres(plot.gridCm)}</bdi></Link></dd>
           <dt>צפון</dt>
-          <dd><Link href={plotHref} className={styles.link}><bdi>{northText(plot.northDeg)}</bdi></Link></dd>
+          <dd><Link href={plotHref} className={chrome.link}><bdi>{northText(plot.northDeg)}</bdi></Link></dd>
         </dl>
 
         <div className={styles.divider} />
@@ -101,7 +102,7 @@ export function PlotInspector({ doc, flags, plotHref, onPickIds }: {
               <span className={styles.sectionMeta}>
                 <button
                   type="button"
-                  className={styles.link}
+                  className={chrome.link}
                   onClick={() => { onPickIds(items.map((entry) => entry.id)); }}
                 >
                   <bdi>{items.length === 1 ? 'פריט אחד' : `${items.length} פריטים`}</bdi>
@@ -110,7 +111,7 @@ export function PlotInspector({ doc, flags, plotHref, onPickIds }: {
             )}
           </div>
           {groups.length === 0 ? (
-            <p className={styles.hint}>המפה ריקה. גרירה של פריט מהספרייה אל המפה, או לחיצה עליו, מניחה את הראשון.</p>
+            <p className={chrome.hint}>המפה ריקה. גרירה של פריט מהספרייה אל המפה, או לחיצה עליו, מניחה את הראשון.</p>
           ) : groups.map(({ group, ids }) => (
             <Count
               key={group}
@@ -127,14 +128,14 @@ export function PlotInspector({ doc, flags, plotHref, onPickIds }: {
         <div className={styles.section}>
           <h3 className={styles.sectionTitle}>צל</h3>
           {shade.nets === 0 ? (
-            <p className={styles.hint}>אין עדיין רשתות צל. גרירה של רשת צל מהספרייה תוסיף אחת.</p>
+            <p className={chrome.hint}>אין עדיין רשתות צל. גרירה של רשת צל מהספרייה תוסיף אחת.</p>
           ) : (
             <>
               <Count name="שטח בצל" figure={formatArea(shade.shadedAreaM2)} ids={netIds} onPickIds={onPickIds} />
               <Count name="רשתות צל" figure={String(shade.nets)} ids={netIds} onPickIds={onPickIds} />
             </>
           )}
-          <p className={styles.hint}>
+          <p className={chrome.hint}>
             רשת של 8 × 8 עם חצי מטר שוליים מצלה על 7 × 7. מה שיושב בשוליים מסומן, כי בשרטוט הוא נראה מכוסה.
           </p>
         </div>
@@ -143,10 +144,10 @@ export function PlotInspector({ doc, flags, plotHref, onPickIds }: {
         <div className={styles.section}>
           <h3 className={styles.sectionTitle}>בדיקות</h3>
           {problems.length === 0 ? (
-            <p className={styles.hint}>הכול בתוך הגדר, ושום דבר לא יושב על משהו אחר.</p>
+            <p className={chrome.hint}>הכול בתוך הגדר, ושום דבר לא יושב על משהו אחר.</p>
           ) : problems.map((problem) => (
             <button key={problem.key} type="button" className={styles.issue} onClick={() => { onPickIds(problem.ids); }}>
-              <span className={styles.issueDot} data-tone={problem.tone} aria-hidden="true" />
+              <span className={chrome.issueDot} data-tone={problem.tone} aria-hidden="true" />
               <span className={styles.issueText}>{problem.text}</span>
             </button>
           ))}

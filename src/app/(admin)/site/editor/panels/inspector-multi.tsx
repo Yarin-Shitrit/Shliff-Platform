@@ -36,6 +36,7 @@ import {
 } from '@/lib/site/editor/metres';
 import { EditorIcon, type EditorIconName } from './editor-icons';
 import { size3 } from './size-text';
+import chrome from './panel.module.css';
 import styles from './inspector.module.css';
 
 type SizeField = 'width' | 'depth' | 'height';
@@ -129,7 +130,7 @@ function KindRow({ doc, kind, ids, onRun }: {
   return (
     <div className={styles.kindRow}>
       <div className={styles.kindHead}>
-        <span className={cx(styles.swatch, styles[`g_${preset.group}`])} aria-hidden="true" />
+        <span className={cx(chrome.swatch, chrome[`g_${preset.group}`])} aria-hidden="true" />
         {preset.label}
         <span className={styles.kindCount}>
           ×
@@ -165,7 +166,7 @@ function KindRow({ doc, kind, ids, onRun }: {
           );
         })}
       </div>
-      {onKindHeight ? <p className={styles.meta}>גובה ברירת מחדל</p> : null}
+      {onKindHeight ? <p className={chrome.meta}>גובה ברירת מחדל</p> : null}
       <label className={styles.check}>
         <input
           type="checkbox"
@@ -178,7 +179,7 @@ function KindRow({ doc, kind, ids, onRun }: {
         {`לשמור גם כברירת המחדל של ${preset.label}`}
       </label>
       {keep ? (
-        <p className={styles.hint}>
+        <p className={chrome.hint}>
           {agreed === null
             ? `המידות של ${preset.plural} בבחירה שונות זו מזו. ברירת המחדל תישמר כשיהיה להן ערך אחד.`
             : <bdi>{`ברירת המחדל של ${preset.label} עכשיו: ${size3(standard)}. כך היא מופיעה בספרייה.`}</bdi>}
@@ -238,7 +239,7 @@ export function MultiInspector({ doc, ids, onRun, onPickIds, onClear, footer }: 
         </span>
       </header>
 
-      <div className={styles.body}>
+      <div className={chrome.body}>
         <div className={styles.pills}>
           {kinds.map(({ kind, ids: ofKind }) => (
             <button key={kind} type="button" className={styles.kindChip} onClick={() => { onPickIds(ofKind); }}>
@@ -254,16 +255,16 @@ export function MultiInspector({ doc, ids, onRun, onPickIds, onClear, footer }: 
             מידות לפי סוג
             <span className={styles.sectionMeta}>במטרים</span>
           </h3>
-          <p className={styles.hint}>שינוי כאן חל על כל הפריטים מאותו סוג שבבחירה. כל פריט גדל או קטן סביב המרכז שלו.</p>
+          <p className={chrome.hint}>שינוי כאן חל על כל הפריטים מאותו סוג שבבחירה. כל פריט גדל או קטן סביב המרכז שלו.</p>
           {lockedCount > 0 ? (
-            <p className={styles.hint}>
+            <p className={chrome.hint}>
               <bdi>{lockedCount === 1 ? 'פריט אחד בבחירה נעול ולא ישתנה.' : `${lockedCount} פריטים בבחירה נעולים ולא ישתנו.`}</bdi>
             </p>
           ) : null}
           {kinds.map(({ kind, ids: ofKind }) => (
             <KindRow key={kind} doc={doc} kind={kind} ids={ofKind} onRun={onRun} />
           ))}
-          <button type="button" className={styles.link} onClick={() => { run('חזרה לברירת המחדל', resetSizeOps(doc, ids)); }}>
+          <button type="button" className={chrome.link} onClick={() => { run('חזרה לברירת המחדל', resetSizeOps(doc, ids)); }}>
             החזרת הנבחרים למידות ברירת המחדל
           </button>
         </div>

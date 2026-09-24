@@ -16,6 +16,7 @@ import { Icon } from '@/components/ui/icon';
 import type { ViewInfo } from '../scene/scene-view';
 import { ZOOM_IN } from '../keyboard';
 import { EditorIcon } from './editor-icons';
+import chrome from './panel.module.css';
 import styles from './view-controls.module.css';
 
 /**
@@ -84,7 +85,7 @@ export function ViewControls({ info, northDeg, keysOpen, onZoom, onFit, onRotate
         </>
       )}
       <span className={styles.vsep} aria-hidden="true" />
-      <button type="button" className={styles.iconButton} aria-label="קיצורי מקלדת" aria-pressed={keysOpen} onClick={onKeys}>
+      <button type="button" className={chrome.iconButton} aria-label="קיצורי מקלדת" aria-pressed={keysOpen} onClick={onKeys}>
         <EditorIcon name="help" />
       </button>
     </div>

@@ -3,28 +3,21 @@
  * the three, because they are one panel in three states and share every rule
  * below. Tokens only, logical properties throughout (A10).
  *
- * `.body`, `.hint`, `.swatch`, `.g_*` and `.issueDot` repeat rules the side
- * panel keeps in its own module (lane rule W2: no panel reaches into
- * another's styles).
+ * The floating card, its body, the hint and meta lines, the links, the group
+ * swatches and the problem dot are the shared `panel.module.css`
+ * (integration's dedupe, ruling W10).
  */
 
 /* ---- the panel ---------------------------------------------------------- */
 
-/* A floating card at the inline end — the left edge on this RTL page — that
-   stops short of the 154px minimap under it (12 + 154 + 12 + 8 = 186). */
+/* Where the floating card (`panel.module.css` `.panel`) sits: at the inline
+   end — the left edge on this RTL page — stopping short of the 154px minimap
+   under it (12 + 154 + 12 + 8 = 186). */
 .inspector {
-  position: absolute;
   inset-block-start: 12px;
   inset-inline-end: 12px;
   inline-size: 292px;
   max-block-size: calc(100% - 186px);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  background: var(--panel);
-  box-shadow: var(--shadow-pop);
 }
 
 .head {
@@ -47,17 +40,6 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-}
-
-.body {
-  flex: 1;
-  min-block-size: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-block: 10px 12px;
-  padding-inline: 12px;
 }
 
 .section {
@@ -96,19 +78,6 @@
   background: var(--line);
 }
 
-.hint {
-  margin: 0;
-  color: var(--ink-3);
-  font-size: var(--text-meta);
-  line-height: 1.45;
-}
-
-.meta {
-  margin: 0;
-  color: var(--ink-3);
-  font-size: var(--text-label);
-}
-
 /* ---- figures ------------------------------------------------------------ */
 
 .kv {
@@ -121,19 +90,6 @@
 }
 .kv dt { color: var(--ink-3); }
 .kv dd { margin: 0; }
-
-.link {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--brand-text);
-  font-size: var(--text-meta);
-  font-weight: 500;
-  text-decoration: none;
-  cursor: pointer;
-}
-.link:hover { text-decoration: underline; }
-.link:disabled { color: var(--ink-4); cursor: not-allowed; text-decoration: none; }
 
 .links {
   display: flex;
@@ -175,21 +131,6 @@
 }
 .kindChip:hover { background: var(--hover); color: var(--ink); }
 
-/* A group's colour: the scene's, handed down by SiteEditor as `--group-*`. */
-.g_sleep { --swatch: var(--group-sleep, var(--line-strong)); }
-.g_living { --swatch: var(--group-living, var(--line-strong)); }
-.g_sanitation { --swatch: var(--group-sanitation, var(--line-strong)); }
-.g_utility { --swatch: var(--group-utility, var(--line-strong)); }
-.g_other { --swatch: var(--group-other, var(--line-strong)); }
-
-.swatch {
-  inline-size: 8px;
-  block-size: 8px;
-  flex-shrink: 0;
-  border-radius: 2px;
-  background: var(--swatch);
-}
-
 /* A count that selects what it counts: a group, the nets, the whole map. */
 .groupStat {
   display: flex;
@@ -225,15 +166,6 @@
 }
 .issue:hover { background: var(--hover); }
 .issueText { flex: 1; }
-
-.issueDot {
-  inline-size: 7px;
-  block-size: 7px;
-  flex-shrink: 0;
-  border-radius: var(--radius-pill);
-  background: var(--warn);
-}
-.issueDot[data-tone='bad'] { background: var(--bad); }
 
 /* ---- typed values ------------------------------------------------------- */
 

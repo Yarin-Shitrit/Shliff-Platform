@@ -1,27 +1,12 @@
 /*
- * The sun card (spec §11), co-located under W2/W10: each panel keeps its own
- * module rather than appending to the shared `editor.module.css`, so
- * parallel lanes never collide on one file — and, on this lane's base,
- * `editor.module.css` doesn't carry these classes at all (it holds only
- * Task 21's shell). `.card` and `.meta` are copied from Task 24's brief,
- * `.hint` from Task 22's — not imported, since none of those modules exist
- * yet in this lane — and `.link` is written to match them. Integration
- * dedupes the repeated base rules across panels once every lane has merged.
+ * The sun card (spec §11): its width, the hour row and the slider. The card
+ * itself, the hint and meta lines and the links are the shared
+ * `panel.module.css` — `.card` came from Task 24's brief, `.hint` from Task
+ * 22's, `.meta` and `.link` from Task 23's; integration folded the copies the
+ * lanes made into that one module (ruling W10).
  *
  * Tokens only, logical properties throughout (A10).
  */
-
-.card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-block: 10px;
-  padding-inline: 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  background: var(--panel);
-  box-shadow: var(--shadow-pop);
-}
 
 .sunCard { inline-size: 360px; }
 
@@ -36,24 +21,3 @@
   flex: 1;
   accent-color: var(--brand);
 }
-
-.hint {
-  margin: 0;
-  color: var(--ink-3);
-  font-size: var(--text-meta);
-  line-height: 1.45;
-}
-
-.meta {
-  margin: 0;
-  color: var(--ink-3);
-  font-size: var(--text-label);
-}
-
-.link {
-  color: var(--brand-text);
-  font-size: var(--text-label);
-  font-weight: 500;
-  text-decoration: none;
-}
-.link:hover { text-decoration: underline; }

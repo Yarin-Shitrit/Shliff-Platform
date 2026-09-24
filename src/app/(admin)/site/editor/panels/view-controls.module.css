@@ -50,26 +50,5 @@
   border-block-start: 0;
 }
 
-/*
- * The shortcuts switch: the kit's `Button` has no `aria-pressed`, so this is
- * a plain button drawn to match its small ghost icon buttons beside it.
- */
-.iconButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  inline-size: 28px;
-  block-size: 28px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--ink-2);
-  cursor: pointer;
-}
-.iconButton:hover { background: var(--sunken); color: var(--ink); }
-.iconButton[aria-pressed='true'] { background: var(--brand-soft); color: var(--brand-text); }
-
-/* Phone targets are at least 44px (A8), as the kit's buttons are. */
-@media (pointer: coarse) {
-  .iconButton { inline-size: 44px; block-size: 44px; }
-}
+/* The shortcuts switch is the shared `panel.module.css` `.iconButton`: the
+   kit's `Button` has no `aria-pressed`. */
