@@ -18,7 +18,7 @@
 import dynamic from 'next/dynamic';
 import {
   useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore,
-  type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactElement, type RefAttributes,
+  type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactElement, type ReactNode, type RefAttributes,
 } from 'react';
 import { SeasonChip, TopBar } from '@/components/shell/top-bar';
 import { Button, ButtonLink } from '@/components/ui/button';
@@ -78,6 +78,11 @@ export interface SiteEditorProps {
   plotHref: string;
   /** The shell's drawer for this season's opening date — the gate day the sun is worked out for (SD4). */
   seasonDateHref: string;
+  /**
+   * The item table (`site-table.tsx`, rendered by the page): the map on a
+   * screen under 900 px, and under the scene's no-WebGL notice (spec §7).
+   */
+  fallback?: ReactNode;
 }
 
 /**
@@ -140,6 +145,54 @@ function serverTheme(): SceneTheme {
   return 'light';
 }
 
+/* Under 900 px the table is the view (spec §7) and the scene is not even
+   mounted, so a phone holds no WebGL context. The server cannot know the
+   width; it renders the wide page, and the stylesheet shows the table in its
+   place below 900 px until the client decides (`editor.module.css`). */
+const WIDE_QUERY = '(min-width: 900px)';
+
+function readWide(): boolean {
+  return window.matchMedia(WIDE_QUERY).matches;
+}
+
+function subscribeWide(onChange: () => void): () => void {
+  const media = window.matchMedia(WIDE_QUERY);
+  media.addEventListener('change', onChange);
+  return () => { media.removeEventListener('change', onChange); };
+}
+
+/**
+ * Whether this browser can give WebGL, asked once per page load. `SceneView`
+ * says so in its own words when it cannot, but tells nobody; the editor needs
+ * to know, to put the item table under that notice. The context made to ask
+ * is let go at once.
+ */
+let webglAnswer: boolean | null = null;
+
+function readWebgl(): boolean {
+  if (webglAnswer === null) {
+    try {
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('webgl2') ?? canvas.getContext('webgl');
+      webglAnswer = context !== null;
+      context?.getExtension('WEBGL_lose_context')?.loseContext();
+    } catch {
+      webglAnswer = false;
+    }
+  }
+  return webglAnswer;
+}
+
+/** Whether a browser can give WebGL does not change while the page is open. */
+function subscribeNever(): () => void {
+  return () => {};
+}
+
+/** The server renders the wide page with the map; the client corrects both once it can ask. */
+function serverYes(): boolean {
+  return true;
+}
+
 /** The scene's group colours, handed to every panel as custom properties. */
 function paletteVars(theme: SceneTheme): CSSProperties {
   const palette = SCENE_PALETTE[theme];
@@ -184,6 +237,10 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     load: () => loadSiteDocAction(planId),
   });
   const theme = useSyncExternalStore(subscribeTheme, readTheme, serverTheme);
+  const wide = useSyncExternalStore(subscribeWide, readWide, serverYes);
+  const webgl = useSyncExternalStore(subscribeNever, readWebgl, serverYes);
+  /** The table is the view: a screen under 900 px, or a browser without WebGL. No map is shown. */
+  const tableMode = !wide || !webgl;
   const [ui, setUi] = useState<EditorUi>(INITIAL_UI);
   const [view, setView] = useState<ViewInfo>(INITIAL_VIEW);
   const [keysOpen, setKeysOpen] = useState(false);
@@ -587,6 +644,19 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     );
   }
 
+  /** "ייצוא תמונה" (spec §10): the current view as a PNG, named for the season. */
+  function exportPicture(): void {
+    const url = sceneRef.current?.exportPng() ?? null;
+    if (url === null) {
+      show({ message: 'לא הצלחנו לשמור תמונה של המפה. אפשר לנסות שוב.', tone: 'bad' });
+      return;
+    }
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `מפת הקאמפ ${seasonName}.png`;
+    link.click();
+  }
+
   function runShortcut(shortcut: Shortcut): void {
     if (typeof shortcut === 'object') {
       nudge(shortcut.arrow, shortcut.big);
@@ -624,10 +694,12 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
   /**
    * On the editor's root, so a key reaches it from the scene and from every
    * panel (§8). The one gate every shortcut passes: a key typed into a box —
-   * a size, a name, the hour slider — is the box's, never the map's.
+   * a size, a name, the hour slider — is the box's, never the map's. While
+   * the table is the view no key is the map's either (ruling P7): nothing
+   * acts on a map that is not shown.
    */
   function onKeyDown(event: ReactKeyboardEvent<HTMLDivElement>): void {
-    if (event.defaultPrevented || isTyping(event.target)) return;
+    if (tableMode || event.defaultPrevented || isTyping(event.target)) return;
     const shortcut = shortcutFor(event);
     if (shortcut === null) return;
     event.preventDefault();
@@ -659,6 +731,18 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
      they take an older undo toast away like any other edit (P6). The store
      is a new object every render anyway; the scene reads it fresh each time. */
   const sceneStore: typeof store = { ...store, run: runEdit };
+
+  const scene = (
+    <SceneView
+      ref={sceneRef}
+      store={sceneStore}
+      ui={sceneUi}
+      insets={INSETS}
+      sunDate={gateDay}
+      onView={onView}
+      onNotice={onNotice}
+    />
+  );
 
   const editor = (
     <div className={styles.editorArea}>
@@ -692,17 +776,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
         onRedo={redo}
       />
       <section className={styles.stage} aria-label="מפת הקאמפ" tabIndex={-1} ref={stageRef}>
-        <div className={styles.scene}>
-          <SceneView
-            ref={sceneRef}
-            store={sceneStore}
-            ui={sceneUi}
-            insets={INSETS}
-            sunDate={gateDay}
-            onView={onView}
-            onNotice={onNotice}
-          />
-        </div>
+        {wide ? <div className={styles.scene}>{scene}</div> : null}
         <SidePanel
           tab={tab}
           onTab={setTab}
@@ -791,6 +865,10 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
               reasonId={saveError === null ? undefined : reasonId}
               onRetry={() => { store.retrySave(); }}
             />
+            <Button size="sm" onClick={exportPicture} disabled={tableMode}>
+              <Icon name="download" size={14} />
+              ייצוא תמונה
+            </Button>
             <ButtonLink size="sm" href={plotHref}>
               <Icon name="grid" size={14} />
               הגדרות המגרש
@@ -798,7 +876,20 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
           </>
         )}
       />
-      {editor}
+      {webgl ? (
+        <>
+          {editor}
+          {/* Hidden by the stylesheet on a wide screen; the view under 900 px. */}
+          <div className={styles.narrowView}>{props.fallback}</div>
+        </>
+      ) : (
+        <div className={styles.fallback}>
+          {/* Where the map would be: the scene says, in its own words, that it
+              needs WebGL. Not under 900 px, where the table is the view anyway. */}
+          {wide ? <div className={styles.noScene}>{scene}</div> : null}
+          {props.fallback}
+        </div>
+      )}
     </div>
   );
 }
