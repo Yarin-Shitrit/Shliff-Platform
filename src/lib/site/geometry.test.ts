@@ -248,4 +248,13 @@ describe('gaps around an item', () => {
     const rect = { x: 0, y: 0, width: 100, depth: 100 };
     expect(gapsAround(rect, [{ x: 100, y: 0, width: 50, depth: 50 }], plot)).toEqual([]);
   });
+
+  it('rounds gap coordinates to whole centimetres with odd-sized rectangles', () => {
+    const rect = { x: 500, y: 900, width: 91, depth: 91 };
+    const others = [{ x: 700, y: 900, width: 100, depth: 100 }];
+    expect(gapsAround(rect, others, plot)).toEqual([
+      { from: [591, 946], to: [700, 946], lengthCm: 109 },
+      { from: [0, 946], to: [500, 946], lengthCm: 500 },
+    ]);
+  });
 });

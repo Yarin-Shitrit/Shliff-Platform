@@ -281,8 +281,8 @@ export interface Gap {
  * the ones a lead is deciding about. Order: east, west, south, north.
  */
 export function gapsAround(rect: Rect, others: readonly Rect[], plot: Plot, maxCm = 600): Gap[] {
-  const midX = rect.x + rect.width / 2;
-  const midY = rect.y + rect.depth / 2;
+  const midX = Math.round(rect.x + rect.width / 2);
+  const midY = Math.round(rect.y + rect.depth / 2);
   const sharesRows = (o: Rect) => o.y < rect.y + rect.depth && o.y + o.depth > rect.y;
   const sharesColumns = (o: Rect) => o.x < rect.x + rect.width && o.x + o.width > rect.x;
   let east = plot.widthCm - (rect.x + rect.width);
