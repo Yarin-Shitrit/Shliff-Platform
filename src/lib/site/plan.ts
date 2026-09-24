@@ -2,12 +2,14 @@ import { and, asc, eq } from 'drizzle-orm';
 import type { AnyDb } from '@/lib/db-types';
 import { isBlank } from '@/lib/text/normalize';
 import { seasons, tasks } from '@/db/schema/camp';
-import { siteItems, sitePlans, type SiteItemKind } from '@/db/schema/site';
+import { siteItems, siteKindDefaults, sitePlans, type SiteItemKind } from '@/db/schema/site';
 import {
   DEFAULT_SHADE_INSET_CM, SITE_KINDS, isSiteItemKind,
 } from './kinds';
 import { MIN_SIDE_CM, placeNew } from './geometry';
 import { derive, toPlaced, type ItemFlags, type SiteCounts } from './derive';
+import type { KindDefaults } from './defaults';
+import type { EditorDoc, EditorItem } from './editor/model';
 
 /**
  * The camp map's reads and writes. One plan per season, any number of items
@@ -30,6 +32,10 @@ export interface SitePlan {
   widthCm: number;
   depthCm: number;
   gridCm: number;
+  /** Bumped by every saved batch; the editor's guard against overwriting (spec §6.4). */
+  version: number;
+  /** The compass bearing of the map's "up"; 0 is north. */
+  northDeg: number;
   notes: string | null;
   updatedAt: Date;
   updatedBy: string | null;
@@ -45,6 +51,8 @@ export interface SiteItem {
   widthCm: number;
   depthCm: number;
   insetCm: number | null;
+  heightCm: number | null;
+  locked: boolean;
   sort: number;
   taskId: string | null;
   taskTitle: string | null;
@@ -57,6 +65,8 @@ export interface PlotInput {
   widthCm: number;
   depthCm: number;
   gridCm: number;
+  /** Whole degrees, 0–359. Left out, a new plan gets 0 and an existing one keeps its own. */
+  northDeg?: number;
   notes?: string | null;
 }
 
@@ -68,6 +78,10 @@ function validatePlot(input: PlotInput): void {
   }
   if (!Number.isInteger(input.gridCm) || input.gridCm < MIN_GRID_CM || input.gridCm > MAX_GRID_CM) {
     throw new Error('a grid step must be a whole number of centimetres between 10 and 200');
+  }
+  if (input.northDeg !== undefined
+    && (!Number.isInteger(input.northDeg) || input.northDeg < 0 || input.northDeg > 359)) {
+    throw new Error('north must be a whole number of degrees from 0 to 359');
   }
 }
 
@@ -108,6 +122,7 @@ export async function createPlan(
       widthCm: input.widthCm,
       depthCm: input.depthCm,
       gridCm: input.gridCm,
+      northDeg: input.northDeg ?? 0,
       notes: cleanNotes(input.notes),
       updatedBy: actor,
     })
@@ -132,6 +147,7 @@ export async function setPlot(
       widthCm: input.widthCm,
       depthCm: input.depthCm,
       gridCm: input.gridCm,
+      ...(input.northDeg === undefined ? {} : { northDeg: input.northDeg }),
       notes: cleanNotes(input.notes),
       updatedBy: actor,
       updatedAt: new Date(),
@@ -155,7 +171,8 @@ export async function copyPlan(
   if (await planForSeason(db, toSeasonId)) throw new Error('this season already has a map');
 
   const planId = await createPlan(db, toSeasonId, {
-    widthCm: source.widthCm, depthCm: source.depthCm, gridCm: source.gridCm, notes: source.notes,
+    widthCm: source.widthCm, depthCm: source.depthCm, gridCm: source.gridCm,
+    northDeg: source.northDeg, notes: source.notes,
   }, actor);
 
   const rows = await db.select().from(siteItems)
@@ -170,6 +187,7 @@ export async function copyPlan(
       widthCm: row.widthCm,
       depthCm: row.depthCm,
       insetCm: row.insetCm,
+      heightCm: row.heightCm,
       sort: row.sort,
       notes: row.notes,
       updatedBy: actor,
@@ -208,6 +226,8 @@ const ITEM_COLUMNS = {
   widthCm: siteItems.widthCm,
   depthCm: siteItems.depthCm,
   insetCm: siteItems.insetCm,
+  heightCm: siteItems.heightCm,
+  locked: siteItems.locked,
   sort: siteItems.sort,
   taskId: siteItems.taskId,
   taskTitle: tasks.title,
@@ -393,4 +413,42 @@ export async function siteView(db: AnyDb, seasonId: string): Promise<SiteView | 
 /** The same derivation the board runs in the browser (`derive.ts`), over the server's rows. */
 export function deriveView(plan: SitePlan, items: readonly SiteItem[]): SiteView {
   return { plan, ...derive(plan, items) };
+}
+
+/** The camp's own sizes per kind (spec D4). A row for a kind the map no longer knows is ignored. */
+export async function kindDefaults(db: AnyDb): Promise<KindDefaults> {
+  const rows = await db.select().from(siteKindDefaults);
+  const out: KindDefaults = {};
+  for (const row of rows) {
+    if (!isSiteItemKind(row.kind)) continue;
+    out[row.kind] = { widthCm: row.widthCm, depthCm: row.depthCm, heightCm: row.heightCm, insetCm: row.insetCm };
+  }
+  return out;
+}
+
+export function toEditorItem(row: SiteItem): EditorItem {
+  return {
+    id: row.id, kind: row.kind, label: row.label,
+    xCm: row.xCm, yCm: row.yCm, widthCm: row.widthCm, depthCm: row.depthCm,
+    heightCm: row.heightCm, insetCm: row.insetCm, sort: row.sort,
+    taskId: row.taskId, notes: row.notes, locked: row.locked,
+  };
+}
+
+/** Everything the editor needs, and the version it will save against. */
+export async function loadDoc(
+  db: AnyDb, planId: string,
+): Promise<{ doc: EditorDoc; version: number } | null> {
+  const plan = await planById(db, planId);
+  if (!plan) return null;
+  const items = await listItems(db, planId);
+  const defaults = await kindDefaults(db);
+  return {
+    version: plan.version,
+    doc: {
+      plot: { id: plan.id, widthCm: plan.widthCm, depthCm: plan.depthCm, gridCm: plan.gridCm, northDeg: plan.northDeg },
+      items: items.map(toEditorItem),
+      defaults,
+    },
+  };
 }

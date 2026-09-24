@@ -37,13 +37,14 @@ const S25 = { id: 's25', name: 'ברן 25', year: 2025, flatRate: '1500.00', pla
 
 const PLAN: SitePlan = {
   id: 'p1', seasonId: 's26', widthCm: 2600, depthCm: 2400, gridCm: 50, notes: null,
+  version: 0, northDeg: 0,
   updatedAt: new Date('2026-09-01T00:00:00Z'), updatedBy: 'lead@shliff.camp',
 };
 
 function item(over: Partial<SiteItemView> & { id: string }): SiteItemView {
   return {
     planId: 'p1', kind: 'tent', label: 'אוהל 1', xCm: 0, yCm: 0, widthCm: 300, depthCm: 300,
-    insetCm: null, sort: 0, taskId: null, taskTitle: null, notes: null,
+    insetCm: null, heightCm: null, locked: false, sort: 0, taskId: null, taskTitle: null, notes: null,
     updatedAt: new Date('2026-09-01T00:00:00Z'), updatedBy: 'lead@shliff.camp',
     outside: false, overlapping: false, shade: 'unshaded', ...over,
   };

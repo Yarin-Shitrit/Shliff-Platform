@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { createTestDb, type TestDb } from '@/test/db';
 import { seasons, tasks } from '@/db/schema/camp';
+import { siteItems, siteKindDefaults } from '@/db/schema/site';
 import {
-  addItem, copyPlan, createPlan, deriveView, itemById, listItems, planForSeason,
+  addItem, copyPlan, createPlan, deriveView, itemById, kindDefaults, listItems, loadDoc, planForSeason,
   removeItem, seasonsWithPlans, setPlot, siteView, updateItem,
 } from './plan';
 
@@ -233,6 +235,61 @@ describe('the camp map', () => {
         plotAreaM2: 624,
         shade: { nets: 1, shaded: 1, partly: 1, unshaded: 1, shadedAreaM2: 49 },
       });
+    });
+  });
+
+  describe('the 3D editor’s fields', () => {
+    it('starts a plan at version 0 with north up, and takes a north when given', async () => {
+      await createPlan(db, s26, { ...PLOT, northDeg: 15 }, LEAD);
+      const plan = await planForSeason(db, s26);
+      expect(plan?.version).toBe(0);
+      expect(plan?.northDeg).toBe(15);
+    });
+
+    it('refuses a north that is not a whole degree from 0 to 359', async () => {
+      await expect(createPlan(db, s26, { ...PLOT, northDeg: 360 }, LEAD)).rejects.toThrow('north must be');
+      await expect(createPlan(db, s26, { ...PLOT, northDeg: 12.5 }, LEAD)).rejects.toThrow('north must be');
+    });
+
+    it('lists items with their own height and their lock', async () => {
+      const planId = await createPlan(db, s26, PLOT, LEAD);
+      const id = await addItem(db, planId, 'tent', LEAD);
+      await db.update(siteItems).set({ heightCm: 180, locked: true }).where(eq(siteItems.id, id));
+      const [row] = await listItems(db, planId);
+      expect(row).toMatchObject({ heightCm: 180, locked: true });
+    });
+
+    it('copies height and north, and does not copy a lock', async () => {
+      const from = await createPlan(db, s25, { ...PLOT, northDeg: 30 }, LEAD);
+      const id = await addItem(db, from, 'caravan', LEAD);
+      await db.update(siteItems).set({ heightCm: 260, locked: true }).where(eq(siteItems.id, id));
+
+      const to = await copyPlan(db, s25, s26, LEAD);
+
+      expect((await planForSeason(db, s26))?.northDeg).toBe(30);
+      const [copy] = await listItems(db, to);
+      expect(copy).toMatchObject({ heightCm: 260, locked: false });
+    });
+
+    it('reads the camp’s kind defaults, ignoring a kind the map no longer knows', async () => {
+      await db.insert(siteKindDefaults).values([
+        { kind: 'tent', widthCm: 350, depthCm: 300, heightCm: 210 },
+        { kind: 'spaceship' as never, widthCm: 100, depthCm: 100, heightCm: 100 },
+      ]);
+      expect(await kindDefaults(db)).toEqual({ tent: { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: null } });
+    });
+
+    it('loads one document for the editor', async () => {
+      const planId = await createPlan(db, s26, { ...PLOT, northDeg: 10 }, LEAD);
+      const id = await addItem(db, planId, 'sofa', LEAD);
+      const loaded = await loadDoc(db, planId);
+      expect(loaded?.version).toBe(0);
+      expect(loaded?.doc.plot).toEqual({ id: planId, widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 10 });
+      expect(loaded?.doc.items).toEqual([expect.objectContaining({
+        id, kind: 'sofa', label: 'ספה 1', heightCm: null, locked: false, taskId: null, notes: null,
+      })]);
+      expect(loaded?.doc.defaults).toEqual({});
+      expect(await loadDoc(db, '00000000-0000-4000-8000-000000000000')).toBeNull();
     });
   });
 });
