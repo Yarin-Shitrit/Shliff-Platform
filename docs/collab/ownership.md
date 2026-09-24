@@ -49,7 +49,7 @@ against `main` (`45fa275`) and `origin/feat/ui-01-foundation`.
 | `src/components/ui/**` *(ui)*, including `ui/icon.tsx` | The component kit (UI plan 03) | A second button/drawer/table, slightly different, which then has to be reconciled by hand |
 | `src/lib/errors/hebrew.ts` *(ui)* | The single Hebrew error map | English text reaching a Hebrew screen — a product-rule violation, not a style nit |
 | `src/lib/money.ts` · `src/lib/dates.ts` *(ui)* | Formatting every screen shares | Two money formatters that round differently |
-| `package.json` | **Ruling R1: no new dependencies.** Not a component library, not icons, not charts, not a test helper | Ask the camp lead first; it is not negotiable by PR |
+| `package.json` | **Ruling R1: no new dependencies.** Not a component library, not icons, not charts, not a test helper. **One exception, granted by the camp lead on 2026-09-24:** `three@0.186.1` and `@types/three@0.186.0`, for the camp map's 3D editor only, imported only under `src/app/(admin)/site/editor/scene/` (spec `2026-09-24-site-map-3d-editor-design.md` D1; enforced by `site/editor/three-guard.test.ts`) | Ask the camp lead first; it is not negotiable by PR |
 | `vitest.config.ts`, `next.config.ts`, `tsconfig.json` | Build and test for everyone | A config change that only fixes your lane |
 | `CLAUDE.md`, `AGENTS.md` | Injected into every session and subagent | Instructions changing under a running agent — invisible in the diff |
 | `docs/superpowers/mock/**` | The shared design canvas. Twelve UI plans are written against these artboards | A logistics screen designed off-canvas that does not match the product, or a change to `shared.css` that moves every existing board |
