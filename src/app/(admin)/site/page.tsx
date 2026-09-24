@@ -7,7 +7,7 @@ import { listTasks } from '@/lib/work/tasks';
 import { itemById, loadDoc, seasonsWithPlans, siteView } from '@/lib/site/plan';
 import { formatArea, formatSize } from '@/lib/site/geometry';
 import {
-  copyHref, itemHref, parseSiteQuery, plotHref, removeItemHref, siteHref, sunDateOf, type RawParams,
+  copyHref, itemHref, parseSiteQuery, plotHref, removeItemHref, seasonDateHref, siteHref, sunDateOf, type RawParams,
 } from '@/lib/site/views';
 import { TopBar, SeasonChip } from '@/components/shell/top-bar';
 import { StatTile } from '@/components/ui/stat-tile';
@@ -134,6 +134,7 @@ export default async function SitePage(
             sunDate={sunDateOf(current.startsOn)}
             buildTasks={editorTasks}
             plotHref={plotHref(here)}
+            seasonDateHref={seasonDateHref(here)}
           />
           {query.plot ? (
             <PlotDrawer

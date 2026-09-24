@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  copyHref, itemHref, parseSiteQuery, plotHref, readSunDate, removeItemHref, siteHref, sunDateOf,
+  copyHref, itemHref, parseSiteQuery, plotHref, readSunDate, removeItemHref, seasonDateHref, siteHref, sunDateOf,
 } from './views';
 
 describe('the camp map’s address', () => {
@@ -25,6 +25,15 @@ describe('the camp map’s address', () => {
     // Any other value is not the flag, and is not carried.
     expect(siteHref({ season: 's26', editor: '2d' })).toBe('/site?season=s26');
     expect(plotHref({ season: 's26' })).toBe('/site?season=s26&act=plot');
+  });
+
+  it('opens the season’s opening date from here, for the season on screen (ruling SD4)', () => {
+    // The shell's drawer (`?act=season-date`) edits the season `?season=` names.
+    expect(seasonDateHref({ season: 's26', peek: 'a', act: 'plot' })).toBe('/site?season=s26&act=season-date');
+    expect(seasonDateHref({})).toBe('/site?act=season-date');
+    // Nothing on the site page reads it as one of its own drawers.
+    const query = parseSiteQuery({ season: 's26', act: 'season-date' });
+    expect([query.plot, query.copy, query.removing]).toEqual([false, false, false]);
   });
 });
 

@@ -49,7 +49,7 @@ vi.mock('./scene/scene-view', () => ({
   },
 }));
 
-import { SiteEditor } from './site-editor';
+import { SiteEditor, type SiteEditorProps } from './site-editor';
 
 const CONFLICT = 'המפה שונתה ממקום אחר מאז שנפתחה. השינויים האחרונים שלך עוד לא נשמרו.';
 const WAIT = { timeout: 3000 };
@@ -66,19 +66,23 @@ beforeEach(() => {
 });
 
 async function renderEditor() {
-  render(
-    <ToastProvider>
-      <SiteEditor
-        initial={{ doc: siteDoc([siteItem({ id: 'a' })]), version: 0 }}
-        initialSelection="a"
-        seasonName="ברן 26"
-        sunDate="2026-06-04"
-        buildTasks={[]}
-        plotHref="/site?season=s26&act=plot"
-      />
-    </ToastProvider>,
-  );
+  const props: SiteEditorProps = {
+    initial: { doc: siteDoc([siteItem({ id: 'a' })]), version: 0 },
+    initialSelection: 'a',
+    seasonName: 'ברן 26',
+    sunDate: '2026-06-04',
+    buildTasks: [],
+    plotHref: '/site?season=s26&act=plot',
+    seasonDateHref: '/site?season=s26&act=season-date',
+  };
+  const rendered = render(<ToastProvider><SiteEditor {...props} /></ToastProvider>);
   await screen.findByTestId('scene');
+  return {
+    /** The page rendering the same editor again with some props changed — as `router.refresh()` does. */
+    rerenderWith(next: Partial<SiteEditorProps>): void {
+      rendered.rerender(<ToastProvider><SiteEditor {...props} {...next} /></ToastProvider>);
+    },
+  };
 }
 
 function firstItem(): EditorItem {
@@ -165,6 +169,45 @@ describe('saving, through the store and the queue', () => {
       expect(saveSiteChangesAction).toHaveBeenLastCalledWith('p1', 4, expect.any(Array));
     }, WAIT);
     expect(await screen.findByText('כל השינויים נשמרו', undefined, WAIT)).toBeTruthy();
+  });
+});
+
+/*
+ * A plot saved in the drawer (Task 25): `setPlot` bumps the plan's version and
+ * the drawer refreshes the page, so the editor is handed a newer `initial`.
+ * The store keeps its first `init` (§6.1), so the editor takes the newer map
+ * itself — never by being remounted on the version.
+ */
+describe('a plot saved in the drawer', () => {
+  const widened = () => ({ doc: siteDoc([siteItem({ id: 'a' })], { widthCm: 3000 }), version: 1 });
+  const plotWidth = () => {
+    const call = sceneProps.mock.lastCall;
+    if (call === undefined) throw new Error('the scene never rendered');
+    return (call[0] as SceneViewProps).store.doc.plot.widthCm;
+  };
+
+  it('is taken up at once when nothing is waiting to be saved', async () => {
+    loadSiteDocAction.mockResolvedValue({ ok: true, value: widened() });
+    const { rerenderWith } = await renderEditor();
+    rerenderWith({ initial: widened() });
+    await waitFor(() => { expect(plotWidth()).toBe(3000); });
+    expect(loadSiteDocAction).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/המפה שונתה ממקום אחר/)).toBeNull();
+  });
+
+  it('raises the choice, rather than dropping edits, when something is waiting to be saved', async () => {
+    loadSiteDocAction.mockResolvedValue({ ok: true, value: widened() });
+    const { rerenderWith } = await renderEditor();
+    turn(); // waiting: the queue sends after 500 ms
+    rerenderWith({ initial: widened() });
+    expect(screen.getByText(CONFLICT)).toBeTruthy();
+    expect(loadSiteDocAction).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'שמירת השינויים שלי מעליה' }));
+    await waitFor(() => { expect(plotWidth()).toBe(3000); });
+    expect(firstItem()).toMatchObject({ widthCm: 200, depthCm: 300 });
+    await waitFor(() => {
+      expect(saveSiteChangesAction).toHaveBeenLastCalledWith('p1', 1, expect.any(Array));
+    }, WAIT);
   });
 });
 

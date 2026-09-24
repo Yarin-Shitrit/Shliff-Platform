@@ -33,6 +33,7 @@ import { findItem, type EditorDoc, type EditorItem } from '@/lib/site/editor/mod
 import type { SiteOp } from '@/lib/site/editor/ops';
 import { addOps, duplicateOps, lockOps, moveOps, removeOps, turnOps } from '@/lib/site/editor/commands';
 import { screenArrowToMap } from '@/lib/site/editor/camera';
+import { CAMP_SITE, jerusalemInstant, shadeAtHour, sunPosition } from '@/lib/site/editor/sun';
 import { readSunDate } from '@/lib/site/views';
 import { loadSiteDocAction, saveSiteChangesAction } from '../actions';
 import { useEditorStore } from './use-editor-store';
@@ -54,6 +55,7 @@ import { Minimap } from './panels/minimap';
 import { ViewControls } from './panels/view-controls';
 import { SelectionBar } from './panels/selection-bar';
 import { ShortcutsCard } from './panels/shortcuts-card';
+import { SunCard } from './panels/sun-card';
 import inspectorStyles from './panels/inspector.module.css';
 import styles from './editor.module.css';
 
@@ -72,6 +74,8 @@ export interface SiteEditorProps {
   buildTasks: ReadonlyArray<{ id: string; title: string }>;
   /** The plot drawer: size, grid and north. */
   plotHref: string;
+  /** The shell's drawer for this season's opening date — the gate day the sun is worked out for (SD4). */
+  seasonDateHref: string;
 }
 
 /**
@@ -167,7 +171,7 @@ function isTyping(target: EventTarget): boolean {
 }
 
 export function SiteEditor(props: SiteEditorProps): ReactElement {
-  const { initial, initialSelection, seasonName, sunDate, plotHref } = props;
+  const { initial, initialSelection, seasonName, sunDate, plotHref, seasonDateHref } = props;
   const planId = initial.doc.plot.id;
   const { show } = useToast();
   const store = useEditorStore({
@@ -213,6 +217,30 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
      toggle opens the card's invitation, and the scene lights no sun. */
   const sceneUi = useMemo<EditorUi>(() => ({ ...fullUi, sun: fullUi.sun && gateDay !== null }), [fullUi, gateDay]);
   const vars = useMemo(() => paletteVars(theme), [theme]);
+
+  /* Shade by hour (spec §11): the sun at the chosen quarter hour of the gate
+     day, over the camp's pin, counted with the map's north. Only for the day
+     `readSunDate` accepted (`gateDay`, P15) — no day is no sun, never a guess. */
+  const sun = ui.sun && gateDay !== null
+    ? sunPosition(jerusalemInstant(gateDay, ui.hour), CAMP_SITE.latitude, CAMP_SITE.longitude)
+    : null;
+  const sunSummary = sun === null ? null : shadeAtHour(store.doc, sun);
+
+  /* A newer map from the server — the plot drawer's save bumps the version
+     (`setPlot`) and refreshes the page. The store keeps its first `init`
+     (§6.1), so the editor takes the newer map itself: with nothing waiting
+     to be saved, by the reload a conflict offers; with edits waiting, by
+     asking, as a conflict does. While a batch is in flight its answer
+     decides. Never by remounting, which would drop unsaved edits. */
+  const serverAhead = initial.version > store.save.version && store.save.status !== 'saving';
+  const plotMovedUnderEdits = serverAhead && store.save.pending > 0;
+  const takingUp = useRef<number | null>(null);
+  useEffect(() => {
+    if (!serverAhead || store.save.pending > 0 || takingUp.current === initial.version) return;
+    takingUp.current = initial.version;
+    historyMoved(); // the reload clears the history: no undo toast may outlive it (P6)
+    void store.resolveConflict('theirs');
+  });
 
   const onView = useCallback((info: ViewInfo) => {
     setView((previous) => (sameView(previous, info) ? previous : info));
@@ -626,7 +654,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
 
   const editor = (
     <div className={styles.editorArea}>
-      {store.conflict === null ? null : (
+      {store.conflict === null && !plotMovedUnderEdits ? null : (
         <ConflictBanner
           busy={resolving}
           onTheirs={() => { void resolve('theirs'); }}
@@ -724,6 +752,17 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
           onRemove={removeSelection}
         />
         <div className={styles.cards}>
+          {ui.sun ? (
+            <SunCard
+              hour={ui.hour}
+              onHour={(hour) => { patchUi({ hour }); }}
+              summary={sunSummary}
+              northDeg={store.doc.plot.northDeg}
+              plotHref={plotHref}
+              dateHref={seasonDateHref}
+              sunDate={gateDay}
+            />
+          ) : null}
           {keysOpen ? <ShortcutsCard onClose={() => { setKeysOpen(false); }} /> : null}
         </div>
         {/* floating panels, over the scene */}

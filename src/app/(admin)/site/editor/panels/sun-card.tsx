@@ -3,9 +3,11 @@
 /**
  * Shade by hour (spec §11): the hour, 07:00 to 18:00 in quarter hours, and
  * what is really in shade then — counted by `shadeAtHour` for the gate day
- * over the Midburn pin. Without a gate day the card says so and the scene
- * lights no sun: the map does not guess a day (§13). It says which way north
- * is, and links to the plot settings where that is set.
+ * over the Midburn pin. Without a gate day the card invites one — a link to
+ * the season's opening date — and the scene lights no sun: the map does not
+ * guess a day (§13). With a day, the date itself links there too, since a
+ * figure links to what changes it (ruling SD4). It says which way north is,
+ * and links to the plot settings where that is set.
  */
 
 import Link from 'next/link';
@@ -43,13 +45,15 @@ function dayText(date: string): string {
   return `${Number(day)}.${Number(month)}.${year}`;
 }
 
-export function SunCard({ hour, onHour, summary, northDeg, plotHref, sunDate }: {
+export function SunCard({ hour, onHour, summary, northDeg, plotHref, dateHref, sunDate }: {
   hour: number;
   onHour: (hour: number) => void;
   /** Null while the sun is down — or when there is no day to ask about. */
   summary: ShadeAtHour | null;
   northDeg: number;
   plotHref: string;
+  /** The shell's drawer for this season's opening date (`?act=season-date`, `seasonDateHref`). */
+  dateHref: string;
   /**
    * The gate day, already read by `readSunDate` (`views.ts`, the one
    * `YYYY-MM-DD` check) — never raw text handed straight from a season row.
@@ -61,14 +65,15 @@ export function SunCard({ hour, onHour, summary, northDeg, plotHref, sunDate }: 
   return (
     <div className={cx(styles.card, styles.sunCard)} role="group" aria-label="צל לפי שעה" data-panel="true">
       {sunDate === null ? (
-        /* D1 (interim): nothing here can set the season's opening date — it
-           is set only when a season is opened (`createSeasonAction`), a
-           shared surface this card does not own. So the card says honestly
-           that shade by hour is not worked out, and where that date comes
-           from, without a link that would look like it fixes it. */
-        <p className={styles.hint}>
-          לעונה הזו לא נרשם תאריך פתיחה, ולכן הצל לפי שעה לא מחושב. כרגע התאריך נקבע רק בפתיחת עונה.
-        </p>
+        /* SD4 (replacing D1's interim statement): an empty state is an
+           invitation. The opening date is the shell's to set, in its own
+           drawer; the card links there. */
+        <>
+          <p className={styles.hint}>
+            לעונה הזו עוד לא נרשם תאריך פתיחה. עם תאריך, הצל לפי שעה יחושב ליום פתיחת השער.
+          </p>
+          <Link href={dateHref} className={styles.link}>קביעת תאריך הפתיחה</Link>
+        </>
       ) : (
         <>
           <div className={styles.sunRow}>
@@ -87,7 +92,17 @@ export function SunCard({ hour, onHour, summary, northDeg, plotHref, sunDate }: 
             />
           </div>
           <p className={styles.hint}><bdi>{summaryText(hour, summary)}</bdi></p>
-          <p className={styles.meta}><bdi>{`ביום פתיחת השער, ${dayText(sunDate)} (תאריך הפתיחה של העונה), במיקום של מידברן.`}</bdi></p>
+          <p className={styles.meta}>
+            {'ביום פתיחת השער, '}
+            <Link
+              href={dateHref}
+              className={styles.link}
+              aria-label={`${dayText(sunDate)}, שינוי תאריך הפתיחה`}
+            >
+              <bdi>{dayText(sunDate)}</bdi>
+            </Link>
+            {' (תאריך הפתיחה של העונה), במיקום של מידברן.'}
+          </p>
         </>
       )}
       <p className={styles.meta}>

@@ -10,6 +10,12 @@ export const PLOT_ACT = 'plot';
 export const COPY_ACT = 'copy';
 /** `?peek=<id>&act=remove`: the confirmation over one item. */
 export const REMOVE_ACT = 'remove';
+/**
+ * `?act=season-date`: the shell's drawer for the opening date of the season
+ * `?season=` names (ruling SD2) — the day shade by hour is worked out for.
+ * The drawer is the shell's, not this page's; the site only links to it.
+ */
+export const SEASON_DATE_ACT = 'season-date';
 
 export type RawParams = Record<string, string | string[] | undefined>;
 
@@ -79,6 +85,11 @@ export function plotHref(params: RawParams): string {
 
 export function copyHref(params: RawParams): string {
   return openActHref(SITE_PATH, carried(params), COPY_ACT);
+}
+
+/** The season's opening date, from the sun card (ruling SD4): a figure links to what changes it. */
+export function seasonDateHref(params: RawParams): string {
+  return openActHref(SITE_PATH, carried(params), SEASON_DATE_ACT);
 }
 
 /**
