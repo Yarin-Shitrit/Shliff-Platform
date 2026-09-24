@@ -1,0 +1,23 @@
+/*
+ * Turn, duplicate, lock and remove (spec §10): the icon buttons and the
+ * spacer the inspector's footer and the selection bar both draw. Tokens only,
+ * logical properties only (A10).
+ */
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 28px;
+  block-size: 28px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.iconButton:hover { background: var(--sunken); color: var(--ink); }
+.iconButton[aria-pressed='true'] { background: var(--brand-soft); color: var(--brand-text); }
+
+/* Removal sits apart from the rest, at the inline end. */
+.pushEnd { margin-inline-start: auto; }
