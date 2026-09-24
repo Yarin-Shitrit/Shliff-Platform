@@ -19,6 +19,8 @@ import type { SceneHandle, ViewInfo } from './scene-view';
 const { renderer, lights } = vi.hoisted(() => ({
   renderer: {
     fails: false, failsAfter: false, created: 0, frames: 0, camera: '', disposed: 0, contextLost: 0,
+    /* What the canvas is drawn at: the pixel ratio last set, and the CSS size last set with it. */
+    pixelRatio: 0, size: [0, 0] as [number, number], sized: 0,
   },
   lights: [] as unknown[],
 }));
@@ -30,9 +32,11 @@ vi.mock('three', async (importOriginal) => {
       renderer.created += 1;
       if (renderer.fails) throw new Error('Error creating WebGL context.');
     }
-    setPixelRatio() {}
-    setSize() {
+    setPixelRatio(ratio: number) { renderer.pixelRatio = ratio; }
+    setSize(width: number, height: number) {
       if (renderer.failsAfter) throw new Error('Something broke after the context was made.');
+      renderer.size = [width, height];
+      renderer.sized += 1;
     }
     render(_scene: unknown, camera: { type: string }) {
       renderer.frames += 1;
@@ -140,6 +144,7 @@ const realGetContext = HTMLCanvasElement.prototype.getContext;
 beforeEach(() => {
   Object.assign(renderer, {
     fails: false, failsAfter: false, created: 0, frames: 0, camera: '', disposed: 0, contextLost: 0,
+    pixelRatio: 0, size: [0, 0], sized: 0,
   });
   lights.length = 0;
   /* No 2D canvas either: labels are measured by an estimate, quietly. */
@@ -206,6 +211,64 @@ describe('the 3D map with WebGL', () => {
     rerenderWith(fakeStore({ selection: ['tent'] }), { ...UI });
     await frames();
     expect(renderer.frames).toBeGreaterThan(drawn);
+  });
+
+  /* A window dragged to a sharper screen keeps its CSS size, so no resize
+     reports it; only the resolution query does. Without following it the
+     canvas is drawn at the old density and stretched — blurred. */
+  it('draws at the screen’s pixel density, and follows it to another screen, never past 2×', async () => {
+    const ownRatio = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio');
+    const ownMedia = Object.getOwnPropertyDescriptor(window, 'matchMedia');
+    const watched: Array<{ query: string; listener: (() => void) | null }> = [];
+    const setRatio = (value: number) => {
+      Object.defineProperty(window, 'devicePixelRatio', { value, configurable: true, writable: true });
+    };
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: (query: string) => {
+        const entry = { query, listener: null as (() => void) | null };
+        watched.push(entry);
+        return {
+          matches: true, media: query, onchange: null,
+          addEventListener: (_type: string, listener: () => void) => { entry.listener = listener; },
+          removeEventListener: () => { entry.listener = null; },
+          addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false,
+        };
+      },
+    });
+    const screenChanges = () => { watched.at(-1)?.listener?.(); };
+    try {
+      setRatio(1);
+      const { onView, unmount } = renderScene();
+      await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+      expect(renderer.pixelRatio).toBe(1);
+      expect(renderer.size).toEqual([1000, 700]);
+
+      setRatio(2);
+      screenChanges();
+      await frames();
+      expect(renderer.pixelRatio).toBe(2);
+      expect(renderer.size).toEqual([1000, 700]);
+      // Watching again, for a change away from the new density.
+      expect(watched.at(-1)?.query).toBe('(resolution: 2dppx)');
+      expect(watched.filter((entry) => entry.listener !== null)).toHaveLength(1);
+
+      const sized = renderer.sized;
+      setRatio(3);
+      screenChanges();
+      await frames();
+      expect(renderer.pixelRatio).toBe(2);
+      expect(renderer.sized).toBe(sized);
+
+      unmount();
+      expect(watched.filter((entry) => entry.listener !== null)).toHaveLength(0);
+    } finally {
+      if (ownRatio === undefined) Reflect.deleteProperty(window, 'devicePixelRatio');
+      else Object.defineProperty(window, 'devicePixelRatio', ownRatio);
+      if (ownMedia === undefined) Reflect.deleteProperty(window, 'matchMedia');
+      else Object.defineProperty(window, 'matchMedia', ownMedia);
+    }
   });
 
   it('aims the light over the plot, and follows the plot when it is resized', async () => {

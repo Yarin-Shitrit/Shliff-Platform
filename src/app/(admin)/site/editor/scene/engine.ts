@@ -105,6 +105,9 @@ export class SceneEngine {
   /** Null until the constructor has made it, and again once disposed. */
   private overlay: OverlayLayer | null = null;
   private readonly resizeObserver: ResizeObserver | null;
+  /** The pixel ratio the canvas is drawn at (0 until the first resize), and the query that reports the screen's changing. */
+  private pixelRatio = 0;
+  private ratioQuery: MediaQueryList | null = null;
   private readonly text: CanvasRenderingContext2D | null;
   private readonly font: string;
 
@@ -164,7 +167,7 @@ export class SceneEngine {
     }
 
     try {
-      this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+      // The pixel ratio is `resize`'s, which reads it every time (see there).
       this.renderer.shadowMap.enabled = true;
       stage.appendChild(canvas);
       this.overlay = new OverlayLayer(stage, options.classes);
@@ -206,6 +209,7 @@ export class SceneEngine {
 
       this.resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => { this.resize(); });
       this.resizeObserver?.observe(stage);
+      this.watchRatio();
       this.update();
       this.resize();
 
@@ -281,6 +285,8 @@ export class SceneEngine {
     this.frameId = 0;
     if (this.settleTimer !== null) clearTimeout(this.settleTimer);
     this.resizeObserver?.disconnect();
+    this.ratioQuery?.removeEventListener('change', this.onRatioChange);
+    this.ratioQuery = null;
     const canvas = this.canvas;
     canvas.removeEventListener('pointerdown', this.onPointerDown);
     canvas.removeEventListener('pointermove', this.onPointerMove);
@@ -526,12 +532,23 @@ export class SceneEngine {
 
   /* ── camera ─────────────────────────────────────────────────────────── */
 
+  /**
+   * The canvas follows the stage's CSS size and the screen's pixel density,
+   * read afresh each time: a page zoom changes both, and a window moved to
+   * another screen changes only the density (`watchRatio`). Capped at 2×,
+   * as the engine always drew.
+   */
   private resize(): void {
     const rect = this.stage.getBoundingClientRect();
     const width = Math.round(rect.width);
     const height = Math.round(rect.height);
     if (width === 0 || height === 0) return;
-    if (width === this.viewport.width && height === this.viewport.height) return;
+    const ratio = Math.min(2, window.devicePixelRatio || 1);
+    if (width === this.viewport.width && height === this.viewport.height && ratio === this.pixelRatio) return;
+    if (ratio !== this.pixelRatio) {
+      this.pixelRatio = ratio;
+      this.renderer.setPixelRatio(ratio);
+    }
     this.viewport = { width, height };
     this.renderer.setSize(width, height, false);
     if (this.cam === null) {
@@ -542,6 +559,25 @@ export class SceneEngine {
     this.viewDirty = true;
     this.requestFrame();
   }
+
+  /**
+   * A query that matches the screen's density now, and so reports the first
+   * change away from it — which no resize does when the CSS size stays put.
+   * It is one density's query, so each change arms a new one.
+   */
+  private watchRatio(): void {
+    this.ratioQuery?.removeEventListener('change', this.onRatioChange);
+    this.ratioQuery = typeof window.matchMedia === 'function'
+      ? window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`)
+      : null;
+    this.ratioQuery?.addEventListener('change', this.onRatioChange);
+  }
+
+  private readonly onRatioChange = (): void => {
+    if (!this.alive) return;
+    this.watchRatio();
+    this.resize();
+  };
 
   private safe(): ScreenBox {
     const { insets } = this.options.props();
