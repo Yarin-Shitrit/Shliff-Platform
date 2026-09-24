@@ -138,7 +138,7 @@ export default async function SitePage(
             <PlotDrawer
               seasonId={current.id}
               seasonName={current.name}
-              plan={{ id: plan.id, widthCm: plan.widthCm, depthCm: plan.depthCm, gridCm: plan.gridCm, notes: plan.notes }}
+              plan={{ id: plan.id, widthCm: plan.widthCm, depthCm: plan.depthCm, gridCm: plan.gridCm, northDeg: plan.northDeg, notes: plan.notes }}
               items={items}
               closeHref={closeHref}
             />
@@ -160,7 +160,7 @@ export default async function SitePage(
   const plotLink = (
     <ButtonLink size="sm" href={plotHref(here)}>
       <Icon name="grid" size={14} />
-      גודל המגרש
+      הגדרות המגרש
     </ButtonLink>
   );
 
@@ -181,7 +181,7 @@ export default async function SitePage(
         <PlotDrawer
           seasonId={current.id}
           seasonName={current.name}
-          plan={{ id: plan.id, widthCm: plan.widthCm, depthCm: plan.depthCm, gridCm: plan.gridCm, notes: plan.notes }}
+          plan={{ id: plan.id, widthCm: plan.widthCm, depthCm: plan.depthCm, gridCm: plan.gridCm, northDeg: plan.northDeg, notes: plan.notes }}
           items={items}
           closeHref={closeHref}
         />
