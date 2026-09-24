@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import type { Db } from '@/db';
 import type { AnyDb } from '@/lib/db-types';
 import { isBlank } from '@/lib/text/normalize';
@@ -11,7 +11,7 @@ import { placeNew } from './geometry';
 import { derive, toPlaced, type ItemFlags, type SiteCounts } from './derive';
 import type { KindDefaults } from './defaults';
 import type { EditorDoc, EditorItem } from './editor/model';
-import { opRefusal, patchRefusal, type ItemPatch, type SiteOp } from './editor/ops';
+import { lockRefusal, opRefusal, patchRefusal, type ItemPatch, type SiteOp } from './editor/ops';
 
 /**
  * The camp map's reads and writes. One plan per season, any number of items
@@ -150,6 +150,7 @@ export async function setPlot(
       gridCm: input.gridCm,
       ...(input.northDeg === undefined ? {} : { northDeg: input.northDeg }),
       notes: cleanNotes(input.notes),
+      version: sql`${sitePlans.version} + 1`,
       updatedBy: actor,
       updatedAt: new Date(),
     })
@@ -431,9 +432,6 @@ export async function loadDoc(
   };
 }
 
-/** Moving, resizing, turning or re-kinding — what a lock forbids. Renaming and notes are not. */
-const LOCKED_FIELDS: ReadonlyArray<keyof ItemPatch> = ['xCm', 'yCm', 'widthCm', 'depthCm', 'kind', 'insetCm'];
-
 /**
  * Runs `fn` in one transaction whichever driver `db` is — the same bridge as
  * `src/lib/import/run-import.ts`, which explains the cast.
@@ -469,10 +467,10 @@ export async function applySiteOps(
       .from(sitePlans).where(eq(sitePlans.id, planId)).limit(1).for('update');
     if (!plan) throw new Error(`unknown site plan ${planId}`);
     if (plan.version !== baseVersion) return { status: 'conflict', version: plan.version };
+    if (ops.length === 0) return { status: 'saved', version: plan.version };
 
     const rows = await tx.select().from(siteItems).where(eq(siteItems.planId, planId));
     const byId = new Map(rows.map((row) => [row.id, row]));
-    let sort = rows.reduce((top, row) => Math.max(top, row.sort), -1);
 
     for (const op of ops) {
       if (op.type === 'add') {
@@ -480,24 +478,22 @@ export async function applySiteOps(
           .where(eq(siteItems.id, op.item.id)).limit(1);
         if (taken) throw new Error('an item id is already in use');
         if (op.item.taskId !== null) await assertBuildTask(tx, op.item.taskId, plan.seasonId);
-        sort += 1;
         const entry = op.item;
         const [row] = await tx.insert(siteItems).values({
           id: entry.id, planId, kind: entry.kind, label: entry.label.trim(),
           xCm: entry.xCm, yCm: entry.yCm, widthCm: entry.widthCm, depthCm: entry.depthCm,
           heightCm: entry.heightCm,
           insetCm: entry.kind === 'shade' ? (entry.insetCm ?? DEFAULT_SHADE_INSET_CM) : null,
-          sort, taskId: entry.taskId, notes: cleanNotes(entry.notes), locked: entry.locked,
+          // The client owns draw order (spec §6.2): what it sent is what is drawn.
+          sort: entry.sort, taskId: entry.taskId, notes: cleanNotes(entry.notes), locked: entry.locked,
           updatedBy: actor,
         }).returning();
         byId.set(row.id, row);
       } else if (op.type === 'update') {
         const existing = byId.get(op.id);
         if (!existing) throw new Error(`unknown site item ${op.id}`);
-        if (existing.locked && op.patch.locked !== false
-          && LOCKED_FIELDS.some((field) => op.patch[field] !== undefined)) {
-          throw new Error('that item is locked');
-        }
+        const locked = lockRefusal(existing.locked, op.patch);
+        if (locked !== null) throw new Error(locked);
         if (op.patch.taskId !== undefined && op.patch.taskId !== null) {
           await assertBuildTask(tx, op.patch.taskId, plan.seasonId);
         }
@@ -513,7 +509,11 @@ export async function applySiteOps(
       } else if (op.size === null) {
         await tx.delete(siteKindDefaults).where(eq(siteKindDefaults.kind, op.kind));
       } else {
-        const size = { widthCm: op.size.widthCm, depthCm: op.size.depthCm, heightCm: op.size.heightCm, insetCm: op.size.insetCm };
+        // Inset is a fact about nets only, same as an item's (`patchSet` above).
+        const size = {
+          widthCm: op.size.widthCm, depthCm: op.size.depthCm, heightCm: op.size.heightCm,
+          insetCm: op.kind === 'shade' ? op.size.insetCm : null,
+        };
         await tx.insert(siteKindDefaults).values({ kind: op.kind, ...size, updatedBy: actor })
           .onConflictDoUpdate({ target: siteKindDefaults.kind, set: { ...size, updatedAt: new Date(), updatedBy: actor } });
       }

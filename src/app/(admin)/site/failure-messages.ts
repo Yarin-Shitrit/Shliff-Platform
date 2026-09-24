@@ -32,6 +32,7 @@ export const SITE_ERRORS: HebrewErrors = [
   ['a kind default must be', 'מידות ברירת המחדל צריכות להיות בין 10 סנטימטר ל־500 מטר, והגובה עד 20 מטר'],
   ['north must be', 'כיוון הצפון נמדד במעלות שלמות, מ־0 עד 359'],
   ['unknown operation', 'השינוי הזה לא מוכר למפה. טעינה מחדש של המפה תסדר את זה'],
+  ['an item sort must be', 'סדר הציור של פריט הוא מספר שלם, אפס או יותר. טעינה מחדש של המפה תסדר את זה'],
 ];
 
 export function siteFailureMessage(error: unknown): string {

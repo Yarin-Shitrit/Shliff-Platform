@@ -65,6 +65,12 @@ describe('the camp map', () => {
       expect(row?.outside).toBe(true);
       expect(view?.counts.outside).toBe(1);
     });
+
+    it('bumps the version when the plot changes, like a saved batch of edits', async () => {
+      const planId = await createPlan(db, s26, PLOT, LEAD);
+      await setPlot(db, planId, { widthCm: 1000, depthCm: 1000, gridCm: 100 }, LEAD);
+      expect((await planForSeason(db, s26))?.version).toBe(1);
+    });
   });
 
   describe('items', () => {
@@ -123,6 +129,8 @@ describe('the camp map', () => {
     it('refuses a blank label, a sliver, and a fractional centimetre', async () => {
       const id = await addItem(db, planId, 'sofa', LEAD);
       await expect(updateItem(db, id, { label: '  ' }, LEAD)).rejects.toThrow('an item must have a label');
+      // A label made only of an RLM mark looks empty on an RTL screen but survives `.trim()`.
+      await expect(updateItem(db, id, { label: '‏' }, LEAD)).rejects.toThrow('an item must have a label');
       await expect(updateItem(db, id, { widthCm: 5 }, LEAD)).rejects.toThrow('an item side must be');
       await expect(updateItem(db, id, { xCm: 12.5 }, LEAD)).rejects.toThrow('an item position must be');
       await expect(updateItem(db, id, { insetCm: -1 }, LEAD)).rejects.toThrow('a shade inset must be');
@@ -392,6 +400,72 @@ describe('the camp map', () => {
       const rows = await listItems(db, planId);
       expect(rows.find((row) => row.id === net.id)?.insetCm).toBe(50);
       expect(rows.find((row) => row.id === sofa.id)?.insetCm).toBeNull();
+    });
+
+    it('rolls back an earlier op in the batch when a later one is refused server-side', async () => {
+      const planId = await createPlan(db, s26, PLOT, LEAD);
+      const [shift] = await db.insert(tasks).values({ seasonId: s26, kind: 'shift', title: 'משמרת בר' }).returning();
+      const a = tentOf();
+      const b = tentOf({ taskId: shift.id });
+      await expect(applySiteOps(db, planId, 0, [
+        { type: 'add', item: a },
+        { type: 'add', item: b },
+      ], LEAD)).rejects.toThrow('that task is not a build task of this season');
+      expect(await listItems(db, planId)).toEqual([]);
+      expect((await planForSeason(db, s26))?.version).toBe(0);
+    });
+
+    it('rolls back a move when a later op in the same batch hits a locked item', async () => {
+      const planId = await createPlan(db, s26, PLOT, LEAD);
+      const x = tentOf();
+      const y = tentOf({ locked: true });
+      await applySiteOps(db, planId, 0, [{ type: 'add', item: x }, { type: 'add', item: y }], LEAD);
+      await expect(applySiteOps(db, planId, 1, [
+        { type: 'update', id: x.id, patch: { xCm: 999 } },
+        { type: 'remove', id: y.id },
+      ], LEAD)).rejects.toThrow('that item is locked');
+      const rows = await listItems(db, planId);
+      expect(rows.find((row) => row.id === x.id)?.xCm).toBe(x.xCm);
+    });
+
+    it('keeps the client’s draw order on add', async () => {
+      const planId = await createPlan(db, s26, PLOT, LEAD);
+      const tent = tentOf({ sort: 7 });
+      await applySiteOps(db, planId, 0, [{ type: 'add', item: tent }], LEAD);
+      const [row] = await listItems(db, planId);
+      expect(row.sort).toBe(7);
+    });
+
+    it('refuses to resize a locked item’s height', async () => {
+      const planId = await createPlan(db, s26, PLOT, LEAD);
+      const tent = tentOf({ locked: true });
+      await applySiteOps(db, planId, 0, [{ type: 'add', item: tent }], LEAD);
+      await expect(applySiteOps(db, planId, 1, [{ type: 'update', id: tent.id, patch: { heightCm: 200 } }], LEAD))
+        .rejects.toThrow('that item is locked');
+    });
+
+    it('answers an empty batch with the current version, unbumped', async () => {
+      const planId = await createPlan(db, s26, PLOT, LEAD);
+      const result = await applySiteOps(db, planId, 0, [], LEAD);
+      expect(result).toEqual({ status: 'saved', version: 0 });
+      expect((await planForSeason(db, s26))?.version).toBe(0);
+    });
+
+    it('keeps a kind default’s inset only for a shade net', async () => {
+      const planId = await createPlan(db, s26, PLOT, LEAD);
+      await applySiteOps(db, planId, 0, [
+        { type: 'setKindDefault', kind: 'tent', size: { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: 40 } },
+      ], LEAD);
+      expect((await kindDefaults(db)).tent?.insetCm).toBeNull();
+    });
+
+    it('refuses an id already used on another season’s map', async () => {
+      const mine = await createPlan(db, s26, PLOT, LEAD);
+      const theirs = await createPlan(db, s25, PLOT, LEAD);
+      const other = await addItem(db, theirs, 'tent', LEAD);
+      const clash = tentOf({ id: other });
+      await expect(applySiteOps(db, mine, 0, [{ type: 'add', item: clash }], LEAD))
+        .rejects.toThrow('an item id is already in use');
     });
   });
 });

@@ -43,6 +43,7 @@ describe('site failure messages', () => {
       'a kind default must be whole centimetres: sides 10 to 50000, height 10 to 2000',
       'north must be a whole number of degrees from 0 to 359',
       'unknown operation',
+      'an item sort must be a whole number, zero or more',
     ]) {
       const hebrew = siteFailureMessage(new Error(english));
       expect(hebrew).not.toBe(HEBREW_FALLBACK);

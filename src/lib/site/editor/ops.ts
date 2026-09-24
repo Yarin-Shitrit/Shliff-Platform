@@ -1,4 +1,5 @@
 import type { SiteItemKind } from '@/db/schema/site';
+import { isBlank } from '@/lib/text/normalize';
 import type { KindSize } from '../defaults';
 import { MIN_SIDE_CM } from '../geometry';
 import { isSiteItemKind } from '../kinds';
@@ -54,7 +55,7 @@ function isHeight(value: number): boolean {
 }
 
 export function patchRefusal(patch: ItemPatch): string | null {
-  if (patch.label !== undefined && patch.label.trim() === '') return 'an item must have a label';
+  if (patch.label !== undefined && isBlank(patch.label)) return 'an item must have a label';
   if (patch.kind !== undefined && !isSiteItemKind(patch.kind)) return `unknown item kind: ${String(patch.kind)}`;
   for (const side of [patch.widthCm, patch.depthCm]) {
     if (side !== undefined && !isSide(side)) {
@@ -81,6 +82,9 @@ export function patchRefusal(patch: ItemPatch): string | null {
 
 export function newItemRefusal(entry: EditorItem): string | null {
   if (!UUID.test(entry.id)) return 'an item id must be a uuid';
+  if (!Number.isInteger(entry.sort) || entry.sort < 0) {
+    return 'an item sort must be a whole number, zero or more';
+  }
   return patchRefusal({
     label: entry.label, kind: entry.kind, xCm: entry.xCm, yCm: entry.yCm,
     widthCm: entry.widthCm, depthCm: entry.depthCm, heightCm: entry.heightCm,
@@ -105,4 +109,16 @@ export function opRefusal(op: SiteOp): string | null {
       return op.size === null ? null : kindSizeRefusal(op.size);
     default: return 'unknown operation';
   }
+}
+
+/** Moving, resizing (height included), turning or re-kinding — what a lock forbids. Renaming, notes and task links are not. */
+export const LOCKED_FIELDS: ReadonlyArray<keyof ItemPatch> = [
+  'xCm', 'yCm', 'widthCm', 'depthCm', 'heightCm', 'kind', 'insetCm',
+];
+
+/** The one lock rule the client and `plan.ts`'s `applySiteOps` both run. */
+export function lockRefusal(locked: boolean, patch: ItemPatch): string | null {
+  return locked && patch.locked !== false && LOCKED_FIELDS.some((field) => patch[field] !== undefined)
+    ? 'that item is locked'
+    : null;
 }

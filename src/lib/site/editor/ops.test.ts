@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { EditorItem } from './model';
 import { nextLabel } from './model';
-import { kindSizeRefusal, newItemRefusal, opRefusal, patchRefusal } from './ops';
+import { kindSizeRefusal, lockRefusal, newItemRefusal, opRefusal, patchRefusal } from './ops';
 
 export function item(over: Partial<EditorItem> = {}): EditorItem {
   return {
@@ -25,6 +25,10 @@ describe('refusals', () => {
     expect(patchRefusal({ kind: 'spaceship' as never })).toMatch(/^unknown item kind/);
   });
 
+  it('refuse a label made only of marks that trim() does not remove', () => {
+    expect(patchRefusal({ label: '‏' })).toMatch(/^an item must have a label/);
+  });
+
   it('refuse a height outside 10 cm to 20 m, but accept null (the kind\'s height)', () => {
     expect(patchRefusal({ heightCm: 5 })).toMatch(/^an item height must be/);
     expect(patchRefusal({ heightCm: 2_001 })).toMatch(/^an item height must be/);
@@ -34,6 +38,12 @@ describe('refusals', () => {
   it('refuse a new item whose id is not a uuid', () => {
     expect(newItemRefusal(item())).toBeNull();
     expect(newItemRefusal(item({ id: 'x1' }))).toMatch(/^an item id must be a uuid/);
+  });
+
+  it('refuse a new item with a negative or fractional sort', () => {
+    expect(newItemRefusal(item({ sort: -1 }))).toMatch(/^an item sort must be/);
+    expect(newItemRefusal(item({ sort: 1.5 }))).toMatch(/^an item sort must be/);
+    expect(newItemRefusal(item({ sort: 7 }))).toBeNull();
   });
 
   it('refuse a kind default with a bad side', () => {
@@ -46,6 +56,24 @@ describe('refusals', () => {
     expect(opRefusal({ type: 'setKindDefault', kind: 'tent', size: null })).toBeNull();
     expect(opRefusal({ type: 'update', id: 'a', patch: { widthCm: 1 } })).toMatch(/^an item side must be/);
     expect(opRefusal({ type: 'explode' } as never)).toMatch(/^unknown operation/);
+  });
+});
+
+describe('the lock', () => {
+  it('refuses a move on a locked item', () => {
+    expect(lockRefusal(true, { xCm: 900 })).toBe('that item is locked');
+  });
+
+  it('allows a rename on a locked item', () => {
+    expect(lockRefusal(true, { label: 'אוהל הצוות' })).toBeNull();
+  });
+
+  it('allows unlocking and moving in the same patch', () => {
+    expect(lockRefusal(true, { locked: false, xCm: 900 })).toBeNull();
+  });
+
+  it('allows a move on an item that is not locked', () => {
+    expect(lockRefusal(false, { xCm: 900 })).toBeNull();
   });
 });
 

@@ -121,7 +121,6 @@ export async function saveSiteChangesAction(
   try {
     const result = await applySiteOps(db, planId, baseVersion, ops, admin.email);
     if (result.status === 'conflict') return { ok: false, reason: 'conflict', version: result.version };
-    revalidatePath(SITE_PATH);
     return { ok: true, version: result.version };
   } catch (error) {
     return { ok: false, reason: 'refused', error: siteFailureMessage(error) };
