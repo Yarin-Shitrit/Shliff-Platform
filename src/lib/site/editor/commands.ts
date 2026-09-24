@@ -41,7 +41,7 @@ function unlockedOf(doc: EditorDoc, ids: readonly string[]): EditorItem[] {
 }
 
 /** An update holding only what differs from the item; null when nothing does. */
-function update(entry: EditorItem, patch: ItemPatch): UpdateOp | null {
+export function changedUpdate(entry: EditorItem, patch: ItemPatch): UpdateOp | null {
   const changed: ItemPatch = {};
   for (const key of Object.keys(patch) as Array<keyof ItemPatch>) {
     const value = patch[key];
@@ -51,7 +51,7 @@ function update(entry: EditorItem, patch: ItemPatch): UpdateOp | null {
 }
 
 function place(entry: EditorItem, rect: Rect): UpdateOp | null {
-  return update(entry, { xCm: rect.x, yCm: rect.y, widthCm: rect.width, depthCm: rect.depth });
+  return changedUpdate(entry, { xCm: rect.x, yCm: rect.y, widthCm: rect.width, depthCm: rect.depth });
 }
 
 function present(ops: ReadonlyArray<SiteOp | null>): SiteOp[] {
@@ -77,7 +77,7 @@ export function moveOps(doc: EditorDoc, ids: readonly string[], dxCm: number, dy
   const dx = wholeCm(dxCm);
   const dy = wholeCm(dyCm);
   if (dx === 0 && dy === 0) return [];
-  return present(unlockedOf(doc, ids).map((entry) => update(entry, { xCm: entry.xCm + dx, yCm: entry.yCm + dy })));
+  return present(unlockedOf(doc, ids).map((entry) => changedUpdate(entry, { xCm: entry.xCm + dx, yCm: entry.yCm + dy })));
 }
 
 /** A handle drag or typed position and sides, for one item. */
@@ -86,7 +86,7 @@ export function setRectOps(
 ): SiteOp[] {
   const entry = findItem(doc, id);
   if (!entry || entry.locked) return [];
-  return present([update(entry, {
+  return present([changedUpdate(entry, {
     xCm: wholeCm(rect.xCm), yCm: wholeCm(rect.yCm), widthCm: wholeCm(rect.widthCm), depthCm: wholeCm(rect.depthCm),
   })]);
 }
@@ -168,7 +168,7 @@ export function duplicateOps(
 }
 
 export function lockOps(doc: EditorDoc, ids: readonly string[], locked: boolean): SiteOp[] {
-  return present(itemsOf(doc, ids).map((entry) => update(entry, { locked })));
+  return present(itemsOf(doc, ids).map((entry) => changedUpdate(entry, { locked })));
 }
 
 /**
@@ -201,7 +201,7 @@ function roundedPatch(patch: ItemPatch): ItemPatch {
 export function patchOps(doc: EditorDoc, id: string, patch: ItemPatch): SiteOp[] {
   const entry = findItem(doc, id);
   if (!entry) return [];
-  const op = update(entry, storedPatch(entry, roundedPatch(patch)));
+  const op = changedUpdate(entry, storedPatch(entry, roundedPatch(patch)));
   if (op === null) return [];
   if (lockRefusal(entry.locked, op.patch) !== null) return [];
   return [op];
@@ -226,7 +226,7 @@ export function resizeKindOps(
       const heightCm = wholeCm(size.heightCm);
       if (heightCm !== itemHeight(entry, doc.defaults)) patch.heightCm = heightCm;
     }
-    return update(entry, patch);
+    return changedUpdate(entry, patch);
   }));
 }
 
@@ -237,7 +237,7 @@ export function resetSizeOps(doc: EditorDoc, ids: readonly string[]): SiteOp[] {
     const rect = resizedAboutCentre(entry, size.widthCm, size.depthCm);
     const patch: ItemPatch = { xCm: rect.x, yCm: rect.y, widthCm: rect.width, depthCm: rect.depth, heightCm: null };
     if (entry.kind === 'shade') patch.insetCm = size.insetCm ?? DEFAULT_SHADE_INSET_CM;
-    return update(entry, patch);
+    return changedUpdate(entry, patch);
   }));
 }
 
@@ -281,7 +281,7 @@ export function alignOps(doc: EditorDoc, ids: readonly string[], how: Alignment)
   const movable = unlockedOf(doc, ids);
   const group = unionRect(movable.map(rectOf));
   if (movable.length < 2 || group === null) return [];
-  return present(movable.map((entry) => update(entry, aligned(entry, group, how))));
+  return present(movable.map((entry) => changedUpdate(entry, aligned(entry, group, how))));
 }
 
 /**
@@ -303,7 +303,7 @@ export function distributeOps(doc: EditorDoc, ids: readonly string[], axis: 'x' 
   const ops: Array<SiteOp | null> = [];
   for (const entry of inner) {
     const at = wholeCm(cursor);
-    ops.push(update(entry, axis === 'x' ? { xCm: at } : { yCm: at }));
+    ops.push(changedUpdate(entry, axis === 'x' ? { xCm: at } : { yCm: at }));
     cursor += side(entry) + gap;
   }
   return present(ops);
@@ -324,7 +324,7 @@ export function rowOps(doc: EditorDoc, ids: readonly string[], gapCm: number): S
   let cursor = group.x;
   const ops: Array<SiteOp | null> = [];
   for (const entry of sorted) {
-    ops.push(update(entry, { xCm: cursor, yCm: group.y }));
+    ops.push(changedUpdate(entry, { xCm: cursor, yCm: group.y }));
     cursor += entry.widthCm + gap;
   }
   return present(ops);
