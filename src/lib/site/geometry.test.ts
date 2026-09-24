@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   HANDLES, areaM2, contains, formatArea, formatMetres, formatSize, gapsAround, move, outsideIds,
   overlap, overlapPairs, placeNew, resize, shadeCounts, shadeState, shadedRect, snap,
-  swapSides, turnAboutCentre, unionRect, wholeCm, type PlacedItem, type Rect,
+  turnAboutCentre, unionRect, wholeCm, type PlacedItem, type Rect,
 } from './geometry';
 
 const PLOT = { widthCm: 2600, depthCm: 2400 };
@@ -99,10 +99,6 @@ describe('moving and resizing', () => {
 
   it('snaps the dragged edge', () => {
     expect(resize(rect, 'e', 37, 0, 50)).toEqual({ x: 500, y: 500, width: 350, depth: 200 });
-  });
-
-  it('turns by swapping the sides on the same corner', () => {
-    expect(swapSides(rect)).toEqual({ x: 500, y: 500, width: 200, depth: 300 });
   });
 });
 

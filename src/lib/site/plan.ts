@@ -259,8 +259,9 @@ export async function itemById(db: AnyDb, id: string): Promise<SiteItem | null> 
 }
 
 /**
- * Drops a preset onto the first free spot. Returns the new id so the board
- * can select what it just made. When the plot has no free spot the item
+ * Drops a preset onto the first free spot and returns the new id. No screen
+ * calls it since the board retired (the editor adds through `applySiteOps`);
+ * `plan.test.ts` builds its maps with it. When the plot has no free spot the item
  * still lands — at the origin, on top of whatever is there — and the overlap
  * flag says so; refusing would leave the lead with nothing to drag.
  */
@@ -385,7 +386,7 @@ export async function siteView(db: AnyDb, seasonId: string): Promise<SiteView | 
   return deriveView(plan, items);
 }
 
-/** The same derivation the board runs in the browser (`derive.ts`), over the server's rows. */
+/** The same derivation the editor's store runs in the browser (`derive.ts`), over the server's rows. */
 export function deriveView(plan: SitePlan, items: readonly SiteItem[]): SiteView {
   return { plan, ...derive(plan, items) };
 }

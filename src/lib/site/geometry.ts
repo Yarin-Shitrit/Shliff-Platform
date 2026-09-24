@@ -125,11 +125,6 @@ export function resize(
   return { x: left, y: top, width: right - left, depth: bottom - top };
 }
 
-/** A quarter turn. The item pivots on its own corner, which is where a lead expects it. */
-export function swapSides(rect: Rect): Rect {
-  return { ...rect, width: rect.depth, depth: rect.width };
-}
-
 /**
  * Where a new item lands: the first grid cell, reading across then down,
  * where it fits inside the plot and sits on nobody. Null when the plot has no

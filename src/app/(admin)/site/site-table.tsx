@@ -15,23 +15,25 @@ import { BUILD_PATH } from '@/lib/logistics/build-views';
 import styles from './site.module.css';
 
 /**
- * No `'use client'`: the list under the board, rendered on the server. It is
- * the reading of the map that needs no pointer — a phone in a dust storm, a
- * screen reader, a printout — and the row action opens the same drawer the
- * board's toolbar does.
+ * No `'use client'`: the item table, rendered on the server and handed to the
+ * editor, which shows it as the view on a screen under 900 px and under the
+ * scene's notice in a browser without WebGL (spec §7). It is the reading of
+ * the map that needs no pointer — a phone in a dust storm, a screen reader,
+ * a printout. A row's name links to the map with that item selected
+ * (`?peek=`); there are no row actions, since every edit, removal included,
+ * is made and undone in the editor.
  */
 
 export type SiteTableProps = {
   items: readonly SiteItemView[];
   params: RawParams;
   season: string;
-  rowActions?: (row: SiteItemView) => ReactNode;
   empty: ReactNode;
 };
 
 const DASH = '—';
 
-export function SiteTable({ items, params, season, rowActions, empty }: SiteTableProps): ReactElement {
+export function SiteTable({ items, params, season, empty }: SiteTableProps): ReactElement {
   const columns: ReadonlyArray<TableColumn<SiteItemView>> = [
     {
       key: 'label',
@@ -119,8 +121,6 @@ export function SiteTable({ items, params, season, rowActions, empty }: SiteTabl
         data: row,
         tone: row.outside ? 'bad' : row.overlapping ? 'warn' : undefined,
       }))}
-      rowActions={rowActions}
-      rowActionsHeader="פעולות"
       empty={empty}
     />
   );

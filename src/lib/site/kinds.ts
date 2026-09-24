@@ -9,8 +9,9 @@ import type { SiteItemKind } from '@/db/schema/site';
  * by typing centimetres. What this table fixes is only that a new tent is
  * tent-sized rather than a 1 × 1 square somebody has to stretch every time.
  *
- * Centimetres, integers, like the schema. `group` is what the board colours
- * by; the tones are the platform's own tokens, never a chart series colour.
+ * Centimetres, integers, like the schema. `group` is what the map colours
+ * by — the scene's own palette (`editor/scene/palette.ts`), which the panels
+ * take as `--group-*` custom properties.
  */
 export type SiteKindGroup = 'sleep' | 'living' | 'sanitation' | 'utility' | 'other';
 

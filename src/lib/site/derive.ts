@@ -7,10 +7,11 @@ import {
 /**
  * The flags the screen draws — outside, overlapping, in shade — derived from
  * the rows and never stored. Pure and free of the database on purpose: the
- * board re-derives them on every drag, in the browser, so the warning on a
- * tent appears the moment it crosses the fence and not after the round trip.
- * `plan.ts` calls the same function for the server render, so the two can
- * never disagree about what "outside" means.
+ * editor's store re-derives them after every edit, in the browser
+ * (`use-editor-store.ts`), so the checks bar and the inspector flag a tent the
+ * moment it crosses the fence and not after the save's round trip. `plan.ts`
+ * calls the same function for the server's read, which the item table draws,
+ * so the two can never disagree about what "outside" means.
  */
 
 export interface PlotShape {
