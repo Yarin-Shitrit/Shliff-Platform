@@ -6,6 +6,7 @@ import { createRef } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { DirectionalLight } from 'three';
 import type { EditorDoc, EditorItem } from '@/lib/site/editor/model';
+import { mapDirection } from '@/lib/site/editor/sun';
 import type { EditorStore } from '../use-editor-store';
 import type { SceneHandle, ViewInfo } from './scene-view';
 
@@ -317,6 +318,57 @@ describe('the 3D map with WebGL', () => {
       expect(renderer.camera).toBe('OrthographicCamera');
       // North up, as the switch left it, and the whole plot: the plan fit, not a 3D one.
       expect(onView.mock.calls.at(-1)?.[0]).toMatchObject({ moving: false, yaw: 0, zoomPct: 100 });
+    });
+  });
+
+  describe('north up', () => {
+    /** Turns north up on a plot whose map-up faces `northDeg`, and waits for the turn to settle. */
+    async function turnedNorthUp(northDeg: number) {
+      const doc = docOf(DOC.items, { ...DOC.plot, northDeg });
+      const { handle, onView } = renderScene(fakeStore({ doc }));
+      await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+      handle.current?.northUp();
+      await wait(800); // a 380 ms turn, then the view settles
+      return { handle, info: onView.mock.calls.at(-1)?.[0] };
+    }
+
+    /**
+     * Which way the top of the screen is, as a unit map direction: from the
+     * ground under the middle to the ground above it. The oracle is
+     * `sun.ts`'s `mapDirection(0, northDeg)` — where true north lies on a
+     * map whose up faces `northDeg` — which the engine does not use.
+     */
+    function screenUp(handle: { current: SceneHandle | null }): [number, number] {
+      const middle = handle.current?.groundAtClient(500, 350) ?? [NaN, NaN];
+      const above = handle.current?.groundAtClient(500, 250) ?? [NaN, NaN];
+      const length = Math.hypot(above[0] - middle[0], above[1] - middle[1]);
+      return [(above[0] - middle[0]) / length, (above[1] - middle[1]) / length];
+    }
+
+    it('turns the map’s own up to the top when that is north, as it always did', async () => {
+      const { handle, info } = await turnedNorthUp(0);
+      expect(info).toMatchObject({ moving: false, yaw: 0 });
+      const [x, y] = screenUp(handle);
+      expect(x).toBeCloseTo(mapDirection(0, 0)[0], 6);
+      expect(y).toBeCloseTo(mapDirection(0, 0)[1], 6);
+    });
+
+    it('turns true north to the top when the map’s up faces east', async () => {
+      const { handle, info } = await turnedNorthUp(90);
+      expect(info?.moving).toBe(false);
+      expect(info?.yaw).toBeCloseTo(90, 6);
+      // North is then the map's west, (−1, 0).
+      const [x, y] = screenUp(handle);
+      expect(x).toBeCloseTo(mapDirection(0, 90)[0], 6);
+      expect(y).toBeCloseTo(mapDirection(0, 90)[1], 6);
+    });
+
+    it('turns true north to the top on the camp’s 2025 plot, six degrees off', async () => {
+      const { handle, info } = await turnedNorthUp(6);
+      expect(info?.yaw).toBeCloseTo(6, 6);
+      const [x, y] = screenUp(handle);
+      expect(x).toBeCloseTo(mapDirection(0, 6)[0], 6);
+      expect(y).toBeCloseTo(mapDirection(0, 6)[1], 6);
     });
   });
 

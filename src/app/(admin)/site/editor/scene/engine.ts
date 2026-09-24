@@ -354,10 +354,23 @@ export class SceneEngine {
     this.animate({ ...this.cam, yaw: Math.round(this.cam.yaw / step) * step + dir * step }, 380);
   }
 
+  /**
+   * True north to the top of the screen (spec §5, the view controls'
+   * compass) — not the map's own up edge, which points to compass bearing
+   * `plot.northDeg`.
+   *
+   * The sign: at yaw θ, screen-up on the ground is the map direction
+   * (−sin θ, −cos θ) (`camera.ts`; the picture is turned θ clockwise, the
+   * map's up showing θ clockwise of the screen's top). True north on the map
+   * is (−sin northDeg, −cos northDeg) (`sun.ts`, `mapDirection(0, northDeg)`):
+   * `northDeg` counter-clockwise of the map's up. They agree when
+   * θ = northDeg. With `northDeg` 0 this is yaw 0, as it always was.
+   */
   northUp(): void {
     if (this.cam === null) return;
     this.stopAnimation();
-    this.animate({ ...this.cam, yaw: 0 }, 380);
+    const { northDeg } = this.options.props().store.doc.plot;
+    this.animate({ ...this.cam, yaw: ((northDeg % 360) + 360) % 360 }, 380);
   }
 
   centreGround(): [number, number] | null {
