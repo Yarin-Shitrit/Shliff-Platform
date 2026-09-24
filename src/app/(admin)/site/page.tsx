@@ -4,10 +4,10 @@ import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import { resolveSeason } from '@/lib/seasons/current';
 import { listTasks } from '@/lib/work/tasks';
-import { itemById, seasonsWithPlans, siteView } from '@/lib/site/plan';
+import { itemById, loadDoc, seasonsWithPlans, siteView } from '@/lib/site/plan';
 import { formatArea, formatSize } from '@/lib/site/geometry';
 import {
-  copyHref, itemHref, parseSiteQuery, plotHref, removeItemHref, siteHref, type RawParams,
+  copyHref, itemHref, parseSiteQuery, plotHref, removeItemHref, seasonDateHref, siteHref, sunDateOf, type RawParams,
 } from '@/lib/site/views';
 import { TopBar, SeasonChip } from '@/components/shell/top-bar';
 import { StatTile } from '@/components/ui/stat-tile';
@@ -21,6 +21,7 @@ import { ItemDrawer } from './item-drawer';
 import { PlotDrawer } from './plot-drawer';
 import { CopyDrawer } from './copy-drawer';
 import { RemoveItem } from './remove-item';
+import { SiteEditor } from './editor/site-editor';
 import styles from './site.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -66,8 +67,9 @@ export default async function SitePage(
 
   /* The URL the sidebar wrote may carry no `season`; every link this page
      builds carries the one it resolved, so a switch of year survives a
-     drawer (R5). */
-  const here: RawParams = { season: current.id };
+     drawer (R5). `?editor=3d` rides along while the flag exists, so the
+     editor's drawers close back into the editor (`carried`, views.ts). */
+  const here: RawParams = query.editor3d ? { season: current.id, editor: '3d' } : { season: current.id };
   const closeHref = siteHref(here);
   const view = await siteView(db, current.id);
   const others = (await seasonsWithPlans(db)).filter((plan) => plan.seasonId !== current.id);
@@ -103,6 +105,51 @@ export default async function SitePage(
 
   const { plan, items, counts } = view;
 
+  /* The editor behind `?editor=3d`, until Task 26 makes it the page. `loadDoc`
+     answers null only if the plan vanished since `siteView` read it; the
+     board below is then the honest fallback. The item drawer and the remove
+     page do not open over the editor: `?peek=` selects the item instead, so
+     this branch comes before the drawer's own reads. */
+  if (query.editor3d) {
+    const loaded = await loadDoc(db, plan.id);
+    if (loaded !== null) {
+      /* `?peek=` selects an item when the map loads — only one on this map. */
+      const initialSelection = query.peek !== null && loaded.doc.items.some((entry) => entry.id === query.peek)
+        ? query.peek
+        : null;
+      const editorTasks = (await listTasks(db, current.id, { kind: 'build' }))
+        .map((task) => ({ id: task.taskId, title: task.title }));
+      return (
+        <main className={styles.editorPage}>
+          <h1 className="sr-only">{`מפת הקאמפ · ${current.name}`}</h1>
+          {/* Keyed on the plan, so another season's map is another editor and
+              one season's name never sits over another's frozen map. Never on
+              the version: a remount would drop edits not yet saved. A newer
+              version reaching this editor is handled inside it (Task 25). */}
+          <SiteEditor
+            key={plan.id}
+            initial={loaded}
+            initialSelection={initialSelection}
+            seasonName={current.name}
+            sunDate={sunDateOf(current.startsOn)}
+            buildTasks={editorTasks}
+            plotHref={plotHref(here)}
+            seasonDateHref={seasonDateHref(here)}
+          />
+          {query.plot ? (
+            <PlotDrawer
+              seasonId={current.id}
+              seasonName={current.name}
+              plan={{ id: plan.id, widthCm: plan.widthCm, depthCm: plan.depthCm, gridCm: plan.gridCm, northDeg: plan.northDeg, notes: plan.notes }}
+              items={items}
+              closeHref={closeHref}
+            />
+          ) : null}
+        </main>
+      );
+    }
+  }
+
   /* Fetched rather than found among `items`: the id comes from a URL, and a
      row that is not on this plan is not this page's to open. */
   const peekedRow = query.peek === null ? null : await itemById(db, query.peek);
@@ -112,21 +159,44 @@ export default async function SitePage(
   const buildTasks = peeked === null ? [] : (await listTasks(db, current.id, { kind: 'build' }))
     .map((task) => ({ id: task.taskId, title: task.title }));
 
+  const plotLink = (
+    <ButtonLink size="sm" href={plotHref(here)}>
+      <Icon name="grid" size={14} />
+      הגדרות המגרש
+    </ButtonLink>
+  );
+
+  const drawers = (
+    <>
+      {peeked !== null && !query.removing ? (
+        <ItemDrawer
+          item={peeked}
+          buildTasks={buildTasks}
+          closeHref={closeHref}
+          removeHref={removeItemHref(here, peeked.id)}
+        />
+      ) : null}
+      {peeked !== null && query.removing ? (
+        <RemoveItem item={{ id: peeked.id, label: peeked.label }} cancelHref={closeHref} />
+      ) : null}
+      {query.plot ? (
+        <PlotDrawer
+          seasonId={current.id}
+          seasonName={current.name}
+          plan={{ id: plan.id, widthCm: plan.widthCm, depthCm: plan.depthCm, gridCm: plan.gridCm, northDeg: plan.northDeg, notes: plan.notes }}
+          items={items}
+          closeHref={closeHref}
+        />
+      ) : null}
+    </>
+  );
+
   const firstOutside = items.find((item) => item.outside) ?? null;
   const shadeAttention = counts.shade.partly + counts.shade.unshaded;
 
   return (
     <main className={styles.page}>
-      <TopBar
-        crumbs={crumbs}
-        chip={<SeasonChip seasonName={current.name} />}
-        actions={(
-          <ButtonLink size="sm" href={plotHref(here)}>
-            <Icon name="grid" size={14} />
-            גודל המגרש
-          </ButtonLink>
-        )}
-      />
+      <TopBar crumbs={crumbs} chip={<SeasonChip seasonName={current.name} />} actions={plotLink} />
 
       <div className={styles.head}>
         <div>
@@ -215,26 +285,7 @@ export default async function SitePage(
         )}
       />
 
-      {peeked !== null && !query.removing ? (
-        <ItemDrawer
-          item={peeked}
-          buildTasks={buildTasks}
-          closeHref={closeHref}
-          removeHref={removeItemHref(here, peeked.id)}
-        />
-      ) : null}
-      {peeked !== null && query.removing ? (
-        <RemoveItem item={{ id: peeked.id, label: peeked.label }} cancelHref={closeHref} />
-      ) : null}
-      {query.plot ? (
-        <PlotDrawer
-          seasonId={current.id}
-          seasonName={current.name}
-          plan={{ id: plan.id, widthCm: plan.widthCm, depthCm: plan.depthCm, gridCm: plan.gridCm, notes: plan.notes }}
-          items={items}
-          closeHref={closeHref}
-        />
-      ) : null}
+      {drawers}
     </main>
   );
 }

@@ -1,0 +1,98 @@
+/*
+ * במפה (spec §10): the search box, each kind group with its hide switch, and
+ * a row per item. The search box, the hint, the invitation, the group
+ * swatches and the problem dot are the shared `panel.module.css`. Tokens
+ * only, logical properties throughout (A10).
+ */
+
+/* An empty state: the sentence, and the one action it offers under it. */
+.offer {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: var(--space-2);
+}
+
+.groupHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-block: 6px 2px;
+  padding-inline: 2px;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+  font-weight: 600;
+}
+
+/* A group's count, which selects the rows it counts. */
+.count {
+  min-inline-size: 22px;
+  block-size: 20px;
+  padding-inline: 6px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--sunken);
+  color: var(--ink-3);
+  font-size: var(--text-label);
+  font-weight: 600;
+  cursor: pointer;
+}
+.count:hover { background: var(--hover); color: var(--ink); }
+
+.eye {
+  margin-inline-start: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 28px;
+  block-size: 28px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.eye:hover { background: var(--sunken); color: var(--ink); }
+.eye[aria-pressed='true'] { color: var(--brand-text); }
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  inline-size: 100%;
+  block-size: 32px;
+  padding-inline: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--text-dense);
+  text-align: start;
+  cursor: pointer;
+}
+.row:hover { background: var(--sunken); }
+.row[aria-pressed='true'] { background: var(--selected); }
+/* Not drawn in the scene: its group, or the nets, are hidden. The row's name says so in words. */
+.row[data-hidden='true'] { color: var(--ink-3); }
+.row[data-hidden='true'] .rowSwatch { opacity: 0.4; }
+
+.rowSwatch {
+  inline-size: 10px;
+  block-size: 10px;
+  flex-shrink: 0;
+  border-radius: 3px;
+  background: var(--swatch);
+}
+
+.rowLabel {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowSize {
+  color: var(--ink-3);
+  font-size: var(--text-label);
+}

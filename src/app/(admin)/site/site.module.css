@@ -33,6 +33,18 @@
   flex-wrap: wrap;
 }
 
+/* The editor's page: the whole panel, no reading measure and no padding —
+   the scene is the page (spec §10). Beats the global `main` rule by class. */
+.editorPage {
+  flex: 1;
+  min-block-size: 0;
+  display: flex;
+  flex-direction: column;
+  max-inline-size: none;
+  margin: 0;
+  padding: 0;
+}
+
 /* ---- the board ------------------------------------------------------- */
 
 .board {

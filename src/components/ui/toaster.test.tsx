@@ -122,6 +122,28 @@ describe('the toaster', () => {
     expect(screen.queryByText(PAID)).toBeNull();
   });
 
+  it('takes a toast away when the code that showed it says it is no longer true', () => {
+    const shown: { dismiss: () => void } = { dismiss: () => {} };
+    function Caller() {
+      const { show } = useToast();
+      return (
+        <button type="button" onClick={() => { shown.dismiss = show({ message: PAID }); show({ message: PAID_TOO }); }}>
+          שלח
+        </button>
+      );
+    }
+    render(<ToastProvider><Caller /></ToastProvider>);
+    fireEvent.click(screen.getByRole('button', { name: 'שלח' }));
+    expect(screen.queryByText(PAID)).toBeTruthy();
+    act(() => { shown.dismiss(); });
+    expect(screen.queryByText(PAID)).toBeNull();
+    // Only that toast: the one shown after it stays.
+    expect(screen.queryByText(PAID_TOO)).toBeTruthy();
+    // Taking away a toast already gone does nothing.
+    act(() => { shown.dismiss(); });
+    expect(screen.queryByText(PAID_TOO)).toBeTruthy();
+  });
+
   it('reports a refused undo instead of swallowing it', async () => {
     const run = vi.fn().mockResolvedValue({ ok: false, error: 'לא ניתן למחוק תשלום שסוכם' });
     const t = mount({ message: PAID, undo: { label: 'ביטול', run } });

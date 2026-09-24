@@ -1,0 +1,270 @@
+/*
+ * The inspector (spec §10): the plot, one item, several items. One module for
+ * the three, because they are one panel in three states and share every rule
+ * below. Tokens only, logical properties throughout (A10).
+ *
+ * The floating card, its body, the hint and meta lines, the links, the group
+ * swatches and the problem dot are the shared `panel.module.css`
+ * (integration's dedupe, ruling W10).
+ */
+
+/* ---- the panel ---------------------------------------------------------- */
+
+/* Where the floating card (`panel.module.css` `.panel`) sits: at the inline
+   end — the left edge on this RTL page — stopping short of the 154px minimap
+   under it (12 + 154 + 12 + 8 = 186). */
+.inspector {
+  inset-block-start: 12px;
+  inset-inline-end: 12px;
+  inline-size: 292px;
+  max-block-size: calc(100% - 186px);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-block: 10px;
+  padding-inline: 12px;
+  border-block-end: 1px solid var(--line);
+}
+
+.headTitle {
+  margin: 0;
+  font-size: var(--text-cell);
+  font-weight: 600;
+}
+
+.headEnd {
+  margin-inline-start: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-meta);
+  font-weight: 600;
+}
+
+/* A heading with a control beside it: the control stays out of the heading's name. */
+.sectionHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sectionMeta {
+  margin-inline-start: auto;
+  color: var(--ink-3);
+  font-size: var(--text-label);
+  font-weight: 400;
+}
+
+.divider {
+  block-size: 1px;
+  flex-shrink: 0;
+  background: var(--line);
+}
+
+/* ---- figures ------------------------------------------------------------ */
+
+.kv {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 6px 10px;
+  align-items: center;
+  margin: 0;
+  font-size: var(--text-dense);
+}
+.kv dt { color: var(--ink-3); }
+.kv dd { margin: 0; }
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.chipButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+/* A kind in the selection, as a chip that selects that kind. The kit's
+   neutral `Pill` look, drawn here because a `Pill` holds only a string and
+   the count needs its own `<bdi>`. The gap stands in for the space between
+   the count and the name, which a flex row does not draw. */
+.kindChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  block-size: 22px;
+  padding-inline: 8px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--sunken);
+  color: var(--ink-2);
+  font-size: var(--text-label);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.kindChip:hover { background: var(--hover); color: var(--ink); }
+
+/* A count that selects what it counts: a group, the nets, the whole map. */
+.groupStat {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  inline-size: 100%;
+  padding-block: 2px;
+  padding-inline: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: var(--text-meta);
+  text-align: start;
+  cursor: pointer;
+}
+.groupStat:hover .groupName { text-decoration: underline; }
+.groupCount { margin-inline-start: auto; color: var(--ink-3); }
+
+.issue {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  inline-size: 100%;
+  padding-block: 6px;
+  padding-inline: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: var(--text-meta);
+  text-align: start;
+  cursor: pointer;
+}
+.issue:hover { background: var(--hover); }
+.issueText { flex: 1; }
+
+/* ---- typed values ------------------------------------------------------- */
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.fieldsTwo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-inline-size: 0;
+  color: var(--ink-3);
+  font-size: var(--text-label);
+}
+
+.input {
+  inline-size: 100%;
+  min-inline-size: 0;
+  block-size: 32px;
+  padding-inline: var(--space-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: var(--text-dense);
+}
+.input:focus-visible { border-color: var(--focus); }
+.input[aria-invalid='true'] { border-color: var(--bad); }
+.input:disabled { background: var(--sunken); color: var(--ink-3); }
+textarea.input { block-size: 56px; padding-block: 6px; resize: none; }
+
+/* A typed figure reads left to right whatever the page's direction (A11). */
+.number {
+  direction: ltr;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.error {
+  margin: 0;
+  color: var(--bad);
+  font-size: var(--text-meta);
+}
+
+/* ---- several items ------------------------------------------------------ */
+
+.kindRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+}
+
+.kindHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-dense);
+  font-weight: 600;
+}
+
+.kindCount {
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+  font-weight: 500;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+  cursor: pointer;
+}
+.check input { inline-size: 14px; block-size: 14px; margin: 0; accent-color: var(--brand); }
+
+.controlsRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.gapField { inline-size: 96px; }
+
+/* ---- the footer: SiteEditor's turn, duplicate, lock and remove ---------- */
+
+.foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding-block: var(--space-2);
+  padding-inline: 10px;
+  border-block-start: 1px solid var(--line);
+  background: var(--sunken);
+}

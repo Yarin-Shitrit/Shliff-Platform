@@ -14,33 +14,41 @@ import type { SiteItemKind } from '@/db/schema/site';
  */
 export type SiteKindGroup = 'sleep' | 'living' | 'sanitation' | 'utility' | 'other';
 
+/** How the scene draws a kind (`scene/meshes.ts`). */
+export type SiteKindShape = 'box' | 'sofa' | 'tent' | 'cylinder' | 'fire' | 'net';
+
 export interface SiteKindPreset {
   label: string;
+  /** For a grouped label: "4 תאי שירותים". */
+  plural: string;
   group: SiteKindGroup;
+  shape: SiteKindShape;
   widthCm: number;
   depthCm: number;
+  /** Drawn and shadowed only. A net's height is the height of its cloth. */
+  heightCm: number;
 }
 
 export const SITE_KINDS: Record<SiteItemKind, SiteKindPreset> = {
-  tent: { label: 'אוהל', group: 'sleep', widthCm: 300, depthCm: 300 },
-  caravan: { label: 'קראוון', group: 'sleep', widthCm: 700, depthCm: 250 },
-  shade: { label: 'רשת צל', group: 'sleep', widthCm: 800, depthCm: 800 },
-  kitchen: { label: 'מטבח', group: 'living', widthCm: 400, depthCm: 300 },
-  bar: { label: 'בר', group: 'living', widthCm: 300, depthCm: 100 },
-  sofa: { label: 'ספה', group: 'living', widthCm: 200, depthCm: 90 },
-  armchair: { label: 'כורסה', group: 'living', widthCm: 90, depthCm: 90 },
-  table: { label: 'שולחן', group: 'living', widthCm: 180, depthCm: 80 },
-  fire: { label: 'מדורה', group: 'living', widthCm: 150, depthCm: 150 },
-  shower: { label: 'מקלחת', group: 'sanitation', widthCm: 100, depthCm: 100 },
-  toilet: { label: 'תא שירותים', group: 'sanitation', widthCm: 100, depthCm: 100 },
-  changing: { label: 'אזור הלבשה', group: 'sanitation', widthCm: 200, depthCm: 150 },
-  fridge: { label: 'מקרר', group: 'utility', widthCm: 70, depthCm: 70 },
-  generator: { label: 'גנרטור', group: 'utility', widthCm: 100, depthCm: 80 },
-  water: { label: 'מיכל מי שתייה', group: 'utility', widthCm: 120, depthCm: 120 },
-  greywater: { label: 'מים אפורים', group: 'utility', widthCm: 100, depthCm: 100 },
-  boiler: { label: 'דוד', group: 'utility', widthCm: 60, depthCm: 60 },
-  storage: { label: 'מחסן', group: 'utility', widthCm: 200, depthCm: 200 },
-  other: { label: 'אחר', group: 'other', widthCm: 100, depthCm: 100 },
+  tent: { label: 'אוהל', plural: 'אוהלים', group: 'sleep', shape: 'tent', widthCm: 300, depthCm: 300, heightCm: 200 },
+  caravan: { label: 'קראוון', plural: 'קראוונים', group: 'sleep', shape: 'box', widthCm: 700, depthCm: 250, heightCm: 270 },
+  shade: { label: 'רשת צל', plural: 'רשתות צל', group: 'sleep', shape: 'net', widthCm: 800, depthCm: 800, heightCm: 300 },
+  kitchen: { label: 'מטבח', plural: 'מטבחים', group: 'living', shape: 'box', widthCm: 400, depthCm: 300, heightCm: 230 },
+  bar: { label: 'בר', plural: 'ברים', group: 'living', shape: 'box', widthCm: 300, depthCm: 100, heightCm: 110 },
+  sofa: { label: 'ספה', plural: 'ספות', group: 'living', shape: 'sofa', widthCm: 200, depthCm: 90, heightCm: 80 },
+  armchair: { label: 'כורסה', plural: 'כורסאות', group: 'living', shape: 'sofa', widthCm: 90, depthCm: 90, heightCm: 80 },
+  table: { label: 'שולחן', plural: 'שולחנות', group: 'living', shape: 'box', widthCm: 180, depthCm: 80, heightCm: 75 },
+  fire: { label: 'מדורה', plural: 'מדורות', group: 'living', shape: 'fire', widthCm: 150, depthCm: 150, heightCm: 35 },
+  shower: { label: 'מקלחת', plural: 'מקלחות', group: 'sanitation', shape: 'box', widthCm: 100, depthCm: 100, heightCm: 210 },
+  toilet: { label: 'תא שירותים', plural: 'תאי שירותים', group: 'sanitation', shape: 'box', widthCm: 100, depthCm: 100, heightCm: 220 },
+  changing: { label: 'אזור הלבשה', plural: 'אזורי הלבשה', group: 'sanitation', shape: 'box', widthCm: 200, depthCm: 150, heightCm: 200 },
+  fridge: { label: 'מקרר', plural: 'מקררים', group: 'utility', shape: 'box', widthCm: 70, depthCm: 70, heightCm: 170 },
+  generator: { label: 'גנרטור', plural: 'גנרטורים', group: 'utility', shape: 'box', widthCm: 100, depthCm: 80, heightCm: 100 },
+  water: { label: 'מיכל מי שתייה', plural: 'מיכלי מי שתייה', group: 'utility', shape: 'cylinder', widthCm: 120, depthCm: 120, heightCm: 130 },
+  greywater: { label: 'מים אפורים', plural: 'מיכלי מים אפורים', group: 'utility', shape: 'cylinder', widthCm: 100, depthCm: 100, heightCm: 100 },
+  boiler: { label: 'דוד', plural: 'דודים', group: 'utility', shape: 'cylinder', widthCm: 60, depthCm: 60, heightCm: 60 },
+  storage: { label: 'מחסן', plural: 'מחסנים', group: 'utility', shape: 'box', widthCm: 200, depthCm: 200, heightCm: 220 },
+  other: { label: 'אחר', plural: 'פריטים', group: 'other', shape: 'box', widthCm: 100, depthCm: 100, heightCm: 100 },
 };
 
 /** The palette's order: what is built first comes first. */

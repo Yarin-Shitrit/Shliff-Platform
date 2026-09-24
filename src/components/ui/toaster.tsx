@@ -33,7 +33,13 @@ type ShownToast = Toast & { id: number };
 const DWELL_MS = 6_000;
 const DWELL_WITH_UNDO_MS = 10_000;
 
-type ToastApi = { show: (toast: Toast) => void };
+/**
+ * `show` hands back a way to take that one toast away, for a caller whose
+ * sentence stops being true before the reader closes it — an undo toast
+ * once a newer edit has made its ביטול about something else. Callers that
+ * have no such moment ignore it.
+ */
+type ToastApi = { show: (toast: Toast) => () => void };
 
 const ToastContext = createContext<ToastApi | null>(null);
 
@@ -57,8 +63,10 @@ export function ToastProvider({ children }: { children: ReactNode }): ReactEleme
 
   const show = useCallback((toast: Toast) => {
     lastId.current += 1;
-    setToasts((current) => [...current, { ...toast, id: lastId.current }]);
-  }, []);
+    const id = lastId.current;
+    setToasts((current) => [...current, { ...toast, id }]);
+    return () => { dismiss(id); };
+  }, [dismiss]);
 
   const api = useMemo<ToastApi>(() => ({ show }), [show]);
 

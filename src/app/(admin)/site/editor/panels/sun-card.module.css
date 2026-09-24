@@ -1,0 +1,23 @@
+/*
+ * The sun card (spec §11): its width, the hour row and the slider. The card
+ * itself, the hint and meta lines and the links are the shared
+ * `panel.module.css` — `.card` came from Task 24's brief, `.hint` from Task
+ * 22's, `.meta` and `.link` from Task 23's; integration folded the copies the
+ * lanes made into that one module (ruling W10).
+ *
+ * Tokens only, logical properties throughout (A10).
+ */
+
+.sunCard { inline-size: 360px; }
+
+.sunRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--text-dense);
+}
+
+.range {
+  flex: 1;
+  accent-color: var(--brand);
+}

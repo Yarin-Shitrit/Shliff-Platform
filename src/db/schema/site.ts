@@ -1,5 +1,5 @@
 import {
-  pgTable, uuid, text, integer, timestamp, unique,
+  pgTable, uuid, text, integer, timestamp, unique, boolean,
 } from 'drizzle-orm/pg-core';
 import { seasons, tasks } from './camp';
 
@@ -38,6 +38,20 @@ export const sitePlans = pgTable('site_plans', {
   widthCm: integer('width_cm').notNull(),
   depthCm: integer('depth_cm').notNull(),
   gridCm: integer('grid_cm').notNull().default(50),
+  /**
+   * Bumped by every saved batch of edits (`applySiteOps`). The editor sends
+   * the version it loaded; a mismatch means another lead saved in between,
+   * and that becomes a visible decision rather than an overwrite (spec §6.4).
+   */
+  version: integer('version').notNull().default(0),
+  /**
+   * The compass bearing the map's "up" points to, in whole degrees. 0 is
+   * north, which is what the map has always implied. Read by shade by hour
+   * (spec §11), by the view controls' compass, whose needle points to true
+   * north, and by `northUp`, which turns the view so true north is up
+   * (spec §6); the plot inspector and the sun card say it in words.
+   */
+  northDeg: integer('north_deg').notNull().default(0),
   notes: text('notes'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -81,10 +95,33 @@ export const siteItems = pgTable('site_items', {
   widthCm: integer('width_cm').notNull(),
   depthCm: integer('depth_cm').notNull(),
   insetCm: integer('inset_cm'),
+  /**
+   * Null means the kind's height (`kinds.ts`, or the camp's default for the
+   * kind). Drawn and shadowed, never validated against anything.
+   */
+  heightCm: integer('height_cm'),
+  /** A locked item is not dragged, nudged, resized, turned or removed until it is unlocked. */
+  locked: boolean('locked').notNull().default(false),
   sort: integer('sort').notNull().default(0),
   taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'set null' }),
   notes: text('notes'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: text('updated_by'),
+});
+
+/**
+ * The camp's own size for a kind, overriding the preset in `kinds.ts`. One
+ * row per kind, camp-wide (spec D4): a tent's size is a fact about the camp's
+ * equipment and survives from one burn to the next. No row means the preset;
+ * "back to the standard size" deletes the row.
+ */
+export const siteKindDefaults = pgTable('site_kind_defaults', {
+  kind: text('kind').$type<SiteItemKind>().primaryKey(),
+  widthCm: integer('width_cm').notNull(),
+  depthCm: integer('depth_cm').notNull(),
+  heightCm: integer('height_cm').notNull(),
+  insetCm: integer('inset_cm'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   updatedBy: text('updated_by'),
 });
