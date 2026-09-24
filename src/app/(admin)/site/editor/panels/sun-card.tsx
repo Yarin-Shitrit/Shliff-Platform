@@ -14,17 +14,23 @@
  * a column a quarter hour, with a playhead at the hour on screen — and says
  * in words when most of it is shaded. Clicking the strip sets the hour; the
  * slider stays the accessible control, and the strip is a picture beside it.
+ *
+ * And it plays: through the day from sunrise to sunset, or through every day
+ * of the burn with the nights skipped, at one of three speeds, stopping at
+ * the end (`sun-playback.ts`). Any hour or day set by hand pauses it.
  */
 
 import Link from 'next/link';
-import { Fragment, useMemo, type ReactElement } from 'react';
+import { Fragment, useId, useMemo, useState, type ReactElement } from 'react';
 import { cx } from '@/components/ui/cx';
-import { Icon } from '@/components/ui/icon';
 import { shadeWindows, type ShadeSample, type ShadeWindow } from '@/lib/site/editor/shade-timeline';
 import type { ShadeAtHour } from '@/lib/site/editor/sun';
 import { burnDays } from '@/lib/site/views';
+import { EditorIcon } from './editor-icons';
 import { northText } from './north';
-import { daySpan } from './sun-playback';
+import {
+  daySpan, SPEEDS, usePlayback, useReducedMotion, type DaySpan, type Moment, type SpeedId,
+} from './sun-playback';
 import chrome from './panel.module.css';
 import styles from './sun-card.module.css';
 
@@ -211,6 +217,53 @@ function ShadeWords({ samples, hasNets, windows }: {
   );
 }
 
+/** One fixed name, whichever scope it plays; `aria-pressed` says whether it is playing. */
+const PLAY_LABEL = 'הרצת הצל לאורך השעות';
+
+type Scope = 'day' | 'burn';
+
+interface ChoiceOption<T extends string> {
+  value: T;
+  label: string;
+  disabled?: boolean;
+}
+
+/**
+ * A segmented choice: radios, so the browser gives the arrow keys and the
+ * checked state for free. Not the kit's `Segmented`, which can only disable
+ * the whole group, and one option here is disabled on its own.
+ */
+function Choice<T extends string>({ label, name, options, value, onChange }: {
+  label: string;
+  name: string;
+  options: readonly ChoiceOption<T>[];
+  value: T;
+  onChange: (value: T) => void;
+}): ReactElement {
+  return (
+    <span className={styles.choice} role="radiogroup" aria-label={label}>
+      {options.map((option) => (
+        <label key={option.value} className={styles.option}>
+          <input
+            type="radio"
+            className={styles.optionInput}
+            name={name}
+            value={option.value}
+            checked={value === option.value}
+            disabled={option.disabled}
+            onChange={() => { onChange(option.value); }}
+          />
+          <span className={styles.optionFace}>{option.label}</span>
+        </label>
+      ))}
+    </span>
+  );
+}
+
+function isSpan(span: DaySpan | null): span is DaySpan {
+  return span !== null;
+}
+
 export interface SunCardProps {
   hour: number;
   onHour: (hour: number) => void;
@@ -249,8 +302,55 @@ export function SunCard(props: SunCardProps): ReactElement {
   const span = useMemo(() => (shown === null ? null : daySpan(shown)) ?? FALLBACK_SPAN, [shown]);
   const windows = useMemo(() => ({ full: shadeWindows(samples, 'full'), any: shadeWindows(samples, 'any') }), [samples]);
 
-  /** A day from its chip, the hour kept inside that day's daylight. */
+  const id = useId();
+  const [speed, setSpeed] = useState<SpeedId>('normal');
+  const [scope, setScope] = useState<Scope>('day');
+  const reduced = useReducedMotion();
+  /* All the burn's days only with a real last day (SIM3): none recorded yet,
+     or one before the first, and the choice is disabled with a way to set it
+     — never a guessed length. */
+  const endState: 'known' | 'missing' | 'early' = endDay === null
+    ? 'missing'
+    : sunDate !== null && endDay < sunDate ? 'early' : 'known';
+  const playScope: Scope = endState === 'known' ? scope : 'day';
+  /* The spans playback runs through, kept by their days: the burn's spans
+     stay one array while playback moves from day to day, and any other scope
+     is a new one — which stops playback (`usePlayback`). */
+  const scopeKey = shown === null ? '' : (playScope === 'burn' ? days : [shown]).join(' ');
+  const spans = useMemo(
+    () => scopeKey.split(' ').filter((day) => day !== '').map((day) => daySpan(day)).filter(isSpan),
+    [scopeKey],
+  );
+  const minutesPerSecond = SPEEDS.find((option) => option.id === speed)?.minutesPerSecond ?? SPEEDS[1].minutesPerSecond;
+  const playback = usePlayback({
+    spans,
+    minutesPerSecond,
+    reduced,
+    onMoment: (moment: Moment) => {
+      if (moment.day !== shown) onDay(moment.day);
+      onHour(moment.hour);
+    },
+  });
+
+  /** The slider or the strip: an hour set by hand stops playback. */
+  function setHourByHand(next: number): void {
+    playback.pause();
+    onHour(next);
+  }
+
+  function chooseScope(next: Scope): void {
+    playback.pause();
+    setScope(next);
+  }
+
+  function togglePlay(): void {
+    if (playback.playing) playback.pause();
+    else if (shown !== null) playback.play({ day: shown, hour });
+  }
+
+  /** A day from its chip, the hour kept inside that day's daylight. Playback stops. */
   function pickDay(next: string): void {
+    playback.pause();
     onDay(next);
     const nextSpan = daySpan(next);
     if (nextSpan !== null && (hour < nextSpan.from || hour > nextSpan.to)) {
@@ -273,7 +373,17 @@ export function SunCard(props: SunCardProps): ReactElement {
       ) : (
         <>
           <div className={styles.sunRow}>
-            <Icon name="sun" size={16} />
+            <button
+              type="button"
+              className={chrome.iconButton}
+              aria-pressed={playback.playing}
+              aria-label={PLAY_LABEL}
+              title={PLAY_LABEL}
+              disabled={spans.length === 0}
+              onClick={togglePlay}
+            >
+              <EditorIcon name={playback.playing ? 'pause' : 'play'} />
+            </button>
             <b><bdi>{hourText(hour)}</bdi></b>
             <input
               type="range"
@@ -284,10 +394,44 @@ export function SunCard(props: SunCardProps): ReactElement {
               value={hour}
               aria-label="שעה ביום"
               aria-valuetext={hourText(hour)}
-              onChange={(event) => { onHour(Number(event.target.value)); }}
+              onChange={(event) => { setHourByHand(Number(event.target.value)); }}
             />
           </div>
-          <ShadeStrip samples={samples} hour={hour} onPick={onHour} />
+          <ShadeStrip samples={samples} hour={hour} onPick={setHourByHand} />
+          <div className={styles.controls}>
+            <Choice<SpeedId>
+              label="מהירות ההרצה"
+              name={`${id}-speed`}
+              options={SPEEDS.map((option) => ({ value: option.id, label: option.label }))}
+              value={speed}
+              onChange={setSpeed}
+            />
+            <Choice<Scope>
+              label="טווח ההרצה"
+              name={`${id}-scope`}
+              options={[
+                { value: 'day', label: 'יום אחד' },
+                { value: 'burn', label: 'כל ימי הברן', disabled: endState !== 'known' },
+              ]}
+              value={playScope}
+              onChange={chooseScope}
+            />
+          </div>
+          {endState === 'known' ? null : (
+            /* SIM3: the burn's last day is the season's, set in the shell's
+               season-dates drawer; the card links there. */
+            <p className={chrome.meta}>
+              {endState === 'missing' ? 'תאריך הסיום של הברן לא נרשם' : 'תאריך הסיום של הברן קודם לתאריך הפתיחה'}
+              {' · '}
+              <Link
+                href={dateHref}
+                className={chrome.link}
+                aria-label={endState === 'missing' ? 'קביעה של תאריך הסיום של הברן' : 'תיקון של תאריך הסיום של הברן'}
+              >
+                {endState === 'missing' ? 'קביעה' : 'תיקון'}
+              </Link>
+            </p>
+          )}
           <div className={styles.days} role="group" aria-label="ימי הברן">
             {days.map((day) => (
               <button

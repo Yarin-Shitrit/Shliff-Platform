@@ -76,6 +76,48 @@
 .partialKey { background: color-mix(in srgb, var(--info) 55%, var(--viz-track)); }
 .sunKey { background: var(--viz-track); box-shadow: inset 0 0 0 1px var(--line-strong); }
 
+/* ---- playback: speed and scope ------------------------------------------------- */
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The kit's segmented look (`field.module.css`), at the card's density. */
+.choice {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-control);
+  background: var(--sunken);
+}
+
+.option { position: relative; display: inline-flex; }
+
+/* The radio itself stays in the page, unseen, so the keys and the checked state are the browser's. */
+.optionInput { position: absolute; opacity: 0; pointer-events: none; }
+
+.optionFace {
+  display: inline-flex;
+  align-items: center;
+  block-size: 24px;
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+  cursor: pointer;
+}
+.optionInput:checked + .optionFace {
+  background: var(--panel);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 0 0 1px var(--line);
+}
+.optionInput:focus-visible + .optionFace { outline: 2px solid var(--focus); outline-offset: 2px; }
+.optionInput:disabled + .optionFace { color: var(--ink-4); cursor: not-allowed; }
+
 /* ---- the burn's days ---------------------------------------------------------- */
 
 .days {
@@ -105,4 +147,5 @@
 /* Phone targets are at least 44px (A8). */
 @media (pointer: coarse) {
   .chip { block-size: var(--tap-min); }
+  .optionFace { block-size: 38px; }
 }

@@ -1,8 +1,9 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from 'vitest';
 import { act, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { Profiler } from 'react';
 import { ToastProvider } from '@/components/ui/toaster';
 import { unnamedControls } from '@/test/a11y';
 import { contains, overlap } from '@/lib/site/geometry';
@@ -971,6 +972,103 @@ describe('shade by hour', () => {
     fireEvent.click(button('צל לפי שעה'));
     expect(screen.getByText(/^אין עדיין רשתות צל במפה\./)).toBeTruthy();
     expect(container.querySelector('[data-strip]')).toBeNull();
+  });
+});
+
+/*
+ * Playback (SIM2) in the whole editor, on frames the test hands out: 16 ms
+ * apart, one `act` each, so every commit renders as it would in a browser.
+ * What is measured is how often the whole editor re-renders — the cost a
+ * playing sun must not multiply by the frame rate.
+ */
+describe('shade by hour, played', () => {
+  let queue = new Map<number, FrameRequestCallback>();
+  let nextFrame = 1;
+  let clock = 0;
+
+  beforeEach(() => {
+    queue = new Map();
+    nextFrame = 1;
+    clock = 0;
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      const id = nextFrame;
+      nextFrame += 1;
+      queue.set(id, callback);
+      return id;
+    });
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => { queue.delete(id); });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function runFrames(ms: number): number {
+    let frames = 0;
+    for (let spent = 0; spent < ms; spent += 16) {
+      act(() => {
+        clock += 16;
+        const due = [...queue.values()];
+        queue.clear();
+        for (const callback of due) callback(clock);
+      });
+      frames += 1;
+    }
+    return frames;
+  }
+
+  it('re-renders the editor about ten times a second while the sun plays, not on every frame', async () => {
+    const commits: number[] = [];
+    const props: SiteEditorProps = {
+      initial: { doc: siteDoc([siteItem({ id: 'a' })]), version: 0 },
+      initialSelection: null,
+      seasonName: 'ברן 26',
+      sunDate: '2026-06-04',
+      buildTasks: [],
+      plotHref: PLOT_HREF,
+      seasonDateHref: DATE_HREF,
+    };
+    render(
+      <Profiler id="editor" onRender={(_id, _phase, actual) => { commits.push(actual); }}>
+        <ToastProvider><SiteEditor {...props} /></ToastProvider>
+      </Profiler>,
+    );
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    fireEvent.click(button('הרצת הצל לאורך השעות'));
+    commits.length = 0;
+    const scenesBefore = scene.props.mock.calls.length;
+
+    const started = performance.now();
+    const frames = runFrames(2000);
+    const wall = performance.now() - started;
+    const sceneRenders = scene.props.mock.calls.length - scenesBefore;
+    const mean = commits.reduce((sum, each) => sum + each, 0) / Math.max(1, commits.length);
+    console.info(
+      `playback, 2 s at ${frames} frames: ${commits.length} editor commits, ${sceneRenders} scene renders, `
+      + `mean commit ${mean.toFixed(2)} ms (jsdom), ${wall.toFixed(0)} ms wall`,
+    );
+
+    expect(frames).toBe(125);
+    expect(commits.length).toBeLessThanOrEqual(20);
+    expect(sceneRenders).toBeLessThanOrEqual(20);
+    // 14:00 on, at 30 simulated minutes a second: nearly an hour later, on the scene.
+    expect(lastScene().ui.hour).toBeGreaterThan(14.9);
+    expect(lastScene().ui.hour).toBeLessThanOrEqual(15);
+  });
+
+  it('stops asking for frames when the sun card is closed mid-play', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    fireEvent.click(button('הרצת הצל לאורך השעות'));
+    runFrames(300);
+    expect(queue.size).toBe(1);
+    fireEvent.click(button('צל לפי שעה'));
+    expect(queue.size).toBe(0);
+    const hour = lastScene().ui.hour;
+    runFrames(1000);
+    expect(lastScene().ui.hour).toBe(hour);
   });
 });
 

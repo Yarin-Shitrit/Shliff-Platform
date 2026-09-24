@@ -1,12 +1,14 @@
 /**
  * Shade by hour, played (ruling SIM2): the hours of a day, or of every day of
  * the burn back to back, fast-forwarded so the lead can watch when the nets
- * shade what stands under them. This half is the arithmetic, pure: where
+ * shade what stands under them. The first half is the arithmetic, pure: where
  * daylight begins and ends each day, and where a moment stands in a scope
  * measured in minutes of daylight — the nights are not in it, so playback
- * goes from one sunset to the next sunrise.
+ * goes from one sunset to the next sunrise. The second half is the clock that
+ * moves through it, on the browser's animation frames.
  */
 
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { daylight } from '@/lib/site/editor/shade-timeline';
 
 /** A day's daylight on the quarter-hour grid: the first and last quarter hours the sun is up, inclusive. */
@@ -92,4 +94,138 @@ export function momentAt(spans: readonly DaySpan[], position: number): Moment {
  */
 export function reducedStep(minutesPerSecond: number): number {
   return Math.max(1, Math.round(minutesPerSecond / QUARTER)) * QUARTER;
+}
+
+/* ── the clock ────────────────────────────────────────────────────────── */
+
+const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
+
+function subscribeReducedMotion(onChange: () => void): () => void {
+  if (typeof window.matchMedia !== 'function') return () => {};
+  const media = window.matchMedia(REDUCED_MOTION);
+  media.addEventListener('change', onChange);
+  return () => { media.removeEventListener('change', onChange); };
+}
+
+function readReducedMotion(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia(REDUCED_MOTION).matches;
+}
+
+/** The server cannot know; it assumes motion, and the client corrects it. */
+function serverReducedMotion(): boolean {
+  return false;
+}
+
+/** Whether the reader asked the system for less motion — read live, as the page's theme is. */
+export function useReducedMotion(): boolean {
+  return useSyncExternalStore(subscribeReducedMotion, readReducedMotion, serverReducedMotion);
+}
+
+/**
+ * How often, at most, playback hands a new hour up: about ten times a second.
+ * Every frame moves the clock, but a commit re-renders the whole editor (and
+ * re-lights the scene), and sixty of those a second would buy nothing the eye
+ * can follow on a sun that moves a few minutes a frame.
+ */
+export const COMMIT_MS = 100;
+
+/** A committed hour is a whole minute: the text and the scene never show a fraction of one. */
+function toMinute(moment: Moment): Moment {
+  return { day: moment.day, hour: Math.round(moment.hour * 60) / 60 };
+}
+
+export interface Playback {
+  playing: boolean;
+  /** Plays from `at`, or from the scope's start when `at` is already its end. */
+  play: (at: Moment) => void;
+  pause: () => void;
+}
+
+/**
+ * Plays through `spans` at `minutesPerSecond`, on `requestAnimationFrame`,
+ * handing each new moment to `onMoment` at most every `COMMIT_MS` — or, with
+ * motion reduced, once a second in whole quarter hours. It stops at the
+ * scope's end.
+ *
+ * Playback belongs to the scope it began in: the state holds those spans, and
+ * a new scope (another day, or the burn instead of a day) is a different
+ * array, so playing is false the moment the scope changes — derived, with no
+ * effect to set it. The frame is cancelled on pause, on unmount and on any
+ * change of scope, speed or motion setting; a change of speed or motion picks
+ * up from where the clock had got to.
+ */
+export function usePlayback({ spans, minutesPerSecond, reduced, onMoment }: {
+  spans: readonly DaySpan[];
+  minutesPerSecond: number;
+  reduced: boolean;
+  onMoment: (moment: Moment) => void;
+}): Playback {
+  const [playingIn, setPlayingIn] = useState<readonly DaySpan[] | null>(null);
+  const playing = playingIn !== null && playingIn === spans;
+  /** Minutes into the scope, as of the last frame. Written by the clock and by `play`; read when the clock (re)starts. */
+  const position = useRef(0);
+  /** Bumped by every pause and every start: a frame from a clock no longer running does nothing. */
+  const generation = useRef(0);
+  const report = useRef(onMoment);
+  useEffect(() => { report.current = onMoment; });
+
+  useEffect(() => {
+    if (!playing) return undefined;
+    generation.current += 1;
+    const mine = generation.current;
+    const total = scopeLength(spans);
+    const step = reducedStep(minutesPerSecond);
+    const from = reduced ? Math.round(position.current / QUARTER) * QUARTER : position.current;
+    let frame = 0;
+    let began: number | null = null;
+    let committedAt = 0;
+    let committed = from;
+
+    const tick = (now: number): void => {
+      if (generation.current !== mine) return;
+      if (began === null) {
+        began = now;
+        committedAt = now;
+      }
+      const elapsed = now - began;
+      const advanced = reduced
+        ? from + Math.floor(elapsed / 1000) * step
+        : from + (elapsed / 1000) * minutesPerSecond;
+      const at = Math.min(total, advanced);
+      position.current = at;
+      const ended = at >= total;
+      if (at !== committed && (ended || reduced || now - committedAt >= COMMIT_MS)) {
+        committed = at;
+        committedAt = now;
+        report.current(toMinute(momentAt(spans, at)));
+      }
+      if (ended) {
+        generation.current += 1;
+        setPlayingIn(null);
+        return;
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => { cancelAnimationFrame(frame); };
+  }, [playing, spans, minutesPerSecond, reduced]);
+
+  function play(at: Moment): void {
+    const total = scopeLength(spans);
+    if (total <= 0) return;
+    let start = positionOf(spans, at.day, at.hour);
+    if (start >= total) {
+      start = 0;
+      onMoment(momentAt(spans, 0));
+    }
+    position.current = start;
+    setPlayingIn(spans);
+  }
+
+  function pause(): void {
+    generation.current += 1;
+    setPlayingIn(null);
+  }
+
+  return { playing, play, pause };
 }

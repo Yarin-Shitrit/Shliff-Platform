@@ -1,8 +1,9 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { useState } from 'react';
 import type { ShadeSample } from '@/lib/site/editor/shade-timeline';
 import { hourText, SunCard, type SunCardProps } from './sun-card';
 
@@ -238,5 +239,309 @@ describe('the days of the burn', () => {
     expect(chips().map((chip) => chip.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false']);
     expect(paragraph('ביום 3.11.2026 של הברן, שמתחיל בתאריך הפתיחה 2.11.2026, במיקום של מידברן.')).toBeTruthy();
     expect(screen.getByRole('link', { name: /^2\.11\.2026/ }).getAttribute('href')).toBe(DATE_HREF);
+  });
+});
+
+/* ── playback ─────────────────────────────────────────────────────────────
+   The browser's frames, by hand: `requestAnimationFrame` queues a callback,
+   and `runFrames` calls the queue every 16 ms of a clock the test owns, one
+   frame per `act` so each commit renders as it would in the browser. */
+
+let queue = new Map<number, FrameRequestCallback>();
+let nextFrame = 1;
+let clock = 0;
+const requestFrame = vi.fn((callback: FrameRequestCallback) => {
+  const id = nextFrame;
+  nextFrame += 1;
+  queue.set(id, callback);
+  return id;
+});
+const cancelFrame = vi.fn((id: number) => { queue.delete(id); });
+
+/** `prefers-reduced-motion`, as the test sets it; nothing else is asked of `matchMedia` here. */
+let reduceMotion = false;
+
+beforeEach(() => {
+  queue = new Map();
+  nextFrame = 1;
+  clock = 0;
+  reduceMotion = false;
+  requestFrame.mockClear();
+  cancelFrame.mockClear();
+  vi.stubGlobal('requestAnimationFrame', requestFrame);
+  vi.stubGlobal('cancelAnimationFrame', cancelFrame);
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: query === '(prefers-reduced-motion: reduce)' && reduceMotion,
+    media: query,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }));
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+const FRAME_MS = 16;
+
+function runFrames(ms: number): void {
+  for (let spent = 0; spent < ms; spent += FRAME_MS) {
+    act(() => {
+      clock += FRAME_MS;
+      const due = [...queue.values()];
+      queue.clear();
+      for (const callback of due) callback(clock);
+    });
+  }
+}
+
+/** The card as the editor holds it: the hour and the day are state above it. */
+function Player(over: Partial<SunCardProps> & { hour?: number; day?: string }) {
+  const [hour, setHour] = useState(over.hour ?? 12);
+  const [day, setDay] = useState(over.day ?? NOV2);
+  return (
+    <SunCard
+      summary={{ under: 3, full: 1, partial: 1, sun: 1 }}
+      northDeg={0}
+      plotHref={HREF}
+      dateHref={DATE_HREF}
+      sunDate={NOV2}
+      samples={[]}
+      hasNets
+      {...over}
+      hour={hour}
+      day={day}
+      onHour={(next) => { over.onHour?.(next); setHour(next); }}
+      onDay={(next) => { over.onDay?.(next); setDay(next); }}
+    />
+  );
+}
+
+const playButton = () => screen.getByRole('button', { name: 'הרצת הצל לאורך השעות' });
+const hourOnScreen = () => screen.getByRole('slider', { name: 'שעה ביום' }).getAttribute('aria-valuetext');
+const lastHour = (onHour: ReturnType<typeof vi.fn>) => onHour.mock.lastCall?.[0] as number;
+const pressedDay = () => within(screen.getByRole('group', { name: 'ימי הברן' }))
+  .getAllByRole('button').find((chip) => chip.getAttribute('aria-pressed') === 'true')?.textContent;
+
+describe('playing the shade through the day', () => {
+  it('plays from the hour on screen, at 30 simulated minutes a second, and stops at sunset', () => {
+    const onHour = vi.fn();
+    render(<Player hour={16} onHour={onHour} />);
+    expect(playButton().getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(playButton());
+    expect(playButton().getAttribute('aria-pressed')).toBe('true');
+    runFrames(1000);
+    // About half an hour on, committed at most 100 ms behind the clock.
+    expect(lastHour(onHour)).toBeGreaterThan(16.4);
+    expect(lastHour(onHour)).toBeLessThanOrEqual(16.5);
+    // 2 November's last quarter hour of daylight is 16:45: 45 minutes, a second and a half.
+    runFrames(1000);
+    expect(hourOnScreen()).toBe('16:45');
+    expect(lastHour(onHour)).toBe(16.75);
+    expect(playButton().getAttribute('aria-pressed')).toBe('false');
+    expect(queue.size).toBe(0);
+    const calls = onHour.mock.calls.length;
+    runFrames(500);
+    expect(onHour.mock.calls.length).toBe(calls);
+  });
+
+  it('starts the day again from sunrise when played at its end', () => {
+    const onHour = vi.fn();
+    render(<Player hour={16.75} onHour={onHour} />);
+    fireEvent.click(playButton());
+    expect(onHour).toHaveBeenCalledWith(6);
+    expect(hourOnScreen()).toBe('06:00');
+    runFrames(1000);
+    expect(lastHour(onHour)).toBeGreaterThan(6.4);
+  });
+
+  it('commits the hour at most ten times a second, whatever the frame rate', () => {
+    const onHour = vi.fn();
+    render(<Player hour={8} onHour={onHour} />);
+    fireEvent.click(playButton());
+    runFrames(2000); // 125 frames
+    expect(requestFrame.mock.calls.length).toBeGreaterThan(120);
+    expect(onHour.mock.calls.length).toBeLessThanOrEqual(20);
+    expect(onHour.mock.calls.length).toBeGreaterThanOrEqual(15);
+    // Each committed hour is a whole minute: the text and the scene never show a fraction of one.
+    for (const [hour] of onHour.mock.calls as [number][]) expect(Math.abs(hour * 60 - Math.round(hour * 60))).toBeLessThan(1e-9);
+  });
+
+  it('runs at the speed chosen: 10, 30 or 90 simulated minutes a second', () => {
+    const slow = vi.fn();
+    const { unmount } = render(<Player hour={8} onHour={slow} />);
+    fireEvent.click(screen.getByRole('radio', { name: 'איטי' }));
+    fireEvent.click(playButton());
+    runFrames(1000);
+    expect(lastHour(slow) - 8).toBeGreaterThan(8 / 60);
+    expect(lastHour(slow) - 8).toBeLessThanOrEqual(10 / 60);
+    unmount();
+
+    const fast = vi.fn();
+    render(<Player hour={8} onHour={fast} />);
+    expect((screen.getByRole('radio', { name: 'רגיל' }) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByRole('radio', { name: 'מהיר' }));
+    fireEvent.click(playButton());
+    runFrames(1000);
+    expect(lastHour(fast) - 8).toBeGreaterThan(80 / 60);
+    expect(lastHour(fast) - 8).toBeLessThanOrEqual(90 / 60);
+  });
+
+  it('changes speed mid-play from where it is, without stopping', () => {
+    const onHour = vi.fn();
+    render(<Player hour={8} onHour={onHour} />);
+    fireEvent.click(playButton());
+    runFrames(1000);
+    const halfway = lastHour(onHour);
+    fireEvent.click(screen.getByRole('radio', { name: 'מהיר' }));
+    expect(playButton().getAttribute('aria-pressed')).toBe('true');
+    runFrames(1000);
+    expect(lastHour(onHour) - halfway).toBeGreaterThan(80 / 60);
+    expect(lastHour(onHour) - halfway).toBeLessThan(100 / 60);
+  });
+
+  it('pauses when the hour is changed by hand — on the slider or on the strip — and stops asking for frames', () => {
+    const onHour = vi.fn();
+    const { container } = render(<Player hour={8} onHour={onHour} samples={MIDDAY} />);
+    fireEvent.click(playButton());
+    runFrames(500);
+    fireEvent.change(screen.getByRole('slider', { name: 'שעה ביום' }), { target: { value: '12' } });
+    expect(playButton().getAttribute('aria-pressed')).toBe('false');
+    expect(queue.size).toBe(0);
+    runFrames(1000);
+    expect(hourOnScreen()).toBe('12:00');
+
+    fireEvent.click(playButton());
+    runFrames(500);
+    fireEvent.click(column(container, 10.25));
+    expect(playButton().getAttribute('aria-pressed')).toBe('false');
+    runFrames(1000);
+    expect(hourOnScreen()).toBe('10:15');
+  });
+
+  it('pauses when another day is picked', () => {
+    render(<Player hour={8} endDay="2026-11-04" />);
+    fireEvent.click(playButton());
+    runFrames(300);
+    fireEvent.click(screen.getByRole('button', { name: 'ג׳ 3.11' }));
+    expect(playButton().getAttribute('aria-pressed')).toBe('false');
+    expect(queue.size).toBe(0);
+    expect(pressedDay()).toBe('ג׳ 3.11');
+  });
+
+  it('cancels its frame when the card goes away mid-play', () => {
+    const onHour = vi.fn();
+    const { unmount } = render(<Player hour={8} onHour={onHour} />);
+    fireEvent.click(playButton());
+    runFrames(200);
+    const pending = [...queue.keys()];
+    expect(pending).toHaveLength(1);
+    unmount();
+    expect(cancelFrame).toHaveBeenCalledWith(pending[0]);
+    expect(queue.size).toBe(0);
+    const calls = onHour.mock.calls.length;
+    runFrames(500);
+    expect(onHour.mock.calls.length).toBe(calls);
+  });
+});
+
+describe('the scope of playback', () => {
+  it('offers one day only while the burn’s last day is unknown, and invites that date', () => {
+    render(<Player />);
+    expect((screen.getByRole('radio', { name: 'יום אחד' }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole('radio', { name: 'כל ימי הברן' }) as HTMLInputElement).disabled).toBe(true);
+    expect(paragraph('תאריך הסיום של הברן לא נרשם · קביעה')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'קביעה של תאריך הסיום של הברן' }).getAttribute('href')).toBe(DATE_HREF);
+  });
+
+  it('says so when the last day recorded comes before the first, rather than guessing either', () => {
+    render(<Player endDay="2026-11-01" />);
+    expect((screen.getByRole('radio', { name: 'כל ימי הברן' }) as HTMLInputElement).disabled).toBe(true);
+    expect(paragraph('תאריך הסיום של הברן קודם לתאריך הפתיחה · תיקון')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'תיקון של תאריך הסיום של הברן' }).getAttribute('href')).toBe(DATE_HREF);
+  });
+
+  it('plays every day of the burn back to back once the last day is known, skipping the nights', () => {
+    const onHour = vi.fn();
+    const onDay = vi.fn();
+    render(<Player hour={16.5} endDay="2026-11-04" onHour={onHour} onDay={onDay} />);
+    expect(screen.queryByText(/לא נרשם/)).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: 'כל ימי הברן' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'מהיר' }));
+    fireEvent.click(playButton());
+    runFrames(1000);
+    // A quarter hour to 2 November's sunset, then straight on from 3 November's first quarter hour, 06:00.
+    expect(pressedDay()).toBe('ג׳ 3.11');
+    expect(lastHour(onHour)).toBeGreaterThan(6.75);
+    expect(lastHour(onHour)).toBeLessThanOrEqual(7.25);
+    expect(onDay).toHaveBeenCalledWith('2026-11-03');
+    runFrames(16_000);
+    expect(pressedDay()).toBe('ד׳ 4.11');
+    expect(hourOnScreen()).toBe('16:45');
+    expect(playButton().getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('starts the burn again from its first sunrise when played at its end', () => {
+    const onDay = vi.fn();
+    render(<Player hour={16.75} day="2026-11-04" endDay="2026-11-04" onDay={onDay} />);
+    fireEvent.click(screen.getByRole('radio', { name: 'כל ימי הברן' }));
+    fireEvent.click(playButton());
+    expect(onDay).toHaveBeenLastCalledWith(NOV2);
+    expect(hourOnScreen()).toBe('06:00');
+  });
+
+  it('pauses when a day is picked while the whole burn plays — the scope is the same, the lead’s choice is not', () => {
+    render(<Player hour={8} endDay="2026-11-04" />);
+    fireEvent.click(screen.getByRole('radio', { name: 'כל ימי הברן' }));
+    fireEvent.click(playButton());
+    runFrames(300);
+    fireEvent.click(screen.getByRole('button', { name: 'ד׳ 4.11' }));
+    expect(playButton().getAttribute('aria-pressed')).toBe('false');
+    expect(queue.size).toBe(0);
+    const picked = hourOnScreen();
+    runFrames(1000);
+    expect(pressedDay()).toBe('ד׳ 4.11');
+    expect(hourOnScreen()).toBe(picked);
+  });
+
+  it('pauses when the scope changes', () => {
+    render(<Player hour={8} endDay="2026-11-04" />);
+    fireEvent.click(playButton());
+    runFrames(300);
+    fireEvent.click(screen.getByRole('radio', { name: 'כל ימי הברן' }));
+    expect(playButton().getAttribute('aria-pressed')).toBe('false');
+    expect(queue.size).toBe(0);
+  });
+});
+
+describe('with motion reduced', () => {
+  it('steps whole quarter hours once a second instead of gliding', () => {
+    reduceMotion = true;
+    const onHour = vi.fn();
+    render(<Player hour={8} onHour={onHour} />);
+    fireEvent.click(playButton());
+    runFrames(900);
+    expect(onHour).not.toHaveBeenCalled();
+    runFrames(200);
+    expect(onHour.mock.calls).toEqual([[8.5]]);
+    runFrames(1000);
+    expect(onHour.mock.calls).toEqual([[8.5], [9]]);
+  });
+
+  it('steps one quarter hour a second at the slow speed, and six at the fast', () => {
+    reduceMotion = true;
+    const onHour = vi.fn();
+    const { unmount } = render(<Player hour={8} onHour={onHour} />);
+    fireEvent.click(screen.getByRole('radio', { name: 'איטי' }));
+    fireEvent.click(playButton());
+    runFrames(1100);
+    expect(lastHour(onHour)).toBe(8.25);
+    unmount();
+    onHour.mockClear();
+    render(<Player hour={8} onHour={onHour} />);
+    fireEvent.click(screen.getByRole('radio', { name: 'מהיר' }));
+    fireEvent.click(playButton());
+    runFrames(1100);
+    expect(lastHour(onHour)).toBe(9.5);
   });
 });

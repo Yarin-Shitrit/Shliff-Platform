@@ -39,6 +39,10 @@ const PATHS = {
   distributeX: '<rect width="6" height="14" x="4" y="5" rx="2"/><rect width="6" height="10" x="14" y="7" rx="2"/><path d="M17 22v-5"/><path d="M17 7V2"/><path d="M7 22v-3"/><path d="M7 5V2"/>',
   distributeY: '<rect width="14" height="6" x="5" y="14" rx="2"/><rect width="10" height="6" x="7" y="4" rx="2"/><path d="M22 7h-5"/><path d="M7 7H2"/><path d="M22 17h-3"/><path d="M5 17H2"/>',
   row: '<path d="M3 7h4v10H3z"/><path d="M10 7h4v10h-4z"/><path d="M17 7h4v10h-4z"/>',
+  /* Shade by hour's playback (SIM2), Lucide `play` and `pause`. A transport
+     control points the same way on every remote in the world: not mirrored. */
+  play: '<polygon points="6 3 20 12 6 21 6 3"/>',
+  pause: '<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',
 } as const;
 
 export type EditorIconName = keyof typeof PATHS;
