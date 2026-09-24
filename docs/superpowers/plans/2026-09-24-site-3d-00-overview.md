@@ -353,3 +353,30 @@ export function SiteEditor(props: SiteEditorProps): ReactElement;
 // sun-card.tsx       SunCard({ hour, onHour, summary, northDeg, plotHref, sunDate })
 // Styles: src/app/(admin)/site/editor/editor.module.css (created in Task 21, extended by later tasks).
 ```
+
+### Amendments recorded after plan 02 was written (additive; binding)
+
+- `metres.ts` also exports `readMetres(text, range): MetresReading` (returns a Hebrew refusal, never throws), `MetresRange`, `SIDE_RANGE`, `HEIGHT_RANGE`, `POSITION_RANGE`, `GAP_RANGE`, `NOT_A_LENGTH`. Panels use `readMetres` for every typed length — no panel writes its own length refusal. `parseMetres` accepts ".5" and strips bidi marks.
+- `addOps`: `at` is the new item's north-west corner.
+- `duplicateOps`: a locked item may be copied; the copy is unlocked and keeps `taskId` and `notes`.
+- `rowOps` needs ≥ 2 unlocked items, like `alignOps`.
+- `patchOps` normalises like the server's `patchSet` (trimmed label, blank notes → null, net ⇔ inset) and drops unchanged fields before the lock check.
+- `resizeKindOps` does not write a height equal to the one the item already shows (keeps "ברירת מחדל"); `resetSizeOps` also resets a net's inset.
+- `record()` ignores an entry with no ops (and keeps the redo stack).
+- `layoutLabels`: higher `priority` places first, ties in input order; a group's key is `group:<sorted ids>`; grouping needs `groupKey`, `groupNoun` and `isNet: false`; the caller drops items under 3 px and appends the selected item's size to its text; a crowded group may end with no label.
+- `camera`: plan-mode `project` never returns null; yaw normalised to [0, 360); `fitRect` clamps pitch, keeps 300 cm of height in view in 3D, and uses the whole viewport when `safe` is empty.
+- `sun`: `jerusalemInstant` reads DST from the tz database via `Intl`; a malformed date throws `a sun date must be YYYY-MM-DD` (callers pass `startsOn`, so only a code bug reaches it).
+- `applyOps` inserts an add in (sort, id) order, so an undone removal returns to its place. The server keeps the client's `sort` on add (ruling during Task 7; `newItemRefusal` requires a whole number ≥ 0), so client and server agree on draw order.
+- One lock rule, in one file: `ops.ts` exports `LOCKED_FIELDS` (`xCm`, `yCm`, `widthCm`, `depthCm`, `heightCm`, `kind`, `insetCm`) and `lockRefusal(locked, patch)`. `commands.ts` (`patchOps` and every geometry command) and `plan.ts` both use them; neither declares its own list. Height counts as a size, so a locked item's height cannot change.
+- An empty batch saves nothing and keeps the version; `setPlot` bumps the version, so an editor open during a plot change gets a conflict instead of saving over a stale plot. `saveSiteChangesAction` does not call `revalidatePath`.
+- Test files do not import fixtures from other test files (that re-registers their tests); each has its own small fixture.
+
+### Amendments recorded after plan 03 was written (additive; binding)
+
+- `save-queue.ts` also exports `NETWORK_FAILURE` (the Hebrew network-failure message). After a conflict `snapshot.version` is the server's version, and `retry()` is inert until `reset`/`rebase`.
+- `EditorStore.conflict` is derived from `save.status`; `resolveConflict('theirs')` doubles as "reload" after a refused batch. The `beforeunload` guard is armed while `save.pending > 0` (covers refused/conflict too, spec §6.3).
+- `palette.ts` gains `ember`, `contact`, `SCENE_ALPHA`, `SCENE_LIGHT`. `ItemLook.sun?` / `SyncInput.sun?` hide the drawn shade patches when real sun shadows are on. Parts carry `userData` tags; `userData.pick === false` makes a part click-through. Hidden groups and hidden nets are removed and disposed, not made invisible (three's raycaster ignores `visible`).
+- `Gestures` gains `active`; double-click and wheel are engine-level (the contract's inputs cannot carry them); a click on a label selects, a drag from a label pans; `moveOps` skips locked items in a moving selection.
+- `scene-view.tsx` exports `NO_WEBGL` (the Hebrew notice). Its imperative work lives in `scene/engine.ts` and `scene/overlay.ts`. `setGhost({ xCm, yCm })` is the new item's north-west corner (same as `addOps`'s `at`). The item table under the no-WebGL notice is plan 04's job.
+- Labels: the scene code drops items under 3 px and appends the selected item's size; a net's label anchors at the middle of its north edge. A `sunDate` that is not `YYYY-MM-DD` is treated as no date.
+- Browser checks: there is no local auth bypass — the checker asks the camp lead to sign in (or for local admin credentials) and stops if `shliff-pg` is down, if migration `0012` is not applied locally, or if no season has a map. Browser checks never save to the shared development database.
