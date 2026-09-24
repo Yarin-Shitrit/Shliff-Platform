@@ -70,10 +70,16 @@ function dot(a: Vec3, b: Vec3): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
 
-/** Degrees in [0, 360). */
+/**
+ * Degrees in [0, 360). A single `wrapped < 0 ? wrapped + 360 : wrapped`
+ * can round a tiny-negative `wrapped` up to exactly 360 (e.g. `-1e-15 + 360`
+ * rounds to 360.0), so the sum is folded back through `% 360` a second time:
+ * that operator's result is exact and strictly less than its divisor, so it
+ * cannot land on 360. `|| 0` guards the one input (`-0`) whose own `% 360` is
+ * `-0`, so the result never reads as negative zero either.
+ */
 function wrapYaw(yaw: number): number {
-  const wrapped = yaw % 360;
-  return wrapped < 0 ? wrapped + 360 : wrapped + 0;
+  return (((yaw % 360) + 360) % 360) || 0;
 }
 
 function focalPx(viewport: Viewport): number {

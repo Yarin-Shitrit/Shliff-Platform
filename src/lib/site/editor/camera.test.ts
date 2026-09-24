@@ -149,6 +149,14 @@ describe('zooming, panning and orbiting', () => {
     expect(orbit(state({ pitch: 50 }), 0, 60).pitch).toBe(PITCH_MAX);
     expect(orbit(state({ pitch: 50 }), 0, -60).pitch).toBe(PITCH_MIN);
   });
+
+  it('never rounds the yaw up to exactly 360 at the floating-point edge', () => {
+    // -0.1 then -0.2 off 0.3 leaves a tiny-negative remainder that a naive
+    // `wrapped + 360` rounds up to 360.0 exactly.
+    const twice = orbit(orbit(state({ yaw: 0.3 }), -0.1, 0), -0.2, 0);
+    expect(twice.yaw).toBeGreaterThanOrEqual(0);
+    expect(twice.yaw).toBeLessThan(360);
+  });
 });
 
 describe('framing a rectangle', () => {
@@ -224,6 +232,12 @@ describe('between two views', () => {
     const end = interpolate(a, b, 1);
     expect(end.yaw).toBeCloseTo(10, 9);
     expect(end.distance).toBeCloseTo(4000, 6);
+  });
+
+  it('never rounds the yaw up to exactly 360 at the floating-point edge', () => {
+    const at = interpolate(state({ yaw: 0 }), state({ yaw: 350 }), 1e-15);
+    expect(at.yaw).toBeGreaterThanOrEqual(0);
+    expect(at.yaw).toBeLessThan(360);
   });
 });
 
