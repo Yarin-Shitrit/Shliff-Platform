@@ -50,7 +50,7 @@ export interface SiteCounts {
 export interface Derived<Item extends ItemShape> {
   items: Array<Item & ItemFlags>;
   counts: SiteCounts;
-  /** Every overlapping pair, same order as `counts.overlapPairs` counts them. */
+  /** Every overlapping pair of item ids — the same list `counts.overlapPairs` is the length of, so a caller that needs the pairs themselves (the store's flags) is not left recomputing them. */
   pairs: Array<[string, string]>;
 }
 

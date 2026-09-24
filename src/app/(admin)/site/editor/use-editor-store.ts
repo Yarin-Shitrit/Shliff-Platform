@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActionResult } from '@/lib/action-result';
 import { derive } from '@/lib/site/derive';
+import { changedUpdate } from '@/lib/site/editor/commands';
 import { EMPTY_HISTORY, record, redo as redoStep, undo as undoStep, type History } from '@/lib/site/editor/history';
 import { findItem, type EditorDoc, type EditorItem } from '@/lib/site/editor/model';
 import { applyOps, invertOps, lockRefusal, type ItemPatch, type SiteOp } from '@/lib/site/editor/ops';
@@ -55,14 +56,26 @@ interface StoreState {
   notice: string | null;
 }
 
-/** When the map could not be read back after a conflict and the server said nothing usable. */
+/** When the map could not be read back after a conflict and the server said nothing usable — including when the reload itself threw (offline). */
 const LOAD_FAILED = 'לא הצלחנו לטעון את המפה העדכנית. אפשר לנסות שוב.';
 /**
  * When an undo or redo names items the map no longer has, or would refuse
  * because another lead locked them meanwhile (Review Focus #3; controller
  * ruling S1 folds a lock refusal into the same "partly applied" notice).
+ * Neither case names an item: what an undo touches can be several things at
+ * once, so this stays generic on purpose.
  */
 const PARTLY_APPLIED = 'חלק מהפעולה לא בוצע, כי פריטים שהיא נוגעת בהם כבר לא במפה.';
+
+/**
+ * Bidi isolates (LRI…PDI) around a name dropped into a Hebrew sentence — an
+ * item label may be Latin, a number, or mixed, and must not drag the rest of
+ * the sentence out of order (matches the A17 convention this repo uses for
+ * every other phrase that carries a variable name or number).
+ */
+const LRI = '⁦';
+const PDI = '⁩';
+const isolate = (name: string) => `${LRI}${name}${PDI}`;
 
 /** Only ids the map still has, each once, in the order given. */
 function existing(doc: EditorDoc, ids: readonly string[]): string[] {
@@ -72,17 +85,35 @@ function existing(doc: EditorDoc, ids: readonly string[]): string[] {
 
 /**
  * Applies what can be applied, one op at a time, and returns which ops
- * landed. An op naming an item that is gone is skipped, never thrown — and so
- * is an update `lockRefusal` would refuse against the doc as it stands right
- * now (controller ruling S1): another lead may have locked the item since
- * this lead's history entry was recorded.
+ * landed. Three things drop an op instead of throwing:
+ * - it names an item that is gone;
+ * - reduced to only the fields that actually differ from the item
+ *   (`changedUpdate`, the same helper `commands.ts` builds every op with —
+ *   ruling 6), an update turns out to change nothing at all: dropped
+ *   silently, neither a skip nor a step, so it is never recorded or sent;
+ * - `lockRefusal` would refuse it against the doc as it stands right now
+ *   (controller ruling S1) — an update whose *reduced* patch still touches a
+ *   locked field, or a remove of a locked item outright. Another lead may
+ *   have locked the item since this lead's history entry was recorded.
  */
 function applyEach(doc: EditorDoc, ops: readonly SiteOp[]): { doc: EditorDoc; applied: SiteOp[]; skipped: number } {
   let next = doc;
   const applied: SiteOp[] = [];
   let skipped = 0;
-  for (const op of ops) {
-    if (op.type === 'update' && lockRefusal(findItem(next, op.id)?.locked ?? false, op.patch) !== null) {
+  for (const raw of ops) {
+    let op: SiteOp = raw;
+    if (raw.type === 'update') {
+      const entry = findItem(next, raw.id);
+      if (entry !== undefined) {
+        const reduced = changedUpdate(entry, raw.patch);
+        if (reduced === null) continue; // nothing actually changes: not a skip, not a step
+        if (lockRefusal(entry.locked, reduced.patch) !== null) {
+          skipped += 1;
+          continue;
+        }
+        op = reduced;
+      }
+    } else if (raw.type === 'remove' && findItem(next, raw.id)?.locked === true) {
       skipped += 1;
       continue;
     }
@@ -100,9 +131,12 @@ function applyEach(doc: EditorDoc, ops: readonly SiteOp[]): { doc: EditorDoc; ap
 /**
  * A full item's fields as a patch — used when 'mine' finds a pending add
  * whose id the server already has (controller ruling S2): the add becomes an
- * update of that item instead of being dropped. `locked` is left out on
- * purpose, so replaying this lead's add can never silently unlock an item the
- * other lead locked — it goes through `lockRefusal` like any other update.
+ * update of that item instead of being dropped, then reduced by
+ * `changedUpdate` (ruling 6) to only what actually differs — nothing at all
+ * when the add had already landed and only the reply was lost. `locked` is
+ * left out on purpose, so replaying this lead's add can never silently
+ * unlock an item the other lead locked — it goes through `lockRefusal` like
+ * any other update.
  */
 function itemPatch(item: EditorItem): ItemPatch {
   return {
@@ -143,6 +177,10 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
   const latest = useRef(state);
   const queueRef = useRef<SaveQueue | null>(null);
   const versionRef = useRef(initial.version);
+  /** Guards `resolveConflict` against a second call while the first is still
+   *  awaiting its `load()` — two reloads racing would both build a merge off
+   *  a stale `latest.current` and one would clobber the other's result. */
+  const resolvingRef = useRef(false);
 
   const commit = useCallback((next: StoreState) => {
     latest.current = next;
@@ -230,72 +268,121 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
 
   /**
    * The conflict banner's two answers (spec §6.4). Both start from the map
-   * as the server has it now. 'theirs' takes it as it is; 'mine' replays what
-   * is unsent on top of it, minus anything about an item that is gone or
-   * locked — and says which items those were, by the names the lead knew
-   * them by, never by id (controller ruling S2).
+   * as the server has it now. 'theirs' takes it as it is and clears undo/redo
+   * — every entry's inverse was computed against a document that no longer
+   * exists, so an undo replayed against theirs could silently overwrite the
+   * other lead's own change (a ruling that overrides the plan's original
+   * test: 'theirs' used to leave history standing). 'mine' replays what is
+   * unsent on top of theirs and keeps history, since every op it keeps (or
+   * drops) is checked against the doc it is about to touch, same as `run`.
+   * Either way, a dropped op says which items those were, by the names the
+   * lead knew them by, never by id (controller ruling S2) — a lock refusal
+   * and a missing item get their own sentence (Review Focus #4), so "locked"
+   * is never reported as "no longer on the map".
    *
-   * 'theirs' is also the reload a refused batch offers.
+   * 'theirs' is also the reload a refused batch offers. A second call while
+   * one is already awaiting `load()` is ignored outright (`resolvingRef`),
+   * and a `load()` that throws — offline — is caught rather than left to
+   * reject unhandled: the conflict stays open, with a Hebrew notice, so the
+   * lead can try again.
    */
   const resolveConflict = useCallback(async (choice: 'theirs' | 'mine') => {
-    const loaded = await initial.load();
-    const current = latest.current;
-    if (!loaded.ok || loaded.value === undefined) {
-      commit({ ...current, notice: loaded.ok ? LOAD_FAILED : loaded.error });
-      return;
-    }
-    const { doc: serverDoc, version } = loaded.value;
-    const queue = queueRef.current;
+    if (resolvingRef.current) return;
+    resolvingRef.current = true;
+    try {
+      let loaded: ActionResult<{ doc: EditorDoc; version: number }>;
+      try {
+        loaded = await initial.load();
+      } catch {
+        commit({ ...latest.current, notice: LOAD_FAILED });
+        return;
+      }
+      const current = latest.current;
+      if (!loaded.ok || loaded.value === undefined) {
+        commit({ ...current, notice: loaded.ok ? LOAD_FAILED : loaded.error });
+        return;
+      }
+      const { doc: serverDoc, version } = loaded.value;
+      const queue = queueRef.current;
 
-    if (choice === 'theirs') {
-      queue?.reset(version);
-      commit({ ...current, doc: serverDoc, selection: existing(serverDoc, current.selection), notice: null });
-      return;
-    }
-
-    // Replayed one op at a time against a doc that carries every kept op
-    // before it, the way the server itself checks a batch (`plan.ts`) — so a
-    // second op about an item the first op just touched sees it as it now is.
-    let merging = serverDoc;
-    const kept: SiteOp[] = [];
-    const dropped: string[] = [];
-    for (const raw of queue?.pendingOps() ?? []) {
-      // S2: an add whose id the server already has becomes an update of that
-      // item, rather than being dropped.
-      const op: SiteOp = raw.type === 'add' && findItem(merging, raw.item.id) !== undefined
-        ? { type: 'update', id: raw.item.id, patch: itemPatch(raw.item) }
-        : raw;
-
-      // S2: a remove of an item already gone does the same thing either way
-      // — dropped without a word.
-      if (op.type === 'remove' && findItem(merging, op.id) === undefined) continue;
-
-      if (op.type === 'update') {
-        const entry = findItem(merging, op.id);
-        if (entry === undefined) {
-          dropped.push(findItem(current.doc, op.id)?.label ?? 'פריט');
-          continue;
-        }
-        // S1: a lock another lead applied refuses this op the same as a
-        // missing item would.
-        if (lockRefusal(entry.locked, op.patch) !== null) {
-          dropped.push(entry.label);
-          continue;
-        }
+      if (choice === 'theirs') {
+        queue?.reset(version);
+        commit({
+          ...current,
+          doc: serverDoc,
+          selection: existing(serverDoc, current.selection),
+          history: EMPTY_HISTORY,
+          notice: null,
+        });
+        return;
       }
 
-      merging = applyOps(merging, [op]).doc;
-      kept.push(op);
-    }
+      // Replayed one op at a time against a doc that carries every kept op
+      // before it, the way the server itself checks a batch (`plan.ts`) — so
+      // a second op about an item the first op just touched sees it as it
+      // now is.
+      let merging = serverDoc;
+      const kept: SiteOp[] = [];
+      const goneNames: string[] = [];
+      const lockedNames: string[] = [];
+      for (const raw of queue?.pendingOps() ?? []) {
+        let op: SiteOp = raw;
 
-    queue?.rebase(version, kept);
-    const names = [...new Set(dropped)];
-    commit({
-      ...current,
-      doc: merging,
-      selection: existing(merging, current.selection),
-      notice: names.length === 0 ? null : `לא נשמרו שינויים בפריטים שכבר לא במפה: ${names.join(', ')}.`,
-    });
+        // S2: an add whose id the server already has becomes an update of
+        // that item, reduced (ruling 6) to only the fields that actually
+        // differ — nothing at all when the add already landed and only the
+        // reply was lost.
+        if (raw.type === 'add') {
+          const existingEntry = findItem(merging, raw.item.id);
+          if (existingEntry !== undefined) {
+            const reduced = changedUpdate(existingEntry, itemPatch(raw.item));
+            if (reduced === null) continue;
+            op = reduced;
+          }
+        }
+
+        // S2: a remove of an item already gone does the same thing either
+        // way — dropped without a word. One a lock refuses is not the same
+        // thing either way: named, in its own sentence (Review Focus #4).
+        if (op.type === 'remove') {
+          const entry = findItem(merging, op.id);
+          if (entry === undefined) continue;
+          if (entry.locked) { lockedNames.push(entry.label); continue; }
+        }
+
+        if (op.type === 'update') {
+          const entry = findItem(merging, op.id);
+          if (entry === undefined) {
+            goneNames.push(findItem(current.doc, op.id)?.label ?? 'פריט');
+            continue;
+          }
+          // S1: a lock another lead applied refuses this op the same as a
+          // missing item would refuse it — but it is named separately.
+          if (lockRefusal(entry.locked, op.patch) !== null) {
+            lockedNames.push(entry.label);
+            continue;
+          }
+        }
+
+        merging = applyOps(merging, [op]).doc;
+        kept.push(op);
+      }
+
+      queue?.rebase(version, kept);
+      const sentences: string[] = [];
+      const gone = [...new Set(goneNames)];
+      const locked = [...new Set(lockedNames)];
+      if (gone.length > 0) sentences.push(`לא נשמרו שינויים בפריטים שכבר לא במפה: ${gone.map(isolate).join(', ')}.`);
+      if (locked.length > 0) sentences.push(`לא נשמרו שינויים בפריטים נעולים: ${locked.map(isolate).join(', ')}.`);
+      commit({
+        ...current,
+        doc: merging,
+        selection: existing(merging, current.selection),
+        notice: sentences.length === 0 ? null : sentences.join(' '),
+      });
+    } finally {
+      resolvingRef.current = false;
+    }
   }, [commit, initial]);
 
   const retrySave = useCallback(() => { void queueRef.current?.retry(); }, []);
