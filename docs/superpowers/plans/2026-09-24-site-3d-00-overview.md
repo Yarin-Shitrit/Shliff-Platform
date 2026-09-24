@@ -330,7 +330,7 @@ export function shortcutFor(event: { code: string; metaKey: boolean; ctrlKey: bo
 // site-editor.tsx — Task 21 (client; the only importer of SceneView, via next/dynamic ssr:false)
 export interface SiteEditorProps { initial: { doc: EditorDoc; version: number }; initialSelection: string | null;
   seasonName: string; sunDate: string | null; buildTasks: ReadonlyArray<{ id: string; title: string }>;
-  plotHref: string }
+  plotHref: string; seasonDateHref: string } // seasonDateHref: `views.ts` seasonDateHref — the shell's ?act=season-date drawer (SD4)
 export function SiteEditor(props: SiteEditorProps): ReactElement;
 
 // panels/*.tsx — Tasks 21–25, one component per file, all client:
@@ -340,18 +340,28 @@ export function SiteEditor(props: SiteEditorProps): ReactElement;
 // toolbar.tsx        Toolbar({ ui, onUi, canUndo, canRedo, onUndo, onRedo })
 // save-status.tsx    SaveStatus({ snapshot, onRetry }), ConflictBanner({ busy, onTheirs, onMine })
 // library-panel.tsx  LibraryPanel({ defaults, onActivate(kind), onDragMove(kind, clientX, clientY), onDrop(kind, clientX, clientY), onDragCancel() })
-// objects-panel.tsx  ObjectsPanel({ items, selection, flags, hiddenGroups, onPick(id, additive), onToggleGroup(group) })
+// objects-panel.tsx  ObjectsPanel({ items, selection, flags, hiddenGroups, netsHidden, onPick(id, additive), onPickIds(ids), onToggleGroup(group), onShowLibrary?() })
+//                    — a group's count is a button selecting the rows it counts (G1); netsHidden marks a net's row hidden (G2);
+//                      onShowLibrary gives the empty list's invitation its button. SiteEditor passes its one pickIds, which
+//                      shows hidden groups and nets before it selects and fits — the inspectors and the checks bar use it too.
 // side-panel.tsx     SidePanel({ tab, onTab, library: ReactNode, objects: ReactNode, count })
 // inspector-plot.tsx PlotInspector({ doc, flags, plotHref, onPickIds(ids) })
 // inspector-item.tsx ItemInspector({ doc, item, flags, buildTasks, onRun(label, ops), onPickIds(ids) })
-// inspector-multi.tsx MultiInspector({ doc, ids, onRun(label, ops) })
+// inspector-multi.tsx MultiInspector({ doc, ids, onRun(label, ops), onPickIds(ids) })   — onPickIds required: a kind's chip selects that kind (P9)
 // checks-bar.tsx     ChecksBar({ doc, flags, onGo(ids) })
-// view-controls.tsx  ViewControls({ info, keysOpen, onZoom(factor), onFit(), onRotate(dir), onNorth(), onKeys() })
+// view-controls.tsx  ViewControls({ info, northDeg, keysOpen, onZoom(factor), onFit(), onRotate(dir), onNorth(), onKeys() })
+//                    — northDeg required (N1): the needle is drawn at yaw − northDeg, pointing to true north
 // minimap.tsx        Minimap({ doc, flags, selection, info, onJump(xCm, yCm) })       — SVG, testable in jsdom
 // selection-bar.tsx  SelectionBar({ box, locked, onTurn, onDuplicate, onLock, onRemove })
+//                    — wraps SelectionActions({ locked, labelled, onTurn, onDuplicate, onLock, onRemove }), no prop added:
+//                      the bar's inverted colours reach its buttons by element (`.selBar button`)
 // shortcuts-card.tsx ShortcutsCard({ onClose })
-// sun-card.tsx       SunCard({ hour, onHour, summary, northDeg, plotHref, sunDate })
-// Styles: src/app/(admin)/site/editor/editor.module.css (created in Task 21, extended by later tasks).
+// sun-card.tsx       SunCard({ hour, onHour, summary, northDeg, plotHref, dateHref, sunDate })
+//                    — dateHref: the season's opening date (SD4); with no day the card invites one and links there,
+//                      with a day the date itself links there
+// Styles (rulings W2, W10): editor.module.css holds the shell only (layout, tool row, save state, banners, the .cards
+// stack); each panel keeps its own panels/<name>.module.css; the chrome they share (.panel .body .card .cardHead .hint
+// .meta .invite .link .g_* .swatch .stack .search .searchInput .issueDot .iconButton) is panels/panel.module.css.
 ```
 
 ### Amendments recorded after plan 02 was written (additive; binding)
@@ -387,10 +397,10 @@ export function SiteEditor(props: SiteEditorProps): ReactElement;
 - `SiteEditorProps.fallback?: ReactNode` carries the item table. `SiteEditor` probes WebGL once; without it, it renders `SceneView` (for its `NO_WEBGL` notice) with the table under it. It never imports `NO_WEBGL` statically — a static import of `scene-view.tsx` would put `three` in the page's first bundle.
 - A newer `initial.version` after a plot save: `SiteEditor` is never keyed; with nothing pending it calls `resolveConflict('theirs')`, with pending ops it shows the conflict banner, with a batch in flight it waits for the answer (Task 25).
 - `SiteEditor` exposes `SCENE_PALETTE` as `--group-*` / `--scene-*` CSS variables (a static import of `palette.ts`, which must stay free of `three`).
-- New panel pieces: `SaveErrorBanner({ message, busy, onReload })`, `panels/selection-actions.tsx` (shared by the inspector footer and `SelectionBar`), `ItemInspector.footer?`, `MultiInspector.footer?`/`onClear?`, `panels/north.ts` (`northText`), pure helpers `scaleFor`, `minimapBounds`, `minimapPoint`, `hourText`; `views.ts` gains `sunDateOf`; `failure-messages.ts` gains `NORTH_INVALID`.
-- Toasts keep the kit's dwell (10 s with an undo), not the spec's 5 s — one timing across the platform.
+- New panel pieces: `SaveErrorBanner({ message, busy, onReload })`, `panels/selection-actions.tsx` (shared by the inspector footer and `SelectionBar`), `ItemInspector.footer?`, `MultiInspector.footer?`/`onClear?`, `panels/north.ts` (`northText`), pure helpers `scaleFor`, `minimapBounds`, `minimapPoint`, `hourText`; `views.ts` gains `sunDateOf` and `seasonDateHref`; `failure-messages.ts` gains `NORTH_INVALID`.
+- Toasts keep the kit's dwell (10 s with an undo), not the spec's 5 s — one timing across the platform. An undo toast undoes only its own history entry (P6): every history change `SiteEditor` makes (an edit from any panel, the keys or the scene — the scene is handed the store with its `run` routed through the same door — an undo, a redo, a reload) takes the open undo toasts away, through the kit's `show`, which returns a dismiss function; a stale ביטול says so instead of undoing. The lock toast counts `ops.length` (P12); the locked sentence is `notices.ts` `LOCKED_NOTICE`, with `LOCKED_ALL_NOTICE` beside it for an all-locked selection (P14).
 - The plot drawer is titled "הגדרות המגרש" (it now holds north too).
-- Known gap: no screen edits an existing season's gate date (`seasons.startsOn`), so the sun card's no-date state is an invitation without a link. Follow-up, outside this feature.
+- An existing season's gate date (`seasons.startsOn`) is edited in the shell's `?act=season-date` drawer (rulings SD1–SD3, the separate season-opening-date branch). The sun card links there (SD4) through `views.ts` `seasonDateHref` / `SEASON_DATE_ACT`: its no-date state invites the date, and a shown date links to it. Until that branch is on main the link opens nothing.
 - Task 27's browser check blocks every mutating server action with `page.route` (proven by a test edit) unless the camp lead approves writes; the two-tab conflict check runs only with that approval.
 
 ### Amendment recorded during plan 03 execution (Task 15 review)

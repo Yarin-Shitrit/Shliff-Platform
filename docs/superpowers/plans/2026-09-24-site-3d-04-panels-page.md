@@ -32,18 +32,25 @@ Every task's requirements include these. Copied from the overview and `CLAUDE.md
 
 ## What this plan adds to the contract
 
-All additive, all inside plan 04's own files. Nothing in plans 01–03 changes shape.
+All additive. All inside plan 04's own files but one: the component kit's toaster, whose `show` now returns a dismiss function (ruling P6, a shared surface — see its row). Nothing in plans 01–03 changes shape.
 
 | Where | Addition | Why |
 |---|---|---|
 | `keyboard.ts` | `export type Arrow`, `export const ZOOM_IN = 0.8` | `Shortcut`'s arrow member needs a name; + and − and the view controls share one step, a distance multiplier like `camera.ts` `zoomAt` ("under 1 is closer") |
 | `site-editor.tsx` | `SiteEditorProps.fallback?: ReactNode` (Task 26) | the item table the editor shows below 900 px and without WebGL |
+| `site-editor.tsx` | `SiteEditorProps.seasonDateHref: string` | the sun card's link to the season's opening date (ruling SD4) |
 | `panels/save-status.tsx` | `SaveErrorBanner({ message, busy, onReload })` | a refused or failed batch shows its Hebrew reason and offers the reload (spec §6.4) |
-| `panels/selection-actions.tsx` (new) | `SelectionActions({ locked, labelled, onTurn, onDuplicate, onLock, onRemove })` | one set of turn/duplicate/lock/remove buttons for the inspector footer and the selection bar |
-| `panels/inspector-item.tsx`, `inspector-multi.tsx` | `footer?: ReactNode`; `MultiInspector` also `onClear?: () => void` | the footer's actions are SiteEditor's (they toast); clearing a multi-selection from its panel |
+| `panels/selection-actions.tsx` (new) | `SelectionActions({ locked, labelled, onTurn, onDuplicate, onLock, onRemove })` — no prop added for the selection bar, whose inverted colours reach these buttons by element (`.selBar button`) | one set of turn/duplicate/lock/remove buttons for the inspector footer and the selection bar |
+| `panels/inspector-item.tsx`, `inspector-multi.tsx` | `footer?: ReactNode`; `MultiInspector` also `onClear?: () => void` and a **required** `onPickIds: (ids: string[]) => void` | the footer's actions are SiteEditor's (they toast); clearing a multi-selection from its panel; a kind's chip selects that kind (ruling P9) |
+| `panels/objects-panel.tsx` | `ObjectsPanel` gains `netsHidden: boolean`, `onPickIds: (ids: string[]) => void` and `onShowLibrary?: () => void` | a group's count selects the rows it counts (G1); a net's row is marked hidden while the nets are (G2); the empty list's invitation has a way to the library |
+| `panels/view-controls.tsx` | `ViewControls` gains a **required** `northDeg: number` | the compass needle points to true north, `yaw − northDeg` (ruling N1) |
+| `panels/sun-card.tsx` | `SunCard` gains `dateHref: string` | with no gate day the card invites one and links there; with a day the date links there (ruling SD4) |
+| `notices.ts` | `LOCKED_ALL_NOTICE` beside `LOCKED_NOTICE` | the locked sentence when every selected item is locked (ruling P14) |
+| `src/components/ui/toaster.tsx` (kit, shared surface) | `show(toast)` returns `() => void` that takes that toast away; existing callers ignore it | a newer edit takes an open undo toast away, so its ביטול never undoes another entry (ruling P6) |
 | `panels/north.ts` (new) | `northText(northDeg)` | the plot inspector and the sun card say north the same way |
 | `panels/view-controls.tsx`, `minimap.tsx`, `sun-card.tsx` | `scaleFor(pxPerM)`, `minimapBounds(doc)`, `minimapPoint(rect, box, x, y)`, `hourText(hour)` | pure helpers beside their components, exported for their tests |
 | `src/lib/site/views.ts` | `sunDateOf(startsOn: Date \| null): string \| null` | the gate day as a calendar date in Israel — `SiteEditorProps.sunDate` |
+| `src/lib/site/views.ts` | `SEASON_DATE_ACT`, `seasonDateHref(params)` | `?act=season-date` with the carried params, like the page's other `act` links — `SiteEditorProps.seasonDateHref` |
 | `failure-messages.ts` | `NORTH_INVALID` | the plot drawer's own pre-flight refusal, in the library's words |
 
 Every typed length in the inspectors — sides, heights, positions, a net's strip, a row's gap — goes through plan 02's `readMetres` with `SIDE_RANGE`, `HEIGHT_RANGE`, `POSITION_RANGE` or `GAP_RANGE` (overview, "Amendments recorded after plan 02"). No panel writes a length refusal of its own. Each test file carries its own small fixture; none imports from another test file or from a shared fixture module.
@@ -56,7 +63,7 @@ What this file takes from plan 03 as written (overview, "Amendments recorded aft
 |---|---|
 | `src/app/(admin)/site/editor/keyboard.ts` (+ `.test.ts`) | 21 |
 | `src/app/(admin)/site/editor/site-editor.tsx` (+ `.test.tsx`; `site-editor.no-webgl.test.tsx` in 26) | 21, extended 22–26 |
-| `src/app/(admin)/site/editor/editor.module.css` | 21, extended 22–26 |
+| `src/app/(admin)/site/editor/editor.module.css` | 21 (the shell only; integration II added the `.cards` stack) — under ruling W2 each panel keeps its own `panels/<name>.module.css`, and `panels/panel.module.css` holds the chrome they share (W10, integration II) |
 | `src/app/(admin)/site/editor/panels/editor-icons.tsx`, `toolbar.tsx`, `save-status.tsx` | 21 |
 | `src/app/(admin)/site/editor/panels/library-panel.tsx`, `objects-panel.tsx`, `side-panel.tsx` (+ tests) | 22 |
 | `src/app/(admin)/site/editor/panels/inspector-plot.tsx`, `inspector-item.tsx`, `inspector-multi.tsx`, `selection-actions.tsx`, `north.ts` (+ tests) | 23 |
