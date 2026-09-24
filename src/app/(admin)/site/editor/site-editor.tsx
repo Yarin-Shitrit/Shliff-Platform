@@ -51,6 +51,7 @@ import { SelectionActions } from './panels/selection-actions';
 import { ChecksBar } from './panels/checks-bar';
 import { Minimap } from './panels/minimap';
 import { ViewControls } from './panels/view-controls';
+import { SelectionBar } from './panels/selection-bar';
 import { ShortcutsCard } from './panels/shortcuts-card';
 import inspectorStyles from './panels/inspector.module.css';
 import styles from './editor.module.css';
@@ -504,6 +505,8 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
      away what was done offline. */
   const saveError = store.save.status === 'error' ? store.save.error : null;
   const refused = store.save.errorKind === 'refused';
+  /** The selected items that still exist, once per render for the selection bar. */
+  const selectedNow = selected();
 
   const editor = (
     <div className={styles.editorArea}>
@@ -595,6 +598,14 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
           onRotate={(dir) => { sceneRef.current?.rotateView(dir); }}
           onNorth={() => { sceneRef.current?.northUp(); }}
           onKeys={() => { setKeysOpen((open) => !open); }}
+        />
+        <SelectionBar
+          box={view.moving || selectedNow.length === 0 ? null : view.selectionBox}
+          locked={selectedNow.length > 0 && selectedNow.every((item) => item.locked)}
+          onTurn={turnSelection}
+          onDuplicate={duplicateSelection}
+          onLock={toggleLock}
+          onRemove={removeSelection}
         />
         <div className={styles.cards}>
           {keysOpen ? <ShortcutsCard onClose={() => { setKeysOpen(false); }} /> : null}

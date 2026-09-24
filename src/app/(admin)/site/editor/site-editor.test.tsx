@@ -773,6 +773,20 @@ describe('the checks, the view controls and the minimap', () => {
     expect(scene.handle.jumpTo).toHaveBeenLastCalledWith(1300, 1200);
   });
 
+  it('floats the selection bar by the selection, and hides it while the view moves', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    act(() => { lastScene().onView({ ...VIEW, selectionBox: { l: 100, t: 200, r: 300, b: 260 } }); });
+    const bar = screen.getByRole('group', { name: 'פעולות על הבחירה' });
+    expect(bar.style.left).toBe('200px');
+    fireEvent.click(within(bar).getByRole('button', { name: 'סיבוב ברבע' }));
+    expect(firstItem().widthCm).toBe(200);
+    fireEvent.click(within(bar).getByRole('button', { name: 'נעילה' }));
+    expect(firstItem().locked).toBe(true);
+    act(() => { lastScene().onView({ ...VIEW, moving: true, selectionBox: null }); });
+    expect(screen.queryByRole('group', { name: 'פעולות על הבחירה' })).toBeNull();
+  });
+
   it('opens the shortcuts card with ?, and esc closes it without letting go of the selection', async () => {
     renderEditor();
     await screen.findByTestId('scene');
