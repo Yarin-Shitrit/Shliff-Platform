@@ -107,6 +107,23 @@ describe('createSeasonAction', () => {
     expect(season.startsOn?.toISOString().slice(0, 10)).toBe('2025-08-01');
   });
 
+  /**
+   * `new Date` read both of these without complaint: `2026-02-30` as
+   * 2 March, `4/6/2026` month-first as 6 April. The season was created with
+   * a gate date nobody typed.
+   */
+  it.each(['2026-02-30', '4/6/2026'])(
+    'refuses an impossible or non-ISO gate date %j, in Hebrew, and creates nothing',
+    async (startsOn) => {
+      const result = await createSeasonAction({
+        name: 'ברן 26', year: '2026', flatRate: '1200', startsOn,
+      });
+
+      expect(result).toEqual({ ok: false, error: 'תאריך פתיחת השער אינו תקין.' });
+      expect(await listSeasons(dbRef.current!)).toHaveLength(0);
+    },
+  );
+
   it('refuses a non-admin and writes nothing', async () => {
     adminRef.current = { ok: false };
 

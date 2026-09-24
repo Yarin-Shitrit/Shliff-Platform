@@ -9,6 +9,7 @@ import { shellCounts, type ShellCounts } from '@/lib/shell/counts';
 import { searchPalette, type PaletteHit } from '@/lib/search/palette';
 import { createSeason, setSeasonStartsOn } from '@/lib/members/roster';
 import { isBlank } from '@/lib/text/normalize';
+import { parseDateInput } from '@/lib/dates';
 import { toHebrewError, type HebrewConstraints } from '@/lib/errors/hebrew';
 import type { ActionResult } from '@/lib/action-result';
 
@@ -124,12 +125,13 @@ export async function createSeasonAction(input: NewSeasonInput): Promise<ActionR
     }
   }
 
+  // Through the same strict reader as `setSeasonStartsOnAction`: `new Date`
+  // alone turned `2026-02-30` into 2 March and read `4/6/2026` month-first.
   let startsOn: Date | undefined;
   if (!isBlank(input.startsOn)) {
-    startsOn = new Date(input.startsOn!);
-    if (Number.isNaN(startsOn.getTime())) {
-      return { ok: false, error: 'תאריך פתיחת השער אינו תקין.' };
-    }
+    const day = parseDateInput(input.startsOn!);
+    if (day === null) return { ok: false, error: 'תאריך פתיחת השער אינו תקין.' };
+    startsOn = day;
   }
 
   try {
@@ -146,24 +148,17 @@ export async function createSeasonAction(input: NewSeasonInput): Promise<ActionR
 }
 
 /**
- * What `<input type="date">` submits, and the only shape accepted here. The
- * shape is checked as well as the value because `new Date` does not refuse
- * what it cannot read: `2026-02-30` becomes 2 March, and `2026-6-4` parses
- * as the server's local midnight rather than UTC. Either would store a day
- * nobody typed.
- */
-const CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
-/**
  * `SeasonDateDrawer` (`?act=season-date`): sets, changes or clears an
  * existing season's gate date. `startsOn` is the raw string the date input
- * holds, and blank means "clear it" — the drawer's own clear button sends
- * exactly that, so there is one meaning of blank, decided here.
+ * holds, and blank means "clear it" — the drawer sends blank only from its
+ * own `הסרת התאריך` button, and refuses an empty `שמירה` before it gets here.
  *
- * A typed date is stored the way `createSeasonAction` stores it,
- * `new Date('YYYY-MM-DD')`, which is UTC midnight — 02:00 or 03:00 the same
- * day in Israel, so every screen reading it in the camp's timezone shows the
- * day that was typed.
+ * A typed date goes through `parseDateInput`, the same reader
+ * `createSeasonAction` uses, and is stored as UTC midnight — 02:00 or 03:00
+ * the same day in Israel, so every screen reading it in the camp's timezone
+ * shows the day that was typed. Anything that reader refuses (`2026-02-30`,
+ * `2026-6-4`, `4/6/2026`) is refused here rather than stored as a day nobody
+ * typed.
  */
 export async function setSeasonStartsOnAction(
   seasonId: string, startsOn: string,
@@ -175,13 +170,8 @@ export async function setSeasonStartsOnAction(
 
   let date: Date | null = null;
   if (!isBlank(startsOn)) {
-    const typed = startsOn.trim();
-    date = new Date(typed);
-    if (!CALENDAR_DATE.test(typed)
-      || Number.isNaN(date.getTime())
-      || date.toISOString().slice(0, 10) !== typed) {
-      return { ok: false, error: 'תאריך פתיחת השער אינו תקין.' };
-    }
+    date = parseDateInput(startsOn);
+    if (date === null) return { ok: false, error: 'תאריך פתיחת השער אינו תקין.' };
   }
 
   let updated: Awaited<ReturnType<typeof setSeasonStartsOn>>;
