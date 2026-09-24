@@ -232,7 +232,10 @@ describe('the 3D map with WebGL', () => {
         return {
           matches: true, media: query, onchange: null,
           addEventListener: (_type: string, listener: () => void) => { entry.listener = listener; },
-          removeEventListener: () => { entry.listener = null; },
+          // Only the function that was added comes off: removing any other leaves it listening.
+          removeEventListener: (_type: string, listener: () => void) => {
+            if (listener === entry.listener) entry.listener = null;
+          },
           addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false,
         };
       },
@@ -269,6 +272,88 @@ describe('the 3D map with WebGL', () => {
       if (ownMedia === undefined) Reflect.deleteProperty(window, 'matchMedia');
       else Object.defineProperty(window, 'matchMedia', ownMedia);
     }
+  });
+
+  /* Ruling X1, "fully fit": a window made larger or smaller refits the plot
+     while the view is still the automatic fit — the first one, or the last F.
+     A view the lead has framed (orbit, pan, zoom, a jump) is theirs, and a
+     resize keeps it. jsdom has no ResizeObserver: this one hands the test
+     the engine's callback, and the stage's box is the one given here. */
+  describe('when the stage is resized', () => {
+    const own = Object.getOwnPropertyDescriptor(globalThis, 'ResizeObserver');
+    const callbacks: Array<() => void> = [];
+
+    beforeEach(() => {
+      callbacks.length = 0;
+      Object.defineProperty(globalThis, 'ResizeObserver', {
+        configurable: true,
+        writable: true,
+        value: class {
+          constructor(callback: () => void) { callbacks.push(callback); }
+          observe() {}
+          unobserve() {}
+          disconnect() {}
+        },
+      });
+    });
+
+    afterEach(() => {
+      if (own === undefined) Reflect.deleteProperty(globalThis, 'ResizeObserver');
+      else Object.defineProperty(globalThis, 'ResizeObserver', own);
+    });
+
+    function resizeStage(width: number, height: number) {
+      Element.prototype.getBoundingClientRect = () => ({
+        width, height, x: 0, y: 0, top: 0, left: 0, right: width, bottom: height, toJSON: () => ({}),
+      });
+      for (const callback of callbacks) callback();
+    }
+
+    /** Past the settle time, so the last report is the settled view. */
+    const settled = () => wait(450);
+
+    it('fits the plot to the new stage while the view is still the automatic fit', async () => {
+      const { onView } = renderScene();
+      await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+      await settled();
+      expect(onView.mock.lastCall?.[0].zoomPct).toBe(100);
+
+      // Narrower than it is tall: the plot's width now decides the fit.
+      resizeStage(500, 700);
+      await settled();
+      expect(renderer.size).toEqual([500, 700]);
+      expect(onView.mock.lastCall?.[0]).toMatchObject({ zoomPct: 100, moving: false });
+    });
+
+    it('keeps a view the lead has framed, until F makes it the automatic fit again', async () => {
+      const { onView, handle } = renderScene();
+      await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+      await settled();
+
+      handle.current?.jumpTo(700, 600);
+      handle.current?.zoomBy(0.8);
+      await settled();
+      expect(onView.mock.lastCall?.[0].zoomPct).toBe(125);
+      const framed = handle.current?.centreGround();
+      expect(framed?.[0]).toBeCloseTo(700, 0);
+      expect(framed?.[1]).toBeCloseTo(600, 0);
+
+      resizeStage(500, 700);
+      await settled();
+      // Where the lead put it, as close as they put it: not refitted.
+      const kept = handle.current?.centreGround();
+      expect(kept?.[0]).toBeCloseTo(700, 0);
+      expect(kept?.[1]).toBeCloseTo(600, 0);
+      expect(onView.mock.lastCall?.[0].zoomPct).not.toBe(100);
+
+      handle.current?.fitAll();
+      await wait(420); // the fly-to
+      await settled();
+      expect(onView.mock.lastCall?.[0]).toMatchObject({ zoomPct: 100, moving: false });
+      resizeStage(1000, 700);
+      await settled();
+      expect(onView.mock.lastCall?.[0]).toMatchObject({ zoomPct: 100, moving: false });
+    });
   });
 
   it('aims the light over the plot, and follows the plot when it is resized', async () => {
