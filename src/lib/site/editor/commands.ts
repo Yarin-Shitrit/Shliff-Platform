@@ -68,7 +68,7 @@ function resizedAboutCentre(entry: EditorItem, widthCm: number, depthCm: number)
   };
 }
 
-/** One past the highest `sort`: drawn on top of everything, like `addItem` always did. */
+/** One past the highest `sort`: drawn on top of everything, as a new item on the map always has been. */
 function nextSort(items: readonly EditorItem[]): number {
   return items.reduce((top, entry) => Math.max(top, entry.sort), -1) + 1;
 }

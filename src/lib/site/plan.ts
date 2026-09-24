@@ -4,14 +4,11 @@ import type { AnyDb } from '@/lib/db-types';
 import { isBlank } from '@/lib/text/normalize';
 import { seasons, tasks } from '@/db/schema/camp';
 import { siteItems, siteKindDefaults, sitePlans, type SiteItemKind } from '@/db/schema/site';
-import {
-  DEFAULT_SHADE_INSET_CM, SITE_KINDS, isSiteItemKind,
-} from './kinds';
-import { placeNew } from './geometry';
-import { derive, toPlaced, type ItemFlags, type SiteCounts } from './derive';
+import { DEFAULT_SHADE_INSET_CM, isSiteItemKind } from './kinds';
+import { derive, type ItemFlags, type SiteCounts } from './derive';
 import type { KindDefaults } from './defaults';
 import type { EditorDoc, EditorItem } from './editor/model';
-import { lockRefusal, opRefusal, patchRefusal, storedPatch, type ItemPatch, type SiteOp } from './editor/ops';
+import { lockRefusal, opRefusal, storedPatch, type ItemPatch, type SiteOp } from './editor/ops';
 
 /**
  * The camp map's reads and writes. One plan per season, any number of items
@@ -258,56 +255,13 @@ export async function itemById(db: AnyDb, id: string): Promise<SiteItem | null> 
   return row ?? null;
 }
 
-/**
- * Drops a preset onto the first free spot and returns the new id. No screen
- * calls it since the board retired (the editor adds through `applySiteOps`);
- * `plan.test.ts` builds its maps with it. When the plot has no free spot the item
- * still lands — at the origin, on top of whatever is there — and the overlap
- * flag says so; refusing would leave the lead with nothing to drag.
+/*
+ * Items are written only by `applySiteOps` below: a batch against the version
+ * it read, refusing a locked item. The board's own writes — `addItem`,
+ * `updateItem`, `removeItem` — bumped no version and ignored locks, so a board
+ * edit and an editor edit could overwrite each other silently (final review,
+ * C1). They retired with the board (Task 26).
  */
-export async function addItem(
-  db: AnyDb, planId: string, kind: SiteItemKind, actor: string,
-): Promise<string> {
-  if (!isSiteItemKind(kind)) throw new Error(`unknown item kind: ${kind}`);
-  const plan = await planById(db, planId);
-  if (!plan) throw new Error(`unknown site plan ${planId}`);
-
-  const preset = SITE_KINDS[kind];
-  const existing = await listItems(db, planId);
-  const placed = existing.map(toPlaced);
-  const spot = placeNew(placed, plan, { width: preset.widthCm, depth: preset.depthCm }, plan.gridCm, kind)
-    ?? { x: 0, y: 0 };
-
-  const [row] = await db.insert(siteItems)
-    .values({
-      planId,
-      kind,
-      label: nextLabel(preset.label, existing.filter((item) => item.kind === kind).length),
-      xCm: spot.x,
-      yCm: spot.y,
-      widthCm: preset.widthCm,
-      depthCm: preset.depthCm,
-      insetCm: kind === 'shade' ? DEFAULT_SHADE_INSET_CM : null,
-      // On top of everything drawn so far.
-      sort: existing.reduce((top, item) => Math.max(top, item.sort), -1) + 1,
-      updatedBy: actor,
-    })
-    .returning();
-  return row.id;
-}
-
-/** `אוהל 4` — numbered by how many of its kind are already on the map, so two tents never share a name by default. */
-function nextLabel(base: string, count: number): string {
-  return `${base} ${count + 1}`;
-}
-
-export type { ItemPatch } from './editor/ops';
-
-/** The one set of refusals the client also runs (`editor/ops.ts`). */
-function validatePatch(patch: ItemPatch): void {
-  const refusal = patchRefusal(patch);
-  if (refusal !== null) throw new Error(refusal);
-}
 
 type ItemRow = typeof siteItems.$inferSelect;
 
@@ -341,33 +295,6 @@ async function assertBuildTask(db: AnyDb, taskId: string, seasonId: string): Pro
     .where(and(eq(tasks.id, taskId), eq(tasks.kind, 'build'), eq(tasks.seasonId, seasonId)))
     .limit(1);
   if (!task) throw new Error('that task is not a build task of this season');
-}
-
-/**
- * Partial on purpose: a drag sends two numbers, a handle sends four, the
- * drawer sends everything. One write path, one set of refusals.
- */
-export async function updateItem(
-  db: AnyDb, id: string, patch: ItemPatch, actor: string,
-): Promise<void> {
-  validatePatch(patch);
-  const existing = await itemById(db, id);
-  if (!existing) throw new Error(`unknown site item ${id}`);
-  if (patch.taskId !== undefined && patch.taskId !== null) {
-    const plan = await planById(db, existing.planId);
-    await assertBuildTask(db, patch.taskId, plan?.seasonId ?? '');
-  }
-  await db.update(siteItems).set(patchSet(existing, patch, actor)).where(eq(siteItems.id, id));
-}
-
-/**
- * A real delete, unlike most of this platform. An item on the map is
- * somebody's statement that a thing goes there, not a fact about the world;
- * withdrawing the statement leaves nothing unexplained.
- */
-export async function removeItem(db: AnyDb, id: string): Promise<void> {
-  if (!(await itemById(db, id))) throw new Error(`unknown site item ${id}`);
-  await db.delete(siteItems).where(eq(siteItems.id, id));
 }
 
 export type SiteItemView = SiteItem & ItemFlags;

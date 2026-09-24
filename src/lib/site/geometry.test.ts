@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   HANDLES, areaM2, contains, formatArea, formatMetres, formatSize, gapsAround, move, outsideIds,
-  overlap, overlapPairs, placeNew, resize, shadeCounts, shadeState, shadedRect, snap,
+  overlap, overlapPairs, resize, shadeCounts, shadeState, shadedRect, snap,
   turnAboutCentre, unionRect, wholeCm, type PlacedItem, type Rect,
 } from './geometry';
 
@@ -99,40 +99,6 @@ describe('moving and resizing', () => {
 
   it('snaps the dragged edge', () => {
     expect(resize(rect, 'e', 37, 0, 50)).toEqual({ x: 500, y: 500, width: 350, depth: 200 });
-  });
-});
-
-describe('placing a new item', () => {
-  const size = { width: 300, depth: 300 };
-
-  it('lands on the origin of an empty plot', () => {
-    expect(placeNew([], PLOT, size, 50, 'tent')).toEqual({ x: 0, y: 0 });
-  });
-
-  it('skips what is already there, reading across first', () => {
-    const items = [item({ id: 'a', x: 0, y: 0 })];
-    expect(placeNew(items, PLOT, size, 50, 'tent')).toEqual({ x: 300, y: 0 });
-  });
-
-  it('wraps to the next row when the first is full', () => {
-    const items = [item({ id: 'row', x: 0, y: 0, width: 2600, depth: 100 })];
-    expect(placeNew(items, PLOT, size, 50, 'tent')).toEqual({ x: 0, y: 100 });
-  });
-
-  it('respects the fence', () => {
-    expect(placeNew([], { widthCm: 250, depthCm: 250 }, size, 50, 'tent')).toBeNull();
-  });
-
-  it('returns null when nothing fits, rather than guessing', () => {
-    const items = [item({ id: 'all', x: 0, y: 0, width: 2600, depth: 2400 })];
-    expect(placeNew(items, PLOT, size, 50, 'tent')).toBeNull();
-  });
-
-  it('lets a sofa land under a net, and a net land over anything', () => {
-    const net = item({ id: 'net', kind: 'shade', insetCm: 50, width: 800, depth: 800 });
-    expect(placeNew([net], PLOT, { width: 200, depth: 90 }, 50, 'sofa')).toEqual({ x: 0, y: 0 });
-    const tent = item({ id: 't', x: 0, y: 0 });
-    expect(placeNew([tent], PLOT, { width: 800, depth: 800 }, 50, 'shade')).toEqual({ x: 0, y: 0 });
   });
 });
 
