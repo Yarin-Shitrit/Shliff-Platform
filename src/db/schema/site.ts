@@ -46,8 +46,10 @@ export const sitePlans = pgTable('site_plans', {
   version: integer('version').notNull().default(0),
   /**
    * The compass bearing the map's "up" points to, in whole degrees. 0 is
-   * north, which is what the map has always implied. Only shade by hour
-   * reads it (spec §11).
+   * north, which is what the map has always implied. Read by shade by hour
+   * (spec §11), by the view controls' compass, whose needle points to true
+   * north, and by `northUp`, which turns the view so true north is up
+   * (spec §6); the plot inspector and the sun card say it in words.
    */
   northDeg: integer('north_deg').notNull().default(0),
   notes: text('notes'),
