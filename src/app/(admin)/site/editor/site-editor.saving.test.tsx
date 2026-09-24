@@ -10,7 +10,7 @@
  * what it says — the path the original bug was on (overview, Review Focus #1).
  */
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ToastProvider } from '@/components/ui/toaster';
 import type { EditorDoc, EditorItem, EditorPlot } from '@/lib/site/editor/model';
 import { NETWORK_FAILURE } from './save-queue';
@@ -214,6 +214,45 @@ describe('a plot saved in the drawer', () => {
     await waitFor(() => {
       expect(saveSiteChangesAction).toHaveBeenLastCalledWith('p1', 1, expect.any(Array));
     }, WAIT);
+  });
+
+  /*
+   * Hotfix H1 — the review's probe, kept. The take-up used 'theirs', which
+   * empties the queue: a turn and a copy made while the newer map was still
+   * loading were thrown away, nothing was sent, the top bar said everything
+   * was saved, and the copy's toast stayed on screen offering ביטול for a
+   * copy that no longer existed.
+   */
+  it('keeps the edits made while the newer map loads, and saves them over it', async () => {
+    let settle: (value: unknown) => void = () => {};
+    loadSiteDocAction.mockReturnValue(new Promise((resolve) => { settle = resolve; }));
+    saveSiteChangesAction.mockResolvedValue({ ok: true, version: 2 });
+    const { rerenderWith } = await renderEditor();
+    rerenderWith({ initial: widened() });
+    await waitFor(() => { expect(loadSiteDocAction).toHaveBeenCalledTimes(1); });
+
+    turn();
+    fireEvent.keyDown(stage(), { code: 'KeyD', metaKey: true });
+    expect(await screen.findByText(/נוצר עותק של/)).toBeTruthy();
+    // Nothing asks the lead to choose while the editor is taking the map up itself.
+    expect(screen.queryByText(CONFLICT)).toBeNull();
+
+    await act(async () => { settle({ ok: true, value: widened() }); });
+    await waitFor(() => { expect(plotWidth()).toBe(3000); });
+    const items = (sceneProps.mock.lastCall?.[0] as SceneViewProps).store.doc.items;
+    expect(items).toHaveLength(2);
+    expect(items[0]).toMatchObject({ id: 'a', widthCm: 200, depthCm: 300 });
+    // Both edits go to the server, over the version the map was taken up at.
+    await waitFor(() => {
+      expect(saveSiteChangesAction).toHaveBeenCalledWith('p1', 1, expect.any(Array));
+    }, WAIT);
+    expect(lastSent().ops).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'update', id: 'a' }),
+      expect.objectContaining({ type: 'add' }),
+    ]));
+    expect(await saved()).toBeTruthy();
+    // The map was replaced under the copy's history entry, so its ביטול goes too.
+    expect(screen.queryByText(/נוצר עותק של/)).toBeNull();
   });
 });
 

@@ -927,11 +927,12 @@ describe('shade by hour', () => {
 describe('a plot saved in the drawer', () => {
   const widened = () => ({ doc: siteDoc([siteItem({ id: 'a' })], { widthCm: 3000 }), version: 1 });
 
-  it('is taken up once, as the reload a conflict offers, when nothing is waiting to be saved', async () => {
+  it('is taken up once, through \'mine\', when nothing is waiting to be saved', async () => {
     const { rerenderWith } = renderEditor();
     await screen.findByTestId('scene');
     rerenderWith({ initial: widened() });
-    await waitFor(() => { expect(fake.resolveConflict).toHaveBeenCalledWith('theirs'); });
+    // 'mine', never 'theirs': an edit made while the map loads is replayed, not emptied out (hotfix H1).
+    await waitFor(() => { expect(fake.resolveConflict).toHaveBeenCalledWith('mine'); });
     rerenderWith({ initial: widened() });
     expect(fake.resolveConflict).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(CONFLICT)).toBeNull();

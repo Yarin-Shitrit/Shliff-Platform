@@ -7,6 +7,7 @@ import { signOutAction } from './actions';
 import { CommandPalette } from './command-palette';
 import { NavList } from './nav-list';
 import { NewSeasonDrawer } from './new-season-drawer';
+import { SeasonDateDrawer } from './season-date-drawer';
 import { SeasonSwitch, type SwitchSeason } from './season-switch';
 import { UserBlock } from './user-block';
 import styles from './sidebar.module.css';
@@ -44,7 +45,9 @@ function stateOf(index: number, flatRate: string): string {
  *
  * `NewSeasonDrawer` is rendered here, beside `SeasonSwitch`, rather than by
  * a page: `?act=season` (the switcher's `שנה חדשה`) must open from any admin
- * screen, and only the rail is common to all of them.
+ * screen, and only the rail is common to all of them. `SeasonDateDrawer`
+ * (`?act=season-date`, the switcher's `פתיחת השער`) sits beside it for the
+ * same reason, and is handed the same season list the switcher is.
  */
 export async function Sidebar() {
   const { seasons } = await resolveSeason(db);
@@ -52,6 +55,7 @@ export async function Sidebar() {
     id: season.id,
     name: season.name,
     state: stateOf(index, season.flatRate),
+    startsOn: season.startsOn,
   }));
   const admin = await requireAdmin();
 
@@ -64,6 +68,7 @@ export async function Sidebar() {
       </div>
       <SeasonSwitch seasons={options} />
       <NewSeasonDrawer />
+      <SeasonDateDrawer seasons={options} />
       <CommandPalette />
       <NavList />
       <div className={styles.sidefoot}>

@@ -16,7 +16,8 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Drawer } from '@/components/ui/drawer';
 import { closePeekHref } from '@/components/ui/drawer-url';
 import { Icon } from '@/components/ui/icon';
-import { GateOpens } from './gate-note';
+import { seasonDateHref } from '@/app/(admin)/shell/season-href';
+import { GateLink } from './gate-note';
 import { NewTaskForm } from './new-task-drawer';
 import { taskColumns, taskRowActions } from './task-row';
 import {
@@ -97,6 +98,15 @@ export default async function TasksPage(
     ),
   ));
 
+  // The countdown links to the drawer that sets the date. `season` is pinned
+  // to the one this page resolved, so the drawer cannot edit a different one
+  // even when the URL named none.
+  const gateHref = seasonDateHref('/tasks', new URLSearchParams(
+    Object.entries({ ...params, season: season.id }).filter(
+      (entry): entry is [string, string] => entry[1] !== undefined,
+    ),
+  ));
+
   return (
     <main>
       <div className={styles.head}>
@@ -107,7 +117,8 @@ export default async function TasksPage(
             <bdi>{`${totals.placesFilled} מתוך ${totals.placesNeeded} מקומות מאוישים`}</bdi>
             {' · '}
             <bdi>{`${totals.uncoveredTasks} משימות עדיין חסרות אנשים`}</bdi>
-            {season.startsOn && <>{' · '}<GateOpens gate={season.startsOn} /></>}
+            {' · '}
+            <GateLink gate={season.startsOn} href={gateHref} />
           </p>
         </div>
         <Link className={styles.primary} href={tasksHref(here, { open: 'new' })}>

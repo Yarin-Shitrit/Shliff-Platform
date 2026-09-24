@@ -288,17 +288,20 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
   /* A newer map from the server — the plot drawer's save bumps the version
      (`setPlot`) and refreshes the page. The store keeps its first `init`
      (§6.1), so the editor takes the newer map itself: with nothing waiting
-     to be saved, by the reload a conflict offers; with edits waiting, by
-     asking, as a conflict does. While a batch is in flight its answer
-     decides. Never by remounting, which would drop unsaved edits. */
+     to be saved, through 'mine' — the server's map, with anything the lead
+     does while it loads replayed on top under the same lock and
+     missing-item checks (hotfix H1; 'theirs' emptied the queue and lost
+     those edits). With edits already waiting, by asking, as a conflict does.
+     While a batch is in flight its answer decides. Never by remounting,
+     which would drop unsaved edits. While the editor takes the map up it
+     asks nothing: an edit made meanwhile is kept, not a question. */
   const serverAhead = initial.version > store.save.version && store.save.status !== 'saving';
-  const plotMovedUnderEdits = serverAhead && store.save.pending > 0;
+  const plotMovedUnderEdits = serverAhead && store.save.pending > 0 && !resolving;
   const takingUp = useRef<number | null>(null);
   useEffect(() => {
     if (!serverAhead || store.save.pending > 0 || takingUp.current === initial.version) return;
     takingUp.current = initial.version;
-    historyMoved(); // the reload clears the history: no undo toast may outlive it (P6)
-    void store.resolveConflict('theirs');
+    void resolve('mine');
   });
 
   const onView = useCallback((info: ViewInfo) => {
@@ -704,11 +707,14 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
   }
 
   async function resolve(choice: 'theirs' | 'mine'): Promise<void> {
-    historyMoved(); // 'theirs' clears the history; 'mine' rebuilds the map under it
     setResolving(true);
     try {
       await store.resolveConflict(choice);
     } finally {
+      /* After the await, not before (hotfix H1): the map was replaced under
+         every history entry — those made while it loaded too — so no undo
+         toast may outlive the reload (P6). */
+      historyMoved();
       setResolving(false);
     }
   }
