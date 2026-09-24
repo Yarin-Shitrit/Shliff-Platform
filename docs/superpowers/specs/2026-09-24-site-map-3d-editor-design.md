@@ -1,6 +1,6 @@
 # מפת הקאמפ, rebuilt: a 3D editor that is easy to operate
 
-**Status:** draft for review, 2026-09-24. Replaces the SVG board that `ad81bb2`
+**Status:** approved 2026-09-24. Replaces the SVG board that `ad81bb2`
 put on `/site`. The page, its URL and its data stay; the editor, the way it saves
 and three of its files do not.
 
@@ -358,8 +358,10 @@ really shaded then.
 - **Sun position** (`sun.ts`): the NOAA solar-position approximation from date,
   clock time in Asia/Jerusalem, latitude and longitude. Pure, and tested against
   published values.
-- **Where and when:** the camp's burn site is one camp-wide constant,
-  `CAMP_SITE = { latitude, longitude }`, **to be confirmed by the camp lead**.
+- **Where and when:** the burn site is one camp-wide constant,
+  `CAMP_SITE = { latitude: 30.6154, longitude: 34.7988 }` — the Midburn event
+  pin the camp lead gave on 2026-09-24. The camp's own spot on the playa is not
+  known yet and does not need to be: a kilometre moves the sun by about 0.01°.
   The date is the season's `startsOn`. Without one, the toggle opens an
   invitation to set the gate date instead of guessing a day.
 - **Orientation:** `north_deg` from the plot drawer. The card says which way
@@ -432,9 +434,11 @@ The suite runs with the capped command in `CLAUDE.md`.
   indicator states, the conflict banner.
 - **The page** (`page.test.tsx`): empty-season invitations, the editor mounted
   with the loaded rows, `?peek=` selecting an item.
-- **In a browser, by hand, before the PR:** the app run locally (the `run`
-  skill) through each gesture in §8, in plan and 3D, light and dark. No
-  Playwright: it would be another dependency, and D1 admits only `three`.
+- **In a browser, before the PR:** the app runs locally and the Playwright MCP
+  (installed in the camp lead's Claude Code, not in the repo) drives each
+  gesture in §8, in plan and 3D, light and dark, with screenshots. Playwright is
+  not added to `package.json`: D1 admits only `three`, and the MCP needs
+  nothing from the repo.
 
 ## 15. Shared surfaces touched
 
@@ -465,4 +469,4 @@ survives a reload.
 | The WebGL context is lost (a GPU reset, a laptop lid) | Listen for `webglcontextlost` / `restored`; show a Hebrew notice and rebuild the scene from the store |
 | Labels cost frame time | Layout runs only when the camera or items change, not every frame; measured at 200 items |
 | The conflict banner is rare, so its code rots | Covered by `plan.test.ts` and a panel test that forces a mismatch |
-| The site's coordinates are wrong | A single constant, flagged for the lead to confirm (§11); it only affects shade by hour |
+| The camp's exact spot differs from the event pin | Irrelevant at this scale (§11); the constant is one line if it ever matters |
