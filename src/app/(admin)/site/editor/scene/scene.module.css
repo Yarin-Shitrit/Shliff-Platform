@@ -28,7 +28,6 @@
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
-  outline: none;
 }
 
 .overlay,
@@ -111,29 +110,4 @@
   color: var(--ink-2);
   font-size: var(--text-body);
   text-align: center;
-}
-
-/* The temporary /site?editor=3d page (Task 20; Task 26 retires it). */
-.preview {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  min-block-size: 0;
-}
-.previewScene {
-  position: relative;
-  block-size: calc(100dvh - 180px);
-  min-block-size: 480px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  overflow: hidden;
-}
-.previewStatus {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0;
-  color: var(--ink-2);
-  font-size: var(--text-meta);
 }

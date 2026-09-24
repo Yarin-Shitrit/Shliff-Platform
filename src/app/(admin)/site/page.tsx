@@ -7,7 +7,7 @@ import { listTasks } from '@/lib/work/tasks';
 import { itemById, loadDoc, seasonsWithPlans, siteView } from '@/lib/site/plan';
 import { formatArea, formatSize } from '@/lib/site/geometry';
 import {
-  copyHref, itemHref, parseSiteQuery, plotHref, removeItemHref, siteHref, type RawParams,
+  copyHref, itemHref, parseSiteQuery, plotHref, removeItemHref, siteHref, sunDateOf, type RawParams,
 } from '@/lib/site/views';
 import { TopBar, SeasonChip } from '@/components/shell/top-bar';
 import { StatTile } from '@/components/ui/stat-tile';
@@ -21,7 +21,7 @@ import { ItemDrawer } from './item-drawer';
 import { PlotDrawer } from './plot-drawer';
 import { CopyDrawer } from './copy-drawer';
 import { RemoveItem } from './remove-item';
-import { ScenePreview } from './editor/scene-preview';
+import { SiteEditor } from './editor/site-editor';
 import styles from './site.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -104,6 +104,50 @@ export default async function SitePage(
 
   const { plan, items, counts } = view;
 
+  /* The editor behind `?editor=3d`, until Task 26 makes it the page. `loadDoc`
+     answers null only if the plan vanished since `siteView` read it; the
+     board below is then the honest fallback. The item drawer and the remove
+     page do not open over the editor: `?peek=` selects the item instead, so
+     this branch comes before the drawer's own reads. */
+  if (query.editor3d) {
+    const loaded = await loadDoc(db, plan.id);
+    if (loaded !== null) {
+      /* `?peek=` selects an item when the map loads — only one on this map. */
+      const initialSelection = query.peek !== null && loaded.doc.items.some((entry) => entry.id === query.peek)
+        ? query.peek
+        : null;
+      const editorTasks = (await listTasks(db, current.id, { kind: 'build' }))
+        .map((task) => ({ id: task.taskId, title: task.title }));
+      return (
+        <main className={styles.editorPage}>
+          <h1 className="sr-only">{`מפת הקאמפ · ${current.name}`}</h1>
+          {/* Keyed on the plan, so another season's map is another editor and
+              one season's name never sits over another's frozen map. Never on
+              the version: a remount would drop edits not yet saved. A newer
+              version reaching this editor is handled inside it (Task 25). */}
+          <SiteEditor
+            key={plan.id}
+            initial={loaded}
+            initialSelection={initialSelection}
+            seasonName={current.name}
+            sunDate={sunDateOf(current.startsOn)}
+            buildTasks={editorTasks}
+            plotHref={plotHref(here)}
+          />
+          {query.plot ? (
+            <PlotDrawer
+              seasonId={current.id}
+              seasonName={current.name}
+              plan={{ id: plan.id, widthCm: plan.widthCm, depthCm: plan.depthCm, gridCm: plan.gridCm, notes: plan.notes }}
+              items={items}
+              closeHref={closeHref}
+            />
+          ) : null}
+        </main>
+      );
+    }
+  }
+
   /* Fetched rather than found among `items`: the id comes from a URL, and a
      row that is not on this plan is not this page's to open. */
   const peekedRow = query.peek === null ? null : await itemById(db, query.peek);
@@ -144,25 +188,6 @@ export default async function SitePage(
       ) : null}
     </>
   );
-
-  /* TEMPORARY (plan 03, Task 20): the bare 3D map behind `?editor=3d`, so the
-     scene is checked in a browser before any panel is built on it. Task 26
-     makes the editor the page and deletes this branch. `loadDoc` answers
-     null only if the plan vanished since `siteView` read it; the board below
-     is then the honest fallback. */
-  if (query.editor3d) {
-    const loaded = await loadDoc(db, plan.id);
-    if (loaded !== null) {
-      return (
-        <main className={styles.page}>
-          <TopBar crumbs={crumbs} chip={<SeasonChip seasonName={current.name} />} actions={plotLink} />
-          <h1>מפת הקאמפ</h1>
-          <ScenePreview initial={loaded} />
-          {drawers}
-        </main>
-      );
-    }
-  }
 
   const firstOutside = items.find((item) => item.outside) ?? null;
   const shadeAttention = counts.shade.partly + counts.shade.unshaded;

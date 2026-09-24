@@ -29,12 +29,37 @@ vi.mock('@/lib/site/plan', async (importOriginal) => ({
 vi.mock('./site-board', () => ({
   SiteBoard: ({ items }: { items: unknown[] }) => <div data-testid="board">{`board:${items.length}`}</div>,
 }));
-/* The 3D map has its own tests (editor/scene/*.test.tsx); here only what the page hands it. */
-vi.mock('./editor/scene-preview', () => ({
-  ScenePreview: ({ initial }: { initial: { doc: { items: unknown[] }; version: number } }) => (
-    <div data-testid="scene-preview">{`preview:${initial.doc.items.length}:v${initial.version}`}</div>
-  ),
-}));
+/* The editor has its own tests, with the scene mocked; here it only has to be handed the right things.
+   Each mount takes the next number, so a test can tell a remount from a re-render. */
+const mounts = vi.hoisted(() => ({ count: 0 }));
+vi.mock('./editor/site-editor', async () => {
+  const { useState } = await import('react');
+  return {
+    SiteEditor: function FakeEditor(props: {
+      initial: { doc: { items: unknown[] }; version: number };
+      initialSelection: string | null;
+      seasonName: string;
+      sunDate: string | null;
+      buildTasks: ReadonlyArray<{ id: string; title: string }>;
+      plotHref: string;
+    }) {
+      const [mount] = useState(() => { mounts.count += 1; return mounts.count; });
+      return (
+        <div
+          data-testid="editor"
+          data-mount={mount}
+          data-season={props.seasonName}
+          data-selection={props.initialSelection ?? ''}
+          data-sun={props.sunDate ?? ''}
+          data-tasks={props.buildTasks.map((task) => task.title).join(',')}
+          data-plot={props.plotHref}
+        >
+          {`editor:${props.initial.doc.items.length}:v${props.initial.version}`}
+        </div>
+      );
+    },
+  };
+});
 
 import SitePage from './page';
 
@@ -79,9 +104,13 @@ beforeEach(() => {
 });
 
 /* The admin layout mounts the `ToastProvider` the drawers report through. */
-async function renderPage(params: Record<string, string> = {}) {
+async function pageFor(params: Record<string, string> = {}) {
   const page = await SitePage({ searchParams: Promise.resolve({ season: 's26', ...params }) });
-  render(<ToastProvider>{page}</ToastProvider>);
+  return <ToastProvider>{page}</ToastProvider>;
+}
+
+async function renderPage(params: Record<string, string> = {}) {
+  return render(await pageFor(params));
 }
 
 describe('the camp map screen', () => {
@@ -215,24 +244,77 @@ describe('the camp map screen', () => {
       },
     };
 
-    it('mounts the 3D map with the document the editor saves against, instead of the board', async () => {
+    it('mounts the editor with the document it saves against, instead of the board', async () => {
       siteView.mockResolvedValue(view([item({ id: 'a' }), item({ id: 'b', label: 'אוהל 2' })]));
       loadDoc.mockResolvedValue(LOADED);
+      listTasks.mockResolvedValue([{ taskId: 't1', title: 'הקמת המטבח' }]);
       await renderPage({ editor: '3d' });
 
       expect(loadDoc).toHaveBeenCalledWith({}, 'p1');
-      expect(screen.getByTestId('scene-preview').textContent).toBe('preview:2:v4');
+      const editor = screen.getByTestId('editor');
+      expect(editor.textContent).toBe('editor:2:v4');
+      expect(editor.getAttribute('data-tasks')).toBe('הקמת המטבח');
+      expect(editor.getAttribute('data-plot')).toBe('/site?season=s26&act=plot');
       expect(screen.queryByTestId('board')).toBeNull();
       expect(screen.queryByRole('table', { name: 'הפריטים במפה' })).toBeNull();
-      expect(screen.getByRole('link', { name: /גודל המגרש/ }).getAttribute('href')).toBe('/site?season=s26&act=plot');
+    });
+
+    it('selects the item ?peek= names instead of opening a drawer, and passes the gate day in Israel', async () => {
+      siteView.mockResolvedValue(view([item({ id: 'a' })]));
+      loadDoc.mockResolvedValue(LOADED);
+      resolveSeason.mockResolvedValue({ seasons: [S26], current: { ...S26, startsOn: new Date('2026-06-03T22:30:00Z') } });
+      await renderPage({ editor: '3d', peek: 'a' });
+      const editor = screen.getByTestId('editor');
+      expect(editor.getAttribute('data-selection')).toBe('a');
+      expect(editor.getAttribute('data-sun')).toBe('2026-06-04');
+      expect(screen.queryByRole('dialog')).toBeNull();
+      // The drawer's own read is not made for a drawer that never opens.
+      expect(itemById).not.toHaveBeenCalled();
+    });
+
+    it('selects nothing for a ?peek= that is not on this map, and no sun without a gate day', async () => {
+      siteView.mockResolvedValue(view([item({ id: 'a' })]));
+      loadDoc.mockResolvedValue(LOADED);
+      await renderPage({ editor: '3d', peek: 'z' });
+      const editor = screen.getByTestId('editor');
+      expect(editor.getAttribute('data-selection')).toBe('');
+      expect(editor.getAttribute('data-sun')).toBe('');
     });
 
     it('still opens the plot drawer over it', async () => {
       siteView.mockResolvedValue(view([item({ id: 'a' })]));
       loadDoc.mockResolvedValue(LOADED);
       await renderPage({ editor: '3d', act: 'plot' });
-      expect(screen.getByTestId('scene-preview')).toBeTruthy();
+      expect(screen.getByTestId('editor')).toBeTruthy();
       expect(screen.getByRole('dialog')).toBeTruthy();
+    });
+
+    /* Keyed on the plan: another season's map is another editor, so one
+       season's name can never sit over another season's frozen map. Never on
+       the version: the page re-renders after the plot drawer saves, and a
+       remount then would throw away edits the queue has not sent yet. */
+    it('remounts the editor for another season’s map, and never for a newer version of the same one', async () => {
+      siteView.mockResolvedValue(view([item({ id: 'a' }), item({ id: 'b' })]));
+      loadDoc.mockResolvedValue(LOADED);
+      const { rerender } = await renderPage({ editor: '3d' });
+      const first = screen.getByTestId('editor').getAttribute('data-mount');
+
+      loadDoc.mockResolvedValue({ ...LOADED, version: 5 });
+      rerender(await pageFor({ editor: '3d' }));
+      expect(screen.getByTestId('editor').textContent).toBe('editor:2:v5');
+      expect(screen.getByTestId('editor').getAttribute('data-mount')).toBe(first);
+
+      resolveSeason.mockResolvedValue({ seasons: [S26, S25], current: S25 });
+      siteView.mockResolvedValue({
+        ...view([item({ id: 'c', planId: 'p2' })]),
+        plan: { ...PLAN, id: 'p2', seasonId: 's25' },
+      });
+      loadDoc.mockResolvedValue({ version: 1, doc: { ...LOADED.doc, plot: { ...LOADED.doc.plot, id: 'p2' }, items: [{ id: 'c' }] } });
+      rerender(await pageFor({ season: 's25', editor: '3d' }));
+      const editor = screen.getByTestId('editor');
+      expect(editor.getAttribute('data-season')).toBe('ברן 25');
+      expect(editor.textContent).toBe('editor:1:v1');
+      expect(editor.getAttribute('data-mount')).not.toBe(first);
     });
 
     it('keeps the board for any other value of ?editor', async () => {
@@ -246,7 +328,7 @@ describe('the camp map screen', () => {
       siteView.mockResolvedValue(view([item({ id: 'a' })]));
       loadDoc.mockResolvedValue(null);
       await renderPage({ editor: '3d' });
-      expect(screen.queryByTestId('scene-preview')).toBeNull();
+      expect(screen.queryByTestId('editor')).toBeNull();
       expect(screen.getByTestId('board')).toBeTruthy();
     });
   });
