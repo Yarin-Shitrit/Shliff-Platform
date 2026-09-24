@@ -392,3 +392,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement;
 - The plot drawer is titled "הגדרות המגרש" (it now holds north too).
 - Known gap: no screen edits an existing season's gate date (`seasons.startsOn`), so the sun card's no-date state is an invitation without a link. Follow-up, outside this feature.
 - Task 27's browser check blocks every mutating server action with `page.route` (proven by a test edit) unless the camp lead approves writes; the two-tab conflict check runs only with that approval.
+
+### Amendment recorded during plan 03 execution (Task 15 review)
+
+- `QueueSnapshot` gains `errorKind: 'network' | 'refused' | null`. The top bar offers retry for `network` and the reload for `refused` (plan 04 ruling P8 reads it). `pending === pendingOps().length`, and a batch that failed on the network stays pending (and is resent unchanged against its own base version) until it is answered. A `flush()` begun before `dispose()` finishes sending what waited behind an in-flight batch.
