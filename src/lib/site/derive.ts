@@ -50,6 +50,8 @@ export interface SiteCounts {
 export interface Derived<Item extends ItemShape> {
   items: Array<Item & ItemFlags>;
   counts: SiteCounts;
+  /** Every overlapping pair of item ids — the same list `counts.overlapPairs` is the length of, so a caller that needs the pairs themselves (the store's flags) is not left recomputing them. */
+  pairs: Array<[string, string]>;
 }
 
 export function toPlaced(item: ItemShape): PlacedItem {
@@ -84,5 +86,6 @@ export function derive<Item extends ItemShape>(
       plotAreaM2: areaM2(bounds),
       shade: shadeCounts(placed),
     },
+    pairs,
   };
 }

@@ -1,0 +1,82 @@
+/*
+ * הוספה למפה (spec §10): the search box, the kinds in their groups, and a
+ * tile per kind with its drawing and the size it lands at. The search box,
+ * the hint and the group swatches are the shared `panel.module.css`. Tokens
+ * only, logical properties throughout (A10).
+ */
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.groupLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-3);
+  font-size: var(--text-label);
+  font-weight: 600;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+/* `touch-action: none` so a finger on a tile drags it rather than scrolling the list. */
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding-block: 8px 6px;
+  padding-inline: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--ink);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.tile:hover { border-color: var(--line-strong); background: var(--hover); }
+.tile:active { cursor: grabbing; }
+
+.tileLabel {
+  font-size: var(--text-meta);
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.tileSize {
+  color: var(--ink-3);
+  font-size: var(--text-label);
+}
+
+/* The "default changed" dot, at the tile's inline-end corner. */
+.tileDot {
+  position: absolute;
+  inset-block-start: 5px;
+  inset-inline-end: 5px;
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--brand);
+}
+
+.glyph {
+  stroke: var(--ink-3);
+  stroke-opacity: 0.45;
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+.faceTop { fill: var(--swatch); }
+.faceSide { fill: var(--swatch); fill-opacity: 0.78; }
+.faceSide2 { fill: var(--swatch); fill-opacity: 0.6; }
+.faceLine { fill: none; }
+.glyph[data-glyph='net'] .faceTop { fill-opacity: 0.6; }

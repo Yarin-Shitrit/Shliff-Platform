@@ -1,0 +1,8 @@
+/*
+ * Turn, duplicate, lock and remove (spec §10): the spacer the inspector's
+ * footer draws. The icon buttons are the shared `panel.module.css`
+ * `.iconButton`. Tokens only, logical properties only (A10).
+ */
+
+/* Removal sits apart from the rest, at the inline end. */
+.pushEnd { margin-inline-start: auto; }

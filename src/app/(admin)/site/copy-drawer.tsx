@@ -2,7 +2,7 @@
 
 /**
  * Last year's map as this year's starting point. The plot size comes with
- * it — the lead then opens `גודל המגרש`, and the outside-count says what
+ * it — the lead then opens `הגדרות המגרש`, and the outside-count says what
  * has to move. Offered only while this season has no map: the library
  * refuses to replace one, and a form that always ends in a refusal is not
  * a form.

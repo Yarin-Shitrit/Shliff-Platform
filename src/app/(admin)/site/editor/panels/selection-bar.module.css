@@ -1,0 +1,28 @@
+/*
+ * The selection bar (spec §10): turn, duplicate, lock and remove, floating
+ * over the selection.
+ *
+ * Placed from the scene's own screen box, so `left`/`top` (set inline) and
+ * the translate are physical on purpose: a point on the map does not mirror.
+ * Inverted colours, as in the mock, from the tokens: ink as the ground.
+ *
+ * The buttons are `SelectionActions`' own, styled in its module. A class
+ * from that module cannot be named here — each CSS module renames its
+ * classes — so the bar reaches them by element. `.selBar button` outranks
+ * `.iconButton`, and `.selBar button:hover` outranks `.iconButton:hover`.
+ */
+
+.selBar {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-control);
+  background: var(--ink);
+  box-shadow: var(--shadow-pop);
+}
+
+.selBar button { color: var(--panel); }
+.selBar button:hover { background: var(--ink-2); color: var(--panel); }
+.selBar button[aria-pressed='true'] { background: var(--brand); color: var(--brand-ink); }

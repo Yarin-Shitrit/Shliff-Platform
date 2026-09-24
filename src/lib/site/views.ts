@@ -10,6 +10,12 @@ export const PLOT_ACT = 'plot';
 export const COPY_ACT = 'copy';
 /** `?peek=<id>&act=remove`: the confirmation over one item. */
 export const REMOVE_ACT = 'remove';
+/**
+ * `?act=season-date`: the shell's drawer for the opening date of the season
+ * `?season=` names (ruling SD2) — the day shade by hour is worked out for.
+ * The drawer is the shell's, not this page's; the site only links to it.
+ */
+export const SEASON_DATE_ACT = 'season-date';
 
 export type RawParams = Record<string, string | string[] | undefined>;
 
@@ -20,6 +26,12 @@ export interface SiteQuery {
   plot: boolean;
   copy: boolean;
   removing: boolean;
+  /**
+   * `?editor=3d`: the bare 3D map instead of the board — temporary, so the
+   * scene can be checked in a browser before the panels exist (plan 03,
+   * Task 20). Task 26 makes the editor the page and removes the flag.
+   */
+  editor3d: boolean;
 }
 
 function one(value: string | string[] | undefined): string {
@@ -36,14 +48,21 @@ export function parseSiteQuery(params: RawParams): SiteQuery {
     plot: act === PLOT_ACT,
     copy: act === COPY_ACT,
     removing: peek !== null && act === REMOVE_ACT,
+    editor3d: one(params.editor) === '3d',
   };
 }
 
-/** Only the season survives from one URL to the next (R5); drawers are the kit's. */
+/**
+ * The season survives from one URL to the next (R5); drawers are the kit's.
+ * So does `?editor=3d` while the flag exists: a drawer opened from the editor
+ * closes back into it, not onto the board. Task 26 removes the flag, and this
+ * with it. Only the flag's own value is carried.
+ */
 function carried(params: RawParams): URLSearchParams {
   const next = new URLSearchParams();
   const season = one(params.season);
   if (season) next.set('season', season);
+  if (one(params.editor) === '3d') next.set('editor', '3d');
   return next;
 }
 
@@ -66,4 +85,42 @@ export function plotHref(params: RawParams): string {
 
 export function copyHref(params: RawParams): string {
   return openActHref(SITE_PATH, carried(params), COPY_ACT);
+}
+
+/** The season's opening date, from the sun card (ruling SD4): a figure links to what changes it. */
+export function seasonDateHref(params: RawParams): string {
+  return openActHref(SITE_PATH, carried(params), SEASON_DATE_ACT);
+}
+
+/**
+ * The day shade by hour is worked out for (spec §11): the season's gate day,
+ * as the calendar date it is in Israel. Null when the season has none — the
+ * sun card then asks for one rather than guessing a day (§13).
+ */
+export function sunDateOf(startsOn: Date | null): string | null {
+  if (startsOn === null) return null;
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(startsOn);
+  const part = (type: 'year' | 'month' | 'day') => parts.find((entry) => entry.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+const SUN_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * A day as `sunDateOf` writes it — `YYYY-MM-DD`, and a day the calendar has —
+ * or null: anything else is no day, never a guess (§13). The one check of that
+ * shape (plan 04, ruling P15): `SiteEditor` asks it once and hands only what
+ * it accepts to the scene and the sun card, so neither keeps a pattern of its
+ * own. What it accepts, `sun.ts` `jerusalemInstant` accepts.
+ */
+export function readSunDate(text: string | null): string | null {
+  if (text === null) return null;
+  const match = SUN_DATE.exec(text);
+  if (match === null) return null;
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const date = new Date(Date.UTC(year, month - 1, day));
+  const real = date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+  return real ? text : null;
 }

@@ -6,9 +6,9 @@ import { render, screen, within } from '@testing-library/react';
 import { ToastProvider } from '@/components/ui/toaster';
 import type { SiteItemView, SitePlan } from '@/lib/site/plan';
 
-const { requireAdmin, resolveSeason, siteView, seasonsWithPlans, itemById, listTasks } = vi.hoisted(() => ({
+const { requireAdmin, resolveSeason, siteView, seasonsWithPlans, itemById, listTasks, loadDoc } = vi.hoisted(() => ({
   requireAdmin: vi.fn(), resolveSeason: vi.fn(), siteView: vi.fn(),
-  seasonsWithPlans: vi.fn(), itemById: vi.fn(), listTasks: vi.fn(),
+  seasonsWithPlans: vi.fn(), itemById: vi.fn(), listTasks: vi.fn(), loadDoc: vi.fn(),
 }));
 const { replace } = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock('next/navigation', async (importOriginal) => ({
@@ -22,13 +22,46 @@ vi.mock('@/lib/work/tasks', () => ({ listTasks }));
 /* Only the readers are replaced; the geometry the screen draws stays real. */
 vi.mock('@/lib/site/plan', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/site/plan')>()),
-  siteView, seasonsWithPlans, itemById,
+  siteView, seasonsWithPlans, itemById, loadDoc,
 }));
 /* The board reaches `useToast`, which needs a provider the page does not
    render (the admin layout does). The board has its own test. */
 vi.mock('./site-board', () => ({
   SiteBoard: ({ items }: { items: unknown[] }) => <div data-testid="board">{`board:${items.length}`}</div>,
 }));
+/* The editor has its own tests, with the scene mocked; here it only has to be handed the right things.
+   Each mount takes the next number, so a test can tell a remount from a re-render. */
+const mounts = vi.hoisted(() => ({ count: 0 }));
+vi.mock('./editor/site-editor', async () => {
+  const { useState } = await import('react');
+  return {
+    SiteEditor: function FakeEditor(props: {
+      initial: { doc: { items: unknown[] }; version: number };
+      initialSelection: string | null;
+      seasonName: string;
+      sunDate: string | null;
+      buildTasks: ReadonlyArray<{ id: string; title: string }>;
+      plotHref: string;
+      seasonDateHref: string;
+    }) {
+      const [mount] = useState(() => { mounts.count += 1; return mounts.count; });
+      return (
+        <div
+          data-testid="editor"
+          data-mount={mount}
+          data-season={props.seasonName}
+          data-selection={props.initialSelection ?? ''}
+          data-sun={props.sunDate ?? ''}
+          data-tasks={props.buildTasks.map((task) => task.title).join(',')}
+          data-plot={props.plotHref}
+          data-date={props.seasonDateHref}
+        >
+          {`editor:${props.initial.doc.items.length}:v${props.initial.version}`}
+        </div>
+      );
+    },
+  };
+});
 
 import SitePage from './page';
 
@@ -37,13 +70,14 @@ const S25 = { id: 's25', name: 'ברן 25', year: 2025, flatRate: '1500.00', pla
 
 const PLAN: SitePlan = {
   id: 'p1', seasonId: 's26', widthCm: 2600, depthCm: 2400, gridCm: 50, notes: null,
+  version: 0, northDeg: 0,
   updatedAt: new Date('2026-09-01T00:00:00Z'), updatedBy: 'lead@shliff.camp',
 };
 
 function item(over: Partial<SiteItemView> & { id: string }): SiteItemView {
   return {
     planId: 'p1', kind: 'tent', label: 'אוהל 1', xCm: 0, yCm: 0, widthCm: 300, depthCm: 300,
-    insetCm: null, sort: 0, taskId: null, taskTitle: null, notes: null,
+    insetCm: null, heightCm: null, locked: false, sort: 0, taskId: null, taskTitle: null, notes: null,
     updatedAt: new Date('2026-09-01T00:00:00Z'), updatedBy: 'lead@shliff.camp',
     outside: false, overlapping: false, shade: 'unshaded', ...over,
   };
@@ -68,12 +102,17 @@ beforeEach(() => {
   seasonsWithPlans.mockResolvedValue([]);
   itemById.mockResolvedValue(null);
   listTasks.mockResolvedValue([]);
+  loadDoc.mockResolvedValue(null);
 });
 
 /* The admin layout mounts the `ToastProvider` the drawers report through. */
-async function renderPage(params: Record<string, string> = {}) {
+async function pageFor(params: Record<string, string> = {}) {
   const page = await SitePage({ searchParams: Promise.resolve({ season: 's26', ...params }) });
-  render(<ToastProvider>{page}</ToastProvider>);
+  return <ToastProvider>{page}</ToastProvider>;
+}
+
+async function renderPage(params: Record<string, string> = {}) {
+  return render(await pageFor(params));
 }
 
 describe('the camp map screen', () => {
@@ -195,6 +234,117 @@ describe('the camp map screen', () => {
     itemById.mockResolvedValue(item({ id: 'z', planId: 'p-other' }));
     await renderPage({ peek: 'z' });
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  describe('behind ?editor=3d', () => {
+    const LOADED = {
+      version: 4,
+      doc: {
+        plot: { id: 'p1', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0 },
+        items: [{ id: 'a' }, { id: 'b' }],
+        defaults: {},
+      },
+    };
+
+    it('mounts the editor with the document it saves against, instead of the board', async () => {
+      siteView.mockResolvedValue(view([item({ id: 'a' }), item({ id: 'b', label: 'אוהל 2' })]));
+      loadDoc.mockResolvedValue(LOADED);
+      listTasks.mockResolvedValue([{ taskId: 't1', title: 'הקמת המטבח' }]);
+      await renderPage({ editor: '3d' });
+
+      expect(loadDoc).toHaveBeenCalledWith({}, 'p1');
+      const editor = screen.getByTestId('editor');
+      expect(editor.textContent).toBe('editor:2:v4');
+      expect(editor.getAttribute('data-tasks')).toBe('הקמת המטבח');
+      // The plot settings open over the editor, not over the board.
+      expect(editor.getAttribute('data-plot')).toBe('/site?season=s26&editor=3d&act=plot');
+      // The sun card's gate day links to the shell's drawer for this season's opening date (SD4), and back to the editor.
+      expect(editor.getAttribute('data-date')).toBe('/site?season=s26&editor=3d&act=season-date');
+      expect(screen.queryByTestId('board')).toBeNull();
+      expect(screen.queryByRole('table', { name: 'הפריטים במפה' })).toBeNull();
+    });
+
+    it('selects the item ?peek= names instead of opening a drawer, and passes the gate day in Israel', async () => {
+      siteView.mockResolvedValue(view([item({ id: 'a' })]));
+      loadDoc.mockResolvedValue(LOADED);
+      resolveSeason.mockResolvedValue({ seasons: [S26], current: { ...S26, startsOn: new Date('2026-06-03T22:30:00Z') } });
+      await renderPage({ editor: '3d', peek: 'a' });
+      const editor = screen.getByTestId('editor');
+      expect(editor.getAttribute('data-selection')).toBe('a');
+      expect(editor.getAttribute('data-sun')).toBe('2026-06-04');
+      expect(screen.queryByRole('dialog')).toBeNull();
+      // The drawer's own read is not made for a drawer that never opens.
+      expect(itemById).not.toHaveBeenCalled();
+    });
+
+    it('selects nothing for a ?peek= that is not on this map, and no sun without a gate day', async () => {
+      siteView.mockResolvedValue(view([item({ id: 'a' })]));
+      loadDoc.mockResolvedValue(LOADED);
+      await renderPage({ editor: '3d', peek: 'z' });
+      const editor = screen.getByTestId('editor');
+      expect(editor.getAttribute('data-selection')).toBe('');
+      expect(editor.getAttribute('data-sun')).toBe('');
+    });
+
+    it('still opens the plot drawer over it', async () => {
+      siteView.mockResolvedValue(view([item({ id: 'a' })]));
+      loadDoc.mockResolvedValue(LOADED);
+      await renderPage({ editor: '3d', act: 'plot' });
+      expect(screen.getByTestId('editor')).toBeTruthy();
+      expect(screen.getByRole('dialog')).toBeTruthy();
+    });
+
+    it('closes the plot drawer back into the editor, not onto the board', async () => {
+      siteView.mockResolvedValue(view([item({ id: 'a' })]));
+      loadDoc.mockResolvedValue(LOADED);
+      await renderPage({ editor: '3d', act: 'plot' });
+      const drawer = screen.getByRole('dialog');
+      expect(within(drawer).getByRole('link', { name: 'סגירה' }).getAttribute('href'))
+        .toBe('/site?season=s26&editor=3d');
+    });
+
+    /* Keyed on the plan: another season's map is another editor, so one
+       season's name can never sit over another season's frozen map. Never on
+       the version: the page re-renders after the plot drawer saves, and a
+       remount then would throw away edits the queue has not sent yet. */
+    it('remounts the editor for another season’s map, and never for a newer version of the same one', async () => {
+      siteView.mockResolvedValue(view([item({ id: 'a' }), item({ id: 'b' })]));
+      loadDoc.mockResolvedValue(LOADED);
+      const { rerender } = await renderPage({ editor: '3d' });
+      const first = screen.getByTestId('editor').getAttribute('data-mount');
+
+      loadDoc.mockResolvedValue({ ...LOADED, version: 5 });
+      rerender(await pageFor({ editor: '3d' }));
+      expect(screen.getByTestId('editor').textContent).toBe('editor:2:v5');
+      expect(screen.getByTestId('editor').getAttribute('data-mount')).toBe(first);
+
+      resolveSeason.mockResolvedValue({ seasons: [S26, S25], current: S25 });
+      siteView.mockResolvedValue({
+        ...view([item({ id: 'c', planId: 'p2' })]),
+        plan: { ...PLAN, id: 'p2', seasonId: 's25' },
+      });
+      loadDoc.mockResolvedValue({ version: 1, doc: { ...LOADED.doc, plot: { ...LOADED.doc.plot, id: 'p2' }, items: [{ id: 'c' }] } });
+      rerender(await pageFor({ season: 's25', editor: '3d' }));
+      const editor = screen.getByTestId('editor');
+      expect(editor.getAttribute('data-season')).toBe('ברן 25');
+      expect(editor.textContent).toBe('editor:1:v1');
+      expect(editor.getAttribute('data-mount')).not.toBe(first);
+    });
+
+    it('keeps the board for any other value of ?editor', async () => {
+      siteView.mockResolvedValue(view([item({ id: 'a' })]));
+      await renderPage({ editor: '2d' });
+      expect(screen.getByTestId('board')).toBeTruthy();
+      expect(loadDoc).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the board when the plan vanished between the two reads', async () => {
+      siteView.mockResolvedValue(view([item({ id: 'a' })]));
+      loadDoc.mockResolvedValue(null);
+      await renderPage({ editor: '3d' });
+      expect(screen.queryByTestId('editor')).toBeNull();
+      expect(screen.getByTestId('board')).toBeTruthy();
+    });
   });
 
   it('is not found for a signed-in non-admin', async () => {

@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
-  HANDLES, areaM2, contains, formatArea, formatMetres, formatSize, move, outsideIds,
+  HANDLES, areaM2, contains, formatArea, formatMetres, formatSize, gapsAround, move, outsideIds,
   overlap, overlapPairs, placeNew, resize, shadeCounts, shadeState, shadedRect, snap,
-  swapSides, type PlacedItem, type Rect,
+  swapSides, turnAboutCentre, unionRect, wholeCm, type PlacedItem, type Rect,
 } from './geometry';
 
 const PLOT = { widthCm: 2600, depthCm: 2400 };
@@ -195,5 +195,78 @@ describe('formatting', () => {
     expect(areaM2({ width: 800, depth: 800 })).toBe(64);
     expect(areaM2({ width: 250, depth: 90 })).toBe(2.3);
     expect(formatArea(624)).toBe('624 מ״ר');
+  });
+});
+
+describe('turning about the centre', () => {
+  it('swaps the sides and keeps the middle where it was', () => {
+    expect(turnAboutCentre({ x: 1000, y: 900, width: 200, depth: 90 }))
+      .toEqual({ x: 1055, y: 845, width: 90, depth: 200 });
+  });
+
+  it('comes back after two turns when the sides differ by an even number', () => {
+    const rect = { x: 500, y: 1200, width: 700, depth: 250 };
+    expect(turnAboutCentre(turnAboutCentre(rect))).toEqual(rect);
+  });
+
+  it('stays in whole centimetres when the sides differ by an odd number', () => {
+    const turned = turnAboutCentre({ x: 0, y: 0, width: 91, depth: 90 });
+    expect(Number.isInteger(turned.x) && Number.isInteger(turned.y)).toBe(true);
+  });
+});
+
+describe('union of rectangles', () => {
+  it('is null for nothing', () => {
+    expect(unionRect([])).toBeNull();
+  });
+
+  it('covers every rectangle', () => {
+    expect(unionRect([
+      { x: 100, y: 100, width: 300, depth: 300 },
+      { x: 600, y: 50, width: 100, depth: 500 },
+    ])).toEqual({ x: 100, y: 50, width: 600, depth: 500 });
+  });
+});
+
+describe('whole centimetres', () => {
+  it('rounds to the nearest whole centimetre', () => {
+    expect(wholeCm(350.4)).toBe(350);
+    expect(wholeCm(350.6)).toBe(351);
+  });
+
+  it('never returns negative zero', () => {
+    expect(wholeCm(-0.4)).toBe(0);
+    expect(Object.is(wholeCm(-0.4), 0)).toBe(true);
+  });
+});
+
+describe('gaps around an item', () => {
+  const plot = { widthCm: 2600, depthCm: 2400 };
+
+  it('measures to the nearest neighbour on each side, and to the fence', () => {
+    const tent = { x: 500, y: 900, width: 300, depth: 300 };
+    const others = [
+      { x: 900, y: 1000, width: 200, depth: 90 }, // east, 100 away, overlaps tent's rows
+      { x: 150, y: 900, width: 300, depth: 300 }, // west, 50 away
+    ];
+    // South is 1200 to the fence and north 900 — both past six metres, so left out.
+    expect(gapsAround(tent, others, plot)).toEqual([
+      { from: [800, 1050], to: [900, 1050], lengthCm: 100 },
+      { from: [450, 1050], to: [500, 1050], lengthCm: 50 },
+    ]);
+  });
+
+  it('leaves out anything six metres or further, and touching sides', () => {
+    const rect = { x: 0, y: 0, width: 100, depth: 100 };
+    expect(gapsAround(rect, [{ x: 100, y: 0, width: 50, depth: 50 }], plot)).toEqual([]);
+  });
+
+  it('rounds gap coordinates to whole centimetres with odd-sized rectangles', () => {
+    const rect = { x: 500, y: 900, width: 91, depth: 91 };
+    const others = [{ x: 700, y: 900, width: 100, depth: 100 }];
+    expect(gapsAround(rect, others, plot)).toEqual([
+      { from: [591, 946], to: [700, 946], lengthCm: 109 },
+      { from: [0, 946], to: [500, 946], lengthCm: 500 },
+    ]);
   });
 });

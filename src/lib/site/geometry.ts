@@ -243,3 +243,68 @@ export function formatSize(widthCm: number, depthCm: number): string {
 export function formatArea(m2: number): string {
   return `${m2} מ״ר`;
 }
+
+/**
+ * A quarter turn about the item's own middle (spec D5): in 3D a lead expects
+ * the caravan to spin in place. Whole centimetres: when the sides differ by
+ * an odd number the middle moves by half a centimetre, rounded.
+ */
+export function turnAboutCentre(rect: Rect): Rect {
+  const doubledX = rect.x * 2 + rect.width;
+  const doubledY = rect.y * 2 + rect.depth;
+  const width = rect.depth;
+  const depth = rect.width;
+  return { x: Math.round((doubledX - width) / 2), y: Math.round((doubledY - depth) / 2), width, depth };
+}
+
+/** The smallest rectangle holding them all; null for none. */
+export function unionRect(rects: readonly Rect[]): Rect | null {
+  if (rects.length === 0) return null;
+  let left = Infinity; let top = Infinity; let right = -Infinity; let bottom = -Infinity;
+  for (const rect of rects) {
+    left = Math.min(left, rect.x); top = Math.min(top, rect.y);
+    right = Math.max(right, rect.x + rect.width); bottom = Math.max(bottom, rect.y + rect.depth);
+  }
+  return { x: left, y: top, width: right - left, depth: bottom - top };
+}
+
+export interface Gap {
+  from: [number, number];
+  to: [number, number];
+  lengthCm: number;
+}
+
+/**
+ * The clear ground on each side of a rectangle while it is dragged: to the
+ * nearest thing that shares its rows (east/west) or columns (south/north),
+ * else to the fence. Only gaps above zero and under `maxCm` are returned —
+ * the ones a lead is deciding about. Order: east, west, south, north.
+ */
+export function gapsAround(rect: Rect, others: readonly Rect[], plot: Plot, maxCm = 600): Gap[] {
+  const midX = Math.round(rect.x + rect.width / 2);
+  const midY = Math.round(rect.y + rect.depth / 2);
+  const sharesRows = (o: Rect) => o.y < rect.y + rect.depth && o.y + o.depth > rect.y;
+  const sharesColumns = (o: Rect) => o.x < rect.x + rect.width && o.x + o.width > rect.x;
+  let east = plot.widthCm - (rect.x + rect.width);
+  let west = rect.x;
+  let south = plot.depthCm - (rect.y + rect.depth);
+  let north = rect.y;
+  for (const o of others) {
+    if (sharesRows(o) && o.x >= rect.x + rect.width) east = Math.min(east, o.x - (rect.x + rect.width));
+    if (sharesRows(o) && o.x + o.width <= rect.x) west = Math.min(west, rect.x - (o.x + o.width));
+    if (sharesColumns(o) && o.y >= rect.y + rect.depth) south = Math.min(south, o.y - (rect.y + rect.depth));
+    if (sharesColumns(o) && o.y + o.depth <= rect.y) north = Math.min(north, rect.y - (o.y + o.depth));
+  }
+  const gaps: Gap[] = [];
+  const keep = (length: number) => length > 0 && length < maxCm;
+  if (keep(east)) gaps.push({ from: [rect.x + rect.width, midY], to: [rect.x + rect.width + east, midY], lengthCm: east });
+  if (keep(west)) gaps.push({ from: [rect.x - west, midY], to: [rect.x, midY], lengthCm: west });
+  if (keep(south)) gaps.push({ from: [midX, rect.y + rect.depth], to: [midX, rect.y + rect.depth + south], lengthCm: south });
+  if (keep(north)) gaps.push({ from: [midX, rect.y - north], to: [midX, rect.y], lengthCm: north });
+  return gaps;
+}
+
+/** Whole centimetres, and never -0. */
+export function wholeCm(value: number): number {
+  return Math.round(value) || 0;
+}

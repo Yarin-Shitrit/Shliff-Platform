@@ -1,0 +1,54 @@
+/* The view controls (spec §10). Tokens only, logical properties throughout. */
+
+/* Centred along the bottom of the scene, as wide as its content. */
+.view {
+  position: absolute;
+  inset-block-end: 12px;
+  inset-inline: 0;
+  margin-inline: auto;
+  inline-size: fit-content;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-pop);
+}
+
+.zoomValue {
+  min-inline-size: 46px;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+  text-align: center;
+}
+
+.vsep {
+  inline-size: 1px;
+  block-size: 20px;
+  flex-shrink: 0;
+  background: var(--line);
+}
+
+.compassRing { fill: none; stroke: currentColor; stroke-opacity: 0.45; stroke-width: 1.25; }
+.compassNorth { fill: var(--focus); }
+.compassSouth { fill: currentColor; fill-opacity: 0.55; }
+
+.scaleBar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-inline: var(--space-2);
+  color: var(--ink-3);
+  font-size: var(--text-label);
+}
+
+.scaleLine {
+  display: block;
+  block-size: 6px;
+  border: 1.5px solid var(--ink-3);
+  border-block-start: 0;
+}
+
+/* The shortcuts switch is the shared `panel.module.css` `.iconButton`: the
+   kit's `Button` has no `aria-pressed`. */

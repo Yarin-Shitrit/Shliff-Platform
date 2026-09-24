@@ -1,0 +1,182 @@
+/*
+ * The chrome every floating panel of the camp map shares (spec §10): the
+ * card a panel floats in, its scrolling body, the hint and meta lines, the
+ * group swatches, the search box, the problem dot, the small icon button,
+ * the in-panel link and the invitation. Each panel keeps what is its own in
+ * `panels/<name>.module.css` (ruling W2) and takes these from here, so the
+ * copies the parallel lanes made are one rule each (ruling W10).
+ *
+ * A class here is combined with a panel's own class only where the two set
+ * different properties, so the result never depends on which module's CSS
+ * the browser happened to load last.
+ *
+ * Tokens only, logical properties throughout (A10).
+ */
+
+/* ---- the floating card ------------------------------------------------- */
+
+/* A panel over the scene: the side panel and the inspector place it. */
+.panel {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-pop);
+}
+
+.body {
+  flex: 1;
+  min-block-size: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-block: 10px 12px;
+  padding-inline: 12px;
+}
+
+/* A card in SiteEditor's stack above the view controls: the sun, the shortcuts. */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-block: 10px;
+  padding-inline: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-pop);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+/* ---- text ---------------------------------------------------------------- */
+
+.hint {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+  line-height: 1.45;
+}
+
+.meta {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-label);
+}
+
+/* An empty state: an invitation, never an apology. */
+.invite {
+  margin: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-control);
+  background: var(--brand-soft);
+  color: var(--ink);
+  font-size: var(--text-meta);
+}
+
+/* A link or a link-looking button inside a panel — a figure that opens what changes it. */
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--brand-text);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+.link:hover { text-decoration: underline; }
+.link:disabled { color: var(--ink-4); cursor: not-allowed; text-decoration: none; }
+/* Inside a meta line it is part of the sentence, at the sentence's size. */
+.meta .link { font-size: inherit; }
+
+/* ---- group colours --------------------------------------------------------- */
+
+/* A group's colour: the scene's, handed down by SiteEditor (see the header of `editor.module.css`). */
+.g_sleep { --swatch: var(--group-sleep, var(--line-strong)); }
+.g_living { --swatch: var(--group-living, var(--line-strong)); }
+.g_sanitation { --swatch: var(--group-sanitation, var(--line-strong)); }
+.g_utility { --swatch: var(--group-utility, var(--line-strong)); }
+.g_other { --swatch: var(--group-other, var(--line-strong)); }
+
+.swatch {
+  inline-size: 8px;
+  block-size: 8px;
+  flex-shrink: 0;
+  border-radius: 2px;
+  background: var(--swatch);
+}
+
+/* ---- the lists: search, stack, problem dot --------------------------------- */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  block-size: 32px;
+  padding-inline: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--ink-3);
+}
+
+.searchInput {
+  flex: 1;
+  min-inline-size: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--text-dense);
+}
+
+.issueDot {
+  inline-size: 7px;
+  block-size: 7px;
+  flex-shrink: 0;
+  border-radius: var(--radius-pill);
+  background: var(--warn);
+}
+.issueDot[data-tone='bad'] { background: var(--bad); }
+
+/* ---- the small icon button --------------------------------------------------- */
+
+/*
+ * A plain button drawn to match the kit's small ghost icon buttons — for a
+ * switch (`aria-pressed`), which the kit's `Button` does not carry, and for
+ * the selection's turn, duplicate, lock and remove.
+ */
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 28px;
+  block-size: 28px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.iconButton:hover { background: var(--sunken); color: var(--ink); }
+.iconButton[aria-pressed='true'] { background: var(--brand-soft); color: var(--brand-text); }
+
+/* Phone targets are at least 44px (A8), as the kit's buttons are. */
+@media (pointer: coarse) {
+  .iconButton { inline-size: 44px; block-size: 44px; }
+}
