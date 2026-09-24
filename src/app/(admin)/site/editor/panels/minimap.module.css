@@ -1,0 +1,53 @@
+/*
+ * The minimap (spec §10). Tokens only, logical properties throughout. The
+ * group colours are the scene's, handed down by SiteEditor as `--group-*`
+ * (see `editor.module.css`'s header), so an item here is the colour it is on
+ * the map.
+ */
+
+/* At the inline end, under the inspector — bottom left here. */
+.minimap {
+  position: absolute;
+  inset-block-end: 12px;
+  inset-inline-end: 12px;
+  inline-size: 168px;
+  block-size: 154px;
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-pop);
+}
+
+.minimapSvg {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  cursor: pointer;
+  touch-action: none;
+}
+
+/* A group's colour: the scene's, handed down by SiteEditor. */
+.g_sleep { --swatch: var(--group-sleep, var(--line-strong)); }
+.g_living { --swatch: var(--group-living, var(--line-strong)); }
+.g_sanitation { --swatch: var(--group-sanitation, var(--line-strong)); }
+.g_utility { --swatch: var(--group-utility, var(--line-strong)); }
+.g_other { --swatch: var(--group-other, var(--line-strong)); }
+
+/* One SVG unit is a centimetre, so every stroke is kept to screen pixels. */
+.mmPlot {
+  fill: var(--scene-plot, var(--sunken));
+  stroke: var(--scene-fence, var(--ink-3));
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+}
+.mmItem { fill: var(--swatch); }
+.mmNet { fill: none; stroke: var(--swatch); stroke-width: 1px; vector-effect: non-scaling-stroke; }
+.mmItem[data-outside='true'] { stroke: var(--bad); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+.mmItem[data-selected='true'] { stroke: var(--focus); stroke-width: 2px; vector-effect: non-scaling-stroke; }
+.mmView {
+  fill: var(--focus);
+  fill-opacity: 0.08;
+  stroke: var(--focus);
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+}
