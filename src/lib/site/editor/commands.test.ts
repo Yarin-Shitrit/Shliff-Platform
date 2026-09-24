@@ -271,6 +271,12 @@ describe('a kind’s default', () => {
     expect(setKindDefaultOps({ ...DOC, defaults: { tent: TENT_350 } }, 'tent', { ...TENT_350 })).toEqual([]);
     expect(setKindDefaultOps(DOC, 'tent', null)).toEqual([]);
   });
+
+  it('never lets a non-net kind’s default carry an inset, even a whole one', () => {
+    expect(setKindDefaultOps(DOC, 'tent', { widthCm: 300, depthCm: 300, heightCm: 200, insetCm: 40 })).toEqual([
+      { type: 'setKindDefault', kind: 'tent', size: { widthCm: 300, depthCm: 300, heightCm: 200, insetCm: null } },
+    ]);
+  });
 });
 
 describe('arranging several items', () => {
@@ -312,28 +318,79 @@ describe('arranging several items', () => {
 });
 
 describe('every command undoes back to the start', () => {
-  const cases: Array<[string, SiteOp[]]> = [
-    ['move', moveOps(DOC, ['t1', 't2', 'c1'], 50, -50)],
-    ['set a rectangle', setRectOps(DOC, 'c1', { xCm: 150, yCm: 650, widthCm: 650, depthCm: 300 })],
-    ['turn', turnOps(DOC, ['c1', 'f1'])],
-    ['add', addOps(DOC, 'shade', { xCm: 0, yCm: 1500 }, 'n1')],
-    ['remove', removeOps(DOC, ['t2', 'c1'])],
-    ['duplicate', duplicateOps(DOC, ['t1', 't2'], ids('n1', 'n2')).ops],
-    ['lock', lockOps(DOC, ['t1', 'lk'], true)],
-    ['patch', patchOps(DOC, 's1', { kind: 'sofa', label: 'ספה גדולה' })],
-    ['resize a kind', resizeKindOps(DOC, ['t1', 't2'], 'tent', { widthCm: 350, heightCm: 180 })],
-    ['reset sizes', resetSizeOps(DOC, ['c1'])],
-    ['set a kind default', setKindDefaultOps(DOC, 'tent', TENT_350)],
-    ['align', alignOps(DOC, ['t1', 'c1'], 'centreY')],
-    ['distribute', distributeOps(DOC, ['t1', 't2', 'f1'], 'x')],
-    ['row', rowOps(DOC, ['t2', 't1', 'c1'], 50)],
+  // An odd-sided item (91 × 90), so the turn case's centre-pivot arithmetic is exercised on a
+  // pair of sides that split unevenly, not just DOC's even ones.
+  const OD = make({ id: 'od', label: 'אוהל 7', xCm: 50, yCm: 50, widthCm: 91, depthCm: 90, sort: 6 });
+  const DOC_ODD: EditorDoc = { ...DOC, items: [...DOC.items, OD] };
+
+  const cases: Array<[string, EditorDoc, SiteOp[]]> = [
+    ['move', DOC, moveOps(DOC, ['t1', 't2', 'c1'], 50, -50)],
+    ['set a rectangle', DOC, setRectOps(DOC, 'c1', { xCm: 150, yCm: 650, widthCm: 650, depthCm: 300 })],
+    ['turn', DOC_ODD, turnOps(DOC_ODD, ['c1', 'f1', 'od'])],
+    ['add', DOC, addOps(DOC, 'shade', { xCm: 0, yCm: 1500 }, 'n1')],
+    ['remove', DOC, removeOps(DOC, ['t2', 'c1'])],
+    ['duplicate', DOC, duplicateOps(DOC, ['t1', 't2'], ids('n1', 'n2')).ops],
+    ['lock', DOC, lockOps(DOC, ['t1', 'lk'], true)],
+    ['patch', DOC, patchOps(DOC, 's1', { kind: 'sofa', label: 'ספה גדולה' })],
+    ['resize a kind', DOC, resizeKindOps(DOC, ['t1', 't2'], 'tent', { widthCm: 350, heightCm: 180 })],
+    ['reset sizes', DOC, resetSizeOps(DOC, ['c1'])],
+    ['set a kind default', DOC, setKindDefaultOps(DOC, 'tent', TENT_350)],
+    ['align', DOC, alignOps(DOC, ['t1', 'c1'], 'centreY')],
+    ['distribute', DOC, distributeOps(DOC, ['t1', 't2', 'f1'], 'x')],
+    ['row', DOC, rowOps(DOC, ['t2', 't1', 'c1'], 50)],
   ];
 
-  it.each(cases)('%s', (_name, ops) => {
+  it.each(cases)('%s', (_name, doc, ops) => {
     expect(ops.length).toBeGreaterThan(0);
-    const after = applyOps(DOC, ops);
+    const after = applyOps(doc, ops);
     expect(after.skipped).toEqual([]);
-    expect(after.doc).not.toEqual(DOC);
-    expect(applyOps(after.doc, invertOps(DOC, ops)).doc).toStrictEqual(DOC);
+    expect(after.doc).not.toEqual(doc);
+    expect(applyOps(after.doc, invertOps(doc, ops)).doc).toStrictEqual(doc);
+  });
+});
+
+describe('every fractional input becomes a whole centimetre, never -0', () => {
+  function assertWhole(value: unknown): void {
+    if (typeof value !== 'number') return;
+    expect(Number.isInteger(value)).toBe(true);
+    expect(Object.is(value, -0)).toBe(false);
+  }
+
+  function assertWholeOps(ops: readonly SiteOp[]): void {
+    for (const op of ops) {
+      if (op.type === 'add') {
+        for (const value of Object.values(op.item)) assertWhole(value);
+      } else if (op.type === 'update') {
+        for (const value of Object.values(op.patch)) assertWhole(value);
+      } else if (op.type === 'setKindDefault' && op.size !== null) {
+        for (const value of Object.values(op.size)) assertWhole(value);
+      }
+    }
+  }
+
+  it('rounds every command’s numbers, including the -0 plain rounding would give', () => {
+    // A tent at x=1, width 10: resizing to width 13 pivots the centre by -0.5 — plain
+    // Math.round gives -0 here, which is exactly the bug this fix closes.
+    const tiny = make({ id: 'ti', label: 'אוהל 9', xCm: 1, yCm: 1, widthCm: 10, depthCm: 10 });
+    // An item spanning x -1..1 inside a two-item box of width 3: centring it pivots by -0.5 too.
+    const edge = make({ id: 'eg', label: 'אוהל 10', xCm: -1, yCm: 0, widthCm: 2, depthCm: 300 });
+    const rest = make({ id: 'rt', label: 'אוהל 11', xCm: 1, yCm: 0, widthCm: 1, depthCm: 300 });
+    const doc: EditorDoc = { ...DOC, items: [...DOC.items, tiny, edge, rest] };
+
+    assertWholeOps(moveOps(doc, ['t1', 't2'], 12.6, -12.6));
+    assertWholeOps(setRectOps(doc, 't1', { xCm: 612.6, yCm: 100.4, widthCm: 350.4, depthCm: 300.2 }));
+    assertWholeOps(turnOps(doc, ['c1']));
+    assertWholeOps(addOps(doc, 'shade', { xCm: 612.6, yCm: 100.4 }, 'n1'));
+    assertWholeOps(duplicateOps(doc, ['f1'], ids('n2')).ops);
+    assertWholeOps(patchOps(doc, 't1', { xCm: 612.6, widthCm: 350.4, heightCm: 180.6 }));
+    assertWholeOps(patchOps(doc, 't1', { kind: 'shade', insetCm: 62.4 }));
+    assertWholeOps(resizeKindOps(doc, ['ti'], 'tent', { widthCm: 13 }));
+    assertWholeOps(resizeKindOps(doc, ['t1'], 'tent', { widthCm: 350.4, depthCm: 300.2, heightCm: 210.6 }));
+    assertWholeOps(resetSizeOps(doc, ['t1']));
+    assertWholeOps(setKindDefaultOps(doc, 'tent', { widthCm: 350.4, depthCm: 300.2, heightCm: 210.6, insetCm: null }));
+    assertWholeOps(setKindDefaultOps(doc, 'shade', { widthCm: 800, depthCm: 800, heightCm: 300, insetCm: 18.5 }));
+    assertWholeOps(alignOps(doc, ['eg', 'rt'], 'centreX'));
+    assertWholeOps(distributeOps(doc, ['t1', 't2', 'f1'], 'x'));
+    assertWholeOps(rowOps(doc, ['t2', 't1', 'c1'], 12.6));
   });
 });

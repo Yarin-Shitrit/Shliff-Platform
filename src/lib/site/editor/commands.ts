@@ -58,11 +58,11 @@ function present(ops: ReadonlyArray<SiteOp | null>): SiteOp[] {
   return ops.filter((op): op is SiteOp => op !== null);
 }
 
-/** New sides about the same middle, in whole centimetres (the rounding `turnAboutCentre` uses). */
+/** New sides about the same middle, in whole centimetres, never -0. */
 function resizedAboutCentre(entry: EditorItem, widthCm: number, depthCm: number): Rect {
   return {
-    x: Math.round((entry.xCm * 2 + entry.widthCm - widthCm) / 2),
-    y: Math.round((entry.yCm * 2 + entry.depthCm - depthCm) / 2),
+    x: wholeCm((entry.xCm * 2 + entry.widthCm - widthCm) / 2),
+    y: wholeCm((entry.yCm * 2 + entry.depthCm - depthCm) / 2),
     width: widthCm,
     depth: depthCm,
   };
@@ -171,12 +171,19 @@ export function lockOps(doc: EditorDoc, ids: readonly string[], locked: boolean)
   return present(itemsOf(doc, ids).map((entry) => update(entry, { locked })));
 }
 
-/** A patch's width, depth and (non-null) height rounded to whole centimetres, so a typed 350.4 becomes 350. */
+/**
+ * A patch's position, sides and (non-null) height or inset rounded to whole
+ * centimetres, so a typed 350.4 or 612.6 becomes 350 or 613 before it ever
+ * reaches an op.
+ */
 function roundedPatch(patch: ItemPatch): ItemPatch {
   const out: ItemPatch = { ...patch };
+  if (out.xCm !== undefined) out.xCm = wholeCm(out.xCm);
+  if (out.yCm !== undefined) out.yCm = wholeCm(out.yCm);
   if (out.widthCm !== undefined) out.widthCm = wholeCm(out.widthCm);
   if (out.depthCm !== undefined) out.depthCm = wholeCm(out.depthCm);
   if (out.heightCm !== undefined && out.heightCm !== null) out.heightCm = wholeCm(out.heightCm);
+  if (out.insetCm !== undefined && out.insetCm !== null) out.insetCm = wholeCm(out.insetCm);
   return out;
 }
 
@@ -250,7 +257,7 @@ export function setKindDefaultOps(doc: EditorDoc, kind: SiteItemKind, size: Kind
     widthCm: wholeCm(size.widthCm),
     depthCm: wholeCm(size.depthCm),
     heightCm: wholeCm(size.heightCm),
-    insetCm: kind === 'shade' ? size.insetCm : null,
+    insetCm: kind === 'shade' && size.insetCm !== null ? wholeCm(size.insetCm) : null,
   };
   if (sameSize(doc.defaults[kind] ?? null, rounded)) return [];
   return [{ type: 'setKindDefault', kind, size: rounded }];
@@ -262,10 +269,10 @@ function aligned(entry: EditorItem, group: Rect, how: Alignment): ItemPatch {
   switch (how) {
     case 'west': return { xCm: group.x };
     case 'east': return { xCm: group.x + group.width - entry.widthCm };
-    case 'centreX': return { xCm: Math.round((group.x * 2 + group.width - entry.widthCm) / 2) };
+    case 'centreX': return { xCm: wholeCm((group.x * 2 + group.width - entry.widthCm) / 2) };
     case 'north': return { yCm: group.y };
     case 'south': return { yCm: group.y + group.depth - entry.depthCm };
-    case 'centreY': return { yCm: Math.round((group.y * 2 + group.depth - entry.depthCm) / 2) };
+    case 'centreY': return { yCm: wholeCm((group.y * 2 + group.depth - entry.depthCm) / 2) };
   }
 }
 
@@ -295,7 +302,7 @@ export function distributeOps(doc: EditorDoc, ids: readonly string[], axis: 'x' 
   let cursor = start(first) + side(first) + gap;
   const ops: Array<SiteOp | null> = [];
   for (const entry of inner) {
-    const at = Math.round(cursor);
+    const at = wholeCm(cursor);
     ops.push(update(entry, axis === 'x' ? { xCm: at } : { yCm: at }));
     cursor += side(entry) + gap;
   }
