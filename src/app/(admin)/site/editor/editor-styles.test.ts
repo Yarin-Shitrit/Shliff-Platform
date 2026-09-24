@@ -13,10 +13,61 @@ import { resolve } from 'node:path';
 const SHEET = readFileSync(resolve(process.cwd(), 'src/app/(admin)/site/editor/editor.module.css'), 'utf8')
   .replace(/\/\*[\s\S]*?\*\//g, '');
 
-function declarations(selector: string): string {
+function declarations(selector: string, sheet = SHEET): string {
   const pattern = new RegExp(`(?:^|[}\\s])${selector.replace('.', '\\.')}\\s*\\{([^}]*)\\}`, 'g');
-  return [...SHEET.matchAll(pattern)].map((match) => match[1]).join(';');
+  return [...sheet.matchAll(pattern)].map((match) => match[1]).join(';');
 }
+
+/** The index of the `}` that closes the `{` at `open`. */
+function closing(open: number): number {
+  let depth = 0;
+  for (let at = open; at < SHEET.length; at += 1) {
+    if (SHEET[at] === '{') depth += 1;
+    if (SHEET[at] === '}') depth -= 1;
+    if (depth === 0) return at;
+  }
+  return SHEET.length;
+}
+
+/** What sits inside `@media <query> { … }`; '' when the sheet has no such block. */
+function mediaBlock(query: string): string {
+  const start = SHEET.indexOf(`@media ${query}`);
+  if (start < 0) return '';
+  const open = SHEET.indexOf('{', start);
+  return SHEET.slice(open + 1, closing(open));
+}
+
+/** Everything outside any `@media` block. */
+function outsideMedia(): string {
+  let out = '';
+  let at = 0;
+  for (let start = SHEET.indexOf('@media'); start >= 0; start = SHEET.indexOf('@media', at)) {
+    out += SHEET.slice(at, start);
+    at = closing(SHEET.indexOf('{', start)) + 1;
+  }
+  return out + SHEET.slice(at);
+}
+
+/* Spec §7: under 900 px the item table is the view. The editor asks the
+   browser about its width (`WIDE_QUERY`, `site-editor.tsx`) to decide whether
+   to mount the scene; the stylesheet draws the same line before the client
+   has answered, as the server renders the wide page. The two must agree, or a
+   screen at the line would get neither view, or both. */
+describe('the table under 900 px', () => {
+  const EDITOR = readFileSync(resolve(process.cwd(), 'src/app/(admin)/site/editor/site-editor.tsx'), 'utf8');
+
+  it('is where the editor draws the line too', () => {
+    expect(EDITOR).toContain("const WIDE_QUERY = '(min-width: 900px)';");
+    expect(mediaBlock('(max-width: 899.98px)')).not.toBe('');
+  });
+
+  it('is hidden on a wide screen, and shown in place of the editor on a narrow one', () => {
+    expect(declarations('.narrowView', outsideMedia())).toMatch(/display:\s*none/);
+    const narrow = mediaBlock('(max-width: 899.98px)');
+    expect(declarations('.narrowView', narrow)).toMatch(/display:\s*block/);
+    expect(declarations('.editorArea', narrow)).toMatch(/display:\s*none/);
+  });
+});
 
 describe('the editor’s stage', () => {
   it('is found where it is looked for', () => {
