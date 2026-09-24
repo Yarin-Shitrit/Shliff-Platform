@@ -1,0 +1,137 @@
+/*
+ * במפה (spec §10): the search box, each kind group with its hide switch, and
+ * a row per item. Tokens only, logical properties throughout (A10).
+ */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  block-size: 32px;
+  padding-inline: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--ink-3);
+}
+
+.searchInput {
+  flex: 1;
+  min-inline-size: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--text-dense);
+}
+
+.hint {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+  line-height: 1.45;
+}
+
+.invite {
+  margin: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-control);
+  background: var(--brand-soft);
+  color: var(--ink);
+  font-size: var(--text-meta);
+}
+
+/* A group's colour: the scene's, handed down by SiteEditor (see the header of `editor.module.css`). */
+.g_sleep { --swatch: var(--group-sleep, var(--line-strong)); }
+.g_living { --swatch: var(--group-living, var(--line-strong)); }
+.g_sanitation { --swatch: var(--group-sanitation, var(--line-strong)); }
+.g_utility { --swatch: var(--group-utility, var(--line-strong)); }
+.g_other { --swatch: var(--group-other, var(--line-strong)); }
+
+.swatch {
+  inline-size: 8px;
+  block-size: 8px;
+  flex-shrink: 0;
+  border-radius: 2px;
+  background: var(--swatch);
+}
+
+.groupHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-block: 6px 2px;
+  padding-inline: 2px;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+  font-weight: 600;
+}
+
+.eye {
+  margin-inline-start: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 28px;
+  block-size: 28px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.eye:hover { background: var(--sunken); color: var(--ink); }
+.eye[aria-pressed='true'] { color: var(--brand-text); }
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  inline-size: 100%;
+  block-size: 32px;
+  padding-inline: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--text-dense);
+  text-align: start;
+  cursor: pointer;
+}
+.row:hover { background: var(--sunken); }
+.row[aria-pressed='true'] { background: var(--selected); }
+
+.rowSwatch {
+  inline-size: 10px;
+  block-size: 10px;
+  flex-shrink: 0;
+  border-radius: 3px;
+  background: var(--swatch);
+}
+
+.rowLabel {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowSize {
+  color: var(--ink-3);
+  font-size: var(--text-label);
+}
+
+.issueDot {
+  inline-size: 7px;
+  block-size: 7px;
+  flex-shrink: 0;
+  border-radius: var(--radius-pill);
+  background: var(--warn);
+}
+.issueDot[data-tone='bad'] { background: var(--bad); }

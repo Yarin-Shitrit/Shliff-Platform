@@ -1,0 +1,77 @@
+/*
+ * The side panel (spec §10): a floating card at the inline start of the
+ * stage, with two tabs — adding to the map and what is on it. Tokens only,
+ * logical properties throughout (A10).
+ */
+
+.panel {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-pop);
+}
+
+/* At the inline start — the right edge on this RTL page, as in the mock. */
+.side {
+  inset-block: 12px;
+  inset-inline-start: 12px;
+  inline-size: 256px;
+}
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding-block-start: 6px;
+  padding-inline: var(--space-2);
+  border-block-end: 1px solid var(--line);
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  block-size: 34px;
+  padding-inline: 10px;
+  margin-block-end: -1px;
+  border: 0;
+  border-block-end: 2px solid transparent;
+  background: none;
+  color: var(--ink-3);
+  font-size: var(--text-dense);
+  font-weight: 500;
+  cursor: pointer;
+}
+.tab[aria-selected='true'] { color: var(--ink); border-block-end-color: var(--brand); font-weight: 600; }
+
+.tabCount {
+  padding-inline: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--sunken);
+  color: var(--ink-3);
+  font-size: var(--text-label);
+  line-height: 17px;
+}
+
+.body {
+  flex: 1;
+  min-block-size: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-block: 10px 12px;
+  padding-inline: 12px;
+}
+
+.invite {
+  margin: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-control);
+  background: var(--brand-soft);
+  color: var(--ink);
+  font-size: var(--text-meta);
+}
