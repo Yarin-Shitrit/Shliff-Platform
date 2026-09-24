@@ -12,7 +12,10 @@ import { coalesceOps, type SaveResult, type SiteOp } from '@/lib/site/editor/ops
  * front of the line, ahead of anything that arrived while it was out — except
  * a batch whose send itself failed (fix round 1, item 2): the server may or
  * may not have applied it, so it is kept apart from later edits rather than
- * merged with them, and resent unchanged, first, on retry.
+ * merged with them, and resent unchanged, first, on retry — and if that
+ * resend comes back a conflict or a refusal, neither of which rules out the
+ * original having gone through, it goes right back to being kept apart
+ * rather than merging in then (fix round 2, item 1).
  *
  * No React here: the store (`use-editor-store.ts`) owns one of these and
  * mirrors its snapshot into state.
@@ -82,8 +85,16 @@ export class SaveQueue {
   /** Bumped by `reset` and `rebase`, so a reply to a batch they replaced is ignored. */
   private epoch = 0;
   private disposed = false;
-  /** Captured at `dispose`: whether a send was out, so `flush` may finish draining what waited behind it. */
+  /** Captured at `dispose`: whether a `flush` call was under way, so it may finish draining what waited behind it. */
   private drainAfterDispose = false;
+  /**
+   * How many `flush` calls are currently between their first line and their
+   * return, counted across every await inside — including the gap between a
+   * reply landing and the loop's next pass, where `inFlight` is briefly null
+   * even though a call is still very much alive (fix round 2, item 2: a
+   * `dispose` landing in exactly that gap must not misread it as idle).
+   */
+  private activeFlushes = 0;
 
   constructor(options: SaveQueueOptions) {
     this.send = options.send;
@@ -99,7 +110,10 @@ export class SaveQueue {
     let status: SaveStatus = 'saved';
     if (this.halted !== null) status = this.halted;
     else if (this.inFlight !== null) status = 'saving';
-    else if (this.queued.length > 0) status = 'pending';
+    // A kept-apart batch counts too: `retry` clears `halted` before the
+    // resend has actually gone out, and that gap must never read as 'saved'
+    // while a batch is still waiting (fix round 2, item 4).
+    else if (this.queued.length > 0 || this.networkFailedBatch !== null) status = 'pending';
     return {
       status,
       version: this.version,
@@ -125,24 +139,32 @@ export class SaveQueue {
    * A call already under way when `dispose` happens keeps draining what
    * waited behind the flight (fix round 1, item 1) — `dispose` only stops the
    * clock and the `onChange` reports, and a fresh call made after `dispose`
-   * (nothing was in flight yet) starts nothing new.
+   * (nothing was in flight yet) starts nothing new. `activeFlushes` (rather
+   * than `inFlight`) is what `dispose` reads to decide that, because it stays
+   * true across the gap between a reply landing and this loop's next pass —
+   * exactly where `inFlight` is briefly null (fix round 2, item 2).
    */
   async flush(): Promise<void> {
-    this.cancelTimer();
-    while (true) {
-      if (this.inFlight !== null) {
-        // A send is under way — including one just started this same tick,
-        // before the promise that started it has been assigned to `flight`
-        // (re-entrancy, item 3: an onChange firing mid-send that calls
-        // `flush` must not race the assignment below). Wait for it.
-        await (this.flight ?? Promise.resolve());
-        continue;
+    this.activeFlushes += 1;
+    try {
+      this.cancelTimer();
+      while (true) {
+        if (this.inFlight !== null) {
+          // A send is under way — including one just started this same tick,
+          // before the promise that started it has been assigned to `flight`
+          // (re-entrancy, item 3: an onChange firing mid-send that calls
+          // `flush` must not race the assignment below). Wait for it.
+          await (this.flight ?? Promise.resolve());
+          continue;
+        }
+        if (this.halted !== null) return;
+        if (this.networkFailedBatch === null && this.queued.length === 0) return;
+        if (this.disposed && !this.drainAfterDispose) return;
+        this.flight = this.sendQueued();
+        await this.flight;
       }
-      if (this.halted !== null) return;
-      if (this.networkFailedBatch === null && this.queued.length === 0) return;
-      if (this.disposed && !this.drainAfterDispose) return;
-      this.flight = this.sendQueued();
-      await this.flight;
+    } finally {
+      this.activeFlushes -= 1;
     }
   }
 
@@ -156,8 +178,14 @@ export class SaveQueue {
     await this.flush();
   }
 
-  /** 'theirs': drop everything unsent and carry on from the server's version. */
+  /**
+   * 'theirs': drop everything unsent and carry on from the server's version.
+   * A no-op once disposed (fix round 2, item 3) — otherwise this could start
+   * a fresh request (`rebase` does, via `flush`) after the caller has already
+   * walked away.
+   */
   reset(version: number): void {
+    if (this.disposed) return;
     this.epoch += 1;
     this.cancelTimer();
     this.queued = [];
@@ -172,8 +200,15 @@ export class SaveQueue {
     this.emit();
   }
 
-  /** 'mine': what is still worth sending, against the server's version, now. */
+  /**
+   * 'mine': what is still worth sending, against the server's version, now.
+   * A no-op once disposed (fix round 2, item 3): unlike `enqueue`, this bypasses
+   * that guard by writing `queued` directly and then calling `flush` itself —
+   * left unchecked it could start a brand-new request after the caller has
+   * already walked away.
+   */
   rebase(version: number, keep: readonly SiteOp[]): void {
+    if (this.disposed) return;
     this.epoch += 1;
     this.cancelTimer();
     this.queued = coalesceOps(keep);
@@ -202,14 +237,22 @@ export class SaveQueue {
   }
 
   /**
-   * Stops the clock and the reports; blocks new enqueues. A `flush` already
-   * under way keeps sending what waited behind the flight (see `flush`); a
-   * reply to a batch that was in flight is still applied internally (the
-   * version it returns still matters to what `flush` sends next) but is
-   * never reported — `emit` is a no-op once disposed.
+   * Stops the clock and the reports; blocks new enqueues (and, item 3,
+   * `reset`/`rebase`). A `flush` already under way keeps sending what waited
+   * behind the flight (see `flush`); a reply to a batch that was in flight is
+   * still applied internally (the version it returns still matters to what
+   * `flush` sends next) but is never reported — `emit` is a no-op once
+   * disposed.
+   *
+   * A no-op if already disposed (fix round 2, item 2): `dispose` is meant to
+   * be called once, and this keeps a stray second call from re-deciding
+   * anything — `drainAfterDispose` stays exactly what the first call decided,
+   * not a fresh (and, at the wrong moment, differently-timed) read of
+   * `activeFlushes`.
    */
   dispose(): void {
-    this.drainAfterDispose = this.inFlight !== null;
+    if (this.disposed) return;
+    this.drainAfterDispose = this.activeFlushes > 0;
     this.disposed = true;
     this.cancelTimer();
   }
@@ -231,6 +274,7 @@ export class SaveQueue {
   private async sendQueued(): Promise<void> {
     const epoch = this.epoch;
     const stranded = this.networkFailedBatch;
+    const wasStranded = stranded !== null;
     const batch = stranded ?? this.queued;
     if (stranded !== null) this.networkFailedBatch = null;
     else this.queued = [];
@@ -270,18 +314,32 @@ export class SaveQueue {
         this.halted = 'error';
         this.errorKind = 'network';
         this.error = NETWORK_FAILURE;
-      } else if (result.reason === 'conflict') {
-        // The server named the batch: nothing was applied. Safe to fold back
-        // in, ahead of anything that arrived meanwhile.
-        this.queued = coalesceOps([...batch, ...this.queued]);
-        this.halted = 'conflict';
-        this.errorKind = null;
-        this.version = result.version;
       } else {
-        this.queued = coalesceOps([...batch, ...this.queued]);
-        this.halted = 'error';
-        this.errorKind = 'refused';
-        this.error = result.error;
+        // For an ordinary batch, a conflict or a refusal is a definite
+        // answer — the server did not apply it — so it's safe to fold back
+        // in, ahead of anything that arrived meanwhile (fix round 1, item 2).
+        //
+        // Not for the resend of a batch that already failed once by getting
+        // no answer at all (fix round 2, item 1): a conflict here is exactly
+        // the signal that the *original* attempt probably was applied — this
+        // identical resend now collides with it — and a refusal (say, the
+        // session had expired) doesn't rule that out either. Either way it
+        // goes back into the kept-apart slot, unchanged, rather than merging
+        // with `queued`, where an add-then-remove of the same id could cancel
+        // out silently and lose the fact that the batch's fate is still
+        // unknown.
+        if (wasStranded) this.networkFailedBatch = batch;
+        else this.queued = coalesceOps([...batch, ...this.queued]);
+
+        if (result.reason === 'conflict') {
+          this.halted = 'conflict';
+          this.errorKind = null;
+          this.version = result.version;
+        } else {
+          this.halted = 'error';
+          this.errorKind = 'refused';
+          this.error = result.error;
+        }
       }
     }
     this.emit();

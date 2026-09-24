@@ -370,4 +370,139 @@ describe('the save queue', () => {
     clock.fire();
     expect(send).toHaveBeenLastCalledWith(1, [move('b', 2)]);
   });
+
+  // --- Fix round 2 -----------------------------------------------------
+
+  it('keeps the stranded batch apart even when its resend comes back a conflict', async () => {
+    const { queue, send, replies, clock } = setup(7);
+    queue.enqueue([{ type: 'add', item: tent('n1') }]);
+    clock.fire();
+    replies[0].reject(new TypeError('Failed to fetch'));
+    await settle();
+    queue.enqueue([{ type: 'remove', id: 'n1' }]);
+
+    void queue.retry();
+    expect(send).toHaveBeenLastCalledWith(7, [{ type: 'add', item: tent('n1') }]);
+    replies[1].resolve({ ok: false, reason: 'conflict', version: 8 });
+    await settle();
+
+    // Never merged: an add-then-remove of the same id would otherwise cancel to nothing.
+    expect(queue.snapshot).toEqual({ status: 'conflict', version: 8, pending: 2, error: null, errorKind: null });
+    expect(queue.pendingOps()).toEqual([
+      { type: 'add', item: tent('n1') },
+      { type: 'remove', id: 'n1' },
+    ]);
+  });
+
+  it('keeps the stranded batch apart when its resend is refused, and resends it alone again', async () => {
+    const { queue, send, replies, clock } = setup(7);
+    queue.enqueue([{ type: 'add', item: tent('n1') }]);
+    clock.fire();
+    replies[0].reject(new TypeError('Failed to fetch'));
+    await settle();
+    queue.enqueue([{ type: 'remove', id: 'n1' }]);
+
+    void queue.retry();
+    replies[1].resolve({ ok: false, reason: 'refused', error: 'הפג תוקף החיבור' });
+    await settle();
+
+    expect(queue.snapshot).toEqual({
+      status: 'error', version: 7, pending: 2, error: 'הפג תוקף החיבור', errorKind: 'refused',
+    });
+    expect(queue.pendingOps()).toEqual([
+      { type: 'add', item: tent('n1') },
+      { type: 'remove', id: 'n1' },
+    ]);
+
+    // A further retry sends the stranded batch alone, first, again.
+    void queue.retry();
+    expect(send).toHaveBeenLastCalledWith(7, [{ type: 'add', item: tent('n1') }]);
+  });
+
+  it('a dispose landing in the gap between a reply and the next send still drains what waited', async () => {
+    const { queue, send, replies, seen } = setup(4);
+    queue.enqueue([move('a', 100)]);
+    const flushing = queue.flush();
+    await settle();
+    expect(send).toHaveBeenCalledTimes(1);
+
+    queue.enqueue([move('b', 300)]);
+    // Registered after sendQueued's own await on the same promise, so it runs
+    // after sendQueued has cleared `inFlight` but before flush's loop picks
+    // up 'b' — exactly the gap where `inFlight` alone misreads "idle".
+    void replies[0].promise.then(() => { queue.dispose(); });
+    const reports = seen.length;
+
+    replies[0].resolve({ ok: true, version: 5 });
+    await settle();
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenLastCalledWith(5, [move('b', 300)]);
+    // One legitimate report — 'a' resolving, registered on the promise before
+    // dispose() was — then silence: dispose() lands before 'b' is picked up,
+    // so 'b' going out is never reported.
+    expect(seen).toHaveLength(reports + 1);
+
+    const afterFirstReply = seen.length;
+    replies[1].resolve({ ok: true, version: 6 });
+    await flushing;
+    expect(seen).toHaveLength(afterFirstReply);
+  });
+
+  it('a second dispose() does not undo what the first one decided', async () => {
+    const { queue, send, replies, seen } = setup(4);
+    queue.enqueue([move('a', 100)]);
+    const flushing = queue.flush();
+    await settle();
+
+    queue.enqueue([move('b', 300)]);
+    queue.dispose();
+    // A second dispose, landing in the same gap as the test above — must be a no-op.
+    void replies[0].promise.then(() => { queue.dispose(); });
+    const reports = seen.length;
+
+    replies[0].resolve({ ok: true, version: 5 });
+    await settle();
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenLastCalledWith(5, [move('b', 300)]);
+    expect(seen).toHaveLength(reports);
+
+    replies[1].resolve({ ok: true, version: 6 });
+    await flushing;
+  });
+
+  it('reset() and rebase() do nothing after dispose', async () => {
+    const { queue, send, replies, clock } = setup(4);
+    queue.enqueue([move('a', 100)]);
+    clock.fire();
+    expect(send).toHaveBeenCalledTimes(1);
+
+    queue.dispose();
+    queue.reset(50);
+    queue.rebase(20, [move('k', 1)]);
+    await settle();
+
+    // Neither started a new request nor changed the version.
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(queue.snapshot.version).toBe(4);
+
+    replies[0].resolve({ ok: true, version: 5 });
+    await settle();
+  });
+
+  it('does not report "saved" while a kept-apart batch is still pending, on retry', async () => {
+    const { queue, replies, clock, seen } = setup(2);
+    queue.enqueue([{ type: 'add', item: tent('n1') }]);
+    clock.fire();
+    replies[0].reject(new TypeError('Failed to fetch'));
+    await settle();
+
+    const reports = seen.length;
+    void queue.retry();
+    // The very first report after retry() clears the halt, before the resend
+    // has actually gone out, must not claim 'saved' while a batch still is.
+    expect(seen[reports]).toEqual({ status: 'pending', version: 2, pending: 1, error: null, errorKind: null });
+
+    replies[1].resolve({ ok: true, version: 3 });
+    await settle();
+  });
 });
