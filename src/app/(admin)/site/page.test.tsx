@@ -42,6 +42,7 @@ vi.mock('./editor/site-editor', async () => {
       sunDate: string | null;
       buildTasks: ReadonlyArray<{ id: string; title: string }>;
       plotHref: string;
+      seasonDateHref: string;
     }) {
       const [mount] = useState(() => { mounts.count += 1; return mounts.count; });
       return (
@@ -53,6 +54,7 @@ vi.mock('./editor/site-editor', async () => {
           data-sun={props.sunDate ?? ''}
           data-tasks={props.buildTasks.map((task) => task.title).join(',')}
           data-plot={props.plotHref}
+          data-date={props.seasonDateHref}
         >
           {`editor:${props.initial.doc.items.length}:v${props.initial.version}`}
         </div>
@@ -255,6 +257,8 @@ describe('the camp map screen', () => {
       expect(editor.textContent).toBe('editor:2:v4');
       expect(editor.getAttribute('data-tasks')).toBe('הקמת המטבח');
       expect(editor.getAttribute('data-plot')).toBe('/site?season=s26&act=plot');
+      // The sun card's gate day links to the shell's drawer for this season's opening date (SD4).
+      expect(editor.getAttribute('data-date')).toBe('/site?season=s26&act=season-date');
       expect(screen.queryByTestId('board')).toBeNull();
       expect(screen.queryByRole('table', { name: 'הפריטים במפה' })).toBeNull();
     });

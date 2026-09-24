@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseSiteQuery, readSunDate, sunDateOf } from './views';
+import { parseSiteQuery, readSunDate, seasonDateHref, sunDateOf } from './views';
 
 describe('the camp map’s address', () => {
   it('asks for the 3D map only with ?editor=3d', () => {
@@ -8,6 +8,15 @@ describe('the camp map’s address', () => {
     expect(parseSiteQuery({ season: 's26' }).editor3d).toBe(false);
     expect(parseSiteQuery({ editor: '2d' }).editor3d).toBe(false);
     expect(parseSiteQuery({ editor: '' }).editor3d).toBe(false);
+  });
+
+  it('opens the season’s opening date from here, for the season on screen (ruling SD4)', () => {
+    // The shell's drawer (`?act=season-date`) edits the season `?season=` names.
+    expect(seasonDateHref({ season: 's26', peek: 'a', act: 'plot' })).toBe('/site?season=s26&act=season-date');
+    expect(seasonDateHref({})).toBe('/site?act=season-date');
+    // Nothing on the site page reads it as one of its own drawers.
+    const query = parseSiteQuery({ season: 's26', act: 'season-date' });
+    expect([query.plot, query.copy, query.removing]).toEqual([false, false, false]);
   });
 });
 

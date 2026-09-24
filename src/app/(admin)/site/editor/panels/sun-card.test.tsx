@@ -7,6 +7,7 @@ import type { ShadeAtHour } from '@/lib/site/editor/sun';
 import { hourText, SunCard } from './sun-card';
 
 const HREF = '/site?season=s26&act=plot';
+const DATE_HREF = '/site?season=s26&act=season-date';
 
 function renderCard(over: Partial<{ hour: number; summary: ShadeAtHour | null; northDeg: number; sunDate: string | null }> = {}) {
   const onHour = vi.fn();
@@ -17,6 +18,7 @@ function renderCard(over: Partial<{ hour: number; summary: ShadeAtHour | null; n
       summary={over.summary === undefined ? { under: 13, full: 4, partial: 4, sun: 5 } : over.summary}
       northDeg={over.northDeg ?? 0}
       plotHref={HREF}
+      dateHref={DATE_HREF}
       sunDate={over.sunDate === undefined ? '2026-06-04' : over.sunDate}
     />,
   );
@@ -27,7 +29,10 @@ describe('shade by hour', () => {
   it('says what is really shaded at the hour, for the gate day, with the date and its source', () => {
     renderCard();
     expect(screen.getByText('בשעה 14:00, מתוך 13 פריטים מתחת לרשתות: 4 בצל מלא, 4 בצל חלקי, 5 בשמש.')).toBeTruthy();
-    expect(screen.getByText('ביום פתיחת השער, 4.6.2026 (תאריך הפתיחה של העונה), במיקום של מידברן.')).toBeTruthy();
+    // The date is a figure, so it links to what changes it (ruling SD4): the season's opening date.
+    const date = screen.getByRole('link', { name: /^4\.6\.2026/ });
+    expect(date.getAttribute('href')).toBe(DATE_HREF);
+    expect(date.closest('p')?.textContent).toBe('ביום פתיחת השער, 4.6.2026 (תאריך הפתיחה של העונה), במיקום של מידברן.');
   });
 
   it('says "פריט אחד" rather than "1 פריטים"', () => {
@@ -57,10 +62,13 @@ describe('shade by hour', () => {
     expect(screen.getByText('בשעה 07:00 השמש מתחת לאופק, ואין צל להראות.')).toBeTruthy();
   });
 
-  it('says honestly that the season has no opening date, rather than guessing one, and keeps no slider or dead link', () => {
+  it('invites the season’s opening date when there is none, rather than guessing a day, and draws no slider', () => {
     renderCard({ sunDate: null, summary: null });
-    expect(screen.getByText('לעונה הזו לא נרשם תאריך פתיחה, ולכן הצל לפי שעה לא מחושב. כרגע התאריך נקבע רק בפתיחת עונה.')).toBeTruthy();
+    // Ruling SD4: an empty state is an invitation, with the way to the date.
+    expect(screen.getByText('לעונה הזו עוד לא נרשם תאריך פתיחה. עם תאריך, הצל לפי שעה יחושב ליום פתיחת השער.')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'קביעת תאריך הפתיחה' }).getAttribute('href')).toBe(DATE_HREF);
     expect(screen.queryByRole('slider')).toBeNull();
+    expect(screen.queryByText(/כרגע התאריך נקבע רק בפתיחת עונה/)).toBeNull();
     // North is still shown and still links to the plot settings — that IS where north is changed.
     expect(screen.getByRole('link', { name: 'שינוי בהגדרות המגרש' })).toBeTruthy();
   });

@@ -178,6 +178,7 @@ vi.mock('./use-editor-store', async () => {
 import { SiteEditor, type SiteEditorProps } from './site-editor';
 
 const PLOT_HREF = '/site?season=s26&act=plot';
+const DATE_HREF = '/site?season=s26&act=season-date';
 const VIEW: ViewInfo = { yaw: 0, zoomPct: 100, pxPerM: 20, groundCorners: [], selectionBox: null, moving: false };
 const CONFLICT = 'המפה שונתה ממקום אחר מאז שנפתחה. השינויים האחרונים שלך עוד לא נשמרו.';
 
@@ -220,9 +221,17 @@ function renderEditor(over: Partial<SiteEditorProps> = {}) {
     sunDate: '2026-06-04',
     buildTasks: [],
     plotHref: PLOT_HREF,
+    seasonDateHref: DATE_HREF,
     ...over,
   };
-  return render(<ToastProvider><SiteEditor {...props} /></ToastProvider>);
+  const rendered = render(<ToastProvider><SiteEditor {...props} /></ToastProvider>);
+  return {
+    ...rendered,
+    /** The page rendering the same editor again with some props changed — as `router.refresh()` does. */
+    rerenderWith(next: Partial<SiteEditorProps>): void {
+      rendered.rerender(<ToastProvider><SiteEditor {...props} {...next} /></ToastProvider>);
+    },
+  };
 }
 
 function lastScene(): SceneViewProps {
@@ -866,6 +875,82 @@ describe('what an edit says', () => {
     fireEvent.click((await toastOf(`הפריט ${copy.label} ננעל`)).getByRole('button', { name: 'ביטול' }));
     await waitFor(() => { expect(lastScene().store.doc.items.every((entry) => !entry.locked)).toBe(true); });
     expect(lastScene().store.doc.items).toHaveLength(2);
+  });
+});
+
+describe('shade by hour', () => {
+  it('opens the sun card from the tool row and lights the sun for the gate day', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    expect(lastScene().ui.sun).toBe(true);
+    const card = within(screen.getByRole('group', { name: 'צל לפי שעה' }));
+    expect(card.getByText(/^בשעה 14:00/)).toBeTruthy();
+    // The gate day is a figure: it links to where the season's opening date is set (SD4).
+    expect(card.getByRole('link', { name: /^4\.6\.2026/ }).getAttribute('href')).toBe(DATE_HREF);
+  });
+
+  it('moves the hour with the slider', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    fireEvent.change(screen.getByRole('slider', { name: 'שעה ביום' }), { target: { value: '9.25' } });
+    expect(lastScene().ui.hour).toBe(9.25);
+    expect(screen.getByText(/^בשעה 09:15/)).toBeTruthy();
+  });
+
+  it('invites a gate day, and lights no sun, when the season has none', async () => {
+    renderEditor({ sunDate: null });
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    expect(lastScene().ui.sun).toBe(false);
+    const card = within(screen.getByRole('group', { name: 'צל לפי שעה' }));
+    expect(card.getByText(/עוד לא נרשם תאריך פתיחה/)).toBeTruthy();
+    expect(card.getByRole('link', { name: 'קביעת תאריך הפתיחה' }).getAttribute('href')).toBe(DATE_HREF);
+    expect(card.queryByRole('slider')).toBeNull();
+  });
+
+  it('treats a day that is not a real day as none (the one check, P15)', async () => {
+    renderEditor({ sunDate: '2026-02-31' });
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    expect(within(screen.getByRole('group', { name: 'צל לפי שעה' })).getByText(/עוד לא נרשם תאריך פתיחה/)).toBeTruthy();
+  });
+});
+
+/* The plot drawer's save bumps the plan's version and refreshes the page; the
+   store keeps its first `init`, so the editor takes the newer map itself —
+   never by being remounted on the version (which would drop unsaved edits).
+   End to end, with the real store, in `site-editor.saving.test.tsx`. */
+describe('a plot saved in the drawer', () => {
+  const widened = () => ({ doc: siteDoc([siteItem({ id: 'a' })], { widthCm: 3000 }), version: 1 });
+
+  it('is taken up once, as the reload a conflict offers, when nothing is waiting to be saved', async () => {
+    const { rerenderWith } = renderEditor();
+    await screen.findByTestId('scene');
+    rerenderWith({ initial: widened() });
+    await waitFor(() => { expect(fake.resolveConflict).toHaveBeenCalledWith('theirs'); });
+    rerenderWith({ initial: widened() });
+    expect(fake.resolveConflict).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(CONFLICT)).toBeNull();
+  });
+
+  it('asks, rather than dropping edits, when something is waiting to be saved', async () => {
+    const { rerenderWith } = renderEditor();
+    await screen.findByTestId('scene');
+    saving({ status: 'pending', pending: 1 });
+    rerenderWith({ initial: widened() });
+    expect(screen.getByText(CONFLICT)).toBeTruthy();
+    expect(fake.resolveConflict).not.toHaveBeenCalled();
+  });
+
+  it('waits for a batch in flight — its answer decides', async () => {
+    const { rerenderWith } = renderEditor();
+    await screen.findByTestId('scene');
+    saving({ status: 'saving', pending: 1 });
+    rerenderWith({ initial: widened() });
+    expect(screen.queryByText(CONFLICT)).toBeNull();
+    expect(fake.resolveConflict).not.toHaveBeenCalled();
   });
 });
 
