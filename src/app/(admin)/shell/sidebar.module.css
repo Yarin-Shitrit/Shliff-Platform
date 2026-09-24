@@ -132,21 +132,22 @@
  * brand, the season switcher (whose menu is wider than the rail and must
  * not be clipped) and the footer stay put.
  *
- * The 4px padding, cancelled by an equal negative margin, is room for the
- * focus ring (A9): a scroll box clips outlines at its padding edge. The gap
- * is `.side`'s own, which the groups had while this box was `contents`.
+ * The padding, cancelled by an equal negative margin, is room for the
+ * focus ring (A9: 2px wide, 2px out — 4px): a scroll box clips outlines at
+ * its padding edge. The gap is `.side`'s own 4px, which the groups had while
+ * this box was `contents`.
  */
 .navstack {
   flex: 1 1 auto;
   min-block-size: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   overflow-y: auto;
-  padding-inline: 4px;
-  padding-block-end: 4px;
-  margin-inline: -4px;
-  margin-block-end: -4px;
+  padding-inline: var(--space-1);
+  padding-block-end: var(--space-1);
+  margin-inline: calc(var(--space-1) * -1);
+  margin-block-end: calc(var(--space-1) * -1);
 }
 .navgroup { display: flex; flex-direction: column; gap: 1px; margin-block-start: 8px; }
 .grouplabel {
