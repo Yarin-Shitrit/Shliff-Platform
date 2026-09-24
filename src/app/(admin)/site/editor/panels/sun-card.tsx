@@ -313,9 +313,9 @@ export function SunCard(props: SunCardProps): ReactElement {
     ? 'missing'
     : sunDate !== null && endDay < sunDate ? 'early' : 'known';
   const playScope: Scope = endState === 'known' ? scope : 'day';
-  /* The spans playback runs through, kept by their days: the burn's spans
-     stay one array while playback moves from day to day, and any other scope
-     is a new one — which stops playback (`usePlayback`). */
+  /* The days playback runs through, as text: the burn's stay the same while
+     playback moves from day to day, and any other scope is another key —
+     which stops playback (`usePlayback`). */
   const scopeKey = shown === null ? '' : (playScope === 'burn' ? days : [shown]).join(' ');
   const spans = useMemo(
     () => scopeKey.split(' ').filter((day) => day !== '').map((day) => daySpan(day)).filter(isSpan),
@@ -323,6 +323,7 @@ export function SunCard(props: SunCardProps): ReactElement {
   );
   const minutesPerSecond = SPEEDS.find((option) => option.id === speed)?.minutesPerSecond ?? SPEEDS[1].minutesPerSecond;
   const playback = usePlayback({
+    scopeKey,
     spans,
     minutesPerSecond,
     reduced,

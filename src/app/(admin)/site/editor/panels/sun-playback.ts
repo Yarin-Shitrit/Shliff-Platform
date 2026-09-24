@@ -129,6 +129,14 @@ export function useReducedMotion(): boolean {
  */
 export const COMMIT_MS = 100;
 
+/**
+ * The most real time one frame may move the clock by. A tab in the background
+ * gets no frames, and the first one back comes a minute late: counted in
+ * full, playback would leap from morning to sunset. Counted up to this, it
+ * picks up where the lead left it.
+ */
+export const MAX_FRAME_MS = 100;
+
 /** A committed hour is a whole minute: the text and the scene never show a fraction of one. */
 function toMinute(moment: Moment): Moment {
   return { day: moment.day, hour: Math.round(moment.hour * 60) / 60 };
@@ -147,47 +155,56 @@ export interface Playback {
  * motion reduced, once a second in whole quarter hours. It stops at the
  * scope's end.
  *
- * Playback belongs to the scope it began in: the state holds those spans, and
- * a new scope (another day, or the burn instead of a day) is a different
- * array, so playing is false the moment the scope changes — derived, with no
- * effect to set it. The frame is cancelled on pause, on unmount and on any
- * change of scope, speed or motion setting; a change of speed or motion picks
- * up from where the clock had got to.
+ * Playback belongs to the scope it began in, named by `scopeKey` — its days,
+ * as text. A new scope (another day, or the burn instead of a day) is another
+ * key, so playing is false the moment the scope changes: derived, with no
+ * effect to set it. The spans are read through the key, never by the array's
+ * identity, so a caller that builds them afresh does not stop or restart the
+ * clock. The frame is cancelled on pause, on unmount and on any change of
+ * scope, speed or motion setting; a change of speed or motion picks up from
+ * where the clock had got to.
  */
-export function usePlayback({ spans, minutesPerSecond, reduced, onMoment }: {
+export function usePlayback({ scopeKey, spans, minutesPerSecond, reduced, onMoment }: {
+  /** The scope's days, as text: the same days, the same key. */
+  scopeKey: string;
   spans: readonly DaySpan[];
   minutesPerSecond: number;
   reduced: boolean;
   onMoment: (moment: Moment) => void;
 }): Playback {
-  const [playingIn, setPlayingIn] = useState<readonly DaySpan[] | null>(null);
-  const playing = playingIn !== null && playingIn === spans;
+  const [playingIn, setPlayingIn] = useState<string | null>(null);
+  const playing = playingIn !== null && playingIn === scopeKey;
   /** Minutes into the scope, as of the last frame. Written by the clock and by `play`; read when the clock (re)starts. */
   const position = useRef(0);
   /** Bumped by every pause and every start: a frame from a clock no longer running does nothing. */
   const generation = useRef(0);
   const report = useRef(onMoment);
-  useEffect(() => { report.current = onMoment; });
+  /** The spans of the scope `scopeKey` names, as of the last render. */
+  const scope = useRef(spans);
+  useEffect(() => {
+    report.current = onMoment;
+    scope.current = spans;
+  });
 
   useEffect(() => {
     if (!playing) return undefined;
     generation.current += 1;
     const mine = generation.current;
-    const total = scopeLength(spans);
+    const spansNow = scope.current;
+    const total = scopeLength(spansNow);
     const step = reducedStep(minutesPerSecond);
     const from = reduced ? Math.round(position.current / QUARTER) * QUARTER : position.current;
     let frame = 0;
-    let began: number | null = null;
+    let last: number | null = null;
+    let elapsed = 0;
     let committedAt = 0;
     let committed = from;
 
     const tick = (now: number): void => {
       if (generation.current !== mine) return;
-      if (began === null) {
-        began = now;
-        committedAt = now;
-      }
-      const elapsed = now - began;
+      if (last === null) committedAt = now;
+      else elapsed += Math.min(MAX_FRAME_MS, Math.max(0, now - last));
+      last = now;
       const advanced = reduced
         ? from + Math.floor(elapsed / 1000) * step
         : from + (elapsed / 1000) * minutesPerSecond;
@@ -197,7 +214,7 @@ export function usePlayback({ spans, minutesPerSecond, reduced, onMoment }: {
       if (at !== committed && (ended || reduced || now - committedAt >= COMMIT_MS)) {
         committed = at;
         committedAt = now;
-        report.current(toMinute(momentAt(spans, at)));
+        report.current(toMinute(momentAt(spansNow, at)));
       }
       if (ended) {
         generation.current += 1;
@@ -208,7 +225,7 @@ export function usePlayback({ spans, minutesPerSecond, reduced, onMoment }: {
     };
     frame = requestAnimationFrame(tick);
     return () => { cancelAnimationFrame(frame); };
-  }, [playing, spans, minutesPerSecond, reduced]);
+  }, [playing, scopeKey, minutesPerSecond, reduced]);
 
   function play(at: Moment): void {
     const total = scopeLength(spans);
@@ -219,7 +236,7 @@ export function usePlayback({ spans, minutesPerSecond, reduced, onMoment }: {
       onMoment(momentAt(spans, 0));
     }
     position.current = start;
-    setPlayingIn(spans);
+    setPlayingIn(scopeKey);
   }
 
   function pause(): void {

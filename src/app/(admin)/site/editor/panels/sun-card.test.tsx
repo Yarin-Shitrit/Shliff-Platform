@@ -6,6 +6,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
 import type { ShadeSample } from '@/lib/site/editor/shade-timeline';
 import { hourText, SunCard, type SunCardProps } from './sun-card';
+import { usePlayback, type DaySpan, type Moment } from './sun-playback';
 
 const HREF = '/site?season=s26&act=plot';
 const DATE_HREF = '/site?season=s26&act=season-date';
@@ -429,6 +430,21 @@ describe('playing the shade through the day', () => {
     expect(pressedDay()).toBe('ג׳ 3.11');
   });
 
+  it('does not leap ahead when the tab comes back from the background', () => {
+    const onHour = vi.fn();
+    render(<Player hour={8} onHour={onHour} />);
+    fireEvent.click(playButton());
+    runFrames(320);
+    // A minute in a background tab: the browser gives no frames, then one late one.
+    clock += 60_000;
+    runFrames(16);
+    runFrames(320);
+    expect(playButton().getAttribute('aria-pressed')).toBe('true');
+    // About two thirds of a second of play at 30 minutes a second, not a minute of it (30 hours).
+    expect(lastHour(onHour)).toBeGreaterThan(8.2);
+    expect(lastHour(onHour)).toBeLessThan(8.5);
+  });
+
   it('cancels its frame when the card goes away mid-play', () => {
     const onHour = vi.fn();
     const { unmount } = render(<Player hour={8} onHour={onHour} />);
@@ -543,5 +559,37 @@ describe('with motion reduced', () => {
     fireEvent.click(playButton());
     runFrames(1100);
     expect(lastHour(onHour)).toBe(9.5);
+  });
+});
+
+describe('the playback clock', () => {
+  const SPAN: DaySpan = { day: NOV2, from: 6, to: 16.75 };
+
+  /** A caller that hands `usePlayback` a new array every render, the same days in it. */
+  function Clock({ onMoment }: { onMoment: (moment: Moment) => void }) {
+    const [moment, setMoment] = useState<Moment>({ day: NOV2, hour: 8 });
+    const playback = usePlayback({
+      scopeKey: NOV2,
+      spans: [{ ...SPAN }],
+      minutesPerSecond: 30,
+      reduced: false,
+      onMoment: (next) => { onMoment(next); setMoment(next); },
+    });
+    return (
+      <button type="button" aria-pressed={playback.playing} onClick={() => { playback.play(moment); }}>
+        {hourText(moment.hour)}
+      </button>
+    );
+  }
+
+  it('belongs to the scope’s days, not to the array they came in', () => {
+    const onMoment = vi.fn();
+    render(<Clock onMoment={onMoment} />);
+    fireEvent.click(screen.getByRole('button'));
+    runFrames(1000);
+    // Every commit re-rendered the caller with a new array: still playing, and moving.
+    expect(screen.getByRole('button').getAttribute('aria-pressed')).toBe('true');
+    expect(onMoment.mock.calls.length).toBeGreaterThan(5);
+    expect(onMoment.mock.lastCall?.[0].hour).toBeGreaterThan(8.4);
   });
 });
