@@ -124,3 +124,35 @@ export function readSunDate(text: string | null): string | null {
   const real = date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
   return real ? text : null;
 }
+
+/**
+ * `day` moved on by `days` whole calendar days (back, for a negative count),
+ * written as `sunDateOf` writes a day. Calendar arithmetic only — no clock and
+ * no time zone, so the night the clocks change is a day like any other. What
+ * `readSunDate` refuses has no day to move: null, as is a part of a day, and a
+ * day past the four-digit years it reads.
+ */
+export function addDays(day: string, days: number): string | null {
+  if (readSunDate(day) === null || !Number.isInteger(days)) return null;
+  // `readSunDate` has checked the shape, so the three numbers are there.
+  const [year, month, date] = day.split('-').map(Number);
+  const moved = new Date(Date.UTC(year, month - 1, date + days));
+  return readSunDate(moved.toISOString().slice(0, 10));
+}
+
+/**
+ * The days of the burn, from the gate day to its last day, each once and in
+ * order — what shade by hour can play through (ruling SIM3). The last day is
+ * not recorded anywhere yet (`seasons` has no end column), so without one the
+ * burn is the gate day alone: its length is never guessed. A last day before
+ * the gate day is no last day either. No gate day, no days.
+ */
+export function burnDays(gateDay: string | null, lastDay: string | null): string[] {
+  const first = readSunDate(gateDay);
+  if (first === null) return [];
+  const last = readSunDate(lastDay);
+  const days = [first];
+  if (last === null) return days;
+  for (let next = addDays(first, 1); next !== null && next <= last; next = addDays(next, 1)) days.push(next);
+  return days;
+}
