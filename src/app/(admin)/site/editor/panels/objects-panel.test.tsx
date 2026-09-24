@@ -2,13 +2,15 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi } from 'vitest';
+import { useState } from 'react';
 import { createEvent, fireEvent, render, screen } from '@testing-library/react';
 import { derive, toPlaced } from '@/lib/site/derive';
 import { overlapPairs } from '@/lib/site/geometry';
+import type { SiteKindGroup } from '@/lib/site/kinds';
 import type { EditorDoc, EditorItem } from '@/lib/site/editor/model';
 import type { EditorFlags } from '../use-editor-store';
 import { ObjectsPanel } from './objects-panel';
-import { SidePanel } from './side-panel';
+import { SidePanel, type SideTab } from './side-panel';
 
 /* This file's own fixture. */
 function item(over: Partial<EditorItem> & { id: string }): EditorItem {
@@ -33,21 +35,30 @@ function flagsOf(map: EditorDoc): EditorFlags {
   };
 }
 
-function renderList(items: EditorItem[], over: { selection?: string[]; hiddenGroups?: Array<'sleep'> } = {}) {
+function renderList(items: EditorItem[], over: {
+  selection?: string[];
+  hiddenGroups?: SiteKindGroup[];
+  netsHidden?: boolean;
+  onShowLibrary?: () => void;
+} = {}) {
   const map = doc(items);
   const onPick = vi.fn();
+  const onPickIds = vi.fn<(ids: string[]) => void>();
   const onToggleGroup = vi.fn();
-  render(
+  const { unmount } = render(
     <ObjectsPanel
       items={map.items}
       selection={over.selection ?? []}
       flags={flagsOf(map)}
       hiddenGroups={over.hiddenGroups ?? []}
+      netsHidden={over.netsHidden ?? false}
       onPick={onPick}
+      onPickIds={onPickIds}
       onToggleGroup={onToggleGroup}
+      onShowLibrary={over.onShowLibrary}
     />,
   );
-  return { onPick, onToggleGroup };
+  return { onPick, onPickIds, onToggleGroup, unmount };
 }
 
 const rows = () => screen.getAllByRole('button').filter((button) => button.dataset.row === 'true');
@@ -75,6 +86,25 @@ describe('the list of what is on the map', () => {
     expect(screen.getByRole('button', { name: 'אוהל 3, בנעילה, 3 × 2 מ׳' })).toBeTruthy();
   });
 
+  it('names every problem a row has, not only the first', () => {
+    renderList([
+      // A net whose shaded ground is (0.5 m, 0.5 m)–(7.5 m, 7.5 m).
+      item({ id: 's', kind: 'shade', label: 'רשת צל 1', xCm: 0, yCm: 0, widthCm: 800, depthCm: 800, insetCm: 50 }),
+      // In the net's sag strip, and under the kitchen's corner.
+      item({ id: 'p', label: 'אוהל 1', xCm: 700, yCm: 100 }),
+      item({ id: 'k', kind: 'kitchen', label: 'מטבח 1', xCm: 900, yCm: 100, widthCm: 400, depthCm: 300 }),
+      // Across the fence, and on a tent flush against it.
+      item({ id: 'c', kind: 'caravan', label: 'קראוון 1', xCm: 2500, widthCm: 700, depthCm: 250 }),
+      item({ id: 't', label: 'אוהל 2', xCm: 2300 }),
+    ]);
+    expect(screen.getByRole('button', { name: 'אוהל 1, חפיפה עם פריט אחר, בשולי רשת צל, 3 × 2 מ׳' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'קראוון 1, מחוץ לגדר, חפיפה עם פריט אחר, 7 × 2.5 מ׳' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'אוהל 2, חפיפה עם פריט אחר, 3 × 2 מ׳' })).toBeTruthy();
+    // The dot takes the worst tone among them.
+    const caravan = screen.getByRole('button', { name: /^קראוון 1,/ });
+    expect(caravan.querySelector('[data-tone]')?.getAttribute('data-tone')).toBe('bad');
+  });
+
   it('picks a row, and adds it with shift or ⌘', () => {
     const { onPick } = renderList([item({ id: 'a' })]);
     fireEvent.click(rows()[0]);
@@ -93,18 +123,74 @@ describe('the list of what is on the map', () => {
     expect(onToggleGroup).toHaveBeenCalledWith('sleep');
   });
 
-  it('finds an item by name, and says when there is none', () => {
+  it('marks the rows of a hidden group, and a net’s row while the nets are hidden, in words', () => {
+    const net = item({ id: 's', kind: 'shade', label: 'רשת צל 1', xCm: 1200, widthCm: 800, depthCm: 800, insetCm: 50 });
+    const kitchen = item({ id: 'k', kind: 'kitchen', label: 'מטבח 1', xCm: 500, yCm: 1500, widthCm: 400, depthCm: 300 });
+    const { unmount } = renderList([item({ id: 'a' }), kitchen], { hiddenGroups: ['sleep'] });
+    const tent = screen.getByRole('button', { name: 'אוהל 1, בהסתרה, 3 × 2 מ׳' });
+    expect(tent.dataset.hidden).toBe('true');
+    // A group that is shown is not marked.
+    const shown = screen.getByRole('button', { name: 'מטבח 1, 4 × 3 מ׳' });
+    expect(shown.dataset.hidden).toBeUndefined();
+    unmount();
+
+    renderList([item({ id: 'a' }), net], { netsHidden: true });
+    expect(screen.getByRole('button', { name: 'רשת צל 1, בהסתרה, 8 × 8 מ׳' }).dataset.hidden).toBe('true');
+    expect(screen.getByRole('button', { name: 'אוהל 1, 3 × 2 מ׳' }).dataset.hidden).toBeUndefined();
+  });
+
+  it('selects exactly the rows a group counts, and during a search only the ones found', () => {
+    const { onPickIds } = renderList([
+      item({ id: 't10', label: 'אוהל 10' }),
+      item({ id: 't2', label: 'אוהל 2', xCm: 900 }),
+      item({ id: 's', kind: 'shade', label: 'רשת צל 1', xCm: 1200, widthCm: 800, depthCm: 800, insetCm: 50 }),
+      item({ id: 'k', kind: 'kitchen', label: 'מטבח 1', xCm: 500, yCm: 1500, widthCm: 400, depthCm: 300 }),
+    ]);
+    const count = () => screen.getByRole('button', { name: 'בחירת הפריטים בקבוצה לינה וצל' });
+    const picked = (): string[] => {
+      const call = onPickIds.mock.lastCall;
+      if (call === undefined) throw new Error('the count selected nothing');
+      return call[0];
+    };
+
+    fireEvent.click(count());
+    expect(picked()).toEqual(['t2', 't10', 's']);
+    // The number on the button is the set it selects.
+    expect(count().textContent).toBe(String(picked().length));
+    fireEvent.click(screen.getByRole('button', { name: 'בחירת הפריטים בקבוצה מגורים' }));
+    expect(picked()).toEqual(['k']);
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'חיפוש במפה' }), { target: { value: 'אוהל' } });
+    fireEvent.click(count());
+    expect(picked()).toEqual(['t2', 't10']);
+    expect(count().textContent).toBe(String(picked().length));
+  });
+
+  it('finds an item by name, and when there is none offers the whole list back', () => {
     renderList([item({ id: 'a' }), item({ id: 'b', label: 'ספה 1', kind: 'sofa', xCm: 1200 })]);
-    const search = screen.getByRole('searchbox', { name: 'חיפוש במפה' });
+    const search = screen.getByRole('searchbox', { name: 'חיפוש במפה' }) as HTMLInputElement;
     fireEvent.change(search, { target: { value: 'ספה' } });
     expect(rows().map((row) => row.dataset.id)).toEqual(['b']);
     fireEvent.change(search, { target: { value: 'חללית' } });
-    expect(screen.getByText('אין במפה פריט בשם הזה.')).toBeTruthy();
+    expect(screen.getByText('אין במפה פריט בשם הזה. אפשר לחפש בשם אחר, או לחזור לכל הרשימה.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'ניקוי החיפוש' }));
+    expect(search.value).toBe('');
+    expect(rows().map((row) => row.dataset.id)).toEqual(['a', 'b']);
+    // The button is gone with the empty result; the search box keeps the focus.
+    expect(document.activeElement).toBe(search);
   });
 
-  it('invites the first item on an empty map', () => {
-    renderList([]);
+  it('invites the first item on an empty map, with a way to the library', () => {
+    const onShowLibrary = vi.fn();
+    const { unmount } = renderList([], { onShowLibrary });
     expect(screen.getByText('המפה ריקה. בלשונית ״הוספה למפה״ גוררים פריט אל המפה או לוחצים עליו.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'מעבר להוספה למפה' }));
+    expect(onShowLibrary).toHaveBeenCalledTimes(1);
+    unmount();
+
+    // Without a way to get there, the panel offers none.
+    renderList([]);
+    expect(screen.queryByRole('button', { name: 'מעבר להוספה למפה' })).toBeNull();
   });
 });
 
@@ -124,9 +210,32 @@ describe('the side panel', () => {
     expect(onTab).toHaveBeenCalledWith('objects');
   });
 
-  it('says how the first item is placed when the map is empty', () => {
+  it('invites the first item when the map is empty, and leaves how to place it to the library', () => {
     renderSide(0);
-    expect(screen.getByText('המפה ריקה. גרירה של פריט אל המפה מניחה אותו בדיוק שם; לחיצה מניחה אותו במקום פנוי במרכז התצוגה.')).toBeTruthy();
+    expect(screen.getByText('המפה ריקה. אפשר להתחיל מכל פריט שכאן.')).toBeTruthy();
+    // The library says how a tile is placed; the panel does not say it a second time.
+    expect(screen.queryByText(/גרירה|לחיצה/)).toBeNull();
+  });
+
+  it('keeps the focus when a control inside a tab opens the other one', () => {
+    function Harness() {
+      const [tab, setTab] = useState<SideTab>('objects');
+      return (
+        <SidePanel
+          tab={tab}
+          onTab={setTab}
+          count={0}
+          library={<p>הספרייה</p>}
+          objects={<button type="button" onClick={() => { setTab('library'); }}>מעבר להוספה למפה</button>}
+        />
+      );
+    }
+    render(<Harness />);
+    const go = screen.getByRole('button', { name: 'מעבר להוספה למפה' });
+    go.focus();
+    fireEvent.click(go);
+    // The button went with its tab; the focus lands on the tab it opened, not on the page.
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'הוספה למפה' }));
   });
 
   it('moves between the tabs with the arrows, and keeps them from nudging the map', () => {

@@ -59,7 +59,8 @@ describe('the library', () => {
     expect(onDragMove).toHaveBeenLastCalledWith('tent', 400, 300);
     fireEvent.pointerUp(tent, { pointerId: 1, clientX: 410, clientY: 305 });
     expect(onDrop).toHaveBeenCalledWith('tent', 410, 305);
-    fireEvent.click(tent);
+    // A pointer's click counts its presses (`detail` 1); a keyboard's counts none.
+    fireEvent.click(tent, { detail: 1 });
     expect(onActivate).not.toHaveBeenCalled();
   });
 
@@ -73,8 +74,52 @@ describe('the library', () => {
     // No click here: a touch that moved is not a tap. The next tap is a click of its own.
     fireEvent.pointerDown(tent, { pointerId: 2, button: 0, clientX: 10, clientY: 10 });
     fireEvent.pointerUp(tent, { pointerId: 2, clientX: 10, clientY: 10 });
-    fireEvent.click(tent);
+    fireEvent.click(tent, { detail: 1 });
+    expect(onActivate).toHaveBeenCalledTimes(1);
     expect(onActivate).toHaveBeenCalledWith('tent');
+  });
+
+  it('places a kind from the keyboard even right after a finger’s drag', () => {
+    const { onActivate, onDrop } = renderLibrary();
+    const tent = tile(/^הוספת אוהל,/);
+    fireEvent.pointerDown(tent, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(tent, { pointerId: 1, clientX: 400, clientY: 300 });
+    fireEvent.pointerUp(tent, { pointerId: 1, clientX: 400, clientY: 300 });
+    expect(onDrop).toHaveBeenCalledTimes(1);
+    // Enter or Space on the tile: the browser's click carries no press count.
+    fireEvent.click(tent, { detail: 0 });
+    expect(onActivate).toHaveBeenCalledTimes(1);
+    expect(onActivate).toHaveBeenCalledWith('tent');
+  });
+
+  it('follows only the finger that started the drag, so a second one neither moves nor strands the ghost', () => {
+    const { onDragMove, onDrop, onDragCancel } = renderLibrary();
+    const tent = tile(/^הוספת אוהל,/);
+    fireEvent.pointerDown(tent, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(tent, { pointerId: 1, clientX: 400, clientY: 300 });
+    fireEvent.pointerDown(tent, { pointerId: 2, button: 0, clientX: 50, clientY: 50 });
+    fireEvent.pointerMove(tent, { pointerId: 2, clientX: 80, clientY: 80 });
+    fireEvent.pointerUp(tent, { pointerId: 2, clientX: 80, clientY: 80 });
+    fireEvent.pointerCancel(tent, { pointerId: 2 });
+    expect(onDragMove).toHaveBeenCalledTimes(1);
+    expect(onDragMove).toHaveBeenLastCalledWith('tent', 400, 300);
+    expect(onDrop).not.toHaveBeenCalled();
+    expect(onDragCancel).not.toHaveBeenCalled();
+    // The first finger still owns the drag, and its lift lands the kind — which takes the ghost away.
+    fireEvent.pointerUp(tent, { pointerId: 1, clientX: 410, clientY: 305 });
+    expect(onDrop).toHaveBeenCalledTimes(1);
+    expect(onDrop).toHaveBeenCalledWith('tent', 410, 305);
+  });
+
+  it('lets the ghost go when the tile loses the pointer', () => {
+    const { onDragCancel, onDrop } = renderLibrary();
+    const tent = tile(/^הוספת אוהל,/);
+    fireEvent.pointerDown(tent, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(tent, { pointerId: 1, clientX: 200, clientY: 200 });
+    fireEvent.lostPointerCapture(tent, { pointerId: 1 });
+    expect(onDragCancel).toHaveBeenCalledTimes(1);
+    fireEvent.pointerUp(tent, { pointerId: 1, clientX: 200, clientY: 200 });
+    expect(onDrop).not.toHaveBeenCalled();
   });
 
   it('reports a drag the browser cancelled', () => {
@@ -83,6 +128,8 @@ describe('the library', () => {
     fireEvent.pointerDown(tent, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
     fireEvent.pointerMove(tent, { pointerId: 1, clientX: 200, clientY: 200 });
     fireEvent.pointerCancel(tent, { pointerId: 1 });
+    // A cancel is followed by the capture's loss; the drag ends once.
+    fireEvent.lostPointerCapture(tent, { pointerId: 1 });
     expect(onDragCancel).toHaveBeenCalledTimes(1);
     expect(onDrop).not.toHaveBeenCalled();
   });
@@ -93,7 +140,7 @@ describe('the library', () => {
     fireEvent.pointerDown(tent, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
     fireEvent.pointerMove(tent, { pointerId: 1, clientX: 12, clientY: 11 });
     fireEvent.pointerUp(tent, { pointerId: 1, clientX: 12, clientY: 11 });
-    fireEvent.click(tent);
+    fireEvent.click(tent, { detail: 1 });
     expect(onDragMove).not.toHaveBeenCalled();
     expect(onActivate).toHaveBeenCalledWith('tent');
   });

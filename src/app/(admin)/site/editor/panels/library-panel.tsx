@@ -11,7 +11,7 @@
  * SiteEditor asks the scene where the ground is.
  */
 
-import { useRef, useState, type PointerEvent, type ReactElement } from 'react';
+import { useRef, useState, type MouseEvent, type PointerEvent, type ReactElement } from 'react';
 import type { SiteItemKind } from '@/db/schema/site';
 import { cx } from '@/components/ui/cx';
 import { Icon } from '@/components/ui/icon';
@@ -89,6 +89,14 @@ function KindGlyph({ kind }: { kind: SiteItemKind }): ReactElement {
   );
 }
 
+/** A press on a tile: the pointer that made it, where it went down, and whether it has become a drag. */
+interface Press {
+  pointer: number;
+  x: number;
+  y: number;
+  dragging: boolean;
+}
+
 interface TileCallbacks {
   onActivate: (kind: SiteItemKind) => void;
   onDragMove: (kind: SiteItemKind, clientX: number, clientY: number) => void;
@@ -100,15 +108,22 @@ function KindTile({ kind, defaults, onActivate, onDragMove, onDrop, onDragCancel
   kind: SiteItemKind;
   defaults: KindDefaults;
 }): ReactElement {
-  const press = useRef<{ pointer: number; x: number; y: number; dragging: boolean } | null>(null);
+  const press = useRef<Press | null>(null);
   const dropped = useRef(false);
   const size = effectiveSize(kind, defaults);
   const customised = isCustomised(kind, defaults);
   const sizeText = formatSize(size.widthCm, size.depthCm);
   const label = SITE_KINDS[kind].label;
 
+  /** The press this pointer owns, or null: one pointer drags a tile at a time, and a second finger is ignored. */
+  function ownPress(event: PointerEvent<HTMLButtonElement>): Press | null {
+    const current = press.current;
+    return current !== null && current.pointer === event.pointerId ? current : null;
+  }
+
   function down(event: PointerEvent<HTMLButtonElement>): void {
     if (event.button !== 0) return;
+    if (press.current !== null && press.current.pointer !== event.pointerId) return;
     /* A new press starts clean. No click follows a finger's drag (a touch
        that moved is not a tap), so a flag left by that drop must not eat
        this press's click. */
@@ -118,33 +133,41 @@ function KindTile({ kind, defaults, onActivate, onDragMove, onDrop, onDragCancel
   }
 
   function move(event: PointerEvent<HTMLButtonElement>): void {
-    const current = press.current;
-    if (current === null || current.pointer !== event.pointerId) return;
+    const current = ownPress(event);
+    if (current === null) return;
     if (!current.dragging && Math.hypot(event.clientX - current.x, event.clientY - current.y) < DRAG_START_PX) return;
     current.dragging = true;
     onDragMove(kind, event.clientX, event.clientY);
   }
 
   function up(event: PointerEvent<HTMLButtonElement>): void {
-    const current = press.current;
+    const current = ownPress(event);
+    if (current === null) return;
     press.current = null;
-    if (current === null || !current.dragging) return;
+    if (!current.dragging) return;
     // The browser follows a drop with a click on the tile; that click is not a second placement.
     dropped.current = true;
     onDrop(kind, event.clientX, event.clientY);
   }
 
-  function cancel(): void {
-    const current = press.current;
+  /* A cancel, or the capture lost without a lift (the tile unmounted, the
+     window lost focus): the drag ends and the ghost goes. A cancel is itself
+     followed by the capture's loss, and a lift by its release; the press is
+     cleared by the first, so the second finds nothing to end. */
+  function cancel(event: PointerEvent<HTMLButtonElement>): void {
+    const current = ownPress(event);
+    if (current === null) return;
     press.current = null;
-    if (current?.dragging) onDragCancel();
+    if (current.dragging) onDragCancel();
   }
 
-  function click(): void {
-    if (dropped.current) {
+  function click(event: MouseEvent<HTMLButtonElement>): void {
+    // Enter or Space: a click with no press count, never the one a drop sends.
+    if (dropped.current && event.detail !== 0) {
       dropped.current = false;
       return;
     }
+    dropped.current = false;
     onActivate(kind);
   }
 
@@ -157,6 +180,7 @@ function KindTile({ kind, defaults, onActivate, onDragMove, onDrop, onDragCancel
       onPointerMove={move}
       onPointerUp={up}
       onPointerCancel={cancel}
+      onLostPointerCapture={cancel}
       onClick={click}
     >
       <KindGlyph kind={kind} />

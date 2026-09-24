@@ -2,11 +2,12 @@
 
 /**
  * The panel at the inline start (spec §10): two tabs, adding to the map and
- * what is on it. On an empty map it opens on the library and says how the
- * first item is placed (§13: an empty state is an invitation).
+ * what is on it. On an empty map it opens on the library, invites the first
+ * item, and leaves how a tile is placed to the library's own hint (§13: an
+ * empty state is an invitation).
  */
 
-import { useId, useRef, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
 import { cx } from '@/components/ui/cx';
 import styles from './side-panel.module.css';
 
@@ -22,6 +23,18 @@ export function SidePanel({ tab, onTab, library, objects, count }: {
   const id = useId();
   const libraryTab = useRef<HTMLButtonElement>(null);
   const objectsTab = useRef<HTMLButtonElement>(null);
+  const shownTab = useRef(tab);
+
+  /* A control inside a tab can open the other one — the empty list's
+     invitation does. That control leaves with its tab, and the focus with
+     it; the focus goes to the tab that opened rather than to the page. */
+  useEffect(() => {
+    if (shownTab.current === tab) return;
+    shownTab.current = tab;
+    if (document.activeElement === null || document.activeElement === document.body) {
+      (tab === 'library' ? libraryTab : objectsTab).current?.focus();
+    }
+  }, [tab]);
 
   /* Two tabs, so either arrow goes to the other one. Handled here and kept
      from the editor's root, where an arrow would nudge the selection. */
@@ -68,9 +81,7 @@ export function SidePanel({ tab, onTab, library, objects, count }: {
       </div>
       <div className={styles.body} role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${tab}`}>
         {count === 0 && tab === 'library' ? (
-          <p className={styles.invite}>
-            המפה ריקה. גרירה של פריט אל המפה מניחה אותו בדיוק שם; לחיצה מניחה אותו במקום פנוי במרכז התצוגה.
-          </p>
+          <p className={styles.invite}>המפה ריקה. אפשר להתחיל מכל פריט שכאן.</p>
         ) : null}
         {tab === 'library' ? library : objects}
       </div>
