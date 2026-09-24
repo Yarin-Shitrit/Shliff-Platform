@@ -24,10 +24,15 @@ function renderCard(over: Partial<{ hour: number; summary: ShadeAtHour | null; n
 }
 
 describe('shade by hour', () => {
-  it('says what is really shaded at the hour, for the gate day', () => {
+  it('says what is really shaded at the hour, for the gate day, with the date and its source', () => {
     renderCard();
-    expect(screen.getByText('בשעה 14:00, מתוך 13 פריטים מתחת לרשתות: 4 בצל מלא, 4 בצל חלקי, 5 בשמש')).toBeTruthy();
-    expect(screen.getByText('ביום פתיחת השער, 4.6.2026, במיקום של מידברן.')).toBeTruthy();
+    expect(screen.getByText('בשעה 14:00, מתוך 13 פריטים מתחת לרשתות: 4 בצל מלא, 4 בצל חלקי, 5 בשמש.')).toBeTruthy();
+    expect(screen.getByText('ביום פתיחת השער, 4.6.2026 (תאריך הפתיחה של העונה), במיקום של מידברן.')).toBeTruthy();
+  });
+
+  it('says "פריט אחד" rather than "1 פריטים"', () => {
+    renderCard({ summary: { under: 1, full: 0, partial: 0, sun: 1 } });
+    expect(screen.getByText('בשעה 14:00, מתוך פריט אחד מתחת לרשתות: 0 בצל מלא, 0 בצל חלקי, 1 בשמש.')).toBeTruthy();
   });
 
   it('runs from 07:00 to 18:00 in quarter hours', () => {
@@ -41,15 +46,23 @@ describe('shade by hour', () => {
     expect(hourText(17.75)).toBe('17:45');
   });
 
+  it('rounds the minute rather than truncating it, so the upper end reads 18:00 and never 17:60', () => {
+    expect(hourText(18)).toBe('18:00');
+    // Old bug: whole=floor(17.999999)=17, minutes=round(0.999999*60)=60 → "17:60".
+    expect(hourText(17.999999)).toBe('18:00');
+  });
+
   it('says the sun is down, or that nothing is under a net, rather than counting nothing', () => {
     renderCard({ hour: 7, summary: null });
     expect(screen.getByText('בשעה 07:00 השמש מתחת לאופק, ואין צל להראות.')).toBeTruthy();
   });
 
-  it('asks for a gate day instead of guessing one, and draws no slider', () => {
+  it('says honestly that the season has no opening date, rather than guessing one, and keeps no slider or dead link', () => {
     renderCard({ sunDate: null, summary: null });
-    expect(screen.getByText(/עוד לא נרשם תאריך כזה/)).toBeTruthy();
+    expect(screen.getByText('לעונה הזו לא נרשם תאריך פתיחה, ולכן הצל לפי שעה לא מחושב. כרגע התאריך נקבע רק בפתיחת עונה.')).toBeTruthy();
     expect(screen.queryByRole('slider')).toBeNull();
+    // North is still shown and still links to the plot settings — that IS where north is changed.
+    expect(screen.getByRole('link', { name: 'שינוי בהגדרות המגרש' })).toBeTruthy();
   });
 
   it('says which way north is, and links to where it is set', () => {

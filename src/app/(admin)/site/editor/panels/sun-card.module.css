@@ -1,10 +1,12 @@
 /*
- * The sun card (spec §11), co-located under W2: each panel keeps its own
+ * The sun card (spec §11), co-located under W2/W10: each panel keeps its own
  * module rather than appending to the shared `editor.module.css`, so
- * parallel lanes never collide on one file. `.card`, `.hint`, `.meta` and
- * `.link` repeat the shell's floating-card language (`editor.module.css`'s
- * `.card`/`.hint`, the inspector's `.meta`/`.link` — see the other panels'
- * own modules) rather than importing it, for the same reason.
+ * parallel lanes never collide on one file — and, on this lane's base,
+ * `editor.module.css` doesn't carry these classes at all (it holds only
+ * Task 21's shell). `.card` and `.meta` are copied from Task 24's brief,
+ * `.hint` from Task 22's — not imported, since none of those modules exist
+ * yet in this lane — and `.link` is written to match them. Integration
+ * dedupes the repeated base rules across panels once every lane has merged.
  *
  * Tokens only, logical properties throughout (A10).
  */
