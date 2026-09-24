@@ -7,7 +7,7 @@ import { ToastProvider } from '@/components/ui/toaster';
 import { unnamedControls } from '@/test/a11y';
 import type { EditorDoc, EditorItem, EditorPlot } from '@/lib/site/editor/model';
 import type { SiteOp } from '@/lib/site/editor/ops';
-import type { QueueSnapshot } from './save-queue';
+import { NETWORK_FAILURE, type QueueSnapshot } from './save-queue';
 import type { EditorStore, EditorStoreInit } from './use-editor-store';
 import type { SceneHandle, SceneViewProps, ViewInfo } from './scene/scene-view';
 
@@ -161,8 +161,6 @@ import { SiteEditor, type SiteEditorProps } from './site-editor';
 
 const PLOT_HREF = '/site?season=s26&act=plot';
 const VIEW: ViewInfo = { yaw: 0, zoomPct: 100, pxPerM: 20, groundCorners: [], selectionBox: null, moving: false };
-/** The save queue's own sentence for a send that got no answer (`save-queue.ts`, `NETWORK_FAILURE`). */
-const NO_ANSWER = 'השמירה נכשלה, אולי אין חיבור. אפשר לנסות שוב.';
 const CONFLICT = 'המפה שונתה ממקום אחר מאז שנפתחה. השינויים האחרונים שלך עוד לא נשמרו.';
 
 /** jsdom has no `matchMedia`; this answers the editor's two questions. */
@@ -303,12 +301,13 @@ describe('saving', () => {
   it('keeps a retry on screen, with the reason, when the connection drops — and no reload', async () => {
     renderEditor();
     await screen.findByTestId('scene');
-    saving({ status: 'error', errorKind: 'network', error: NO_ANSWER, pending: 1 });
+    // The save queue's own sentence for a send that got no answer.
+    saving({ status: 'error', errorKind: 'network', error: NETWORK_FAILURE, pending: 1 });
     expect(screen.getByText('לא נשמר —')).toBeTruthy();
     // Ruling P8 took the reload away from a dropped connection, not the reason.
-    expect(screen.getByText(NO_ANSWER)).toBeTruthy();
+    expect(screen.getByText(NETWORK_FAILURE)).toBeTruthy();
     // The retry is read with the reason, though they sit in two places.
-    expect(screen.getByRole('button', { name: 'ניסיון חוזר', description: NO_ANSWER })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'ניסיון חוזר', description: NETWORK_FAILURE })).toBeTruthy();
     fireEvent.click(button('ניסיון חוזר'));
     expect(fake.retrySave).toHaveBeenCalledTimes(1);
     // A reload would throw away what the lead did while offline (ruling P8).

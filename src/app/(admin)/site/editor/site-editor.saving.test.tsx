@@ -87,7 +87,15 @@ function firstItem(): EditorItem {
   return (call[0] as SceneViewProps).store.doc.items[0];
 }
 
-const turn = () => { fireEvent.keyDown(screen.getByRole('region', { name: 'מפת הקאמפ' }), { code: 'KeyR' }); };
+const stage = () => screen.getByRole('region', { name: 'מפת הקאמפ' });
+const turn = () => { fireEvent.keyDown(stage(), { code: 'KeyR' }); };
+const saved = () => screen.findByText('כל השינויים נשמרו', undefined, WAIT);
+/** What the server was sent last: the batch's ops, coalesced by the queue. */
+function lastSent(): { baseVersion: number; ops: unknown[] } {
+  const call = saveSiteChangesAction.mock.lastCall;
+  if (call === undefined) throw new Error('nothing was sent');
+  return { baseVersion: call[1] as number, ops: call[2] as unknown[] };
+}
 
 describe('saving, through the store and the queue', () => {
   it('says every change is saved, then that it is saving, then saved again', async () => {
@@ -157,5 +165,67 @@ describe('saving, through the store and the queue', () => {
       expect(saveSiteChangesAction).toHaveBeenLastCalledWith('p1', 4, expect.any(Array));
     }, WAIT);
     expect(await screen.findByText('כל השינויים נשמרו', undefined, WAIT)).toBeTruthy();
+  });
+});
+
+/*
+ * The shortcuts that change the map, with the real store behind them:
+ * `site-editor.test.tsx` checks the same keys against a stand-in, so this is
+ * where a key press is followed all the way to what the server is sent.
+ */
+describe('the keyboard, through the store and the queue', () => {
+  it('turns with R, undoes with ⌘Z and redoes with ⇧⌘Z, and the server gets where it ended', async () => {
+    await renderEditor();
+    const undo = screen.getByRole('button', { name: 'ביטול הפעולה האחרונה' }) as HTMLButtonElement;
+    const redo = screen.getByRole('button', { name: 'ביצוע מחדש' }) as HTMLButtonElement;
+    expect(undo.disabled).toBe(true);
+
+    turn();
+    expect(firstItem()).toMatchObject({ xCm: 550, yCm: 450, widthCm: 200, depthCm: 300 });
+    expect(undo.disabled).toBe(false);
+    fireEvent.keyDown(stage(), { code: 'KeyZ', key: 'ז', metaKey: true });
+    expect(firstItem()).toMatchObject({ xCm: 500, yCm: 500, widthCm: 300, depthCm: 200 });
+    expect(redo.disabled).toBe(false);
+    fireEvent.keyDown(stage(), { code: 'KeyZ', key: 'ז', metaKey: true, shiftKey: true });
+    expect(firstItem()).toMatchObject({ xCm: 550, yCm: 450, widthCm: 200, depthCm: 300 });
+
+    expect(await saved()).toBeTruthy();
+    // Three presses inside the quiet time are one batch, and it carries where the item ended.
+    expect(saveSiteChangesAction).toHaveBeenCalledTimes(1);
+    expect(lastSent()).toEqual({
+      baseVersion: 0,
+      ops: [{ type: 'update', id: 'a', patch: { xCm: 550, yCm: 450, widthCm: 200, depthCm: 300 } }],
+    });
+  });
+
+  it('sends an undo to the server too, once the turn it undoes was saved', async () => {
+    await renderEditor();
+    turn();
+    expect(await saved()).toBeTruthy();
+    expect(lastSent().ops).toEqual([
+      { type: 'update', id: 'a', patch: { xCm: 550, yCm: 450, widthCm: 200, depthCm: 300 } },
+    ]);
+
+    fireEvent.keyDown(stage(), { code: 'KeyZ', key: 'ז', ctrlKey: true });
+    expect(firstItem()).toMatchObject({ xCm: 500, yCm: 500, widthCm: 300, depthCm: 200 });
+    await waitFor(() => { expect(saveSiteChangesAction).toHaveBeenCalledTimes(2); }, WAIT);
+    expect(lastSent()).toEqual({
+      baseVersion: 1,
+      ops: [{ type: 'update', id: 'a', patch: { xCm: 500, yCm: 500, widthCm: 300, depthCm: 200 } }],
+    });
+  });
+
+  it('nudges by one grid step, and by a metre with shift, and saves the move', async () => {
+    await renderEditor();
+    fireEvent.keyDown(stage(), { code: 'ArrowRight' });
+    expect(firstItem()).toMatchObject({ xCm: 550, yCm: 500 });
+    fireEvent.keyDown(stage(), { code: 'ArrowDown', shiftKey: true });
+    expect(firstItem()).toMatchObject({ xCm: 550, yCm: 600 });
+
+    expect(await saved()).toBeTruthy();
+    expect(lastSent()).toEqual({
+      baseVersion: 0,
+      ops: [{ type: 'update', id: 'a', patch: { xCm: 550, yCm: 600 } }],
+    });
   });
 });
