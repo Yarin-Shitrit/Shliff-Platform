@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   HANDLES, areaM2, contains, formatArea, formatMetres, formatSize, gapsAround, move, outsideIds,
   overlap, overlapPairs, placeNew, resize, shadeCounts, shadeState, shadedRect, snap,
-  swapSides, turnAboutCentre, unionRect, type PlacedItem, type Rect,
+  swapSides, turnAboutCentre, unionRect, wholeCm, type PlacedItem, type Rect,
 } from './geometry';
 
 const PLOT = { widthCm: 2600, depthCm: 2400 };
@@ -225,6 +225,18 @@ describe('union of rectangles', () => {
       { x: 100, y: 100, width: 300, depth: 300 },
       { x: 600, y: 50, width: 100, depth: 500 },
     ])).toEqual({ x: 100, y: 50, width: 600, depth: 500 });
+  });
+});
+
+describe('whole centimetres', () => {
+  it('rounds to the nearest whole centimetre', () => {
+    expect(wholeCm(350.4)).toBe(350);
+    expect(wholeCm(350.6)).toBe(351);
+  });
+
+  it('never returns negative zero', () => {
+    expect(wholeCm(-0.4)).toBe(0);
+    expect(Object.is(wholeCm(-0.4), 0)).toBe(true);
   });
 });
 

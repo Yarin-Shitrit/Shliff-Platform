@@ -303,3 +303,8 @@ export function gapsAround(rect: Rect, others: readonly Rect[], plot: Plot, maxC
   if (keep(north)) gaps.push({ from: [midX, rect.y - north], to: [midX, rect.y], lengthCm: north });
   return gaps;
 }
+
+/** Whole centimetres, and never -0. */
+export function wholeCm(value: number): number {
+  return Math.round(value) || 0;
+}
