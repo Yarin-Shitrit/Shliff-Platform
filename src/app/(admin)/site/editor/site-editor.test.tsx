@@ -558,6 +558,36 @@ describe('placing from the library', () => {
     expect(lastScene().store.doc.items).toHaveLength(1);
   });
 
+  /* Review (post-landing), G2: an item added while its group is hidden was
+     selected but not drawn — a selection nobody could see. */
+  it('shows a hidden group before it selects the item just added to it', async () => {
+    scene.handle.centreGround.mockReturnValue([1300, 1200]);
+    renderEditor({ initialSelection: null });
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('tab', { name: /במפה/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'הסתרת לינה וצל' }));
+    expect(lastScene().ui.hiddenGroups).toEqual(['sleep']);
+    fireEvent.click(screen.getByRole('tab', { name: /הוספה למפה/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^הוספת אוהל,/ }));
+    const added = lastScene().store.doc.items.find((entry) => entry.id !== 'a');
+    if (added === undefined) throw new Error('no tent was added');
+    expect(lastScene().ui.hiddenGroups).toEqual([]);
+    expect(lastScene().store.selection).toEqual([added.id]);
+  });
+
+  it('shows the nets before it selects a net just added while they are hidden', async () => {
+    scene.handle.centreGround.mockReturnValue([1300, 1200]);
+    renderEditor({ initialSelection: null });
+    await screen.findByTestId('scene');
+    fireEvent.click(button('הסתרת רשתות צל'));
+    expect(lastScene().ui.netsHidden).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: /^הוספת רשת צל,/ }));
+    const net = lastScene().store.doc.items.find((entry) => entry.kind === 'shade');
+    if (net === undefined) throw new Error('no net was added');
+    expect(lastScene().ui.netsHidden).toBe(false);
+    expect(lastScene().store.selection).toEqual([net.id]);
+  });
+
   it('says there is no room instead of guessing a spot', async () => {
     renderEditor({
       initial: {

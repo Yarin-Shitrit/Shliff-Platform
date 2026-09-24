@@ -413,6 +413,8 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     const ops = addOps(store.doc, kind, at, id);
     const added = ops.find((op): op is Extract<SiteOp, { type: 'add' }> => op.type === 'add');
     if (added === undefined) return;
+    // The new item is selected, so its group — or the nets — is shown first (G2).
+    revealFor([kind]);
     // Through a fixed noun: "הוספת" + the kind's name would read "הוספת אחר" for the kind אחר.
     runEdit(`הוספת פריט מסוג ${SITE_KINDS[kind].label}`, ops, [id]);
     saidWithUndo(`הפריט ${added.item.label} נוסף למפה`);
@@ -468,20 +470,25 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
 
   /**
    * A hidden item is never selected — the rule `patchUi` keeps for the nets
-   * (ruling G2). Anything about to select items shows their group, or the
-   * nets, first.
+   * (ruling G2). Anything about to select items of these kinds shows their
+   * group, or the nets, first — an item just added included, which is not in
+   * the map yet when this runs.
    */
-  function revealFor(ids: readonly string[]): void {
-    const items = ids
-      .map((id) => findItem(store.doc, id))
-      .filter((item): item is EditorItem => item !== undefined);
-    const groups = new Set(items.map((item) => SITE_KINDS[item.kind].group));
+  function revealFor(kinds: readonly SiteItemKind[]): void {
+    const groups = new Set(kinds.map((kind) => SITE_KINDS[kind].group));
     const patch: Partial<EditorUi> = {};
     if (ui.hiddenGroups.some((group) => groups.has(group))) {
       patch.hiddenGroups = ui.hiddenGroups.filter((group) => !groups.has(group));
     }
-    if (ui.netsHidden && items.some((item) => item.kind === 'shade')) patch.netsHidden = false;
+    if (ui.netsHidden && kinds.includes('shade')) patch.netsHidden = false;
     if (patch.hiddenGroups !== undefined || patch.netsHidden !== undefined) patchUi(patch);
+  }
+
+  /** `revealFor` the kinds of these items. */
+  function revealIds(ids: readonly string[]): void {
+    revealFor(ids
+      .map((id) => findItem(store.doc, id)?.kind)
+      .filter((kind): kind is SiteItemKind => kind !== undefined));
   }
 
   /**
@@ -491,7 +498,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
    * select a hidden item. An empty list clears the selection.
    */
   function pickIds(ids: string[]): void {
-    revealFor(ids);
+    revealIds(ids);
     store.select(ids);
     if (ids.length > 0) sceneRef.current?.fitIds(ids);
   }
@@ -507,7 +514,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
       return;
     }
     if (additive) {
-      revealFor([id]);
+      revealIds([id]);
       store.select([...store.selection, id]);
       return;
     }
