@@ -380,3 +380,15 @@ export function SiteEditor(props: SiteEditorProps): ReactElement;
 - `scene-view.tsx` exports `NO_WEBGL` (the Hebrew notice). Its imperative work lives in `scene/engine.ts` and `scene/overlay.ts`. `setGhost({ xCm, yCm })` is the new item's north-west corner (same as `addOps`'s `at`). The item table under the no-WebGL notice is plan 04's job.
 - Labels: the scene code drops items under 3 px and appends the selected item's size; a net's label anchors at the middle of its north edge. A `sunDate` that is not `YYYY-MM-DD` is treated as no date.
 - Browser checks: there is no local auth bypass — the checker asks the camp lead to sign in (or for local admin credentials) and stops if `shliff-pg` is down, if migration `0012` is not applied locally, or if no season has a map. Browser checks never save to the shared development database.
+
+### Amendments recorded after plan 04 was written (additive; binding)
+
+- `keyboard.ts` also exports `Arrow` and `ZOOM_IN = 0.8` (a distance multiplier — under 1 is closer, as `zoomAt` expects). Q turns the view right and E left (as in the mock).
+- `SiteEditorProps.fallback?: ReactNode` carries the item table. `SiteEditor` probes WebGL once; without it, it renders `SceneView` (for its `NO_WEBGL` notice) with the table under it. It never imports `NO_WEBGL` statically — a static import of `scene-view.tsx` would put `three` in the page's first bundle.
+- A newer `initial.version` after a plot save: `SiteEditor` is never keyed; with nothing pending it calls `resolveConflict('theirs')`, with pending ops it shows the conflict banner, with a batch in flight it waits for the answer (Task 25).
+- `SiteEditor` exposes `SCENE_PALETTE` as `--group-*` / `--scene-*` CSS variables (a static import of `palette.ts`, which must stay free of `three`).
+- New panel pieces: `SaveErrorBanner({ message, busy, onReload })`, `panels/selection-actions.tsx` (shared by the inspector footer and `SelectionBar`), `ItemInspector.footer?`, `MultiInspector.footer?`/`onClear?`, `panels/north.ts` (`northText`), pure helpers `scaleFor`, `minimapBounds`, `minimapPoint`, `hourText`; `views.ts` gains `sunDateOf`; `failure-messages.ts` gains `NORTH_INVALID`.
+- Toasts keep the kit's dwell (10 s with an undo), not the spec's 5 s — one timing across the platform.
+- The plot drawer is titled "הגדרות המגרש" (it now holds north too).
+- Known gap: no screen edits an existing season's gate date (`seasons.startsOn`), so the sun card's no-date state is an invitation without a link. Follow-up, outside this feature.
+- Task 27's browser check blocks every mutating server action with `page.route` (proven by a test edit) unless the camp lead approves writes; the two-tab conflict check runs only with that approval.
