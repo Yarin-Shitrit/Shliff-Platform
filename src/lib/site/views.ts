@@ -46,11 +46,17 @@ export function parseSiteQuery(params: RawParams): SiteQuery {
   };
 }
 
-/** Only the season survives from one URL to the next (R5); drawers are the kit's. */
+/**
+ * The season survives from one URL to the next (R5); drawers are the kit's.
+ * So does `?editor=3d` while the flag exists: a drawer opened from the editor
+ * closes back into it, not onto the board. Task 26 removes the flag, and this
+ * with it. Only the flag's own value is carried.
+ */
 function carried(params: RawParams): URLSearchParams {
   const next = new URLSearchParams();
   const season = one(params.season);
   if (season) next.set('season', season);
+  if (one(params.editor) === '3d') next.set('editor', '3d');
   return next;
 }
 

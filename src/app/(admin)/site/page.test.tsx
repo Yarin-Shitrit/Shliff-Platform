@@ -254,7 +254,8 @@ describe('the camp map screen', () => {
       const editor = screen.getByTestId('editor');
       expect(editor.textContent).toBe('editor:2:v4');
       expect(editor.getAttribute('data-tasks')).toBe('הקמת המטבח');
-      expect(editor.getAttribute('data-plot')).toBe('/site?season=s26&act=plot');
+      // The plot settings open over the editor, not over the board.
+      expect(editor.getAttribute('data-plot')).toBe('/site?season=s26&editor=3d&act=plot');
       expect(screen.queryByTestId('board')).toBeNull();
       expect(screen.queryByRole('table', { name: 'הפריטים במפה' })).toBeNull();
     });
@@ -287,6 +288,15 @@ describe('the camp map screen', () => {
       await renderPage({ editor: '3d', act: 'plot' });
       expect(screen.getByTestId('editor')).toBeTruthy();
       expect(screen.getByRole('dialog')).toBeTruthy();
+    });
+
+    it('closes the plot drawer back into the editor, not onto the board', async () => {
+      siteView.mockResolvedValue(view([item({ id: 'a' })]));
+      loadDoc.mockResolvedValue(LOADED);
+      await renderPage({ editor: '3d', act: 'plot' });
+      const drawer = screen.getByRole('dialog');
+      expect(within(drawer).getByRole('link', { name: 'סגירה' }).getAttribute('href'))
+        .toBe('/site?season=s26&editor=3d');
     });
 
     /* Keyed on the plan: another season's map is another editor, so one
