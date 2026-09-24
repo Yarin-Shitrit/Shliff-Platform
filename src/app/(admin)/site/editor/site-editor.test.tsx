@@ -10,6 +10,7 @@ import { rectOf } from '@/lib/site/editor/model';
 import type { EditorDoc, EditorItem, EditorPlot } from '@/lib/site/editor/model';
 import type { SiteOp } from '@/lib/site/editor/ops';
 import { NETWORK_FAILURE, type QueueSnapshot } from './save-queue';
+import { LOCKED_ALL_NOTICE, LOCKED_NOTICE } from './notices';
 import type { EditorStore, EditorStoreInit } from './use-editor-store';
 import type { SceneHandle, SceneViewProps, ViewInfo } from './scene/scene-view';
 
@@ -723,6 +724,148 @@ describe('the inspector', () => {
     expect(lastScene().ui.hiddenGroups).toEqual([]);
     expect(lastScene().store.selection).toEqual(['a']);
     expect(scene.handle.fitIds).toHaveBeenLastCalledWith(['a']);
+  });
+});
+
+describe('what an edit says', () => {
+  /** The toast holding `text`, to press its ביטול. */
+  async function toastOf(text: string) {
+    const message = await screen.findByText(text);
+    const toast = message.closest('li');
+    if (toast === null) throw new Error(`"${text}" is not in a toast`);
+    return within(toast);
+  }
+
+  const threeTents = (lockedIds: string[] = []) => ({
+    doc: siteDoc(['a', 'b', 'c'].map((id, index) => siteItem({
+      id, label: `אוהל ${index + 1}`, xCm: 300 + index * 500, locked: lockedIds.includes(id),
+    }))),
+    version: 0,
+  });
+
+  it('removes without asking, and ביטול puts the item back', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'Delete' });
+    expect(lastScene().store.doc.items).toEqual([]);
+    fireEvent.click((await toastOf('הפריט אוהל 1 הוסר מהמפה')).getByRole('button', { name: 'ביטול' }));
+    await waitFor(() => { expect(lastScene().store.doc.items.map((entry) => entry.id)).toEqual(['a']); });
+  });
+
+  it('keeps a locked item where it is, and says why nothing happened', async () => {
+    renderEditor({ initial: { doc: siteDoc([siteItem({ id: 'a', locked: true })]), version: 0 } });
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'Delete' });
+    // Ruling P14: the one sentence every surface says about a locked item.
+    expect(await screen.findByText(LOCKED_NOTICE)).toBeTruthy();
+    expect(lastScene().store.doc.items).toHaveLength(1);
+    fireEvent.keyDown(stage(), { code: 'KeyR' });
+    expect(firstItem().widthCm).toBe(300);
+  });
+
+  it('says so in the plural when every selected item is locked', async () => {
+    renderEditor({ initial: threeTents(['a', 'b', 'c']) });
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'KeyA', metaKey: true });
+    fireEvent.keyDown(stage(), { code: 'ArrowRight' });
+    expect(await screen.findByText(LOCKED_ALL_NOTICE)).toBeTruthy();
+    expect(lastScene().store.doc.items.map((entry) => entry.xCm)).toEqual([300, 800, 1300]);
+  });
+
+  it('says what a duplicate made, and ביטול takes the copy away', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'KeyD', metaKey: true });
+    expect(lastScene().store.doc.items).toHaveLength(2);
+    fireEvent.click((await toastOf('נוצר עותק של אוהל 1')).getByRole('button', { name: 'ביטול' }));
+    await waitFor(() => { expect(lastScene().store.doc.items).toHaveLength(1); });
+  });
+
+  it('says a lock was put on, and ביטול takes it off', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'KeyL' });
+    expect(firstItem().locked).toBe(true);
+    fireEvent.click((await toastOf('הפריט אוהל 1 ננעל')).getByRole('button', { name: 'ביטול' }));
+    await waitFor(() => { expect(firstItem().locked).toBe(false); });
+  });
+
+  it('counts the items a lock actually changed, not the ones selected (ruling P12)', async () => {
+    renderEditor({ initial: threeTents(['b']) });
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'KeyA', metaKey: true });
+    fireEvent.keyDown(stage(), { code: 'KeyL' });
+    expect(lastScene().store.doc.items.every((entry) => entry.locked)).toBe(true);
+    expect(await screen.findByText('2 פריטים ננעלו')).toBeTruthy();
+    expect(screen.queryByText('3 פריטים ננעלו')).toBeNull();
+  });
+
+  it('names the one item a lock changed, even from a larger selection', async () => {
+    renderEditor({ initial: threeTents(['a', 'c']) });
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'KeyA', metaKey: true });
+    fireEvent.keyDown(stage(), { code: 'KeyL' });
+    expect(await screen.findByText('הפריט אוהל 2 ננעל')).toBeTruthy();
+  });
+
+  it('says a library item landed, and ביטול takes it off the map', async () => {
+    scene.handle.centreGround.mockReturnValue([1300, 1200]);
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('button', { name: /^הוספת מטבח,/ }));
+    expect(lastScene().store.doc.items).toHaveLength(2);
+    fireEvent.click((await toastOf('הפריט מטבח 1 נוסף למפה')).getByRole('button', { name: 'ביטול' }));
+    await waitFor(() => { expect(lastScene().store.doc.items).toHaveLength(1); });
+  });
+
+  /* Ruling P6: an undo toast undoes only its own history entry. Once anything
+     newer is on top, its ביטול would undo that instead — so it goes. */
+
+  it('takes an undo toast away when a newer edit is made', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'KeyD', metaKey: true });
+    expect(await screen.findByText('נוצר עותק של אוהל 1')).toBeTruthy();
+    fireEvent.keyDown(stage(), { code: 'KeyR' });
+    expect(screen.queryByText('נוצר עותק של אוהל 1')).toBeNull();
+    // The newer edit and the copy both stand.
+    const items = lastScene().store.doc.items;
+    expect(items).toHaveLength(2);
+    expect(items[1]).toMatchObject({ widthCm: 200, depthCm: 300 });
+  });
+
+  it('takes an undo toast away when the keys undo its entry', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'KeyD', metaKey: true });
+    expect(await screen.findByText('נוצר עותק של אוהל 1')).toBeTruthy();
+    fireEvent.keyDown(stage(), { code: 'KeyZ', metaKey: true });
+    expect(lastScene().store.doc.items).toHaveLength(1);
+    expect(screen.queryByText('נוצר עותק של אוהל 1')).toBeNull();
+  });
+
+  it('takes an undo toast away when a drag in the scene makes a newer edit', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'KeyD', metaKey: true });
+    expect(await screen.findByText('נוצר עותק של אוהל 1')).toBeTruthy();
+    act(() => { lastScene().store.run('הזזה', [{ type: 'update', id: 'a', patch: { xCm: 600 } }]); });
+    expect(screen.queryByText('נוצר עותק של אוהל 1')).toBeNull();
+    expect(firstItem().xCm).toBe(600);
+  });
+
+  it('keeps an older toast from undoing a newer toast’s entry', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'KeyD', metaKey: true });
+    expect(await screen.findByText('נוצר עותק של אוהל 1')).toBeTruthy();
+    const copy = lastScene().store.doc.items[1];
+    fireEvent.keyDown(stage(), { code: 'KeyL' }); // the copy is what is selected
+    // Only the newest undo toast is left, and its ביטול takes off only the lock.
+    expect(screen.queryByText('נוצר עותק של אוהל 1')).toBeNull();
+    fireEvent.click((await toastOf(`הפריט ${copy.label} ננעל`)).getByRole('button', { name: 'ביטול' }));
+    await waitFor(() => { expect(lastScene().store.doc.items.every((entry) => !entry.locked)).toBe(true); });
+    expect(lastScene().store.doc.items).toHaveLength(2);
   });
 });
 
