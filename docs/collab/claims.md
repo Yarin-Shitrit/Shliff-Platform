@@ -1,6 +1,6 @@
 # What is in flight
 
-**updated: 2026-09-25** · if that date is more than a day or two old, **this file
+**updated: 2026-09-24** · if that date is more than a day or two old, **this file
 is fiction**. Read §1 before you act on §3.
 
 This is the only document in `docs/collab/` that goes stale, and it goes stale
@@ -58,7 +58,6 @@ touching `docs/reference-data/`, and pushing or force-pushing shared branches.
 | @josefcohen96 | Logistics | merged to `main` (#8, #9, #11) | **done** — the three screens (מחסן, רכש, הקמה), the rail entry and the two exports are on `main`. **Migrations `0009` and `0010` were applied to Railway by hand on 2026-09-24** (`docs/deploy.md` §6 has the record and the procedure), which unblocked every `/logistics/*` page and `/site` in production. Verified signed-in on a local database carrying both: all four screens render in Hebrew. #11 also added one shared error boundary at `src/app/(admin)/error.tsx`. Not yet verified by a human in the production browser. **In flight on this laptop (2026-09-24): camp-wide רכש rows** — `acquisition_items.season_id` becomes nullable, migration **`0011`** (generated with `drizzle-kit generate`, one `ALTER … DROP NOT NULL`, **not yet applied to Railway**; `docs/deploy.md` §6 has the procedure). Touches the shared `drizzle/` sequence; nothing else outside logistics | 2026-09-24 |
 | @Yarin-Shitrit | Collaboration harness + CI | merged to `main` | done | 2026-09-19 |
 | @Yarin-Shitrit | Camp map (מפת הקאמפ) | `claude/new-interesting-page-fv986o` | **active** — a new `/site` screen: one drag-and-drop map per season, plot size per event, item sizes editable, shade nets that shade (m−1)×(n−1). Touches shared surfaces: `src/db/schema/site.ts` + migration **`0010`** (generated with `drizzle-kit generate`; applying it to Railway is the camp lead's manual step, like `0009`), `drizzle.config.ts`, `shell/nav-data.ts` (a `מפת הקאמפ` item in הקאמפ), this file and `ownership.md` | 2026-09-23 |
-| @Yarin-Shitrit | Season opening date — an existing season's `starts_on` becomes editable | `feat/season-opening-date` | **active** — a `?act=season-date` drawer, opened from the season switcher's `פתיחת השער` row; `seasonDateHref` lets other pages (the camp map's sun card) link to it. **No migration.** Touches shared surfaces, additively: `src/app/(admin)/shell/**` (`actions.ts`, `season-switch.tsx` — `SwitchSeason` gains a required `startsOn` —, `season-href.ts`, `sidebar.tsx`, `sidebar.module.css`, new `season-date-drawer.*`) and this file. Delete this row when it merges | 2026-09-25 |
 | @Yarin-Shitrit | Hosting on Vercel + Railway | merged to `main` | **live** at <https://shliff-platform.vercel.app>. Vercel project is deliberately **not** Git-connected — do not connect it. Railway Postgres 18 in `europe-west4` holds the real data. Runbook: `docs/deploy.md`. **`drizzle-kit push` is now forbidden alongside `migrate`** — see the runbook §6. Signed-in pages not yet verified by a human | 2026-09-19 |
 
 ### Phase 4, in more detail
