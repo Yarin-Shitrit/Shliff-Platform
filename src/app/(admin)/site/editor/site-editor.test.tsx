@@ -1154,8 +1154,12 @@ describe('the checks, the view controls and the minimap', () => {
     expect(firstItem().widthCm).toBe(200);
     fireEvent.click(within(bar).getByRole('button', { name: 'נעילה' }));
     expect(firstItem().locked).toBe(true);
-    act(() => { lastScene().onView({ ...VIEW, moving: true, selectionBox: null }); });
+    // A real box while the view moves (review minor, H1 7): with no box the bar would hide
+    // whatever `moving` says, and this could not fail if the editor stopped reading it.
+    act(() => { lastScene().onView({ ...VIEW, moving: true, selectionBox: { l: 120, t: 220, r: 320, b: 280 } }); });
     expect(screen.queryByRole('group', { name: 'פעולות על הבחירה' })).toBeNull();
+    act(() => { lastScene().onView({ ...VIEW, moving: false, selectionBox: { l: 120, t: 220, r: 320, b: 280 } }); });
+    expect(screen.getByRole('group', { name: 'פעולות על הבחירה' }).style.left).toBe('220px');
   });
 
   it('opens the shortcuts card with ?, and esc closes it without letting go of the selection', async () => {

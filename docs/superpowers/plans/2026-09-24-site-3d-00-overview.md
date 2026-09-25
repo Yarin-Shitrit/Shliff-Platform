@@ -364,7 +364,8 @@ export function SiteEditor(props: SiteEditorProps): ReactElement;
 // view-controls.tsx  ViewControls({ info, northDeg, keysOpen, onZoom(factor), onFit(), onRotate(dir), onNorth(), onKeys() })
 //                    — northDeg required (N1): the needle is drawn at yaw − northDeg, pointing to true north
 // minimap.tsx        Minimap({ doc, flags, selection, info, onJump(xCm, yCm) })       — SVG, testable in jsdom
-// selection-bar.tsx  SelectionBar({ box, locked, onTurn, onDuplicate, onLock, onRemove })
+// selection-bar.tsx  SelectionBar({ box, stage?, locked, onTurn, onDuplicate, onLock, onRemove }), placeBar(box, stage), BAR
+//                    — above the selection when it fits, else under it; never past the stage (stage: its measured size)
 //                    — wraps SelectionActions({ locked, labelled, onTurn, onDuplicate, onLock, onRemove }), no prop added:
 //                      the bar's inverted colours reach its buttons by element (`.selBar button`)
 // shortcuts-card.tsx ShortcutsCard({ onClose })

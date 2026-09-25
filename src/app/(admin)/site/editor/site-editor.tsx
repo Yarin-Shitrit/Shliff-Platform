@@ -241,6 +241,19 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
   const [resolving, setResolving] = useState(false);
   const [tab, setTab] = useState<SideTab>('library');
   const stageRef = useRef<HTMLElement>(null);
+  /* The stage's size, so the selection bar stays on it (`placeBar`). Null
+     until measured, and where `ResizeObserver` is missing. */
+  const [stageSize, setStageSize] = useState<{ width: number; height: number } | null>(null);
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (stage === null || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      setStageSize((previous) => (previous?.width === width && previous.height === height ? previous : { width, height }));
+    });
+    observer.observe(stage);
+    return () => { observer.disconnect(); };
+  }, []);
   const reasonId = useId();
   const sceneRef = useRef<SceneHandle>(null);
   const flownToPeek = useRef(false);
@@ -819,6 +832,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
         />
         <SelectionBar
           box={view.moving || selectedNow.length === 0 ? null : view.selectionBox}
+          stage={stageSize}
           locked={selectedNow.length > 0 && selectedNow.every((item) => item.locked)}
           onTurn={turnSelection}
           onDuplicate={duplicateSelection}
