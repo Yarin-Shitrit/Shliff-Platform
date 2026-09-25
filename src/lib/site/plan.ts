@@ -601,16 +601,21 @@ export async function applySiteOps(
         byId.delete(op.id);
         // The database cascades the item's lines away (`site.ts`); the map of rows follows it.
         for (const line of linesAt(op.id)) linesById.delete(line.id);
-      } else if (op.size === null) {
-        await tx.delete(siteKindDefaults).where(eq(siteKindDefaults.kind, op.kind));
+      } else if (op.type === 'setKindDefault') {
+        if (op.size === null) {
+          await tx.delete(siteKindDefaults).where(eq(siteKindDefaults.kind, op.kind));
+        } else {
+          // Inset is a fact about nets only, same as an item's (`patchSet` above).
+          const size = {
+            widthCm: op.size.widthCm, depthCm: op.size.depthCm, heightCm: op.size.heightCm,
+            insetCm: op.kind === 'shade' ? op.size.insetCm : null,
+          };
+          await tx.insert(siteKindDefaults).values({ kind: op.kind, ...size, updatedBy: actor })
+            .onConflictDoUpdate({ target: siteKindDefaults.kind, set: { ...size, updatedAt: new Date(), updatedBy: actor } });
+        }
       } else {
-        // Inset is a fact about nets only, same as an item's (`patchSet` above).
-        const size = {
-          widthCm: op.size.widthCm, depthCm: op.size.depthCm, heightCm: op.size.heightCm,
-          insetCm: op.kind === 'shade' ? op.size.insetCm : null,
-        };
-        await tx.insert(siteKindDefaults).values({ kind: op.kind, ...size, updatedBy: actor })
-          .onConflictDoUpdate({ target: siteKindDefaults.kind, set: { ...size, updatedAt: new Date(), updatedBy: actor } });
+        // `setUnderlay`: written from Task 4 of the Part C plan on, when its table exists. No client sends one before.
+        throw new Error('unknown operation');
       }
     }
 

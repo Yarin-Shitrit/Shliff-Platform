@@ -50,6 +50,10 @@ export const SITE_ERRORS: HebrewErrors = [
   ['a line id is already in use', 'הקו הזה כבר נמצא במפה. טעינה מחדש של המפה תסדר את זה'],
   ['a line sort must be', 'סדר הקווים הוא מספר שלם, אפס או יותר. טעינה מחדש של המפה תסדר את זה'],
   ['an item with a line attached keeps', 'לפריט מחובר צינור או כבל, ולכן אי אפשר להפוך אותו לסוג שהקו לא מגיע אליו. קודם מסירים את הקו'],
+  // The picture under the map (`editor/ops.ts` `underlayRefusal`, `plan.ts`).
+  ['an underlay file must be', 'קובץ תמונת הרקע לא שייך למפה הזו. טעינה מחדש של המפה תסדר את זה'],
+  ['an underlay placement must be', 'מיקום תמונת הרקע נמדד במספר שלם של סנטימטרים'],
+  ['an underlay calibration must be', 'הכיול של תמונת הרקע לא נשמר כמו שצריך. אפשר לכייל שוב'],
 ];
 
 export function siteFailureMessage(error: unknown): string {

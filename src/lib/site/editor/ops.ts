@@ -4,11 +4,18 @@ import type { KindDefaults, KindSize } from '../defaults';
 import { MIN_SIDE_CM } from '../geometry';
 import { DEFAULT_SHADE_INSET_CM, isSiteItemKind } from '../kinds';
 import { endpointRefusal, isSiteLineKind, joins } from '../lines';
-import { findItem, findLine, type EditorDoc, type EditorItem, type EditorLine } from './model';
+import {
+  MAX_CALIBRATION_CM, MAX_UNDERLAY_BYTES, MAX_UNDERLAY_OFFSET_CM, MAX_UNDERLAY_WIDTH_CM,
+  MIN_CALIBRATION_CM, MIN_UNDERLAY_WIDTH_CM, contentTypeOf, underlayKeyPlan,
+} from '../underlay-limits';
+import {
+  copyUnderlay, findItem, findLine, sameUnderlay, underlayOf,
+  type EditorDoc, type EditorItem, type EditorLine, type EditorUnderlay,
+} from './model';
 
 /**
- * Every change the editor persists is one of seven ops (spec §6.2; the three
- * line ops came with `site_lines`). The client checks each op with these
+ * Every change the editor persists is one of eight ops (spec §6.2; the three
+ * line ops came with `site_lines`, and `setUnderlay` with `site_underlays`). The client checks each op with these
  * refusals before it is queued; the server checks them again before it
  * writes (`plan.ts` `applySiteOps`). One set of rules, in one file, so the
  * two can never disagree.
@@ -47,7 +54,9 @@ export type SiteOp =
   | { type: 'setKindDefault'; kind: SiteItemKind; size: KindSize | null }
   | { type: 'addLine'; line: EditorLine }
   | { type: 'updateLine'; id: string; patch: LinePatch }
-  | { type: 'removeLine'; id: string };
+  | { type: 'removeLine'; id: string }
+  /** The picture under the map, whole, or null to take it off (spec §17). One per map, so no id. */
+  | { type: 'setUnderlay'; underlay: EditorUnderlay | null };
 
 /**
  * Every op type there is: the one list anything reading ops back from
@@ -57,7 +66,7 @@ export type SiteOp =
  * pipe's removal (#25 review, Critical).
  */
 export const SITE_OP_TYPES = [
-  'add', 'update', 'remove', 'setKindDefault', 'addLine', 'updateLine', 'removeLine',
+  'add', 'update', 'remove', 'setKindDefault', 'addLine', 'updateLine', 'removeLine', 'setUnderlay',
 ] as const satisfies ReadonlyArray<SiteOp['type']>;
 
 type ListedOpType = (typeof SITE_OP_TYPES)[number];
@@ -142,6 +151,46 @@ export function kindSizeRefusal(size: KindSize): string | null {
     : 'a kind default must be whole centimetres: sides 10 to 50000, height 10 to 2000';
 }
 
+function isWholeIn(value: unknown, min: number, max: number): boolean {
+  return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max;
+}
+
+function isImagePoint(value: unknown): boolean {
+  return Array.isArray(value) && value.length === 2
+    && value.every((n) => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 1);
+}
+
+/**
+ * The picture's shape (spec §17), checked by the client before it is queued
+ * and by the server before it writes. Only the server can tell that the file
+ * is this map's own (`plan.ts`); here a key must at least be a picture's key,
+ * on some map, with the content type its extension names.
+ */
+export function underlayRefusal(underlay: EditorUnderlay | null): string | null {
+  if (underlay === null) return null;
+  // An op read back from outside the editor (the unsaved-work stash, a request) may carry anything.
+  if (typeof underlay !== 'object') return 'an underlay file must be a png, jpeg or webp image uploaded to a map';
+  const { storageKey, contentType, sizeBytes, filename, calibration } = underlay;
+  if (typeof storageKey !== 'string' || underlayKeyPlan(storageKey) === null
+    || contentTypeOf(storageKey) !== contentType
+    || !isWholeIn(sizeBytes, 1, MAX_UNDERLAY_BYTES)
+    || typeof filename !== 'string' || isBlank(filename)) {
+    return 'an underlay file must be a png, jpeg or webp image uploaded to a map';
+  }
+  if (!isWholeIn(underlay.centreXCm, -MAX_UNDERLAY_OFFSET_CM, MAX_UNDERLAY_OFFSET_CM)
+    || !isWholeIn(underlay.centreYCm, -MAX_UNDERLAY_OFFSET_CM, MAX_UNDERLAY_OFFSET_CM)
+    || !isWholeIn(underlay.widthCm, MIN_UNDERLAY_WIDTH_CM, MAX_UNDERLAY_WIDTH_CM)
+    || !isWholeIn(underlay.rotationTenths, 0, 3599)) {
+    return 'an underlay placement must be whole centimetres and tenths of a degree';
+  }
+  if (calibration !== null && (typeof calibration !== 'object'
+    || !isImagePoint(calibration.from) || !isImagePoint(calibration.to)
+    || !isWholeIn(calibration.distanceCm, MIN_CALIBRATION_CM, MAX_CALIBRATION_CM))) {
+    return 'an underlay calibration must be two points on the image and a distance of 10 cm to 500 m';
+  }
+  return null;
+}
+
 /** No more bends than a lead could ever place by hand; past this the op is a bug, not a route. */
 export const MAX_LINE_POINTS = 200;
 
@@ -202,6 +251,7 @@ export function opRefusal(op: SiteOp): string | null {
     case 'addLine': return newLineRefusal(op.line);
     case 'updateLine': return linePatchRefusal(op.patch);
     case 'removeLine': return null;
+    case 'setUnderlay': return underlayRefusal(op.underlay);
     default: return 'unknown operation';
   }
 }
@@ -325,10 +375,16 @@ export function applyOps(doc: EditorDoc, ops: readonly SiteOp[]): { doc: EditorD
   let items = doc.items;
   let lines = doc.lines;
   let defaults = doc.defaults;
+  /** Undefined until an op sets the picture: a doc no op touches keeps its own field, or its lack of one. */
+  let underlay: EditorUnderlay | null | undefined;
   const skipped: SiteOp[] = [];
   for (const op of ops) {
     if (op.type === 'setKindDefault') {
       defaults = withDefault(defaults, op.kind, op.size);
+      continue;
+    }
+    if (op.type === 'setUnderlay') {
+      underlay = copyUnderlay(op.underlay);
       continue;
     }
     if (isLineOp(op)) {
@@ -366,8 +422,11 @@ export function applyOps(doc: EditorDoc, ops: readonly SiteOp[]): { doc: EditorD
       items = [...items.slice(0, index), ...items.slice(index + 1)];
     }
   }
-  const unchanged = items === doc.items && lines === doc.lines && defaults === doc.defaults;
-  return { doc: unchanged ? doc : { ...doc, items, lines, defaults }, skipped };
+  if (items === doc.items && lines === doc.lines && defaults === doc.defaults && underlay === undefined) return { doc, skipped };
+  return {
+    doc: underlay === undefined ? { ...doc, items, lines, defaults } : { ...doc, items, lines, defaults, underlay },
+    skipped,
+  };
 }
 
 /** What undoes one op against the doc it is about to be applied to; null when there is nothing to undo. */
@@ -412,6 +471,10 @@ function inverseOf(doc: EditorDoc, op: SiteOp): SiteOp | null {
       const before = findLine(doc, op.id);
       return before ? { type: 'addLine', line: copyLine(before) } : null;
     }
+    case 'setUnderlay': {
+      const before = underlayOf(doc);
+      return sameUnderlay(before, op.underlay) ? null : { type: 'setUnderlay', underlay: copyUnderlay(before) };
+    }
   }
 }
 
@@ -442,14 +505,15 @@ function copyOf(op: SiteOp): SiteOp {
     case 'addLine': return { type: 'addLine', line: copyLine(op.line) };
     case 'updateLine': return { type: 'updateLine', id: op.id, patch: storedLinePatch(definedFields(op.patch)) };
     case 'removeLine': return { type: 'removeLine', id: op.id };
+    case 'setUnderlay': return { type: 'setUnderlay', underlay: copyUnderlay(op.underlay) };
   }
 }
 
 /**
  * Fewer ops that save the same thing (spec §6.3): updates to one item merge,
  * later fields winning; an add followed by updates becomes one add; an add
- * followed, however much later, by a remove sends nothing; a kind's default
- * keeps only its last size. Everything else keeps the order it came in,
+ * followed, however much later, by a remove sends nothing; a kind's default,
+ * and the picture under the map, keep only their last value. Everything else keeps the order it came in,
  * which matters twice: an unlock must still reach the server before the
  * remove it allows, and a remove before an add of the same id (an undone
  * removal) must stay in that order.
@@ -466,6 +530,7 @@ export function coalesceOps(ops: readonly SiteOp[]): SiteOp[] {
   const lastForItem = new Map<string, number>();
   const lastForLine = new Map<string, number>();
   const lastForKind = new Map<SiteItemKind, number>();
+  let underlayAt: number | undefined;
   for (const op of ops) {
     if (op.type === 'setKindDefault') {
       const at = lastForKind.get(op.kind);
@@ -474,6 +539,16 @@ export function coalesceOps(ops: readonly SiteOp[]): SiteOp[] {
         out.push(copyOf(op));
       } else {
         out[at] = copyOf(op);
+      }
+      continue;
+    }
+    if (op.type === 'setUnderlay') {
+      // One picture per map: the last value wins, in the first one's place, as a kind's default does.
+      if (underlayAt === undefined) {
+        underlayAt = out.length;
+        out.push(copyOf(op));
+      } else {
+        out[underlayAt] = copyOf(op);
       }
       continue;
     }
