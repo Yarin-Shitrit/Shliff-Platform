@@ -50,6 +50,7 @@ vi.mock('./scene/scene-view', () => ({
 }));
 
 import { SiteEditor, type SiteEditorProps } from './site-editor';
+import { notePlotSaved } from './own-plot-saves';
 
 const CONFLICT = 'המפה שונתה ממקום אחר מאז שנפתחה. השינויים האחרונים שלך עוד לא נשמרו.';
 const PLOT_SAVED = 'הגדרות המגרש נשמרו, ויש כאן שינויים שעוד לא נשמרו. אפשר לשמור אותם מעל המפה המעודכנת, או לטעון אותה בלעדיהם.';
@@ -368,6 +369,7 @@ describe('a plot saved in the drawer', () => {
 
   it('raises the choice, rather than dropping edits, when something is waiting to be saved', async () => {
     loadSiteDocAction.mockResolvedValue({ ok: true, value: widened() });
+    notePlotSaved('p1', 1); // the drawer in this tab saved version 1
     const { rerenderWith } = await renderEditor();
     turn(); // waiting: the queue sends after 500 ms
     rerenderWith({ initial: widened() });

@@ -52,6 +52,7 @@ import type { EditorUi, Insets, SceneHandle, SceneViewProps, ViewInfo } from './
 import { shortcutFor, ZOOM_IN, type Arrow, type Shortcut } from './keyboard';
 import { isolate, LOCKED_ALL_NOTICE, LOCKED_NOTICE } from './notices';
 import { forgetUnsaved, isStaleBuild, keepUnsaved, readUnsaved, SITE_UPDATED } from './unsaved-work';
+import { isOwnPlotSave } from './own-plot-saves';
 import { Toolbar } from './panels/toolbar';
 import { ConflictBanner, SaveErrorBanner, SaveStatus } from './panels/save-status';
 import { LibraryPanel } from './panels/library-panel';
@@ -1050,10 +1051,10 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
           busy={resolving}
           onTheirs={() => { void resolve('theirs'); }}
           onMine={() => { void resolve('mine'); }}
-          /* A newer map the page itself handed down is the lead's own plot
-             save (the drawer refreshes the page) — not a change "from
-             elsewhere", which only the save queue's conflict can report. */
-          message={store.conflict === null ? PLOT_SAVED_UNDER_EDITS : undefined}
+          /* A newer map the page handed down is the lead's own plot save only
+             when it is the version this tab's drawer saved (#25 fix round,
+             Minor 10); any other is said in the neutral words of a conflict. */
+          message={store.conflict === null && isOwnPlotSave(planId, initial.version) ? PLOT_SAVED_UNDER_EDITS : undefined}
         />
       )}
       {saveError === null ? null : (

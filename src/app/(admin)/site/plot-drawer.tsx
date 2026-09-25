@@ -22,6 +22,7 @@ import { useToast } from '@/components/ui/toaster';
 import { areaM2, formatArea, outsideIds } from '@/lib/site/geometry';
 import { toPlaced, type ItemShape } from '@/lib/site/derive';
 import { createPlanAction, setPlotAction } from './actions';
+import { notePlotSaved } from './editor/own-plot-saves';
 import { NORTH_INVALID, PLOT_SIDE_INVALID } from './failure-messages';
 import styles from './site.module.css';
 
@@ -75,10 +76,15 @@ export function PlotDrawer({ seasonId, seasonName, plan, items, closeHref }: {
     const input = { widthCm, depthCm, gridCm: Number(grid), northDeg, notes: plan?.notes ?? null };
     setPending(true);
     try {
-      const result = plan === null
-        ? await createPlanAction(seasonId, input)
-        : await setPlotAction(plan.id, input);
-      if (!result.ok) { setRefusal(result.error); return; }
+      if (plan === null) {
+        const created = await createPlanAction(seasonId, input);
+        if (!created.ok) { setRefusal(created.error); return; }
+      } else {
+        const saved = await setPlotAction(plan.id, input);
+        if (!saved.ok) { setRefusal(saved.error); return; }
+        // The editor, handed this version after the refresh, knows it is this lead's own plot save.
+        if (saved.value !== undefined) notePlotSaved(plan.id, saved.value);
+      }
       show({
         message: plan === null ? `נוצרה מפה ל${seasonName}` : 'הגדרות המגרש עודכנו',
         tone: 'ok',

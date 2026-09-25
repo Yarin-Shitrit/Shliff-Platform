@@ -142,7 +142,8 @@ describe('the camp map', () => {
 
     it('bumps the version when the plot changes, like a saved batch of edits', async () => {
       const planId = await createPlan(db, s26, PLOT, LEAD);
-      await setPlot(db, planId, { widthCm: 1000, depthCm: 1000, gridCm: 100 }, LEAD);
+      // It says which: the editor tells its own plot save from another lead's by it (#25 fix round, Minor 10).
+      expect(await setPlot(db, planId, { widthCm: 1000, depthCm: 1000, gridCm: 100 }, LEAD)).toBe(1);
       expect((await planForSeason(db, s26))?.version).toBe(1);
     });
   });

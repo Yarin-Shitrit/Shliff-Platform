@@ -35,13 +35,14 @@ export async function createPlanAction(
   }
 }
 
-export async function setPlotAction(planId: string, input: PlotInput): Promise<ActionResult> {
+/** Answers the plan's new version (#25 fix round, Minor 10): the drawer notes it, so the editor knows its own plot save. */
+export async function setPlotAction(planId: string, input: PlotInput): Promise<ActionResult<number>> {
   const admin = await requireAdmin();
   if (!admin.ok) return { ok: false, error: NO_ACCESS };
   try {
-    await setPlot(db, planId, input, admin.email);
+    const version = await setPlot(db, planId, input, admin.email);
     revalidatePath(SITE_PATH);
-    return { ok: true };
+    return { ok: true, value: version };
   } catch (error) {
     return { ok: false, error: siteFailureMessage(error) };
   }

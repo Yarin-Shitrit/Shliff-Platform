@@ -12,6 +12,7 @@ import type { EditorDoc, EditorItem, EditorPlot } from '@/lib/site/editor/model'
 import type { SiteOp } from '@/lib/site/editor/ops';
 import { NETWORK_FAILURE, type QueueSnapshot } from './save-queue';
 import { LOCKED_ALL_NOTICE, LOCKED_NOTICE } from './notices';
+import { notePlotSaved } from './own-plot-saves';
 import type { EditorStore, EditorStoreInit } from './use-editor-store';
 import type { SceneHandle, SceneViewProps, ViewInfo } from './scene/scene-view';
 
@@ -1367,6 +1368,7 @@ describe('a plot saved in the drawer', () => {
   });
 
   it('asks, rather than dropping edits, when something is waiting to be saved', async () => {
+    notePlotSaved('p1', 1); // this tab's plot drawer saved version 1
     const { rerenderWith } = renderEditor();
     await screen.findByTestId('scene');
     saving({ status: 'pending', pending: 1 });
@@ -1376,6 +1378,18 @@ describe('a plot saved in the drawer', () => {
     expect(screen.queryByText(CONFLICT)).toBeNull();
     expect(button('שמירת השינויים שלי מעליה')).toBeTruthy();
     expect(fake.resolveConflict).not.toHaveBeenCalled();
+  });
+
+  /* #25 fix round, Minor 10: a newer version the page hands down is not
+     always this lead's plot save — only the one this tab's drawer saved. */
+  it('says the map changed elsewhere when the newer version is not the one this tab saved', async () => {
+    notePlotSaved('p1', 7); // an older save of this tab's, not the version now arriving
+    const { rerenderWith } = renderEditor();
+    await screen.findByTestId('scene');
+    saving({ status: 'pending', pending: 1 });
+    rerenderWith({ initial: widened() });
+    expect(screen.getByText(CONFLICT)).toBeTruthy();
+    expect(screen.queryByText(PLOT_SAVED)).toBeNull();
   });
 
   it('waits for a batch in flight — its answer decides', async () => {
