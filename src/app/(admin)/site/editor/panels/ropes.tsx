@@ -139,9 +139,13 @@ export function RopeSection({ doc, item, onRun }: {
     if (ops.length > 0) onRun('זווית החבלים של רשתות צל', ops);
   }
 
+  /* With no camp angle there is no default to go back to: the link then says
+     what it does — the net's own angle goes, and with it the ropes (review M3). */
+  const clearLabel = camp === null ? 'הסרת הזווית של הרשת' : 'חזרה לזווית ברירת המחדל';
+
   function backToDefault(): void {
     const ops = patchOps(doc, item.id, { ropeAngleDeg: null });
-    if (ops.length > 0) onRun('חזרה לזווית ברירת המחדל', ops);
+    if (ops.length > 0) onRun(clearLabel, ops);
   }
 
   return (
@@ -189,7 +193,7 @@ export function RopeSection({ doc, item, onRun }: {
       </dl>
       {placed.ropeCm > 0 && angle !== null ? (
         <p className={chrome.meta}>
-          <bdi>{`היתדות ${formatMetres(placed.ropeCm)} מהבד: גובה ${formatMetres(itemHeight(item, doc.defaults))} ÷ tan ${angle}°`}</bdi>
+          <bdi>{`היתדות ${formatMetres(placed.ropeCm)} מהבד: גובה ${formatMetres(itemHeight(item, doc.defaults))} חלקי טנגנס של ${angle}°`}</bdi>
         </p>
       ) : null}
       <div className={styles.links}>
@@ -197,7 +201,7 @@ export function RopeSection({ doc, item, onRun }: {
           שמירת הזווית כברירת המחדל של רשתות צל
         </button>
         <button type="button" className={chrome.link} onClick={backToDefault} disabled={item.ropeAngleDeg === null || held}>
-          חזרה לזווית ברירת המחדל
+          {clearLabel}
         </button>
       </div>
     </>

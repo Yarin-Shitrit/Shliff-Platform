@@ -324,7 +324,12 @@ function insertInOrder(items: readonly EditorItem[], entry: EditorItem): EditorI
 }
 
 function withDefault(defaults: KindDefaults, kind: SiteItemKind, size: KindSize | null): KindDefaults {
-  if (size !== null) return { ...defaults, [kind]: { ...size } };
+  if (size !== null) {
+    /* A size from a page older than rope angles has no `ropeAngleDeg` key:
+       the camp's angle stays as it was, as the server keeps it (review M1). */
+    const angle: number | null | undefined = size.ropeAngleDeg;
+    return { ...defaults, [kind]: { ...size, ropeAngleDeg: angle === undefined ? (defaults[kind]?.ropeAngleDeg ?? null) : angle } };
+  }
   if (defaults[kind] === undefined) return defaults;
   const rest: KindDefaults = {};
   for (const key of Object.keys(defaults) as SiteItemKind[]) {
@@ -377,7 +382,8 @@ export function applyOps(doc: EditorDoc, ops: readonly SiteOp[]): { doc: EditorD
     const index = items.findIndex((entry) => entry.id === id);
     if (op.type === 'add') {
       if (index !== -1) { skipped.push(op); continue; }
-      items = insertInOrder(items, { ...op.item });
+      // An item from a page older than rope angles has no key: that is a net on the camp's angle, null (review M1).
+      items = insertInOrder(items, { ...op.item, ropeAngleDeg: op.item.ropeAngleDeg ?? null });
     } else if (index === -1) {
       skipped.push(op);
     } else if (op.type === 'update') {

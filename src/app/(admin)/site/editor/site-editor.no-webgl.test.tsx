@@ -95,6 +95,35 @@ describe('the editor without WebGL', () => {
     expect(screen.queryByRole('button', { name: 'ייצוא תמונה' })).toBeNull();
   });
 
+  /* Review I2: the table reads the flags the checks read. With the camp's
+     rope angle (45°, 3 m nets), a net flush with the east fence by its cloth
+     has its stakes 3 m past it: outside, in the table as in the checks bar. */
+  it('flags a net outside by its ropes in the item table, with the camp’s angle', async () => {
+    const roped: EditorDoc = {
+      ...DOC,
+      items: [{ ...DOC.items[0], id: 'n', kind: 'shade', label: 'רשת צל 1', xCm: 1800, yCm: 800, widthCm: 800, depthCm: 800, insetCm: 50 }],
+      defaults: { shade: { widthCm: 800, depthCm: 800, heightCm: 300, insetCm: 50, ropeAngleDeg: 45 } },
+    };
+    render(
+      <ToastProvider>
+        <SiteEditor
+          initial={{ doc: roped, version: 0 }}
+          initialSelection={null}
+          seasonId="s26"
+          seasonName="ברן 26"
+          sunDate={null}
+          buildTasks={[]}
+          plotHref="/site?season=s26&act=plot"
+          seasonDateHref="/site?season=s26&act=season-date"
+        />
+      </ToastProvider>,
+    );
+    const table = await screen.findByRole('table', { name: 'הפריטים במפה' });
+    const row = within(table).getByText('רשת צל 1').closest('tr');
+    if (row === null) throw new Error('the net has no row');
+    expect(within(row).getByText('מחוץ למגרש')).toBeTruthy();
+  });
+
   /* Ruling P7: no shortcut acts on a map that is not shown. */
   it('leaves every key to the page', async () => {
     renderEditor();

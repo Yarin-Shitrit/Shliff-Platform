@@ -116,7 +116,10 @@ describe('a net’s ropes, in its inspector', () => {
     expect(screen.getByText('7 × 7 מ׳ · 49 מ״ר')).toBeTruthy();
     expect(screen.getByText('8 × 8 מ׳ · 64 מ״ר')).toBeTruthy();
     expect(screen.getByText('14 × 14 מ׳ · 196 מ״ר')).toBeTruthy();
-    expect(screen.getByText('היתדות 3 מ׳ מהבד: גובה 3 מ׳ ÷ tan 45°')).toBeTruthy();
+    // Said in Hebrew, formula and all: no Latin reaches a Hebrew screen (review I1).
+    const source = screen.getByText(/^היתדות /).textContent ?? '';
+    expect(source).toBe('היתדות 3 מ׳ מהבד: גובה 3 מ׳ חלקי טנגנס של 45°');
+    expect(source).not.toMatch(/[A-Za-z]/);
     expect(angleBox().value).toBe('');
     expect(angleBox().placeholder).toBe('45');
     expect(screen.getByText('ברירת המחדל של רשתות צל')).toBeTruthy();
@@ -166,6 +169,14 @@ describe('a net’s ropes, in its inspector', () => {
     const { after } = renderItem(item({ id: 'n1', ropeAngleDeg: 30 }));
     fireEvent.click(screen.getByRole('button', { name: 'חזרה לזווית ברירת המחדל' }));
     expect(after().items[0].ropeAngleDeg).toBeNull();
+  });
+
+  it('says it removes the net’s angle, not "back to the default", while the camp has none (review M3)', () => {
+    const { onRun, after } = renderItem(item({ id: 'n1', ropeAngleDeg: 30 }), {});
+    expect(screen.queryByRole('button', { name: 'חזרה לזווית ברירת המחדל' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'הסרת הזווית של הרשת' }));
+    expect(after().items[0].ropeAngleDeg).toBeNull();
+    expect(onRun.mock.lastCall?.[0]).toBe('הסרת הזווית של הרשת');
   });
 
   it('offers neither link to a net already on the camp’s angle', () => {

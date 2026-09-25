@@ -509,3 +509,23 @@ describe('a shade net’s rope angle', () => {
     expect(storedPatch(roped, { label: 'רשת הבר' })).not.toHaveProperty('ropeAngleDeg');
   });
 });
+
+describe('rope angles in ops from a page older than them (review M1)', () => {
+  const CAMP_45: KindSize = { widthCm: 800, depthCm: 800, heightCm: 300, insetCm: 50, ropeAngleDeg: 45 };
+  /** What such a page sends: a size with no `ropeAngleDeg` key at all. */
+  const OLDER_SIZE = { widthCm: 700, depthCm: 700, heightCm: 300, insetCm: 50 } as unknown as KindSize;
+
+  it('keep the camp’s angle when a kind default arrives without one, as the server does', () => {
+    const { doc } = applyOps(docOf([], { shade: CAMP_45 }), [{ type: 'setKindDefault', kind: 'shade', size: OLDER_SIZE }]);
+    expect(doc.defaults.shade).toEqual({ widthCm: 700, depthCm: 700, heightCm: 300, insetCm: 50, ropeAngleDeg: 45 });
+    const { doc: fresh } = applyOps(docOf([]), [{ type: 'setKindDefault', kind: 'shade', size: OLDER_SIZE }]);
+    expect(fresh.defaults.shade).toHaveProperty('ropeAngleDeg', null);
+  });
+
+  it('read an added item without one as a net on the camp’s angle — null, never undefined', () => {
+    const older: Partial<EditorItem> = { ...item({ kind: 'shade', insetCm: 50 }) };
+    delete older.ropeAngleDeg;
+    const { doc } = applyOps(docOf([]), [{ type: 'add', item: older as EditorItem }]);
+    expect(doc.items[0]).toHaveProperty('ropeAngleDeg', null);
+  });
+});
