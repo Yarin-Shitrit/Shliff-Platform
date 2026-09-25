@@ -311,6 +311,48 @@ tree (`scripts/land-camp-layout.ts`, actor `yarin`): 68 items — the sink at
 overlapping pairs. The map it replaced was at version 2, so one editor save
 made since the morning's landing went with it.
 
+### Migration `0015` — not yet applied to Railway
+
+`0015_site_underlays` is Part C of the camp map's extensions, the image to
+trace (spec
+`docs/superpowers/specs/2026-09-25-site-map-pipes-ropes-underlay-design.md`
+§16–19). It adds one new, empty table, `site_underlays`: one row per map, with
+a foreign key to `site_plans` that cascades. It is additive, and no existing
+row is touched. It must be on Railway **before** the code that reads it
+deploys, because every `/site` load reads the table (`loadDoc` →
+`readUnderlay`). Applying it is the camp lead's decision. Part B's `0014` (the
+ropes) goes first, if its record says it is not applied yet. As `0013` taught,
+the order is migration first, merge second.
+
+The pictures are not in the database. They go to the same private Vercel Blob
+store as the workbooks (`STORAGE_DRIVER=blob`, written with
+`access: 'private'`), under `site-underlays/<planId>/<sha256>.<ext>`. Only
+`GET /site/underlay/<planId>/<file>` reads them back, and only for admins:
+the proxy does not gate image paths, and the route's own `requireAdmin` does.
+There is no new environment variable and no new service. Removing a picture
+from a map keeps its file, so that an undo can bring it back; erasing files
+waits for a storage delete.
+
+Read-only check (before: nothing; after: `site_underlays`):
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" postgres:18-alpine sh -c '
+  psql "$R" -tAc "select table_name from information_schema.tables
+    where table_schema='"'"'public'"'"' and table_name='"'"'site_underlays'"'"'"'
+```
+
+Then:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine sh -euc '
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0015_site_underlays.sql
+'
+```
+
+Afterwards the query above prints `site_underlays`. The parity check at the
+top of this section must come back empty against a local database that also
+carries `0015`.
+
 ### Copying the laptop's database up
 
 The local container is Postgres **16**; Railway is **18**. Dump with the
