@@ -456,9 +456,18 @@ Everything else is inside the camp-map area.
 ## 16. Out of scope
 
 Free rotation; editing on a phone (phones get the table, §7); live presence or
-simultaneous-edit merging beyond §6.4; textures and models; drawing paths, zones
-or neighbouring camps; printing layouts beyond the PNG export; a history that
-survives a reload.
+simultaneous-edit merging beyond §6.4; textures and models; drawing free paths,
+zones or neighbouring camps; printing layouts beyond the PNG export; a history
+that survives a reload.
+
+> **Narrowed 2026-09-25 (`feat/site-utility-lines`, migration `0013`).** One
+> kind of path is now in scope: a **pipe or cable between two items**
+> (`site_lines`), so the camp can read off how many metres of hose and cable
+> to buy. It is not a free path — its ends are items, it follows them, and it
+> may join only the kinds its utility reaches (`src/lib/site/lines.ts`: water
+> between a drinking-water tank, a shower and a sink; power between the
+> generator, a fridge and a light). Bends are typed in the line's panel.
+> Everything else in this list stands.
 
 ## 17. Risks
 

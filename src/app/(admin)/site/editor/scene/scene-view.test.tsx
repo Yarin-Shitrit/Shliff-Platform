@@ -54,7 +54,22 @@ vi.mock('three', async (importOriginal) => {
   return { ...actual, WebGLRenderer, DirectionalLight: RememberedLight };
 });
 
+/* The label layout is the real one, counted: a test can tell whether a
+   change made the engine lay the labels out again. */
+const layouts = vi.hoisted(() => ({ count: 0 }));
+vi.mock('@/lib/site/editor/label-layout', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/site/editor/label-layout')>();
+  return {
+    ...actual,
+    layoutLabels: (...args: Parameters<typeof actual.layoutLabels>) => {
+      layouts.count += 1;
+      return actual.layoutLabels(...args);
+    },
+  };
+});
+
 import { LOCKED_NOTICE } from '../notices';
+import { SceneSync } from './scene-sync';
 import { NO_WEBGL, SCENE_FAILED, SceneView, type EditorUi } from './scene-view';
 
 const UI: EditorUi = {
@@ -72,11 +87,12 @@ function item(over: Partial<EditorItem> & { id: string }): EditorItem {
 const DOC: EditorDoc = {
   plot: { id: 'p1', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0 },
   items: [item({ id: 'tent' })],
+  lines: [],
   defaults: {},
 };
 
 function docOf(items: EditorItem[], plot: EditorDoc['plot'] = DOC.plot): EditorDoc {
-  return { plot, items, defaults: {} };
+  return { plot, items, lines: [], defaults: {} };
 }
 
 function fakeStore(over: Partial<EditorStore> = {}): EditorStore {
@@ -92,17 +108,19 @@ function fakeStore(over: Partial<EditorStore> = {}): EditorStore {
 
 const NO_INSETS = { left: 0, right: 0, top: 0, bottom: 0 };
 
-function renderScene(store = fakeStore(), ui: EditorUi = UI) {
+function renderScene(store = fakeStore(), ui: EditorUi = UI, sunDate: string | null = null) {
   const onView = vi.fn<(info: ViewInfo) => void>();
   const onNotice = vi.fn();
   const onModeSettled = vi.fn();
   const handle = createRef<SceneHandle>();
-  const scene = (next: EditorStore, nextUi: EditorUi) => (
+  const scene = (next: EditorStore, nextUi: EditorUi, nextSunDate: string | null) => (
     <SceneView ref={handle} store={next} ui={nextUi} insets={{ ...NO_INSETS }}
-      sunDate={null} onView={onView} onNotice={onNotice} onModeSettled={onModeSettled} />
+      sunDate={nextSunDate} onView={onView} onNotice={onNotice} onModeSettled={onModeSettled} />
   );
-  const view = render(scene(store, ui));
-  const rerenderWith = (next: EditorStore, nextUi: EditorUi = ui) => { view.rerender(scene(next, nextUi)); };
+  const view = render(scene(store, ui, sunDate));
+  const rerenderWith = (next: EditorStore, nextUi: EditorUi = ui, nextSunDate: string | null = sunDate) => {
+    view.rerender(scene(next, nextUi, nextSunDate));
+  };
   return { ...view, onView, onNotice, onModeSettled, handle, store, rerenderWith };
 }
 
@@ -368,6 +386,85 @@ describe('the 3D map with WebGL', () => {
     expect(light.shadow.camera.right).toBeCloseTo(Math.hypot(52, 48) / 2 + 10, 5);
     expect(light.target.position.x).toBeCloseTo(26, 5);
     expect(light.target.position.z).toBeCloseTo(24, 5);
+  });
+
+  /*
+   * Shade by hour plays (SIM2): the hour changes up to ten times a second.
+   * A new hour or a new day moves only the light — the meshes and the labels
+   * stay as they are. Only the sun coming on or going off (switched, or set
+   * below the horizon by the hour) changes what the scene draws: real shadows
+   * instead of the drawn patches.
+   */
+  describe('the sun', () => {
+    const SUN: EditorUi = { ...UI, sun: true };
+    let syncs: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => { syncs = vi.spyOn(SceneSync.prototype, 'sync'); });
+    afterEach(() => { syncs.mockRestore(); });
+
+    it('re-aims for a new hour or a new day without rebuilding the scene or laying the labels out again', async () => {
+      const store = fakeStore();
+      const { onView, rerenderWith } = renderScene(store, { ...SUN, hour: 10 }, '2026-06-04');
+      await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+      await frames();
+      const light = lights.at(-1) as DirectionalLight;
+      expect(light.castShadow).toBe(true);
+      const aimed = light.position.clone();
+      const [laid, synced, drawn] = [layouts.count, syncs.mock.calls.length, renderer.frames];
+
+      rerenderWith(store, { ...SUN, hour: 15 });
+      await frames();
+      expect(light.position.distanceTo(aimed)).toBeGreaterThan(1);
+      expect(renderer.frames).toBeGreaterThan(drawn);
+      expect(layouts.count).toBe(laid);
+      expect(syncs.mock.calls.length).toBe(synced);
+
+      const afternoon = light.position.clone();
+      rerenderWith(store, { ...SUN, hour: 15 }, '2026-11-02');
+      await frames();
+      expect(light.position.distanceTo(afternoon)).toBeGreaterThan(1);
+      expect(layouts.count).toBe(laid);
+      expect(syncs.mock.calls.length).toBe(synced);
+    });
+
+    it('rebuilds the scene and lays the labels out again when the sun is switched on or off', async () => {
+      const store = fakeStore();
+      const { onView, rerenderWith } = renderScene(store, { ...UI, hour: 10 }, '2026-06-04');
+      await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+      await frames();
+      const light = lights.at(-1) as DirectionalLight;
+      expect(light.castShadow).toBe(false);
+      let [laid, synced] = [layouts.count, syncs.mock.calls.length];
+
+      rerenderWith(store, { ...SUN, hour: 10 });
+      await frames();
+      expect(light.castShadow).toBe(true);
+      expect(syncs.mock.lastCall?.[0]).toMatchObject({ sun: true });
+      expect(syncs.mock.calls.length).toBeGreaterThan(synced);
+      expect(layouts.count).toBeGreaterThan(laid);
+      [laid, synced] = [layouts.count, syncs.mock.calls.length];
+
+      rerenderWith(store, { ...UI, hour: 10 });
+      await frames();
+      expect(light.castShadow).toBe(false);
+      expect(syncs.mock.lastCall?.[0]).toMatchObject({ sun: false });
+      expect(syncs.mock.calls.length).toBeGreaterThan(synced);
+      expect(layouts.count).toBeGreaterThan(laid);
+    });
+
+    it('brings the drawn patches back when the hour sets the sun, without laying the labels out again', async () => {
+      const store = fakeStore();
+      const { onView, rerenderWith } = renderScene(store, { ...SUN, hour: 12 }, '2026-11-02');
+      await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+      await frames();
+      const [laid, synced] = [layouts.count, syncs.mock.calls.length];
+      // 2 November's sunset is 16:50:56 (the almanac): at 17:30 the sun is down.
+      rerenderWith(store, { ...SUN, hour: 17.5 });
+      await frames();
+      expect((lights.at(-1) as DirectionalLight).castShadow).toBe(false);
+      expect(syncs.mock.calls.length).toBeGreaterThan(synced);
+      expect(syncs.mock.lastCall?.[0]).toMatchObject({ sun: false });
+      expect(layouts.count).toBe(laid);
+    });
   });
 
   it('lays the labels out again once the web font has loaded, and does nothing if that is after it is gone', async () => {

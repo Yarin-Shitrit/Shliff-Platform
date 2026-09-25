@@ -3,12 +3,18 @@ import type { Db } from '@/db';
 import type { AnyDb } from '@/lib/db-types';
 import { isBlank } from '@/lib/text/normalize';
 import { seasons, tasks } from '@/db/schema/camp';
-import { siteItems, siteKindDefaults, sitePlans, type SiteItemKind } from '@/db/schema/site';
+import {
+  siteItems, siteKindDefaults, siteLines, sitePlans, type SiteItemKind, type SiteLineKind, type SiteLinePoint,
+} from '@/db/schema/site';
 import { DEFAULT_SHADE_INSET_CM, isSiteItemKind } from './kinds';
 import { derive, type ItemFlags, type SiteCounts } from './derive';
 import type { KindDefaults } from './defaults';
-import type { EditorDoc, EditorItem } from './editor/model';
-import { lockRefusal, opRefusal, storedPatch, type ItemPatch, type SiteOp } from './editor/ops';
+import type { EditorDoc, EditorItem, EditorLine } from './editor/model';
+import {
+  isLineOp, lineEndsRefusal, lockRefusal, opRefusal, rekindRefusal, storedLinePatch, storedPatch,
+  type ItemPatch, type LinePatch, type SiteOp,
+} from './editor/ops';
+import { lineLengthCm } from './lines';
 
 /**
  * The camp map's reads and writes. One plan per season, any number of items
@@ -54,6 +60,21 @@ export interface SiteItem {
   sort: number;
   taskId: string | null;
   taskTitle: string | null;
+  notes: string | null;
+  updatedAt: Date;
+  updatedBy: string | null;
+}
+
+/** A pipe or a cable as the database holds it, with its length on this map worked out on read. */
+export interface SiteLine {
+  id: string;
+  planId: string;
+  kind: SiteLineKind;
+  label: string;
+  fromItemId: string;
+  toItemId: string;
+  pointsCm: SiteLinePoint[];
+  sort: number;
   notes: string | null;
   updatedAt: Date;
   updatedBy: string | null;
@@ -177,7 +198,9 @@ export async function copyPlan(
   const rows = await db.select().from(siteItems)
     .where(eq(siteItems.planId, source.id)).orderBy(asc(siteItems.sort), asc(siteItems.id));
   if (rows.length > 0) {
-    await db.insert(siteItems).values(rows.map((row) => ({
+    // New ids for the copies, remembered so the copied lines run between the copies.
+    const copies = rows.map((row) => ({
+      id: crypto.randomUUID(),
       planId,
       kind: row.kind,
       label: row.label,
@@ -190,7 +213,24 @@ export async function copyPlan(
       sort: row.sort,
       notes: row.notes,
       updatedBy: actor,
-    })));
+    }));
+    await db.insert(siteItems).values(copies);
+    const copyOf = new Map(rows.map((row, index) => [row.id, copies[index].id]));
+
+    // The pipes and cables run between the same things next year: copied, re-pointed at the copies.
+    const lines = await db.select().from(siteLines)
+      .where(eq(siteLines.planId, source.id)).orderBy(asc(siteLines.sort), asc(siteLines.id));
+    const carried = lines.flatMap((line) => {
+      const fromItemId = copyOf.get(line.fromItemId);
+      const toItemId = copyOf.get(line.toItemId);
+      if (fromItemId === undefined || toItemId === undefined) return [];
+      return [{
+        planId, kind: line.kind, label: line.label, fromItemId, toItemId,
+        pointsCm: line.pointsCm.map((p): SiteLinePoint => [p[0], p[1]]),
+        sort: line.sort, notes: line.notes, updatedBy: actor,
+      }];
+    });
+    if (carried.length > 0) await db.insert(siteLines).values(carried);
   }
   return planId;
 }
@@ -255,6 +295,43 @@ export async function itemById(db: AnyDb, id: string): Promise<SiteItem | null> 
   return row ?? null;
 }
 
+const LINE_COLUMNS = {
+  id: siteLines.id,
+  planId: siteLines.planId,
+  kind: siteLines.kind,
+  label: siteLines.label,
+  fromItemId: siteLines.fromItemId,
+  toItemId: siteLines.toItemId,
+  pointsCm: siteLines.pointsCm,
+  sort: siteLines.sort,
+  notes: siteLines.notes,
+  updatedAt: siteLines.updatedAt,
+  updatedBy: siteLines.updatedBy,
+};
+
+/** The plan's pipes and cables, in the order they were drawn. */
+export async function listLines(db: AnyDb, planId: string): Promise<SiteLine[]> {
+  return db.select(LINE_COLUMNS)
+    .from(siteLines)
+    .where(eq(siteLines.planId, planId))
+    .orderBy(asc(siteLines.sort), asc(siteLines.id));
+}
+
+export function toEditorLine(row: SiteLine): EditorLine {
+  return {
+    id: row.id, kind: row.kind, label: row.label, fromId: row.fromItemId, toId: row.toItemId,
+    points: row.pointsCm.map((p): SiteLinePoint => [p[0], p[1]]), sort: row.sort, notes: row.notes,
+  };
+}
+
+/** A line with its length on this map and the names of its ends — what the item table prints. */
+export type SiteLineView = SiteLine & {
+  fromLabel: string;
+  toLabel: string;
+  /** Null when an end is not on this map, which the cascade should make impossible; the table then says so rather than printing 0. */
+  lengthCm: number | null;
+};
+
 /*
  * Items are written only by `applySiteOps` below: a batch against the version
  * it read, refusing a locked item. The board's own writes — `addItem`,
@@ -290,6 +367,17 @@ function patchSet(
   return set;
 }
 
+/** What a line patch writes onto its row, once `storedLinePatch` has shaped it. */
+function lineSet(stored: LinePatch, actor: string): Partial<typeof siteLines.$inferInsert> {
+  const set: Partial<typeof siteLines.$inferInsert> = { updatedBy: actor, updatedAt: new Date() };
+  if (stored.label !== undefined) set.label = stored.label;
+  if (stored.fromId !== undefined) set.fromItemId = stored.fromId;
+  if (stored.toId !== undefined) set.toItemId = stored.toId;
+  if (stored.points !== undefined) set.pointsCm = stored.points;
+  if (stored.notes !== undefined) set.notes = stored.notes;
+  return set;
+}
+
 async function assertBuildTask(db: AnyDb, taskId: string, seasonId: string): Promise<void> {
   const [task] = await db.select({ id: tasks.id }).from(tasks)
     .where(and(eq(tasks.id, taskId), eq(tasks.kind, 'build'), eq(tasks.seasonId, seasonId)))
@@ -302,20 +390,38 @@ export type SiteItemView = SiteItem & ItemFlags;
 export interface SiteView {
   plan: SitePlan;
   items: SiteItemView[];
+  lines: SiteLineView[];
   counts: SiteCounts;
 }
 
-/** One call for the whole screen: the plan, its items, and every derived flag. */
+/** One call for the whole screen: the plan, its items, its lines, and every derived flag. */
 export async function siteView(db: AnyDb, seasonId: string): Promise<SiteView | null> {
   const plan = await planForSeason(db, seasonId);
   if (!plan) return null;
   const items = await listItems(db, plan.id);
-  return deriveView(plan, items);
+  const lines = await listLines(db, plan.id);
+  return deriveView(plan, items, lines);
 }
 
-/** The same derivation the editor's store runs in the browser (`derive.ts`), over the server's rows. */
-export function deriveView(plan: SitePlan, items: readonly SiteItem[]): SiteView {
-  return { plan, ...derive(plan, items) };
+/** The same derivation the editor's store runs in the browser (`derive.ts`, `lines.ts`), over the server's rows. */
+export function deriveView(plan: SitePlan, items: readonly SiteItem[], lines: readonly SiteLine[] = []): SiteView {
+  const doc: EditorDoc = {
+    plot: { id: plan.id, widthCm: plan.widthCm, depthCm: plan.depthCm, gridCm: plan.gridCm, northDeg: plan.northDeg },
+    items: items.map(toEditorItem),
+    lines: lines.map(toEditorLine),
+    defaults: {},
+  };
+  const labelOf = (id: string) => items.find((item) => item.id === id)?.label ?? '';
+  return {
+    plan,
+    ...derive(plan, items),
+    lines: lines.map((line) => ({
+      ...line,
+      fromLabel: labelOf(line.fromItemId),
+      toLabel: labelOf(line.toItemId),
+      lengthCm: lineLengthCm(doc, toEditorLine(line)),
+    })),
+  };
 }
 
 /** The camp's own sizes per kind (spec D4). A row for a kind the map no longer knows is ignored. */
@@ -345,12 +451,14 @@ export async function loadDoc(
   const plan = await planById(db, planId);
   if (!plan) return null;
   const items = await listItems(db, planId);
+  const lines = await listLines(db, planId);
   const defaults = await kindDefaults(db);
   return {
     version: plan.version,
     doc: {
       plot: { id: plan.id, widthCm: plan.widthCm, depthCm: plan.depthCm, gridCm: plan.gridCm, northDeg: plan.northDeg },
       items: items.map(toEditorItem),
+      lines: lines.map(toEditorLine),
       defaults,
     },
   };
@@ -395,8 +503,48 @@ export async function applySiteOps(
 
     const rows = await tx.select().from(siteItems).where(eq(siteItems.planId, planId));
     const byId = new Map(rows.map((row) => [row.id, row]));
+    const lineRows = await tx.select().from(siteLines).where(eq(siteLines.planId, planId));
+    const linesById = new Map(lineRows.map((row) => [row.id, row]));
+    const linesAt = (itemId: string) => [...linesById.values()].filter((line) => line.fromItemId === itemId || line.toItemId === itemId);
+    const endOf = (id: string) => {
+      const row = byId.get(id);
+      return row === undefined ? undefined : { id: row.id, kind: row.kind };
+    };
 
     for (const op of ops) {
+      if (isLineOp(op)) {
+        if (op.type === 'addLine') {
+          const [taken] = await tx.select({ id: siteLines.id }).from(siteLines)
+            .where(eq(siteLines.id, op.line.id)).limit(1);
+          if (taken) throw new Error('a line id is already in use');
+          const ends = lineEndsRefusal(op.line.kind, endOf(op.line.fromId), endOf(op.line.toId));
+          if (ends !== null) throw new Error(ends);
+          const entry = op.line;
+          const [row] = await tx.insert(siteLines).values({
+            id: entry.id, planId, kind: entry.kind, label: entry.label.trim(),
+            fromItemId: entry.fromId, toItemId: entry.toId,
+            pointsCm: entry.points.map((p): SiteLinePoint => [p[0], p[1]]),
+            sort: entry.sort, notes: cleanNotes(entry.notes), updatedBy: actor,
+          }).returning();
+          linesById.set(row.id, row);
+        } else if (op.type === 'updateLine') {
+          const existing = linesById.get(op.id);
+          if (!existing) throw new Error(`unknown site line ${op.id}`);
+          const stored = storedLinePatch(op.patch);
+          if (stored.fromId !== undefined || stored.toId !== undefined) {
+            const ends = lineEndsRefusal(existing.kind, endOf(stored.fromId ?? existing.fromItemId), endOf(stored.toId ?? existing.toItemId));
+            if (ends !== null) throw new Error(ends);
+          }
+          const set = lineSet(stored, actor);
+          await tx.update(siteLines).set(set).where(eq(siteLines.id, op.id));
+          linesById.set(op.id, { ...existing, ...set });
+        } else {
+          if (!linesById.has(op.id)) throw new Error(`unknown site line ${op.id}`);
+          await tx.delete(siteLines).where(eq(siteLines.id, op.id));
+          linesById.delete(op.id);
+        }
+        continue;
+      }
       if (op.type === 'add') {
         const [taken] = await tx.select({ id: siteItems.id }).from(siteItems)
           .where(eq(siteItems.id, op.item.id)).limit(1);
@@ -421,6 +569,10 @@ export async function applySiteOps(
         if (op.patch.taskId !== undefined && op.patch.taskId !== null) {
           await assertBuildTask(tx, op.patch.taskId, plan.seasonId);
         }
+        if (op.patch.kind !== undefined) {
+          const rekind = rekindRefusal(op.patch.kind, linesAt(op.id));
+          if (rekind !== null) throw new Error(rekind);
+        }
         const set = patchSet(existing, op.patch, actor);
         await tx.update(siteItems).set(set).where(eq(siteItems.id, op.id));
         byId.set(op.id, { ...existing, ...set } as ItemRow);
@@ -430,6 +582,8 @@ export async function applySiteOps(
         if (existing.locked) throw new Error('that item is locked');
         await tx.delete(siteItems).where(eq(siteItems.id, op.id));
         byId.delete(op.id);
+        // The database cascades the item's lines away (`site.ts`); the map of rows follows it.
+        for (const line of linesAt(op.id)) linesById.delete(line.id);
       } else if (op.size === null) {
         await tx.delete(siteKindDefaults).where(eq(siteKindDefaults.kind, op.kind));
       } else {

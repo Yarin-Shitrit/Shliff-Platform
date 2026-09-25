@@ -1,6 +1,6 @@
 # What is in flight
 
-**updated: 2026-09-24** · if that date is more than a day or two old, **this file
+**updated: 2026-09-25** · if that date is more than a day or two old, **this file
 is fiction**. Read §1 before you act on §3.
 
 This is the only document in `docs/collab/` that goes stale, and it goes stale

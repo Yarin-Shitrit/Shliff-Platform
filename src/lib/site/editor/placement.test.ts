@@ -10,7 +10,7 @@ function make(over: Partial<EditorItem> & Pick<EditorItem, 'id'>): EditorItem {
 }
 
 function docOf(items: EditorItem[], plot = { widthCm: 2600, depthCm: 2400 }): EditorDoc {
-  return { plot: { id: 'p', ...plot, gridCm: 50, northDeg: 0 }, items, defaults: {} };
+  return { plot: { id: 'p', ...plot, gridCm: 50, northDeg: 0 }, items, lines: [], defaults: {} };
 }
 
 const TENT = { widthCm: 300, depthCm: 300 };

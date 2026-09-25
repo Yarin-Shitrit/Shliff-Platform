@@ -7,7 +7,8 @@ import {
 } from '@/lib/site/editor/camera';
 import { moveOps, setRectOps } from '@/lib/site/editor/commands';
 import { layoutLabels, type LabelInput, type PlacedLabel } from '@/lib/site/editor/label-layout';
-import { findItem, rectOf, type EditorItem } from '@/lib/site/editor/model';
+import { findItem, findLine, rectOf, type EditorItem } from '@/lib/site/editor/model';
+import { pathOf } from '@/lib/site/lines';
 import { snapMove, snapResize, type GuideLine } from '@/lib/site/editor/snapping';
 import { CAMP_SITE, jerusalemInstant, sunDirection, sunPosition } from '@/lib/site/editor/sun';
 import {
@@ -159,8 +160,8 @@ export class SceneEngine {
   private placed: PlacedLabel[] = [];
   private slots = new Map<string, string>();
   private anchors = new Map<string, [number, number]>();
-  private seen: { doc: unknown; selection: unknown; flags: unknown; ui: string; insets: string; tool: string } = {
-    doc: null, selection: null, flags: null, ui: '', insets: '', tool: '',
+  private seen: { doc: unknown; selection: unknown; flags: unknown; ui: string; light: string; insets: string; tool: string } = {
+    doc: null, selection: null, flags: null, ui: '', light: '', insets: '', tool: '',
   };
 
   constructor(private readonly stage: HTMLElement, private readonly options: EngineOptions) {
@@ -242,11 +243,15 @@ export class SceneEngine {
   update(): void {
     const { store, ui, insets, sunDate } = this.options.props();
     const plot = store.doc.plot;
-    // The plot's size is here for the light: its shadows cover the plot, so they follow a resize.
     const uiKey = [
-      ui.tool, ui.labels, ui.sun, ui.netsHidden, ui.snap, ui.hiddenGroups.join(','), ui.hour, ui.theme, sunDate,
-      plot.northDeg, plot.widthCm, plot.depthCm,
+      ui.tool, ui.labels, ui.sun, ui.netsHidden, ui.snap, ui.hiddenGroups.join(','), ui.theme,
     ].join('|');
+    /* What only the light reads (SIM2 fix round 1): shade by hour plays the
+       hour up to ten times a second, and a new hour or day moves the sun and
+       nothing else — no rebuild, no new label layout. `applyLight` marks the
+       scene dirty itself when the sun comes on or goes off. The plot's size is
+       here because the shadows cover the plot, so they follow a resize. */
+    const lightKey = [ui.sun, ui.hour, sunDate, plot.northDeg, plot.widthCm, plot.depthCm].join('|');
     const insetsKey = `${insets.left},${insets.top},${insets.right},${insets.bottom}`;
     let changed = false;
     if (store.doc !== this.seen.doc || store.flags !== this.seen.flags || store.selection !== this.seen.selection) {
@@ -258,6 +263,9 @@ export class SceneEngine {
     if (uiKey !== this.seen.ui) {
       this.sceneDirty = true;
       this.labelsDirty = true;
+      changed = true;
+    }
+    if (uiKey !== this.seen.ui || lightKey !== this.seen.light) {
       this.applyLight();
       changed = true;
     }
@@ -270,7 +278,9 @@ export class SceneEngine {
       // The measure tool's crosshair; back to the plain arrow until the next hover says otherwise.
       this.canvas.style.cursor = ui.tool === 'measure' ? 'crosshair' : 'default';
     }
-    this.seen = { doc: store.doc, selection: store.selection, flags: store.flags, ui: uiKey, insets: insetsKey, tool: ui.tool };
+    this.seen = {
+      doc: store.doc, selection: store.selection, flags: store.flags, ui: uiKey, light: lightKey, insets: insetsKey, tool: ui.tool,
+    };
     if (ui.tool !== 'measure' && this.measuring !== null && !this.gestures.active) {
       this.measuring = null;
       changed = true;
@@ -347,7 +357,19 @@ export class SceneEngine {
     this.stopAnimation();
     this.autoFit = false;
     const { doc } = this.options.props().store;
-    const rect = unionRect(doc.items.filter((entry) => ids.includes(entry.id)).map(rectOf));
+    const rects = doc.items.filter((entry) => ids.includes(entry.id)).map(rectOf);
+    // A line frames as the box around its whole run, walls and bends included.
+    for (const line of doc.lines) {
+      if (!ids.includes(line.id)) continue;
+      const path = pathOf(doc, line);
+      if (path === null) continue;
+      const xs = path.map((p) => p[0]);
+      const ys = path.map((p) => p[1]);
+      const x = Math.min(...xs);
+      const y = Math.min(...ys);
+      rects.push({ x, y, width: Math.max(...xs) - x, depth: Math.max(...ys) - y });
+    }
+    const rect = unionRect(rects);
     if (rect === null) return;
     const pad = 250;
     const padded = { x: rect.x - pad, y: rect.y - pad, width: rect.width + pad * 2, depth: rect.depth + pad * 2 };
@@ -748,10 +770,16 @@ export class SceneEngine {
     });
   }
 
-  /** The directional light: the sun at the chosen hour when shade by hour is on (spec §11), else a fixed key light. */
+  /**
+   * The directional light: the sun at the chosen hour when shade by hour is
+   * on (spec §11), else a fixed key light. The meshes read only whether the
+   * sun is on — real shadows, or the drawn patches — so the scene is rebuilt
+   * only when that flips, not for every new hour.
+   */
   private applyLight(): void {
     const { store, ui, sunDate } = this.options.props();
     const plot = store.doc.plot;
+    const wasOn = this.sunOn;
     let toward: Vec3 = DEFAULT_LIGHT;
     let sunDown = false;
     this.sunOn = false;
@@ -782,7 +810,7 @@ export class SceneEngine {
     shadow.updateProjectionMatrix();
     this.light.intensity = sunDown ? 0 : this.sunOn ? 2.4 : 1.4;
     this.hemisphere.intensity = this.sunOn ? 1.3 : sunDown ? 0.9 : 2.2;
-    this.sceneDirty = true;
+    if (this.sunOn !== wasOn) this.sceneDirty = true;
   }
 
   /* ── what is where on screen ────────────────────────────────────────── */
@@ -827,14 +855,16 @@ export class SceneEngine {
     return box;
   }
 
-  private itemAt(x: number, y: number): { id: string; isNet: boolean; locked: boolean } | null {
+  private itemAt(x: number, y: number): { id: string; isNet: boolean; locked: boolean; line?: boolean } | null {
     if (this.cam === null) return null;
     const { store } = this.options.props();
     const camera = this.rig.apply(this.cam, this.viewport, this.drawMode);
     const id = pickItemId(camera, this.sync, x, y, this.viewport);
-    const item = id === null ? undefined : findItem(store.doc, id);
-    if (item === undefined) return null;
-    return { id: item.id, isNet: SITE_KINDS[item.kind].shape === 'net', locked: item.locked };
+    if (id === null) return null;
+    const item = findItem(store.doc, id);
+    if (item !== undefined) return { id: item.id, isNet: SITE_KINDS[item.kind].shape === 'net', locked: item.locked };
+    // A pipe or a cable: selectable, never dragged (its ends are).
+    return findLine(store.doc, id) === undefined ? null : { id, isNet: false, locked: false, line: true };
   }
 
   private labelAt(x: number, y: number): { ids: string[]; group: boolean } | null {

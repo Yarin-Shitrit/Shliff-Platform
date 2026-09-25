@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import type { EditorDoc, EditorItem } from './model';
+import type { SiteLinePoint } from '@/db/schema/site';
+import type { EditorDoc, EditorItem, EditorLine } from './model';
 import { nextLabel } from './model';
 import {
-  applyOps, coalesceOps, invertOps, kindSizeRefusal, lockRefusal, newItemRefusal, opRefusal, patchRefusal,
-  storedPatch, type SiteOp,
+  applyOps, coalesceOps, invertOps, kindSizeRefusal, lineEndsRefusal, linePatchRefusal, lockRefusal, newItemRefusal,
+  newLineRefusal, opRefusal, patchRefusal, rekindRefusal, storedPatch, type SiteOp,
 } from './ops';
 
 export function item(over: Partial<EditorItem> = {}): EditorItem {
@@ -95,7 +96,7 @@ const C = item({ id: 'c', kind: 'sofa', label: 'ספה 1', widthCm: 200, depthCm
 const TENT_350 = { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: null };
 
 function docOf(items: EditorItem[], defaults: EditorDoc['defaults'] = {}): EditorDoc {
-  return { plot: { id: 'p', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0 }, items, defaults };
+  return { plot: { id: 'p', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0 }, items, lines: [], defaults };
 }
 
 describe('applying ops', () => {
@@ -343,5 +344,137 @@ describe('the stored patch', () => {
 
   it('passes unrelated fields through unchanged', () => {
     expect(storedPatch(item(), { xCm: 500, taskId: 'a-task' })).toEqual({ xCm: 500, taskId: 'a-task' });
+  });
+});
+
+/* ── the pipes and cables (site_lines) ────────────────────────────────── */
+
+const LINE_A = '7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
+const LINE_B = '8b2c3d4e-5f60-4b7c-9d8e-0f1a2b3c4d5e';
+const TANK_ID = '9c3d4e5f-6071-4c8d-ae9f-1a2b3c4d5e6f';
+const SHOWER_ID = 'ad4e5f60-7182-4d9e-bfa0-2b3c4d5e6f70';
+
+function lineOf(over: Partial<EditorLine> = {}): EditorLine {
+  return { id: LINE_A, kind: 'water', label: 'צינור מים 1', fromId: TANK_ID, toId: SHOWER_ID, points: [], sort: 0, notes: null, ...over };
+}
+
+function docWithLines(lines: EditorLine[]): EditorDoc {
+  return {
+    ...docOf([item({ id: TANK_ID, kind: 'water' }), item({ id: SHOWER_ID, kind: 'shower', xCm: 500 })]),
+    lines,
+  };
+}
+
+describe('line refusals', () => {
+  it('accept a straight line and one with whole-centimetre bends', () => {
+    expect(newLineRefusal(lineOf())).toBeNull();
+    expect(newLineRefusal(lineOf({ points: [[50, 300], [550, 300]] }))).toBeNull();
+    expect(linePatchRefusal({ label: 'הצינור לכיור', notes: null })).toBeNull();
+  });
+
+  it('refuse a blank label, a fractional bend, a bend past the map, an id that is not a uuid, and an unknown kind', () => {
+    expect(linePatchRefusal({ label: '  ' })).toMatch(/^a line must have a label/);
+    expect(linePatchRefusal({ points: [[1.5, 2]] })).toMatch(/^a line bend must be/);
+    expect(linePatchRefusal({ points: [[60_000, 0]] })).toMatch(/^a line bend must be/);
+    expect(linePatchRefusal({ points: [[1, 2, 3]] as never })).toMatch(/^a line bend must be/);
+    expect(linePatchRefusal({ fromId: 'x' })).toMatch(/^a line end must be/);
+    expect(newLineRefusal(lineOf({ id: 'l1' }))).toMatch(/^a line id must be a uuid/);
+    expect(newLineRefusal(lineOf({ kind: 'gas' as never }))).toMatch(/^unknown line kind/);
+    expect(newLineRefusal(lineOf({ sort: -1 }))).toMatch(/^a line sort must be/);
+  });
+
+  it('check the ends against the map: both there, different, both carrying the utility', () => {
+    const tank = { id: TANK_ID, kind: 'water' as const };
+    const shower = { id: SHOWER_ID, kind: 'shower' as const };
+    const toilet = { id: LINE_B, kind: 'toilet' as const };
+    expect(lineEndsRefusal('water', tank, shower)).toBeNull();
+    expect(lineEndsRefusal('water', tank, undefined)).toMatch(/^a line end is not an item on this map/);
+    expect(lineEndsRefusal('water', tank, tank)).toMatch(/^a line must join two different items/);
+    expect(lineEndsRefusal('water', tank, toilet)).toMatch(/^a water pipe joins only/);
+    expect(lineEndsRefusal('power', tank, shower)).toMatch(/^a power cable joins only/);
+  });
+
+  it('keep an item with a line attached on a kind the line can reach', () => {
+    expect(rekindRefusal('sink', [{ kind: 'water' }])).toBeNull();
+    expect(rekindRefusal('tent', [{ kind: 'water' }])).toMatch(/^an item with a line attached keeps/);
+    expect(rekindRefusal('tent', [])).toBeNull();
+  });
+
+  it('go through opRefusal like every other op', () => {
+    expect(opRefusal({ type: 'addLine', line: lineOf() })).toBeNull();
+    expect(opRefusal({ type: 'updateLine', id: LINE_A, patch: { label: ' ' } })).toMatch(/^a line must have a label/);
+    expect(opRefusal({ type: 'removeLine', id: LINE_A })).toBeNull();
+  });
+});
+
+describe('applying line ops', () => {
+  it('adds, updates and removes a line, and skips what names a line that is not there', () => {
+    const start = docWithLines([]);
+    const added = applyOps(start, [{ type: 'addLine', line: lineOf() }]);
+    expect(added.skipped).toEqual([]);
+    expect(added.doc.lines).toEqual([lineOf()]);
+    // The items are untouched — the same array.
+    expect(added.doc.items).toBe(start.items);
+
+    const bent = applyOps(added.doc, [{ type: 'updateLine', id: LINE_A, patch: { points: [[50, 300]], label: 'לכיור' } }]);
+    expect(bent.doc.lines[0]).toMatchObject({ points: [[50, 300]], label: 'לכיור', fromId: TANK_ID });
+
+    const gone = applyOps(bent.doc, [{ type: 'removeLine', id: LINE_A }, { type: 'removeLine', id: LINE_B }]);
+    expect(gone.doc.lines).toEqual([]);
+    expect(gone.skipped).toEqual([{ type: 'removeLine', id: LINE_B }]);
+  });
+
+  it('keeps the bends its own: the doc never shares an array with the op', () => {
+    const points: SiteLinePoint[] = [[50, 300]];
+    const { doc: next } = applyOps(docWithLines([]), [{ type: 'addLine', line: lineOf({ points }) }]);
+    points[0][0] = 999;
+    expect(next.lines[0].points).toEqual([[50, 300]]);
+  });
+
+  it('inverts every line op, so apply then undo is the starting doc', () => {
+    const start = docWithLines([lineOf({ points: [[50, 300]] })]);
+    const ops: SiteOp[] = [
+      { type: 'updateLine', id: LINE_A, patch: { points: [[50, 400]], notes: 'לאורך הגדר' } },
+      { type: 'addLine', line: lineOf({ id: LINE_B, label: 'צינור מים 2', sort: 1 }) },
+      { type: 'removeLine', id: LINE_A },
+    ];
+    const inverse = invertOps(start, ops);
+    expect(inverse.map((op) => op.type)).toEqual(['addLine', 'removeLine', 'updateLine']);
+    const after = applyOps(start, ops).doc;
+    expect(applyOps(after, inverse).doc.lines).toEqual(start.lines);
+  });
+
+  it('has nothing to undo for an update that changes nothing, bends included', () => {
+    const start = docWithLines([lineOf({ points: [[50, 300]] })]);
+    expect(invertOps(start, [{ type: 'updateLine', id: LINE_A, patch: { points: [[50, 300]] } }])).toEqual([]);
+  });
+});
+
+describe('coalescing line ops', () => {
+  it('folds updates into an add, merges updates, and drops an add that was removed', () => {
+    expect(coalesceOps([
+      { type: 'addLine', line: lineOf() },
+      { type: 'updateLine', id: LINE_A, patch: { points: [[50, 300]] } },
+      { type: 'updateLine', id: LINE_A, patch: { label: ' לכיור ' } },
+    ])).toEqual([{ type: 'addLine', line: lineOf({ points: [[50, 300]], label: ' לכיור ' }) }]);
+
+    expect(coalesceOps([
+      { type: 'updateLine', id: LINE_A, patch: { points: [[50, 300]] } },
+      { type: 'updateLine', id: LINE_A, patch: { notes: 'x' } },
+    ])).toEqual([{ type: 'updateLine', id: LINE_A, patch: { points: [[50, 300]], notes: 'x' } }]);
+
+    expect(coalesceOps([
+      { type: 'addLine', line: lineOf() },
+      { type: 'remove', id: SHOWER_ID },
+      { type: 'removeLine', id: LINE_A },
+    ])).toEqual([{ type: 'remove', id: SHOWER_ID }]);
+  });
+
+  it('keeps a line op and an item op with the same id apart', () => {
+    // Never the case in practice — ids are uuids — but the two maps must not cross.
+    expect(coalesceOps([
+      { type: 'add', item: item({ id: LINE_A }) },
+      { type: 'removeLine', id: LINE_A },
+    ])).toHaveLength(2);
   });
 });

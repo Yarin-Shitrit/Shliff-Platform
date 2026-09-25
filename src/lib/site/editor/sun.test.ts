@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
+import type { Rect } from '../geometry';
 import type { EditorDoc, EditorItem } from './model';
 import {
-  CAMP_SITE, jerusalemInstant, mapDirection, shadeAtHour, shadowOffset, sunDirection, sunPosition,
+  CAMP_SITE, castShades, itemShade, jerusalemInstant, mapDirection, shadeAtHour, shadowOffset, sunDirection, sunPosition,
   type SunPosition,
 } from './sun';
 
@@ -188,7 +189,7 @@ describe('shade at an hour', () => {
   ];
 
   function docOf(items: EditorItem[], northDeg: number): EditorDoc {
-    return { plot: { id: 'p', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg }, items, defaults: {} };
+    return { plot: { id: 'p', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg }, items, lines: [], defaults: {} };
   }
 
   const NOON = { azimuthDeg: 180, elevationDeg: 45 };
@@ -211,5 +212,30 @@ describe('shade at an hour', () => {
 
   it('says nothing while the sun is down', () => {
     expect(shadeAtHour(docOf(ITEMS, 0), { azimuthDeg: 270, elevationDeg: -2 })).toBeNull();
+  });
+
+  /* The two halves `shadeAtHour` is made of, shared with the tent ranking
+     (`shade-timeline.ts`) so the geometry is written once. */
+  function expectRect(actual: Rect, expected: Rect): void {
+    expect(actual.x).toBeCloseTo(expected.x, 6);
+    expect(actual.y).toBeCloseTo(expected.y, 6);
+    expect(actual.width).toBeCloseTo(expected.width, 6);
+    expect(actual.depth).toBeCloseTo(expected.depth, 6);
+  }
+
+  it('casts each net’s shaded ground away from the sun, and none while the sun is down', () => {
+    const [shade, ...more] = castShades(docOf(ITEMS, 0), NOON)!;
+    expect(more).toEqual([]);
+    expectRect(shade, { x: 1050, y: 750, width: 700, depth: 700 });
+    expect(castShades(docOf(ITEMS, 0), { azimuthDeg: 270, elevationDeg: -2 })).toBeNull();
+  });
+
+  it('says how a footprint stands against the cast shade — beyond the net’s own footprint too', () => {
+    // Sun due east at 30°: the 3 m cloth's shade falls 3·√3 m = 519.6 cm west, x 530.4–1230.4, y 1050–1750.
+    const shades = castShades(docOf(ITEMS, 0), { azimuthDeg: 90, elevationDeg: 30 })!;
+    expect(itemShade({ x: 600, y: 1100, width: 300, depth: 300 }, shades)).toBe('full');
+    expect(itemShade({ x: 400, y: 1100, width: 300, depth: 300 }, shades)).toBe('partial');
+    expect(itemShade({ x: 100, y: 100, width: 300, depth: 300 }, shades)).toBe('sun');
+    expect(itemShade({ x: 600, y: 1100, width: 300, depth: 300 }, [])).toBe('sun');
   });
 });

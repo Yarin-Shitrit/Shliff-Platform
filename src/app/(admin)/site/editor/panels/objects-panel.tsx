@@ -14,8 +14,10 @@ import { useRef, useState, type ReactElement } from 'react';
 import { Button } from '@/components/ui/button';
 import { cx } from '@/components/ui/cx';
 import { Icon } from '@/components/ui/icon';
-import { formatSize } from '@/lib/site/geometry';
+import type { SiteLineKind } from '@/db/schema/site';
+import { formatMetres, formatSize } from '@/lib/site/geometry';
 import { KIND_GROUP_LABELS, KIND_GROUP_ORDER, SITE_KINDS, type SiteKindGroup } from '@/lib/site/kinds';
+import { LINE_KINDS } from '@/lib/site/lines';
 import type { EditorItem } from '@/lib/site/editor/model';
 import type { EditorFlags } from '../use-editor-store';
 import { EditorIcon } from './editor-icons';
@@ -36,10 +38,20 @@ function issuesOf(item: EditorItem, flags: EditorFlags): Issue[] {
   return issues;
 }
 
+/** A pipe or a cable as the list shows it: named, with its length on the map, or none when an end is gone. */
+export interface LineRow {
+  id: string;
+  kind: SiteLineKind;
+  label: string;
+  lengthCm: number | null;
+}
+
 export function ObjectsPanel({
-  items, selection, flags, hiddenGroups, netsHidden, onPick, onPickIds, onToggleGroup, onShowLibrary,
+  items, lines = [], selection, flags, hiddenGroups, netsHidden, onPick, onPickIds, onToggleGroup, onShowLibrary,
 }: {
   items: readonly EditorItem[];
+  /** The pipes and cables, listed after the groups; a row selects its line like an item's row does. */
+  lines?: readonly LineRow[];
   selection: readonly string[];
   flags: EditorFlags;
   hiddenGroups: readonly SiteKindGroup[];
@@ -64,6 +76,9 @@ export function ObjectsPanel({
         .sort((a, b) => a.label.localeCompare(b.label, 'he', { numeric: true })),
     }))
     .filter((entry) => entry.rows.length > 0);
+  const lineRows = lines
+    .filter((line) => wanted === '' || line.label.includes(wanted))
+    .sort((a, b) => a.label.localeCompare(b.label, 'he', { numeric: true }));
 
   /* The button that cleared the search leaves with the empty result, so the
      focus goes to the box the next search is typed in. */
@@ -171,7 +186,41 @@ export function ObjectsPanel({
           </div>
         );
       })}
-      {groups.length === 0 ? (
+      {lineRows.length === 0 ? null : (
+        <div>
+          <div className={styles.groupHead}>
+            <span>צנרת וכבלים</span>
+            <button
+              type="button"
+              className={styles.count}
+              aria-label={`בחירת הקווים בקבוצה צנרת וכבלים (${lineRows.length})`}
+              onClick={() => { onPickIds(lineRows.map((line) => line.id)); }}
+            >
+              <bdi>{lineRows.length}</bdi>
+            </button>
+          </div>
+          {lineRows.map((line) => {
+            const length = line.lengthCm === null ? 'קצה חסר' : formatMetres(line.lengthCm);
+            return (
+              <button
+                key={line.id}
+                type="button"
+                className={styles.row}
+                data-row="true"
+                data-id={line.id}
+                aria-label={[line.label, LINE_KINDS[line.kind].label, length].join(', ')}
+                aria-pressed={selected.has(line.id)}
+                onClick={(event) => { onPick(line.id, event.shiftKey || event.metaKey || event.ctrlKey); }}
+              >
+                <span className={cx(styles.rowSwatch, chrome[`l_${line.kind}`])} aria-hidden="true" />
+                <span className={styles.rowLabel}>{line.label}</span>
+                <span className={styles.rowSize}><bdi>{length}</bdi></span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {groups.length === 0 && lineRows.length === 0 ? (
         <div className={styles.offer}>
           <p className={chrome.hint}>אין במפה פריט בשם הזה. אפשר לחפש בשם אחר, או לחזור לכל הרשימה.</p>
           <Button size="sm" tone="ghost" onClick={clearSearch}>ניקוי החיפוש</Button>

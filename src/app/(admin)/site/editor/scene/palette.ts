@@ -1,3 +1,4 @@
+import type { SiteLineKind } from '@/db/schema/site';
 import type { SiteKindGroup } from '@/lib/site/kinds';
 
 /**
@@ -33,6 +34,8 @@ export interface ScenePalette {
   /** The soft patch under a solid while shade by hour is off. */
   contact: string;
   groups: Record<SiteKindGroup, string>;
+  /** The pipes and cables on the ground: water blue, power amber — apart from every group colour, in both themes. */
+  lines: Record<SiteLineKind, string>;
 }
 
 export const SCENE_PALETTE: Record<SceneTheme, ScenePalette> = {
@@ -54,6 +57,7 @@ export const SCENE_PALETTE: Record<SceneTheme, ScenePalette> = {
     ember: '#E8743B',
     contact: '#46321E',
     groups: { sleep: '#E6D0A6', living: '#EDBF98', sanitation: '#B4CDEE', utility: '#B7D9C3', other: '#D5C4EA' },
+    lines: { water: '#2F6FD6', power: '#D9861A' },
   },
   dark: {
     outside: '#141211',
@@ -73,6 +77,7 @@ export const SCENE_PALETTE: Record<SceneTheme, ScenePalette> = {
     ember: '#C8612B',
     contact: '#000000',
     groups: { sleep: '#7C6948', living: '#83593D', sanitation: '#44607F', utility: '#42685A', other: '#5D4D78' },
+    lines: { water: '#6FA3F0', power: '#F0B453' },
   },
 };
 

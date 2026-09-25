@@ -1,9 +1,12 @@
-import type { SiteItemKind } from '@/db/schema/site';
+import type { SiteItemKind, SiteLineKind, SiteLinePoint } from '@/db/schema/site';
 import { effectiveSize, itemHeight, type KindSize } from '../defaults';
 import { contains, overlap, turnAboutCentre, unionRect, wholeCm, type Rect } from '../geometry';
 import { DEFAULT_SHADE_INSET_CM } from '../kinds';
-import { findItem, nextLabel, rectOf, type EditorDoc, type EditorItem } from './model';
-import { lockRefusal, storedPatch, type ItemPatch, type SiteOp } from './ops';
+import { findItem, findLine, linesAt, nextLabel, nextLineLabel, rectOf, type EditorDoc, type EditorItem, type EditorLine } from './model';
+import {
+  lineEndsRefusal, lockRefusal, rekindRefusal, samePoints, storedLinePatch, storedPatch,
+  type ItemPatch, type LinePatch, type SiteOp,
+} from './ops';
 
 /**
  * Every edit a lead can make, as a pure function from the doc to the ops that
@@ -118,8 +121,25 @@ export function addOps(
   }];
 }
 
+/**
+ * Removing an item takes its pipes and cables with it, each as its own op
+ * before the item's, so an undo puts the item back first and then every line
+ * that hung from it. The database would drop them anyway (the cascade in
+ * `site.ts`); the explicit ops are what makes the removal undoable.
+ */
 export function removeOps(doc: EditorDoc, ids: readonly string[]): SiteOp[] {
-  return unlockedOf(doc, ids).map((entry): SiteOp => ({ type: 'remove', id: entry.id }));
+  const going = unlockedOf(doc, ids);
+  const lineIds = new Set<string>();
+  const ops: SiteOp[] = [];
+  for (const entry of going) {
+    for (const line of linesAt(doc, entry.id)) {
+      if (lineIds.has(line.id)) continue;
+      lineIds.add(line.id);
+      ops.push({ type: 'removeLine', id: line.id });
+    }
+  }
+  for (const entry of going) ops.push({ type: 'remove', id: entry.id });
+  return ops;
 }
 
 /** Whether a copy could land here: inside the fence, and on nothing solid unless it is a net. */
@@ -204,6 +224,82 @@ export function patchOps(doc: EditorDoc, id: string, patch: ItemPatch): SiteOp[]
   const op = changedUpdate(entry, storedPatch(entry, roundedPatch(patch)));
   if (op === null) return [];
   if (lockRefusal(entry.locked, op.patch) !== null) return [];
+  // A fridge with a cable does not become a tent (`rekindRefusal`, the rule the server runs too).
+  if (op.patch.kind !== undefined && rekindRefusal(op.patch.kind, linesAt(doc, id)) !== null) return [];
+  return [op];
+}
+
+/* ── lines ──────────────────────────────────────────────────────────────── */
+
+type UpdateLineOp = Extract<SiteOp, { type: 'updateLine' }>;
+
+/** One past the highest `sort` among the lines. */
+function nextLineSort(lines: readonly EditorLine[]): number {
+  return lines.reduce((top, entry) => Math.max(top, entry.sort), -1) + 1;
+}
+
+/** An update holding only what differs from the line; null when nothing does. */
+export function changedLineUpdate(entry: EditorLine, patch: LinePatch): UpdateLineOp | null {
+  const changed: LinePatch = {};
+  for (const key of Object.keys(patch) as Array<keyof LinePatch>) {
+    const value = patch[key];
+    if (value === undefined) continue;
+    const same = key === 'points' ? samePoints(value as SiteLinePoint[], entry.points) : value === entry[key];
+    if (!same) (changed as Record<string, unknown>)[key] = value;
+  }
+  return Object.keys(changed).length === 0 ? null : { type: 'updateLine', id: entry.id, patch: changed };
+}
+
+/**
+ * A new pipe or cable from one item to another, straight, with the kind's
+ * next label. Nothing when either end is missing, the two are one item, or
+ * an end does not carry the utility (`lineEndsRefusal`, the rule the server
+ * runs too) — the inspector offers only ends that pass, so a refusal here is
+ * a race with another lead, not a lead's mistake.
+ */
+export function addLineOps(doc: EditorDoc, kind: SiteLineKind, fromId: string, toId: string, id: string): SiteOp[] {
+  if (findLine(doc, id)) return [];
+  const from = findItem(doc, fromId);
+  const to = findItem(doc, toId);
+  if (lineEndsRefusal(kind, from, to) !== null) return [];
+  return [{
+    type: 'addLine',
+    line: {
+      id, kind, label: nextLineLabel(doc.lines, kind), fromId, toId, points: [],
+      sort: nextLineSort(doc.lines), notes: null,
+    },
+  }];
+}
+
+export function removeLineOps(doc: EditorDoc, ids: readonly string[]): SiteOp[] {
+  const seen = new Set<string>();
+  const ops: SiteOp[] = [];
+  for (const id of ids) {
+    if (seen.has(id) || !findLine(doc, id)) continue;
+    seen.add(id);
+    ops.push({ type: 'removeLine', id });
+  }
+  return ops;
+}
+
+/**
+ * Whatever the line inspector typed: a name, the bends in whole centimetres,
+ * notes, or a new end — which is checked like a new line's. Fields equal to
+ * the line's own are dropped, so nothing is saved for a form that changed
+ * nothing.
+ */
+export function patchLineOps(doc: EditorDoc, id: string, patch: LinePatch): SiteOp[] {
+  const entry = findLine(doc, id);
+  if (!entry) return [];
+  const rounded: LinePatch = { ...patch };
+  if (rounded.points !== undefined) rounded.points = rounded.points.map((p): SiteLinePoint => [wholeCm(p[0]), wholeCm(p[1])]);
+  const op = changedLineUpdate(entry, storedLinePatch(rounded));
+  if (op === null) return [];
+  if (op.patch.fromId !== undefined || op.patch.toId !== undefined) {
+    const from = findItem(doc, op.patch.fromId ?? entry.fromId);
+    const to = findItem(doc, op.patch.toId ?? entry.toId);
+    if (lineEndsRefusal(entry.kind, from, to) !== null) return [];
+  }
   return [op];
 }
 

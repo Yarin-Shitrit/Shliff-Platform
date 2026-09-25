@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from 'vitest';
 import { act, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { Profiler } from 'react';
 import { ToastProvider } from '@/components/ui/toaster';
 import { unnamedControls } from '@/test/a11y';
 import { contains, overlap } from '@/lib/site/geometry';
@@ -25,7 +26,7 @@ function siteItem(over: Partial<EditorItem> & { id: string }): EditorItem {
 }
 
 function siteDoc(items: EditorItem[], plot: Partial<EditorPlot> = {}): EditorDoc {
-  return { plot: { id: 'p1', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0, ...plot }, items, defaults: {} };
+  return { plot: { id: 'p1', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0, ...plot }, items, lines: [], defaults: {} };
 }
 
 const { saveSiteChangesAction, loadSiteDocAction } = vi.hoisted(() => ({
@@ -947,6 +948,187 @@ describe('shade by hour', () => {
     await screen.findByTestId('scene');
     fireEvent.click(button('צל לפי שעה'));
     expect(within(screen.getByRole('group', { name: 'צל לפי שעה' })).getByText(/עוד לא נרשם תאריך פתיחה/)).toBeTruthy();
+  });
+
+  it('lights the day a chip picks, once the burn’s last day is known', async () => {
+    renderEditor({ sunEndDate: '2026-06-06' });
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    const days = within(screen.getByRole('group', { name: 'ימי הברן' }));
+    expect(days.getAllByRole('button').map((chip) => chip.textContent)).toEqual(['ה׳ 4.6', 'ו׳ 5.6', 'ש׳ 6.6']);
+    fireEvent.click(days.getByRole('button', { name: 'ו׳ 5.6' }));
+    expect(lastScene().sunDate).toBe('2026-06-05');
+    expect(days.getByRole('button', { name: 'ו׳ 5.6' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByText((_, element) => element?.tagName === 'P' && element.textContent?.startsWith('ביום 5.6.2026 של הברן') === true))
+      .toBeTruthy();
+  });
+
+  it('has the gate day alone, and lights it, while the burn’s last day is unknown', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    const chips = within(screen.getByRole('group', { name: 'ימי הברן' })).getAllByRole('button');
+    expect(chips.map((chip) => chip.textContent)).toEqual(['ה׳ 4.6']);
+    fireEvent.click(chips[0]);
+    expect(lastScene().sunDate).toBe('2026-06-04');
+  });
+
+  it('goes back to the gate day when a picked day is no longer one of the burn’s', async () => {
+    const { rerenderWith } = renderEditor({ sunEndDate: '2026-06-06' });
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    fireEvent.click(button('ש׳ 6.6'));
+    expect(lastScene().sunDate).toBe('2026-06-06');
+    // The season's opening date moved in its drawer, and the page refreshed.
+    rerenderWith({ sunDate: '2026-07-01', sunEndDate: '2026-07-02' });
+    expect(lastScene().sunDate).toBe('2026-07-01');
+  });
+
+  it('pictures the day’s shade from the map on screen, a column a quarter hour', async () => {
+    const net = siteItem({ id: 'n', kind: 'shade', label: 'רשת 1', xCm: 400, yCm: 400, widthCm: 800, depthCm: 800, insetCm: 50 });
+    const { container } = renderEditor({ initial: { doc: siteDoc([siteItem({ id: 'a' }), net]), version: 0 } });
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    // 4 June at the camp: sunrise 05:39:37, sunset 19:38:51 (the almanac) — 05:45 to 19:30, 56 quarter hours.
+    expect(container.querySelectorAll('[data-strip] [data-hour]')).toHaveLength(56);
+    const slider = screen.getByRole('slider', { name: 'שעה ביום' }) as HTMLInputElement;
+    expect([slider.min, slider.max]).toEqual(['5.75', '19.5']);
+    // Clicking the strip moves the hour the scene lights.
+    fireEvent.click(container.querySelector('[data-strip] [data-hour="10.25"]')!);
+    expect(lastScene().ui.hour).toBe(10.25);
+  });
+
+  it('invites a net when the map has none, instead of an empty picture', async () => {
+    const { container } = renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    expect(screen.getByText(/^אין עדיין רשתות צל במפה\./)).toBeTruthy();
+    expect(container.querySelector('[data-strip]')).toBeNull();
+  });
+
+  it('ranks the map’s tents by their shade, and a row selects its tent (MST)', async () => {
+    // 4 June: the sun stands high, so the net's shade stays near it; a tent under it outranks one across the plot.
+    const net = siteItem({ id: 'n', kind: 'shade', label: 'רשת 1', xCm: 400, yCm: 400, widthCm: 800, depthCm: 800, insetCm: 50 });
+    const far = siteItem({ id: 'far', label: 'אוהל רחוק', xCm: 2000, yCm: 2000 });
+    renderEditor({ initial: { doc: siteDoc([far, siteItem({ id: 'a' }), net]), version: 0 }, initialSelection: null });
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    fireEvent.click(button('האוהלים המוצלים ביותר'));
+    const list = within(screen.getByRole('list', { name: 'האוהלים המוצלים ביותר' }));
+    const rows = list.getAllByRole('button');
+    expect(rows.map((row) => row.textContent?.startsWith('אוהל 1') ? 'a' : row.textContent?.startsWith('אוהל רחוק') ? 'far' : '?'))
+      .toEqual(['a', 'far']);
+    expect(rows[0].textContent).toMatch(/בצל$/);
+    expect(rows[1].textContent).toBe('אוהל רחוק אין צל');
+    fireEvent.click(rows[0]);
+    expect(lastScene().store.selection).toEqual(['a']);
+    expect(scene.handle.fitIds).toHaveBeenLastCalledWith(['a']);
+  });
+
+  it('selects the nets from the invitation when full shade never reaches what is under them', async () => {
+    /* A 10 × 10 m tent half under an 8 × 8 m net: the net's shaded ground is
+       7 × 7 m, so the tent is never wholly in its shade. */
+    const tent = siteItem({ id: 'big', label: 'אוהל גדול', xCm: 0, yCm: 0, widthCm: 1000, depthCm: 1000 });
+    const net = siteItem({ id: 'n', kind: 'shade', label: 'רשת 1', xCm: 400, yCm: 400, widthCm: 800, depthCm: 800, insetCm: 50 });
+    renderEditor({ initial: { doc: siteDoc([tent, net]), version: 0 }, initialSelection: null });
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    expect(screen.getByText(/^באף שעה ביום הזה אין צל/)).toBeTruthy();
+    fireEvent.click(button('בחירת רשתות הצל'));
+    expect(lastScene().store.selection).toEqual(['n']);
+    expect(scene.handle.fitIds).toHaveBeenLastCalledWith(['n']);
+  });
+});
+
+/*
+ * Playback (SIM2) in the whole editor, on frames the test hands out: 16 ms
+ * apart, one `act` each, so every commit renders as it would in a browser.
+ * What is measured is how often the whole editor re-renders — the cost a
+ * playing sun must not multiply by the frame rate.
+ */
+describe('shade by hour, played', () => {
+  let queue = new Map<number, FrameRequestCallback>();
+  let nextFrame = 1;
+  let clock = 0;
+
+  beforeEach(() => {
+    queue = new Map();
+    nextFrame = 1;
+    clock = 0;
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      const id = nextFrame;
+      nextFrame += 1;
+      queue.set(id, callback);
+      return id;
+    });
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => { queue.delete(id); });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function runFrames(ms: number): number {
+    let frames = 0;
+    for (let spent = 0; spent < ms; spent += 16) {
+      act(() => {
+        clock += 16;
+        const due = [...queue.values()];
+        queue.clear();
+        for (const callback of due) callback(clock);
+      });
+      frames += 1;
+    }
+    return frames;
+  }
+
+  it('re-renders the editor about ten times a second while the sun plays, not on every frame', async () => {
+    const commits: number[] = [];
+    const props: SiteEditorProps = {
+      initial: { doc: siteDoc([siteItem({ id: 'a' })]), version: 0 },
+      initialSelection: null,
+      seasonId: 's26',
+      seasonName: 'ברן 26',
+      sunDate: '2026-06-04',
+      buildTasks: [],
+      plotHref: PLOT_HREF,
+      seasonDateHref: DATE_HREF,
+    };
+    render(
+      <Profiler id="editor" onRender={(_id, _phase, actual) => { commits.push(actual); }}>
+        <ToastProvider><SiteEditor {...props} /></ToastProvider>
+      </Profiler>,
+    );
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    fireEvent.click(button('הרצת הצל לאורך השעות'));
+    commits.length = 0;
+    const scenesBefore = scene.props.mock.calls.length;
+
+    const frames = runFrames(2000);
+    const sceneRenders = scene.props.mock.calls.length - scenesBefore;
+
+    // Measured at c2b1e38: 17 commits for 125 frames; 124 with the throttle taken out (sim-2-report.md).
+    expect(frames).toBe(125);
+    expect(commits.length).toBeLessThanOrEqual(20);
+    expect(sceneRenders).toBeLessThanOrEqual(20);
+    // 14:00 on, at 30 simulated minutes a second: nearly an hour later, on the scene.
+    expect(lastScene().ui.hour).toBeGreaterThan(14.9);
+    expect(lastScene().ui.hour).toBeLessThanOrEqual(15);
+  });
+
+  it('stops asking for frames when the sun card is closed mid-play', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    fireEvent.click(button('הרצת הצל לאורך השעות'));
+    runFrames(300);
+    expect(queue.size).toBe(1);
+    fireEvent.click(button('צל לפי שעה'));
+    expect(queue.size).toBe(0);
+    const hour = lastScene().ui.hour;
+    runFrames(1000);
+    expect(lastScene().ui.hour).toBe(hour);
   });
 });
 

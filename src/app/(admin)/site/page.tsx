@@ -14,7 +14,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { ButtonLink } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { SiteEditor } from './editor/site-editor';
-import { SiteTable } from './site-table';
+import { SiteLinesTable, SiteTable } from './site-table';
 import { PlotDrawer } from './plot-drawer';
 import { CopyDrawer } from './copy-drawer';
 import styles from './site.module.css';
@@ -29,9 +29,9 @@ export const metadata: Metadata = { title: 'מפת הקאמפ' };
  * One map per season. The page reads it once and hands it to the editor
  * (spec §6.1); from then on the editor's store is the truth and saves in the
  * background, so nothing here re-reads after an edit. The editor draws the
- * item table from that store on a screen under 900 px and under its no-WebGL
- * notice (§7), so a phone, a screen reader and an old browser all still read
- * the map as it is being edited.
+ * item table, and the pipes and cables under it, from that store on a screen
+ * under 900 px and under its no-WebGL notice (§7), so a phone, a screen
+ * reader and an old browser all still read the map as it is being edited.
  *
  * Every number on this screen was typed by somebody (R11): no workbook holds
  * a map, and the chips say so.
@@ -100,7 +100,7 @@ export default async function SitePage(
     );
   }
 
-  const { plan, items } = view;
+  const { plan, items, lines } = view;
 
   /* `loadDoc` answers null only if the plan was there for `siteView` and not
      found a moment later. Not a 404 — the page exists — and never a guess:
@@ -126,6 +126,8 @@ export default async function SitePage(
           season={current.id}
           empty={<EmptyState kind="nothing-this-season" noun="פריטים במפה" seasonName={current.name} />}
         />
+        {/* The pipes and cables under the items, with their metres — nothing when there are none. */}
+        <SiteLinesTable lines={lines} />
       </main>
     );
   }
@@ -133,9 +135,8 @@ export default async function SitePage(
   /* `?peek=` selects an item when the map loads (spec §12) — only one that is
      on this season's map. Nothing opens over the editor for it, not even the
      retired board's `?act=remove`: a removal is undone in the editor. */
-  const initialSelection = query.peek !== null && loaded.doc.items.some((entry) => entry.id === query.peek)
-    ? query.peek
-    : null;
+  const onThisMap = (id: string) => loaded.doc.items.some((entry) => entry.id === id) || loaded.doc.lines.some((entry) => entry.id === id);
+  const initialSelection = query.peek !== null && onThisMap(query.peek) ? query.peek : null;
   const buildTasks = (await listTasks(db, current.id, { kind: 'build' }))
     .map((task) => ({ id: task.taskId, title: task.title }));
 

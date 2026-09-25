@@ -3,9 +3,11 @@ import Link from 'next/link';
 import { Table, type TableColumn } from '@/components/ui/table';
 import { Pill } from '@/components/ui/pill';
 import { SourceChip } from '@/components/ui/source-chip';
-import { formatSize, metres, shadedRect } from '@/lib/site/geometry';
+import type { SiteLineView } from '@/lib/site/plan';
+import { formatMetres, formatSize, metres, shadedRect } from '@/lib/site/geometry';
 import { toPlaced, type ItemFlags, type ItemShape } from '@/lib/site/derive';
 import { SITE_KINDS } from '@/lib/site/kinds';
+import { LINE_KINDS } from '@/lib/site/lines';
 import {
   SHADE_STATE_LABELS, SHADE_STATE_TONES, SITE_STATE_LABELS, SITE_STATE_TONES,
 } from '@/lib/site/labels';
@@ -130,6 +132,57 @@ export function SiteTable({ items, season, empty }: SiteTableProps): ReactElemen
         tone: row.outside ? 'bad' : row.overlapping ? 'warn' : undefined,
       }))}
       empty={empty}
+    />
+  );
+}
+
+/** What a line's row needs: what it is, the names of its ends, its bends, and its length on this map. */
+export type SiteLinesTableRow = Pick<SiteLineView, 'id' | 'kind' | 'label' | 'fromLabel' | 'toLabel' | 'lengthCm' | 'pointsCm'>;
+
+/**
+ * The pipes and cables, read the same way (`site_lines`): what runs from
+ * where to where and how long it is on the map, wall to wall through its
+ * bends, with no reserve — the metres the camp buys by. Shown, like the items,
+ * only where the map is not, so a name is a name. Nothing when the map has
+ * none: the editor is where the first one is drawn.
+ */
+export function SiteLinesTable({ lines }: { lines: readonly SiteLinesTableRow[] }): ReactElement | null {
+  if (lines.length === 0) return null;
+  const columns: ReadonlyArray<TableColumn<SiteLinesTableRow>> = [
+    {
+      key: 'label',
+      header: 'קו',
+      card: 'title',
+      cell: (row) => (
+        <span className={styles.title}>
+          <span className="nm">{row.label}</span>
+          <span className="muted">{LINE_KINDS[row.kind].label}</span>
+        </span>
+      ),
+    },
+    { key: 'from', header: 'מ', card: 'meta', cell: (row) => row.fromLabel || DASH },
+    { key: 'to', header: 'אל', card: 'meta', cell: (row) => row.toLabel || DASH },
+    {
+      key: 'length',
+      header: 'אורך על המפה',
+      card: 'figure',
+      cell: (row) => (row.lengthCm === null ? 'קצה חסר' : <bdi>{formatMetres(row.lengthCm)}</bdi>),
+    },
+    {
+      key: 'bends',
+      header: 'נקודות פנייה',
+      card: 'meta',
+      cell: (row) => <bdi>{String(row.pointsCm.length)}</bdi>,
+    },
+    // R11: no workbook holds a map, so every metre here was drawn by a lead.
+    { key: 'source', header: 'מקור הנתון', card: 'meta', cell: () => <SourceChip source={{ kind: 'manual' }} /> },
+  ];
+  const total = lines.reduce((sum, row) => sum + (row.lengthCm ?? 0), 0);
+  return (
+    <Table
+      caption={`צינורות וכבלים · ${formatMetres(total)} על המפה`}
+      columns={columns}
+      rows={lines.map((row) => ({ id: row.id, data: row }))}
     />
   );
 }
