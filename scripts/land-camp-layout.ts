@@ -6,7 +6,8 @@
  * over the whole 28 × 20 m built area with a 2 m margin for its guy lines, a sofa lounge in the north-west corner, sixteen
  * 2.3 m tents in facing rows on the east, showers and a sink on the east
  * edge, the kitchen, dressing area, stalls and water tanks down the west
- * side, and four caravans along the south. Every number below is that sketch read off the
+ * side, and four caravans along the south — plus the fridge and four lights
+ * the sketch never drew, placed as a starting point and noted as such. Every number below is that sketch read off the
  * grid — `notes` on each item says so — and the readings the sketch leaves
  * unclear are labelled as unclear rather than guessed (product rule: the
  * system never guesses).
@@ -94,6 +95,8 @@ interface SketchItem {
 }
 
 const FROM_SKETCH = `מהסקיצה ${SKETCH_DATE}`;
+/** An item the camp brings that the sketch never drew: its place here is a starting point, and the note says so. */
+const NOT_ON_SKETCH = 'לא מופיע בסקיצה. נוסף לפי יוסף 2026-09-25; המיקום הוא הצעה לגרירה, לא קריאה מהסקיצה';
 
 function repeat(
   kind: SiteItemKind, labelBase: string, size: [number, number], at: Array<[number, number]>,
@@ -153,11 +156,14 @@ export function sketchItems(): SketchItem[] {
     // -- Showers and a sink on the east edge ---------------------------------
     { kind: 'shower', label: 'מקלחת 1', xCm: 2800, yCm: 1050, widthCm: 200, depthCm: 200 },
     { kind: 'shower', label: 'מקלחת 2', xCm: 2800, yCm: 1250, widthCm: 200, depthCm: 250 },
-    // A sink of its own kind since `site_lines`: where a water pipe may end. Still the sketch's reading, still unclear.
+    // The sink is a table with the basin built in, 1.5 × 0.6 m (the lead, 2026-09-25) — the kind's
+    // default. It stands where the sketch's rotated word was read as "כיור", against the showers.
     {
-      kind: 'sink', label: 'כיור', xCm: 2700, yCm: 1250, widthCm: 100, depthCm: 250,
-      unclear: 'הכיתוב המסובב בסקיצה ליד המקלחות לא קריא בוודאות; נקרא "כיור"',
+      kind: 'sink', label: 'כיור', xCm: 2640, yCm: 1250, widthCm: 150, depthCm: 60,
+      unclear: 'הכיתוב המסובב בסקיצה ליד המקלחות לא קריא בוודאות; נקרא "כיור". המידות 1.5×0.6 הן של שולחן הכיור, לפי יוסף 2026-09-25, לא מהסקיצה',
     },
+    // A light for the showers and the sink.
+    { kind: 'light', label: 'תאורה 3', xCm: 2740, yCm: 1180, widthCm: 40, depthCm: 40, unclear: NOT_ON_SKETCH },
 
     // -- Down the west side: chairs, two unnamed boxes, kitchen, dressing ---
     ...repeat('other', 'כיסא', [60, 60], [[320, 1320], [420, 1320], [520, 1320]]),
@@ -171,6 +177,12 @@ export function sketchItems(): SketchItem[] {
       kind: 'kitchen', label: 'מטבח', xCm: 200, yCm: 1550, widthCm: 600, depthCm: 250,
       unclear: 'הכיתוב הצהוב המסובב לא קריא בוודאות; נקרא "מטבח"',
     },
+    // -- What the sketch does not draw and the camp brings anyway (Yosef, 2026-09-25) ----
+    // The fridge beside the kitchen, and a light each for the lounge, the kitchen, the
+    // showers (above) and the toilets (below). Their notes say they are placed, not read.
+    { kind: 'fridge', label: 'מקרר 1', xCm: 810, yCm: 1560, widthCm: 70, depthCm: 70, unclear: NOT_ON_SKETCH },
+    { kind: 'light', label: 'תאורה 1', xCm: 1010, yCm: 250, widthCm: 40, depthCm: 40, unclear: NOT_ON_SKETCH },
+    { kind: 'light', label: 'תאורה 2', xCm: 810, yCm: 1650, widthCm: 40, depthCm: 40, unclear: NOT_ON_SKETCH },
     {
       kind: 'changing', label: 'אזור הלבשה', xCm: 300, yCm: 1800, widthCm: 600, depthCm: 300,
       unclear: 'בסקיצה, בתוך האזור לאורך הצד הדרומי: "מקלחית" (כ-4×1.25 מ׳)',
@@ -185,6 +197,7 @@ export function sketchItems(): SketchItem[] {
     { kind: 'toilet', label: 'תא שירותים 2', xCm: 690, yCm: 2100, widthCm: 110, depthCm: 100 },
     { kind: 'greywater', label: 'מים אפורים', xCm: 320, yCm: 2200, widthCm: 150, depthCm: 150 },
     ...repeat('water', 'מי שתייה', [150, 150], [[480, 2200], [630, 2200]]),
+    { kind: 'light', label: 'תאורה 4', xCm: 810, yCm: 2110, widthCm: 40, depthCm: 40, unclear: NOT_ON_SKETCH },
 
     // -- Four caravans along the south, 2.5 wide × 6.5 deep, 5 m apart -------
     ...repeat('caravan', 'קראוון', [250, 650], [[1150, 1650], [1650, 1650], [2150, 1650], [2650, 1650]]),

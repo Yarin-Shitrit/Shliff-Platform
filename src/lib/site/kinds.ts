@@ -43,8 +43,8 @@ export const SITE_KINDS: Record<SiteItemKind, SiteKindPreset> = {
   shower: { label: 'מקלחת', plural: 'מקלחות', group: 'sanitation', shape: 'box', widthCm: 100, depthCm: 100, heightCm: 210 },
   toilet: { label: 'תא שירותים', plural: 'תאי שירותים', group: 'sanitation', shape: 'box', widthCm: 100, depthCm: 100, heightCm: 220 },
   changing: { label: 'אזור הלבשה', plural: 'אזורי הלבשה', group: 'sanitation', shape: 'box', widthCm: 200, depthCm: 150, heightCm: 200 },
-  // A camp sink: a basin on a stand, the width of a person. Where a water pipe ends (`lines.ts`).
-  sink: { label: 'כיור', plural: 'כיורים', group: 'sanitation', shape: 'box', widthCm: 100, depthCm: 50, heightCm: 90 },
+  // The camp's sink comes as a table with the basin built in: 1.5 × 0.6 m (the lead, 2026-09-25). Where a water pipe ends (`lines.ts`).
+  sink: { label: 'כיור', plural: 'כיורים', group: 'sanitation', shape: 'box', widthCm: 150, depthCm: 60, heightCm: 90 },
   fridge: { label: 'מקרר', plural: 'מקררים', group: 'utility', shape: 'box', widthCm: 70, depthCm: 70, heightCm: 170 },
   generator: { label: 'גנרטור', plural: 'גנרטורים', group: 'utility', shape: 'box', widthCm: 100, depthCm: 80, heightCm: 100 },
   water: { label: 'מיכל מי שתייה', plural: 'מיכלי מי שתייה', group: 'utility', shape: 'cylinder', widthCm: 120, depthCm: 120, heightCm: 130 },
