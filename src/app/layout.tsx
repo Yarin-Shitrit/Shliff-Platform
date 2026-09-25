@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Frank_Ruhl_Libre, Heebo, IBM_Plex_Mono } from 'next/font/google';
+import localFont from 'next/font/local';
 import { cookies } from 'next/headers';
 import { parseTheme, THEME_COOKIE } from '@/lib/theme';
 import './globals.css';
@@ -23,21 +23,111 @@ import './globals.css';
  * `תנועות קופה!A14`, where the Latin run has to line up like the workbook
  * shows it. Its Hebrew sheet name falls through to the system mono, which is
  * correct — Plex Mono has no Hebrew.
+ *
+ * The files are self-hosted, from `./fonts/`. They were `next/font/google`
+ * until that loader's build-time download failed on a GitHub runner and took
+ * a production deploy down with it (run 36139140426): a build must not depend
+ * on a third party's CDN answering. They are Google's own files, byte for
+ * byte — the css2 API's Hebrew and Latin subsets, the only two the layout
+ * ever asked for. Each family's OFL.txt sits beside its files.
+ *
+ * How the calls are shaped, because none of it is obvious:
+ *
+ * - Google cuts a family into one file per subset and lets `unicode-range`
+ *   pick between them. `next/font/local` applies `declarations` to every face
+ *   a call emits, so one subset is one call, and the two halves of a family
+ *   differ only in file and range. The ranges are Google's, verbatim, written
+ *   out in full because the font compiler accepts literals only.
+ * - Turbopack names a face after the **const** it is assigned to, and builds
+ *   the custom property from that name, ignoring a `font-family` declaration.
+ *   So the Latin half of each family is the call that owns the custom property
+ *   and the metric-matched fallback face (those metrics are measured from Latin
+ *   glyphs the Hebrew file lacks), and its const is named for the font:
+ *   `--font-body` is `"Heebo", "Heebo Fallback"`, exactly what Google's loader
+ *   rendered. A family whose name has spaces cannot be a const, so the other
+ *   two render as `Frank_Ruhl_Libre` and `IBM_Plex_Mono`.
+ * - The Hebrew half joins its family by declaring that const's name as its
+ *   `font-family`. The string has to equal the const name; `layout.test.tsx`
+ *   holds it there.
+ * - Nothing reads a Hebrew half's binding. The call is the point: the compiler
+ *   turns it into an import of the stylesheet that carries its faces.
  */
-const display = Frank_Ruhl_Libre({
-  subsets: ['hebrew', 'latin'],
-  weight: ['500'],
+const Frank_Ruhl_Libre = localFont({
+  src: [{ path: './fonts/frank-ruhl-libre/frank-ruhl-libre-500-latin.woff2', weight: '500' }],
+  display: 'swap',
+  adjustFontFallback: 'Times New Roman',
+  declarations: [
+    { prop: 'unicode-range', value: 'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD' },
+  ],
   variable: '--font-display',
 });
-const body = Heebo({
-  subsets: ['hebrew', 'latin'],
-  weight: ['400', '500', '600', '700'],
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- emits the Hebrew faces; see above
+const Frank_Ruhl_Libre_Hebrew = localFont({
+  src: [{ path: './fonts/frank-ruhl-libre/frank-ruhl-libre-500-hebrew.woff2', weight: '500' }],
+  display: 'swap',
+  adjustFontFallback: false,
+  declarations: [
+    { prop: 'font-family', value: "'Frank_Ruhl_Libre'" },
+    { prop: 'unicode-range', value: 'U+0307-0308, U+0590-05FF, U+200C-2010, U+20AA, U+25CC, U+FB1D-FB4F' },
+  ],
+});
+
+/** One variable file per subset serves all four weights, as it did from Google. */
+const Heebo = localFont({
+  src: [
+    { path: './fonts/heebo/heebo-latin.woff2', weight: '400' },
+    { path: './fonts/heebo/heebo-latin.woff2', weight: '500' },
+    { path: './fonts/heebo/heebo-latin.woff2', weight: '600' },
+    { path: './fonts/heebo/heebo-latin.woff2', weight: '700' },
+  ],
+  display: 'swap',
+  adjustFontFallback: 'Arial',
+  declarations: [
+    { prop: 'unicode-range', value: 'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD' },
+  ],
   variable: '--font-body',
 });
-const mono = IBM_Plex_Mono({
-  subsets: ['latin'],
-  weight: ['400'],
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- emits the Hebrew faces; see above
+const Heebo_Hebrew = localFont({
+  src: [
+    { path: './fonts/heebo/heebo-hebrew.woff2', weight: '400' },
+    { path: './fonts/heebo/heebo-hebrew.woff2', weight: '500' },
+    { path: './fonts/heebo/heebo-hebrew.woff2', weight: '600' },
+    { path: './fonts/heebo/heebo-hebrew.woff2', weight: '700' },
+  ],
+  display: 'swap',
+  adjustFontFallback: false,
+  declarations: [
+    { prop: 'font-family', value: "'Heebo'" },
+    { prop: 'unicode-range', value: 'U+0307-0308, U+0590-05FF, U+200C-2010, U+20AA, U+25CC, U+FB1D-FB4F' },
+  ],
+});
+
+const IBM_Plex_Mono = localFont({
+  src: [{ path: './fonts/ibm-plex-mono/ibm-plex-mono-400-latin.woff2', weight: '400' }],
+  display: 'swap',
+  adjustFontFallback: 'Arial',
+  declarations: [
+    { prop: 'unicode-range', value: 'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD' },
+  ],
   variable: '--font-mono',
+});
+/**
+ * `(home)/home.module.css` names the family as `'IBM Plex Mono'` rather than
+ * through `--font-mono`, which Google's loader happened to satisfy. This keeps
+ * that name resolving to the same file. It keeps the fallback flag the call
+ * above has, because the flag is part of the emitted file name: with the same
+ * flags both calls share one URL, and the browser downloads the file once.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- emits the face; see above
+const IBM_Plex_Mono_ByName = localFont({
+  src: [{ path: './fonts/ibm-plex-mono/ibm-plex-mono-400-latin.woff2', weight: '400' }],
+  display: 'swap',
+  adjustFontFallback: 'Arial',
+  declarations: [
+    { prop: 'font-family', value: "'IBM Plex Mono'" },
+    { prop: 'unicode-range', value: 'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD' },
+  ],
 });
 
 /**
@@ -68,7 +158,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       lang="he"
       dir="rtl"
       data-theme={theme ?? undefined}
-      className={`${display.variable} ${body.variable} ${mono.variable}`}
+      className={`${Frank_Ruhl_Libre.variable} ${Heebo.variable} ${IBM_Plex_Mono.variable}`}
     >
       <body>{children}</body>
     </html>
