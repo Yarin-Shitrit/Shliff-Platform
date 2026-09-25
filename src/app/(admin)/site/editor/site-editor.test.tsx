@@ -517,6 +517,32 @@ describe('saving', () => {
       expect(confirm).not.toHaveBeenCalled();
       confirm.mockRestore();
     });
+
+    /* #25 fix round, Important 5: the sidebar's link to this page carries no
+       `season`, and the page's own drawer links carry `season=<id>` — one
+       compared as null against an id, and opening a drawer asked "leave?".
+       No season in a link means the editor's own. */
+    it('asks nothing for a drawer link that names this editor’s season, whether or not the page’s address does', async () => {
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      const address = window.location.href;
+      try {
+        renderEditor();
+        await screen.findByTestId('scene');
+        saving({ status: 'error', errorKind: 'network', error: NETWORK_FAILURE, pending: 1 });
+        // Reached through the sidebar: no season in the address.
+        expect(clickLink(`${window.location.pathname}?season=s26&act=plot`)).toEqual({ prevented: false });
+        // Reached through a season-carrying link: a link with none is this editor too.
+        window.history.replaceState(null, '', `${window.location.pathname}?season=s26`);
+        expect(clickLink(`${window.location.pathname}?act=season-date`)).toEqual({ prevented: false });
+        expect(confirm).not.toHaveBeenCalled();
+        // Another season's map is another editor: that still asks.
+        expect(clickLink(`${window.location.pathname}?season=s25`)).toEqual({ prevented: true });
+        expect(confirm).toHaveBeenCalledTimes(1);
+      } finally {
+        window.history.replaceState(null, '', address);
+        confirm.mockRestore();
+      }
+    });
   });
 
   it('says what the store could not do, until the lead has read it', async () => {

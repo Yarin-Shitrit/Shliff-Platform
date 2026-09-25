@@ -344,14 +344,19 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
       const here = new URL(window.location.href);
       const to = new URL(link.href, here);
       if (to.origin !== here.origin) return;
-      if (to.pathname === here.pathname && to.searchParams.get('season') === here.searchParams.get('season')) return;
+      /* No `season` in an address is this editor's own: the sidebar's link
+         to this page carries none, the page's drawer links carry the id
+         (#25 fix round, Important 5 — comparing the two asked "leave?"
+         before opening a drawer). */
+      const seasonOf = (url: URL) => url.searchParams.get('season') ?? seasonId;
+      if (to.pathname === here.pathname && seasonOf(to) === seasonOf(here)) return;
       if (window.confirm(LEAVE_UNSAVED)) return;
       event.preventDefault();
       event.stopPropagation();
     };
     document.addEventListener('click', onClick, true);
     return () => { document.removeEventListener('click', onClick, true); };
-  }, [halted]);
+  }, [halted, seasonId]);
   // While the build is stale, what is unsaved is kept for the page after the refresh.
   useEffect(() => { if (staleBuild) keepUnsaved(planId, store.pendingOps()); });
   const theme = useSyncExternalStore(subscribeTheme, readTheme, serverTheme);
