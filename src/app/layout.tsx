@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Frank_Ruhl_Libre, Heebo, IBM_Plex_Mono } from 'next/font/google';
 import { cookies } from 'next/headers';
 import { parseTheme, THEME_COOKIE } from '@/lib/theme';
@@ -48,6 +48,26 @@ const mono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: { default: 'קופת שליף', template: '%s · קופת שליף' },
   description: 'ניהול נתוני הקאמפ',
+  /* "Add to home screen" (2026-09-25). Safari on iPhone takes the icon from
+     `apple-icon.png` beside this file (Next's file convention) and the name
+     from here; Android and desktop Chrome read `manifest.ts`. The tab's
+     icon (`icon.png`) is the same logo, so the home screen shows what the
+     tab does. */
+  manifest: '/manifest.webmanifest',
+  appleWebApp: { capable: true, title: 'קופת שליף', statusBarStyle: 'default' },
+};
+
+/**
+ * The colour the phone paints around the page — the status bar, the
+ * launcher's splash — is the page's own canvas, light or dark with the OS
+ * (`tokens.css` `--canvas`). Separate from `metadata` because Next reads
+ * `themeColor` from `viewport`.
+ */
+export const viewport: Viewport = {
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#F6F4F1' },
+    { media: '(prefers-color-scheme: dark)', color: '#0E0D0C' },
+  ],
 };
 
 /**
