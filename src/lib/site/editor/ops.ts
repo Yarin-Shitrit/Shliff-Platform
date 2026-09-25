@@ -6,7 +6,7 @@ import { DEFAULT_SHADE_INSET_CM, isSiteItemKind } from '../kinds';
 import { endpointRefusal, isSiteLineKind, joins } from '../lines';
 import {
   MAX_CALIBRATION_CM, MAX_UNDERLAY_BYTES, MAX_UNDERLAY_OFFSET_CM, MAX_UNDERLAY_WIDTH_CM,
-  MIN_CALIBRATION_CM, MIN_UNDERLAY_WIDTH_CM, contentTypeOf, underlayKeyPlan,
+  MAX_UNDERLAY_FILENAME, MIN_CALIBRATION_CM, MIN_UNDERLAY_WIDTH_CM, contentTypeOf, underlayKeyPlan,
 } from '../underlay-limits';
 import { isRopeAngle } from './degrees';
 import {
@@ -190,6 +190,9 @@ export function underlayRefusal(underlay: EditorUnderlay | null): string | null 
     || !isWholeIn(sizeBytes, 1, MAX_UNDERLAY_BYTES)
     || typeof filename !== 'string' || isBlank(filename)) {
     return 'an underlay file must be a png, jpeg or webp image uploaded to a map';
+  }
+  if (filename.trim().length > MAX_UNDERLAY_FILENAME) {
+    return `an underlay file name must be at most ${MAX_UNDERLAY_FILENAME} characters`;
   }
   if (!isWholeIn(underlay.centreXCm, -MAX_UNDERLAY_OFFSET_CM, MAX_UNDERLAY_OFFSET_CM)
     || !isWholeIn(underlay.centreYCm, -MAX_UNDERLAY_OFFSET_CM, MAX_UNDERLAY_OFFSET_CM)

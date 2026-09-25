@@ -595,7 +595,8 @@ Hebrew (§20). The checks run in this order:
    reasoning as `upload-limits.ts`. A request whose `Content-Length` already
    says more than the picture and its form can take is refused before its body
    is read, and the card says any 413 in Hebrew, the platform's included
-   (review U1).
+   (review U1). Its name, which is kept with the picture, is at most 200
+   characters, else 422 `file name too long` (review U1).
 5. Its type, read from both the bytes and the name, is PNG, JPEG or WebP. PDF,
    HEIC and anything else get 415 with the code `pdf`, `heic` or `unsupported
    file type`, so each refusal can say what to do instead.
@@ -863,15 +864,17 @@ adjective agrees with a noun that varies: the toasts put a fixed noun first
   `unsupported file type` "אפשר להעלות רק תמונה: PNG,‏ JPEG או WebP." · `image
   too large` "התמונה גדולה מדי — עד 8192 פיקסלים בכל צד." · `image too small`
   "התמונה קטנה מדי — לפחות 100 פיקסלים בכל צד." · `storage unavailable` "לא
-  הצלחנו לשמור את התמונה. אפשר לנסות שוב." · anything else "ההעלאה נכשלה. אפשר
-  לנסות שוב."
+  הצלחנו לשמור את התמונה. אפשר לנסות שוב." · `file name too long` "שם הקובץ ארוך
+  מדי — עד 200 תווים. אפשר לקצר אותו ולהעלות שוב." (review U1) · anything else
+  "ההעלאה נכשלה. אפשר לנסות שוב."
 - Display: "לא הצלחנו להציג את התמונה. אפשר לנסות שוב, או להעלות אותה מחדש." with
   "ניסיון נוסף". File missing (404): "קובץ התמונה לא נמצא. אפשר להעלות אותו
   מחדש."
 - Server prefixes: `an underlay file must be` → "קובץ תמונת הרקע לא שייך למפה
   הזו. טעינה מחדש של המפה תסדר את זה" · `an underlay placement must be` → "מיקום
   תמונת הרקע נמדד במספר שלם של סנטימטרים" · `an underlay calibration must be` →
-  "הכיול של תמונת הרקע לא נשמר כמו שצריך. אפשר לכייל שוב".
+  "הכיול של תמונת הרקע לא נשמר כמו שצריך. אפשר לכייל שוב" · `an underlay file
+  name must be` → "שם הקובץ של תמונת הרקע ארוך מדי — עד 200 תווים" (review U1).
 
 ## 21. The product's rules, applied
 

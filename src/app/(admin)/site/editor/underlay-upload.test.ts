@@ -52,6 +52,7 @@ describe('sending a picture from the card', () => {
         'הדפדפן לא מציג תמונות HEIC (ברירת המחדל של מצלמת האייפון). שמירה כ־JPEG, או צילום מסך, יעבדו.'],
       [png(1600, 1200, 4 * 1024 * 1024 + 1), 'big.png', 'התמונה גדולה מדי — עד 4 מגה־בייט.'],
       [png(80, 1200), 'thin.png', 'התמונה קטנה מדי — לפחות 100 פיקסלים בכל צד.'],
+      [png(1600, 1200), `${'א'.repeat(197)}.png`, 'שם הקובץ ארוך מדי — עד 200 תווים. אפשר לקצר אותו ולהעלות שוב.'],
     ] as const) {
       const route = deps(async () => json({}, 201));
       expect(await uploadUnderlay(file(data, name), PLAN, route)).toEqual({ ok: false, error: said });

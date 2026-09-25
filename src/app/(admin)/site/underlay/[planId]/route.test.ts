@@ -187,6 +187,13 @@ describe('POST /site/underlay/<planId>', () => {
     expect(readdirSync(storageDir)).toEqual([]);
   });
 
+  it('refuses a file name over 200 characters with 422, and stores nothing (review U1)', async () => {
+    const response = await upload(planId, `${'א'.repeat(197)}.png`, png(1600, 1200));
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: 'file name too long' });
+    expect(readdirSync(storageDir)).toEqual([]);
+  });
+
   it('refuses under 100 or over 8192 pixels a side with 422', async () => {
     const small = await upload(planId, 'a.png', png(99, 300));
     expect(small.status).toBe(422);

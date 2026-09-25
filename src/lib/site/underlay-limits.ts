@@ -40,6 +40,12 @@ export const MAX_UNDERLAY_OFFSET_CM = 50_000;
 /** A typed calibration distance: `SIDE_RANGE`, 10 cm to 500 m (spec §18.3). */
 export const MIN_CALIBRATION_CM = 10;
 export const MAX_CALIBRATION_CM = 50_000;
+/**
+ * The longest file name kept with a picture, in characters as a string counts
+ * them, spaces around it aside (review U1). Longer is refused before upload,
+ * and by the op's shape check, never cut short: the name is the lead's.
+ */
+export const MAX_UNDERLAY_FILENAME = 200;
 
 export const UNDERLAY_TYPES = { png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp' } as const;
 export type UnderlayExtension = keyof typeof UNDERLAY_TYPES;
@@ -93,7 +99,7 @@ export function contentTypeOf(name: string): UnderlayContentType | null {
 export type UnderlayUploadCode =
   | 'unauthorized' | 'unknown plan' | 'missing file' | 'file too large'
   | 'pdf' | 'heic' | 'unsupported file type' | 'image too small' | 'image too large'
-  | 'storage unavailable';
+  | 'storage unavailable' | 'file name too long';
 
 /** The rules line under the upload button (spec §20). The mark after "PNG," keeps the comma with its word. */
 export const UNDERLAY_RULES_HE = `PNG,‏ JPEG או WebP, עד ${MAX_UNDERLAY_MB} מגה־בייט`;
@@ -113,6 +119,7 @@ const UPLOAD_HE: Readonly<Record<UnderlayUploadCode, string>> = {
   'image too large': `התמונה גדולה מדי — עד ${MAX_UNDERLAY_PX} פיקסלים בכל צד.`,
   'image too small': `התמונה קטנה מדי — לפחות ${MIN_UNDERLAY_PX} פיקסלים בכל צד.`,
   'storage unavailable': 'לא הצלחנו לשמור את התמונה. אפשר לנסות שוב.',
+  'file name too long': `שם הקובץ ארוך מדי — עד ${MAX_UNDERLAY_FILENAME} תווים. אפשר לקצר אותו ולהעלות שוב.`,
 };
 /** A Map, so a code such as `constructor` finds nothing. */
 const BY_CODE = new Map<string, string>(Object.entries(UPLOAD_HE));

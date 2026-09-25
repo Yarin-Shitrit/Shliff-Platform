@@ -68,6 +68,13 @@ describe('an image to trace, checked the same way in the browser and on the serv
     expect(checkUnderlayFile('cut.png', png(400, 300).slice(0, 8))).toEqual(unsupported);
   });
 
+  it('takes a name of 200 characters and refuses one longer, spaces around it aside (review U1)', () => {
+    const at = (length: number) => `${'א'.repeat(length - 4)}.png`;
+    expect(checkUnderlayFile(at(200), png(400, 300)).ok).toBe(true);
+    expect(checkUnderlayFile(`  ${at(200)}  `, png(400, 300)).ok).toBe(true);
+    expect(checkUnderlayFile(at(201), png(400, 300))).toEqual({ ok: false, code: 'file name too long', status: 422 });
+  });
+
   it('refuses under 100 or over 8192 pixels on a side, and takes both edges', () => {
     expect(checkUnderlayFile('a.png', png(99, 500))).toEqual({ ok: false, code: 'image too small', status: 422 });
     expect(checkUnderlayFile('a.png', png(500, 99))).toMatchObject({ code: 'image too small' });

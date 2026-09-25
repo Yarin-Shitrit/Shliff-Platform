@@ -88,6 +88,7 @@ describe('what an upload says, in Hebrew', () => {
     expect(uploadRefusalHe('image too large')).toBe('התמונה גדולה מדי — עד 8192 פיקסלים בכל צד.');
     expect(uploadRefusalHe('image too small')).toBe('התמונה קטנה מדי — לפחות 100 פיקסלים בכל צד.');
     expect(uploadRefusalHe('storage unavailable')).toBe('לא הצלחנו לשמור את התמונה. אפשר לנסות שוב.');
+    expect(uploadRefusalHe('file name too long')).toBe('שם הקובץ ארוך מדי — עד 200 תווים. אפשר לקצר אותו ולהעלות שוב.');
   });
 
   it('falls back to Hebrew for a code it does not know, or no code at all', () => {
@@ -106,7 +107,7 @@ describe('what an upload says, in Hebrew', () => {
 
   it('carries no Latin word but the formats it names', () => {
     const codes = ['unauthorized', 'unknown plan', 'missing file', 'file too large', 'pdf', 'heic',
-      'unsupported file type', 'image too large', 'image too small', 'storage unavailable', 'unknown'];
+      'unsupported file type', 'image too large', 'image too small', 'storage unavailable', 'file name too long', 'unknown'];
     for (const sentence of [...codes.map(uploadRefusalHe), UNDERLAY_RULES_HE]) {
       expect(sentence).toMatch(/[֐-׿]/);
       const latin = sentence.match(/[A-Za-z]+/g) ?? [];

@@ -64,5 +64,7 @@ describe('site failure messages', () => {
       .toBe('מיקום תמונת הרקע נמדד במספר שלם של סנטימטרים');
     expect(siteFailureMessage(new Error('an underlay calibration must be two points on the image and a distance of 10 cm to 500 m')))
       .toBe('הכיול של תמונת הרקע לא נשמר כמו שצריך. אפשר לכייל שוב');
+    expect(siteFailureMessage(new Error('an underlay file name must be at most 200 characters')))
+      .toBe('שם הקובץ של תמונת הרקע ארוך מדי — עד 200 תווים');
   });
 });

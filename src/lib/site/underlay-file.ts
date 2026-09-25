@@ -1,6 +1,6 @@
 import { imageFacts } from './image-facts';
 import {
-  MAX_UNDERLAY_BYTES, MAX_UNDERLAY_PX, MIN_UNDERLAY_PX, UNDERLAY_TYPES,
+  MAX_UNDERLAY_BYTES, MAX_UNDERLAY_FILENAME, MAX_UNDERLAY_PX, MIN_UNDERLAY_PX, UNDERLAY_TYPES,
   type UnderlayContentType, type UnderlayExtension, type UnderlayUploadCode,
 } from './underlay-limits';
 
@@ -18,7 +18,7 @@ import {
  */
 
 type RefusalCode = Extract<UnderlayUploadCode,
-  'file too large' | 'pdf' | 'heic' | 'unsupported file type' | 'image too small' | 'image too large'>;
+  'file too large' | 'file name too long' | 'pdf' | 'heic' | 'unsupported file type' | 'image too small' | 'image too large'>;
 
 export type UnderlayFileCheck =
   | { ok: true; ext: UnderlayExtension; contentType: UnderlayContentType; width: number; height: number }
@@ -37,6 +37,8 @@ function named(filename: string): UnderlayExtension | 'pdf' | 'heic' | null {
 
 export function checkUnderlayFile(filename: string, bytes: Uint8Array): UnderlayFileCheck {
   if (bytes.byteLength > MAX_UNDERLAY_BYTES) return { ok: false, code: 'file too large', status: 413 };
+  // The name is kept with the picture (`ops.ts` refuses a longer one): refused here, before anything is stored (review U1).
+  if (filename.trim().length > MAX_UNDERLAY_FILENAME) return { ok: false, code: 'file name too long', status: 422 };
 
   const facts = imageFacts(bytes);
   const byName = named(filename);
