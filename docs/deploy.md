@@ -311,6 +311,37 @@ tree (`scripts/land-camp-layout.ts`, actor `yarin`): 68 items — the sink at
 overlapping pairs. The map it replaced was at version 2, so one editor save
 made since the morning's landing went with it.
 
+### Migration `0014` — generated 2026-09-25, **not yet applied**
+
+`0014_site_rope_angles` is the shade nets' rope angle (spec
+`2026-09-25-site-map-pipes-ropes-underlay-design.md` §13): two nullable
+columns, `site_items.rope_angle_deg` and `site_kind_defaults.rope_angle_deg`.
+Additive: every existing row takes null, which means "no angle", so no net's
+checks change until the camp sets one (D16). It must be on Railway **after
+`0013` and before** the code that reads it deploys, because every `/site`
+query selects the new columns. Applying it is the camp lead's step, by the
+same procedure as `0012`:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine sh -euc '
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0014_site_rope_angles.sql
+'
+```
+
+Read-only check before and after — `0` before, `2` after; the plan and item
+counts do not move:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" postgres:18-alpine sh -c '
+  psql "$R" -tAc "select count(*) from information_schema.columns where column_name='"'"'rope_angle_deg'"'"'"'
+```
+
+Record the measured numbers here when it is done.
+
+Not yet applied to the local `shliff-pg` either: it was stopped to relieve memory
+pressure when this was written. Apply it there with `psql -1 -v ON_ERROR_STOP=1 -f`
+once the camp lead restarts it.
+
 ### Copying the laptop's database up
 
 The local container is Postgres **16**; Railway is **18**. Dump with the
