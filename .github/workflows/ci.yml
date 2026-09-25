@@ -16,11 +16,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Shape: typecheck+lint, four test shards and the build all start at once; a
+# Shape: typecheck+lint, eight test shards and the build all start at once; a
 # last job waits for all of them and decides the result. Until 2026-09-25 this
 # was one job running typecheck, lint and the whole suite in a row: about 25
 # minutes (run 36071133680, Test 1421s), then about 10 once #21 pooled PGlite
-# per worker (run 36115059878, Test 512s).
+# per worker (run 36115059878, Test 512s), then 3m46s at four shards (run
+# 36131956671).
 
 jobs:
   checks:
@@ -31,14 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # package.json declares no engines field, so the version is pinned here.
-      # Keep it matching what the team runs locally.
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-
-      - run: npm ci
+      - uses: ./.github/actions/install
 
       - name: Typecheck
         run: npx tsc --noEmit
@@ -49,11 +43,10 @@ jobs:
   test:
     name: test ${{ matrix.shard }}/${{ strategy.job-total }}
     runs-on: ubuntu-latest
-    # A shard runs in a few minutes. Headroom is deliberate: even without #21's
-    # pooled PGlite, a quarter of the old 1421s suite fits well inside this.
-    # A timeout kills the job before the report is written, which the verdict
-    # job below then reports as a shard that left no report.
-    timeout-minutes: 20
+    # A shard's tests take about a minute. A timeout kills the job before the
+    # report is written, which the verdict job below then reports as a shard
+    # that left no report.
+    timeout-minutes: 10
 
     strategy:
       # Let every shard finish. A failure in one must not cancel the others and
@@ -61,13 +54,12 @@ jobs:
       fail-fast: false
       matrix:
         # vitest splits by FILE COUNT over a hash of each path, not by duration,
-        # so shards are uneven. Measured on PR #22: at eight shards the whole
-        # workflow took 1m55s but billed 20 runner-minutes. Four keeps it at a
-        # few minutes for fewer billed minutes and fewer concurrent runners --
-        # the Free plan caps a private repo at 20 jobs at once, and several
-        # lanes push together. The count comes from this list via
+        # so shards are uneven. At four shards the Test step took 106-131s
+        # (run 36131956671) and set a 3m46s run. Modelled from that run's
+        # per-file times, the heaviest of eight shards is ~66s of tests --
+        # what the two-minute target needs. The count comes from this list via
         # strategy.job-total, so adding a shard is one edit.
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
 
     env:
       # src/db/index.ts reads DATABASE_URL at import time. The suite never talks
@@ -82,12 +74,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-
-      - run: npm ci
+      - uses: ./.github/actions/install
 
       # Every flag is load-bearing; CLAUDE.md explains why. Two differences from
       # the local command, both deliberate:
@@ -132,6 +119,10 @@ jobs:
   #     docs/reference-data/ out of every traced route.
   # It does not deploy. Deployment is .github/workflows/deploy.yml, which
   # builds its own copy through `vercel build`.
+  #
+  # Deliberately a plain `npm ci`, not the cached node_modules the other jobs
+  # restore: this is the job that proves argon2 loads on linux/Node 22, so it
+  # installs the way deploy.yml does. It is not on the critical path.
   build:
     name: next build (linux)
     runs-on: ubuntu-latest
@@ -211,11 +202,10 @@ jobs:
     timeout-minutes: 10
 
     steps:
+      # git ls-files needs the tree; the script needs only fs, path and
+      # child_process, so the runner's own Node is enough -- no setup-node here,
+      # because this job is on the critical path.
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
 
       - name: Collect the shard reports
         uses: actions/download-artifact@v4
@@ -225,7 +215,9 @@ jobs:
           merge-multiple: true
 
       - name: Every test file ran exactly once, and passed
-        run: node scripts/verify-shard-reports.mjs shard-reports
+        run: |
+          echo "runner node $(node --version)"
+          node scripts/verify-shard-reports.mjs shard-reports
 
       - name: Every other job passed
         if: ${{ !cancelled() }}

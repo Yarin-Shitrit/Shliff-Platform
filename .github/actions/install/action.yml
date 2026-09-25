@@ -1,0 +1,52 @@
+name: Install dependencies
+description: >
+  Node 22, and node_modules restored whole from the Actions cache when
+  package-lock.json has not changed -- `npm ci` only on a miss.
+
+# Why: `npm ci` cost 12-19s in every job, and CI runs ten jobs. Restoring the
+# tree it produced is a few seconds. The key pins everything that decides what
+# `npm ci` writes: the runner OS image, the CPU architecture, the exact Node
+# version and the lockfile. argon2 is the native module that makes this matter
+# (docs/deploy.md §3) -- a tree installed for another platform or Node would load
+# the wrong binding -- and every one of those is in the key. There are no
+# restore-keys on purpose: a near-miss is a different tree, so it installs fresh.
+#
+# The cache is saved straight after `npm ci`, before anything runs. Tests and
+# builds write into node_modules (vitest's results cache under .vite), and
+# none of that belongs in what the next job starts from.
+#
+# The `next build (linux)` job does NOT use this. It runs a plain `npm ci`, as
+# deploy.yml does, so the build that proves argon2 and the reference-data
+# exclusion never starts from a cached tree.
+
+runs:
+  using: composite
+  steps:
+    # package.json declares no engines field, so the version is pinned here.
+    # Keep it matching what the team runs locally.
+    - id: node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+
+    # ImageOS (e.g. ubuntu24) is a variable of the runner's shell, which the
+    # `env` expression context cannot see -- so it is read here.
+    - id: image
+      shell: bash
+      run: echo "os=${ImageOS:?hosted runners set ImageOS}" >> "$GITHUB_OUTPUT"
+
+    - id: modules
+      uses: actions/cache/restore@v4
+      with:
+        path: node_modules
+        key: node-modules-${{ steps.image.outputs.os }}-${{ runner.arch }}-node-${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}
+
+    - if: steps.modules.outputs.cache-hit != 'true'
+      shell: bash
+      run: npm ci
+
+    - if: steps.modules.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: node_modules
+        key: ${{ steps.modules.outputs.cache-primary-key }}
