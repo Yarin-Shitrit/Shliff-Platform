@@ -49,7 +49,9 @@ export type UnderlayEvent =
   /** A point marked on the picture, as fractions of it. */
   | { type: 'point'; uv: [number, number] }
   | { type: 'offImage' }
-  | { type: 'tooClose' };
+  | { type: 'tooClose' }
+  /** A calibration click before the picture could be shown: still loading, or failed (review U1). */
+  | { type: 'notReady' };
 
 /** A decoded picture, as the scene draws it: already turned by its EXIF tag and shrunk to fit. */
 export interface DecodedUnderlay {

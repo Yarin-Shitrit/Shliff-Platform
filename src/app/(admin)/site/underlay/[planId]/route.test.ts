@@ -6,7 +6,7 @@ import { createTestDb, type TestDb } from '@/test/db';
 import { seasons } from '@/db/schema/camp';
 import { siteUnderlays } from '@/db/schema/site';
 import { createPlan, planById } from '@/lib/site/plan';
-import { MAX_UNDERLAY_BYTES } from '@/lib/site/underlay-limits';
+import { MAX_UNDERLAY_BYTES, MAX_UNDERLAY_REQUEST_BYTES } from '@/lib/site/underlay-limits';
 import type { AdminCheck } from '@/lib/auth/guard';
 import type { Storage } from '@/lib/storage';
 
@@ -133,6 +133,46 @@ describe('POST /site/underlay/<planId>', () => {
     expect(await over.json()).toEqual({ error: 'file too large' });
   });
 
+  /** The form as a browser sends it: serialized, with the Content-Length it states. */
+  async function stated(planId: string, name: string, data: Uint8Array): Promise<Request> {
+    const form = new FormData();
+    form.set('file', new File([new Uint8Array(data)], name));
+    const draft = new Request(`http://localhost/site/underlay/${planId}`, { method: 'POST', body: form });
+    const body = new Uint8Array(await draft.arrayBuffer());
+    return new Request(`http://localhost/site/underlay/${planId}`, {
+      method: 'POST', body,
+      headers: { 'content-type': draft.headers.get('content-type') ?? '', 'content-length': String(body.byteLength) },
+    });
+  }
+
+  it('refuses a body whose Content-Length is over the limit with 413, without reading it (review U1)', async () => {
+    const request = new Request(`http://localhost/site/underlay/${planId}`, {
+      method: 'POST', body: 'x',
+      headers: { 'content-type': 'multipart/form-data; boundary=x', 'content-length': String(MAX_UNDERLAY_REQUEST_BYTES + 1) },
+    });
+    const read = vi.spyOn(request, 'formData');
+    const response = await POST(request, { params: Promise.resolve({ planId }) });
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({ error: 'file too large' });
+    expect(read).not.toHaveBeenCalled();
+    expect(readdirSync(storageDir)).toEqual([]);
+  });
+
+  it('still takes exactly 4 MB sent as a browser sends it, Content-Length and all', async () => {
+    const request = await stated(planId, 'big.png', png(1600, 1200, MAX_UNDERLAY_BYTES));
+    expect(Number(request.headers.get('content-length'))).toBeGreaterThan(MAX_UNDERLAY_BYTES);
+    const response = await POST(request, { params: Promise.resolve({ planId }) });
+    expect(response.status).toBe(201);
+  });
+
+  it('asks who is signed in, and for which map, before it reads the Content-Length', async () => {
+    adminRef.current = { ok: false };
+    const request = new Request(`http://localhost/site/underlay/${planId}`, {
+      method: 'POST', body: 'x', headers: { 'content-length': String(MAX_UNDERLAY_REQUEST_BYTES + 1) },
+    });
+    expect((await POST(request, { params: Promise.resolve({ planId }) })).status).toBe(401);
+  });
+
   it('refuses a PDF, an iPhone photo and anything else with 415, each with its own code', async () => {
     for (const [name, data, code] of [
       ['plan.pdf', PDF, 'pdf'],
@@ -144,6 +184,13 @@ describe('POST /site/underlay/<planId>', () => {
       expect(response.status).toBe(415);
       expect(await response.json()).toEqual({ error: code });
     }
+    expect(readdirSync(storageDir)).toEqual([]);
+  });
+
+  it('refuses a file name over 200 characters with 422, and stores nothing (review U1)', async () => {
+    const response = await upload(planId, `${'א'.repeat(197)}.png`, png(1600, 1200));
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: 'file name too long' });
     expect(readdirSync(storageDir)).toEqual([]);
   });
 

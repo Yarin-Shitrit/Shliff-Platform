@@ -23,6 +23,21 @@ vi.mock('three', async (importOriginal) => {
   return { ...actual, WebGLRenderer };
 });
 
+/* The label layout is the real one, counted, as in `scene-view.test.tsx`: a
+   test can tell whether a change made the engine lay the labels out again. */
+const layouts = vi.hoisted(() => ({ count: 0 }));
+vi.mock('@/lib/site/editor/label-layout', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/site/editor/label-layout')>();
+  return {
+    ...actual,
+    layoutLabels: (...args: Parameters<typeof actual.layoutLabels>) => {
+      layouts.count += 1;
+      return actual.layoutLabels(...args);
+    },
+  };
+});
+
+import { SceneSync } from './scene-sync';
 import { SceneView, type EditorUi } from './scene-view';
 
 const PLAN = '0b7c6a52-8f7e-4c1e-9a55-3d2f1e0c9b8a';
@@ -125,6 +140,33 @@ describe('the picture under the map, in the engine', () => {
     expect(decode).toHaveBeenCalledWith(expect.anything(), { imageOrientation: 'from-image', premultiplyAlpha: 'none' });
   });
 
+  it('fades and hides the picture without rebuilding the scene or laying the labels out again (review U1)', async () => {
+    const syncs = vi.spyOn(SceneSync.prototype, 'sync');
+    try {
+      const LABELLED: EditorUi = { ...UI, labels: true };
+      const { onUnderlay, rerenderWith } = renderScene(LABELLED);
+      await ready(onUnderlay);
+      const [laid, synced] = [layouts.count, syncs.mock.calls.length];
+      expect(laid).toBeGreaterThan(0);
+
+      rerenderWith({ ...LABELLED, underlay: { shown: true, opacity: 0.3 } });
+      await frames();
+      expect((plane()!.material as MeshBasicMaterial).opacity).toBeCloseTo(0.3, 9);
+      rerenderWith({ ...LABELLED, underlay: { shown: false, opacity: 0.3 } });
+      await frames();
+      expect(plane()!.visible).toBe(false);
+      expect(layouts.count).toBe(laid);
+      expect(syncs.mock.calls.length).toBe(synced);
+
+      // A change that is not the picture's view still does both, so the counts can move.
+      rerenderWith({ ...LABELLED, underlay: { shown: false, opacity: 0.3 }, netsHidden: true });
+      await frames();
+      expect(layouts.count).toBeGreaterThan(laid);
+    } finally {
+      syncs.mockRestore();
+    }
+  });
+
   it('lies where it was placed, a millimetre up — and is hidden, so left out of the picture export, when this viewer hides it', async () => {
     const { onUnderlay, rerenderWith } = renderScene();
     await ready(onUnderlay);
@@ -136,6 +178,17 @@ describe('the picture under the map, in the engine', () => {
     await frames();
     expect(plane()!.visible).toBe(false);
     expect((plane()!.material as MeshBasicMaterial).opacity).toBeCloseTo(0.3, 9);
+  });
+
+  it('says a calibration click came before the picture could be shown, and marks nothing (review U1)', async () => {
+    decode.mockImplementationOnce(() => new Promise(() => {}));
+    const { onUnderlay, canvas, store } = renderScene({ ...UI, tool: 'calibrate' });
+    await waitFor(() => { expect(onUnderlay).toHaveBeenCalledWith({ type: 'status', status: { state: 'loading' } }); });
+    await frames();
+    click(canvas, [500, 350]);
+    expect(onUnderlay).toHaveBeenLastCalledWith({ type: 'notReady' });
+    expect(onUnderlay.mock.calls.some(([event]) => event.type === 'point')).toBe(false);
+    expect(store.run).not.toHaveBeenCalled();
   });
 
   it('marks a calibration point where the picture is clicked, and refuses a click beside it or too near the first', async () => {

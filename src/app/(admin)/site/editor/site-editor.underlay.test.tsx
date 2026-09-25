@@ -167,6 +167,33 @@ describe('the picture under the map, in the editor', () => {
     expect(picture()).toEqual(IMAGE);
   });
 
+  it('says in Hebrew that a click came before the picture was shown — still loading, or not shown at all (review U1)', async () => {
+    await renderEditor(null);
+    await uploaded();
+    sceneSays({ type: 'status', status: { state: 'loading' } });
+    sceneSays({ type: 'notReady' });
+    expect(card().getByRole('alert').textContent).toBe('התמונה עוד נטענת. אפשר לסמן נקודות כשהיא מופיעה.');
+    sceneSays({ type: 'status', status: { state: 'failed' } });
+    sceneSays({ type: 'notReady' });
+    expect(card().getByRole('alert').textContent).toBe('לא הצלחנו להציג את התמונה, ולכן אי אפשר לסמן עליה נקודות.');
+    shown();
+    sceneSays({ type: 'point', uv: [0.1, 0.5] });
+    expect(card().queryByRole('alert')).toBeNull();
+    expect(card().getByRole('status').textContent).toBe('סימון הנקודה השנייה');
+  });
+
+  it('ends the calibration on Esc typed in the distance box, back to the view it came from (review U1)', async () => {
+    await renderEditor(IMAGE);
+    await calibrating();
+    sceneSays({ type: 'point', uv: [0.1, 0.5] });
+    sceneSays({ type: 'point', uv: [0.9, 0.5] });
+    const distance = card().getByLabelText('המרחק בין שתי הנקודות, במטרים');
+    fireEvent.change(distance, { target: { value: '2' } });
+    fireEvent.keyDown(distance, { key: 'Escape', code: 'Escape' });
+    expect(lastScene().ui).toMatchObject({ tool: 'select', mode: '3d' });
+    expect(picture()).toEqual(IMAGE);
+  });
+
   it('refuses in Hebrew a point beside the picture, a point too near the first, and a distance that is not one', async () => {
     await renderEditor(IMAGE);
     await calibrating();
@@ -216,7 +243,7 @@ describe('the picture under the map, in the editor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'תמונת רקע' }));
     expect(lastScene().ui.underlay).toEqual({ shown: false, opacity: 0.5 });
     fireEvent.click(inspector().getByRole('button', { name: 'לא כוילה' }));
-    fireEvent.change(card().getByRole('slider', { name: 'שקיפות' }), { target: { value: '30' } });
+    fireEvent.change(card().getByRole('slider', { name: 'אטימות' }), { target: { value: '30' } });
     expect(lastScene().ui.underlay).toEqual({ shown: false, opacity: 0.3 });
     await new Promise((done) => { setTimeout(done, 700); });
     expect(saveSiteChangesAction).not.toHaveBeenCalled();
@@ -241,5 +268,75 @@ describe('the picture under the map, in the editor', () => {
     expect(card().getByRole('alert').textContent).toBe('קובץ PDF אי אפשר להעלות כרקע. צילום מסך של העמוד יעבוד.');
     expect(route).not.toHaveBeenCalled();
     expect(picture()).toBeNull();
+  });
+});
+
+/** Uploads the sketch from the plot's row, as the first test does, and waits for it on the map. */
+async function uploaded(): Promise<void> {
+  fireEvent.click(inspector().getByRole('button', { name: 'העלאת תמונה' }));
+  const input = screen.getByRole('group', { name: 'תמונת רקע' }).querySelector('input[type="file"]') as HTMLInputElement;
+  fireEvent.change(input, { target: { files: [new File([png()], 'שרטוט.png', { type: 'image/png' })] } });
+  await waitFor(() => { expect(picture()).toEqual(IMAGE); });
+}
+
+const toolRow = () => within(screen.getByRole('group', { name: 'כלי' }));
+
+/*
+ * Review U1: the picture's two tools end with the picture. However it goes —
+ * an undo of its upload, a redo of its removal, the other lead's removal
+ * reloaded — no calibration or alignment tool stays on over nothing.
+ */
+describe('the picture’s tools end with the picture (review U1)', () => {
+  it('leaves the calibration when the tool row’s undo takes the new picture away, and the view it came from comes back', async () => {
+    await renderEditor(null);
+    await uploaded();
+    expect(lastScene().ui).toMatchObject({ tool: 'calibrate', mode: 'plan' });
+    sceneSays({ type: 'point', uv: [0.1, 0.5] });
+    fireEvent.click(screen.getByRole('button', { name: 'ביטול הפעולה האחרונה' }));
+    expect(picture()).toBeNull();
+    expect(lastScene().ui).toMatchObject({ tool: 'select', mode: '3d' });
+    expect(lastScene().underlayMarks).toEqual([]);
+  });
+
+  it('leaves the alignment when an undo takes the picture away', async () => {
+    await renderEditor(null);
+    await uploaded();
+    shown();
+    fireEvent.keyDown(stage(), { code: 'Escape' });
+    fireEvent.click(card().getByRole('button', { name: 'הזזה' }));
+    expect(lastScene().ui.tool).toBe('align');
+    fireEvent.keyDown(stage(), { code: 'KeyZ', metaKey: true });
+    expect(picture()).toBeNull();
+    expect(lastScene().ui.tool).toBe('select');
+  });
+
+  it('leaves the picture’s tools by the tool row’s select and measure, with the view it came from', async () => {
+    await renderEditor(IMAGE);
+    await calibrating();
+    sceneSays({ type: 'point', uv: [0.1, 0.5] });
+    fireEvent.click(toolRow().getByRole('button', { name: /בחירה/ }));
+    expect(lastScene().ui).toMatchObject({ tool: 'select', mode: '3d' });
+    expect(lastScene().underlayMarks).toEqual([]);
+
+    fireEvent.click(card().getByRole('button', { name: 'כיול' }));
+    expect(lastScene().ui).toMatchObject({ tool: 'calibrate', mode: 'plan' });
+    fireEvent.click(toolRow().getByRole('button', { name: /מדידה/ }));
+    expect(lastScene().ui).toMatchObject({ tool: 'measure', mode: '3d' });
+
+    fireEvent.click(toolRow().getByRole('button', { name: /בחירה/ }));
+    fireEvent.click(card().getByRole('button', { name: 'הזזה' }));
+    expect(lastScene().ui.tool).toBe('align');
+    fireEvent.click(toolRow().getByRole('button', { name: /מדידה/ }));
+    expect(lastScene().ui.tool).toBe('measure');
+  });
+
+  it('leaves them by the keys V and M too', async () => {
+    await renderEditor(IMAGE);
+    await calibrating();
+    fireEvent.keyDown(stage(), { code: 'KeyV' });
+    expect(lastScene().ui).toMatchObject({ tool: 'select', mode: '3d' });
+    fireEvent.click(card().getByRole('button', { name: 'כיול' }));
+    fireEvent.keyDown(stage(), { code: 'KeyM' });
+    expect(lastScene().ui).toMatchObject({ tool: 'measure', mode: '3d' });
   });
 });

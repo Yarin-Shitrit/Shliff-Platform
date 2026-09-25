@@ -4,12 +4,15 @@ import { requireAdmin } from '@/lib/auth/guard';
 import { getStorage, sha256Hex } from '@/lib/storage';
 import { planById } from '@/lib/site/plan';
 import { checkUnderlayFile } from '@/lib/site/underlay-file';
-import { MAX_UNDERLAY_BYTES, isPlanId, underlayKey, type UnderlayUploadCode } from '@/lib/site/underlay-limits';
+import {
+  MAX_UNDERLAY_BYTES, MAX_UNDERLAY_REQUEST_BYTES, isPlanId, underlayKey, type UnderlayUploadCode,
+} from '@/lib/site/underlay-limits';
 
 /**
  * `POST /site/underlay/<planId>`: stores a picture to trace over (spec §16).
- * It checks, in order: an admin, the map, a file, its size, its type from
- * both its bytes and its name, and its size in pixels. It answers 201 with
+ * It checks, in order: an admin, the map, a file, its size (first the size
+ * the request declares, before its body is read), its type from both its
+ * bytes and its name, and its size in pixels. It answers 201 with
  * what the editor saves, or a machine code the card turns into Hebrew
  * (`uploadRefusalHe`).
  *
@@ -44,6 +47,10 @@ export async function POST(
   } catch {
     return refuse('storage unavailable', 503);
   }
+
+  // A body that says it is too big is refused before a byte of it is read (review U1).
+  const declared = Number(request.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > MAX_UNDERLAY_REQUEST_BYTES) return refuse('file too large', 413);
 
   let file: FormDataEntryValue | null = null;
   try {

@@ -592,7 +592,11 @@ Hebrew (§20). The checks run in this order:
 3. A file was sent, else 400 `missing file`.
 4. It is at most 4 MB, else 413 `file too large`. Vercel refuses request bodies
    over 4.5 MB before the route runs, and answers in English. This is the same
-   reasoning as `upload-limits.ts`.
+   reasoning as `upload-limits.ts`. A request whose `Content-Length` already
+   says more than the picture and its form can take is refused before its body
+   is read, and the card says any 413 in Hebrew, the platform's included
+   (review U1). Its name, which is kept with the picture, is at most 200
+   characters, else 422 `file name too long` (review U1).
 5. Its type, read from both the bytes and the name, is PNG, JPEG or WebP. PDF,
    HEIC and anything else get 415 with the code `pdf`, `heic` or `unsupported
    file type`, so each refusal can say what to do instead.
@@ -694,9 +698,11 @@ site_underlays
    are today.
 6. **Opacity** is a slider from 10% to 100% in steps of 10. The tool-row toggle
    shows and hides the image.
-7. **Replacing the image** keeps its centre and width and clears the calibration,
-   because the scale belonged to the old image. The card then asks for a new
-   calibration.
+7. **Replacing the image** keeps its centre and width, and clears the
+   calibration and resets the turn to 0, because both belonged to the old
+   image: the scale, and the turn the parallel box set to straighten it. The
+   card says so beside "החלפת תמונה" before the replace, and asks for a new
+   calibration after it (review U1).
 8. **Removing the image** is `setUnderlay(null)`, with a ביטול toast.
 
 **What the card reports:** the file name; "מכסה על המפה 31.2 × 27.6 מ׳"; and
@@ -842,13 +848,18 @@ adjective agrees with a noun that varies: the toasts put a fixed noun first
   בין שתי הנקודות, במטרים", with the box "הקו הזה מקביל לגדר" and the buttons
   "כיול" / "ביטול". Note: "הכיול נעשה בתצוגת תוכנית." Refusals: "שתי הנקודות
   קרובות מדי זו לזו. מרחק ארוך, כמו צלע של הגדר, נותן כיול מדויק יותר." and
-  "הנקודה מחוץ לתמונה."
+  "הנקודה מחוץ לתמונה." A click before the picture is shown: "התמונה עוד נטענת.
+  אפשר לסמן נקודות כשהיא מופיעה.", or, if it failed, "לא הצלחנו להציג את
+  התמונה, ולכן אי אפשר לסמן עליה נקודות." (review U1).
 - After calibration: "כויל לפי 26 מ׳ שסומנו על התמונה", with "כיול מחדש";
-  "מכסה על המפה 31.2 × 27.6 מ׳"; "שקיפות 50%".
+  "מכסה על המפה 31.2 × 27.6 מ׳"; "אטימות 50%" (the slider sets opacity, so it is
+  named for it: at 10% the picture is barely there).
 - Alignment: "הזזה"; hint "גרירה מזיזה את התמונה · החצים — 10 ס״מ, עם Shift —
   מטר · Esc — סיום"; "סיבוב רבע ימינה", "סיבוב רבע שמאלה", "סיום".
 - Export note: "כשהתמונה מוצגת, היא נכללת גם בייצוא התמונה של המפה."
-- Replace and remove: "החלפת תמונה" (with "הכיול יתחיל מחדש"), "הסרת התמונה".
+- Replace and remove: "החלפת תמונה" (with "הכיול יתחיל מחדש", "הסיבוב יתחיל
+  מחדש" or "הכיול והסיבוב יתחילו מחדש", whichever the picture has; review U1),
+  "הסרת התמונה".
   Toasts: "תמונת הרקע הוסרה מהמפה. הקובץ עצמו נשמר, כדי שאפשר יהיה לבטל." and
   "תמונת הרקע הוחלפה".
 - Upload codes: `unauthorized` "אין הרשאה להעלות קבצים." · `unknown plan` "לא
@@ -859,15 +870,17 @@ adjective agrees with a noun that varies: the toasts put a fixed noun first
   `unsupported file type` "אפשר להעלות רק תמונה: PNG,‏ JPEG או WebP." · `image
   too large` "התמונה גדולה מדי — עד 8192 פיקסלים בכל צד." · `image too small`
   "התמונה קטנה מדי — לפחות 100 פיקסלים בכל צד." · `storage unavailable` "לא
-  הצלחנו לשמור את התמונה. אפשר לנסות שוב." · anything else "ההעלאה נכשלה. אפשר
-  לנסות שוב."
+  הצלחנו לשמור את התמונה. אפשר לנסות שוב." · `file name too long` "שם הקובץ ארוך
+  מדי — עד 200 תווים. אפשר לקצר אותו ולהעלות שוב." (review U1) · anything else
+  "ההעלאה נכשלה. אפשר לנסות שוב."
 - Display: "לא הצלחנו להציג את התמונה. אפשר לנסות שוב, או להעלות אותה מחדש." with
   "ניסיון נוסף". File missing (404): "קובץ התמונה לא נמצא. אפשר להעלות אותו
   מחדש."
 - Server prefixes: `an underlay file must be` → "קובץ תמונת הרקע לא שייך למפה
   הזו. טעינה מחדש של המפה תסדר את זה" · `an underlay placement must be` → "מיקום
   תמונת הרקע נמדד במספר שלם של סנטימטרים" · `an underlay calibration must be` →
-  "הכיול של תמונת הרקע לא נשמר כמו שצריך. אפשר לכייל שוב".
+  "הכיול של תמונת הרקע לא נשמר כמו שצריך. אפשר לכייל שוב" · `an underlay file
+  name must be` → "שם הקובץ של תמונת הרקע ארוך מדי — עד 200 תווים" (review U1).
 
 ## 21. The product's rules, applied
 

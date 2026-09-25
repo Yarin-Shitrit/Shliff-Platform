@@ -959,6 +959,22 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
   }
 
   /**
+   * The tool row's changes. Its select and measure buttons leave the
+   * picture's tools through `leaveTool`, so the view calibrating switched to
+   * plan comes back and no mark is left behind (review U1).
+   */
+  function toolRowUi(patch: Partial<EditorUi>): void {
+    const pictureTool = ui.tool === 'calibrate' || ui.tool === 'align';
+    if (pictureTool && (patch.tool === 'select' || patch.tool === 'measure')) {
+      const { tool, ...rest } = patch;
+      picture.leaveTool(tool);
+      if (Object.keys(rest).length > 0) patchUi(rest);
+      return;
+    }
+    patchUi(patch);
+  }
+
+  /**
    * While the picture is calibrated or aligned (spec §18), the keys are its
    * own. Esc ends the tool. Aligning, the arrows move the picture (10 cm, a
    * metre with Shift), and undo, redo and the view's keys work as ever.
@@ -972,6 +988,11 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
       return true;
     }
     if (shortcut === 'escape') return picture.escape();
+    // V and M leave the picture's tool for theirs, as the tool row's buttons do (review U1).
+    if (shortcut === 'toolSelect' || shortcut === 'toolMeasure') {
+      picture.leaveTool(shortcut === 'toolMeasure' ? 'measure' : 'select');
+      return true;
+    }
     const viewKeys: ReadonlyArray<Shortcut> = ['fit', 'viewLeft', 'viewRight', 'zoomIn', 'zoomOut', 'keys'];
     const alignKeys: ReadonlyArray<Shortcut> = ['undo', 'redo', 'plan', '3d'];
     if (viewKeys.includes(shortcut)) return false;
@@ -1145,7 +1166,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     <div className={styles.editorArea}>
       <Toolbar
         ui={fullUi}
-        onUi={patchUi}
+        onUi={toolRowUi}
         canUndo={store.canUndo}
         canRedo={store.canRedo}
         onUndo={undo}

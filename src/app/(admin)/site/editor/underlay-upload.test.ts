@@ -52,6 +52,7 @@ describe('sending a picture from the card', () => {
         'הדפדפן לא מציג תמונות HEIC (ברירת המחדל של מצלמת האייפון). שמירה כ־JPEG, או צילום מסך, יעבדו.'],
       [png(1600, 1200, 4 * 1024 * 1024 + 1), 'big.png', 'התמונה גדולה מדי — עד 4 מגה־בייט.'],
       [png(80, 1200), 'thin.png', 'התמונה קטנה מדי — לפחות 100 פיקסלים בכל צד.'],
+      [png(1600, 1200), `${'א'.repeat(197)}.png`, 'שם הקובץ ארוך מדי — עד 200 תווים. אפשר לקצר אותו ולהעלות שוב.'],
     ] as const) {
       const route = deps(async () => json({}, 201));
       expect(await uploadUnderlay(file(data, name), PLAN, route)).toEqual({ ok: false, error: said });
@@ -65,6 +66,14 @@ describe('sending a picture from the card', () => {
     route.decode.mockRejectedValueOnce(new Error('The source image could not be decoded.'));
     expect(await uploadUnderlay(file(png(1600, 1200), 'a.png'), PLAN, route)).toEqual({ ok: false, error: FAILED });
     expect(route.fetch).not.toHaveBeenCalled();
+  });
+
+  it('says a 413 is the size, in Hebrew, whoever answered it — the route, or the platform before it (review U1)', async () => {
+    const size = 'התמונה גדולה מדי — עד 4 מגה־בייט.';
+    const fromRoute = deps(async () => json({ error: 'file too large' }, 413));
+    expect(await uploadUnderlay(file(png(1600, 1200), 'a.png'), PLAN, fromRoute)).toEqual({ ok: false, error: size });
+    const fromPlatform = deps(async () => new Response('Request Entity Too Large', { status: 413, headers: { 'Content-Type': 'text/plain' } }));
+    expect(await uploadUnderlay(file(png(1600, 1200), 'a.png'), PLAN, fromPlatform)).toEqual({ ok: false, error: size });
   });
 
   it('turns every refusal the route answers into its Hebrew, and an unknown one into the fallback', async () => {

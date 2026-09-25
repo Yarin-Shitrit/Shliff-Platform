@@ -50,6 +50,12 @@ describe('the image’s refusals', () => {
     expect(opRefusal({ type: 'setUnderlay', underlay: 'x' } as unknown as SiteOp)).toBe(file);
   });
 
+  it('refuses a file name over 200 characters, and takes 200 (review U1)', () => {
+    const at = (length: number) => `${'א'.repeat(length - 4)}.png`;
+    expect(underlayRefusal(image({ filename: at(200) }))).toBeNull();
+    expect(underlayRefusal(image({ filename: at(201) }))).toBe('an underlay file name must be at most 200 characters');
+  });
+
   it('refuses a placement in fractions, too small, too far or turned past a circle', () => {
     const placement = 'an underlay placement must be whole centimetres and tenths of a degree';
     expect(underlayRefusal(image({ centreXCm: 12.5 }))).toBe(placement);

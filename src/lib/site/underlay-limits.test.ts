@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  MAX_UNDERLAY_BYTES, MAX_UNDERLAY_MB, MAX_UNDERLAY_PX, MAX_UNDERLAY_TEXTURE_PX, MIN_UNDERLAY_PX,
+  MAX_UNDERLAY_BYTES, MAX_UNDERLAY_MB, MAX_UNDERLAY_PX, MAX_UNDERLAY_REQUEST_BYTES, MAX_UNDERLAY_TEXTURE_PX, MIN_UNDERLAY_PX,
   UNDERLAY_FILE, UNDERLAY_RULES_HE, UPLOAD_FAILED_HE,
   contentTypeOf, isPlanId, underlayKey, underlayKeyPlan, underlayUrl, uploadRefusalHe, uploadUrl,
 } from './underlay-limits';
@@ -16,6 +16,12 @@ describe('the image limits', () => {
     expect(MAX_UNDERLAY_BYTES).toBeLessThan(4.5 * 1024 * 1024);
     expect(MAX_UNDERLAY_MB).toBe(4);
     expect(Number.isInteger(MAX_UNDERLAY_MB)).toBe(true);
+  });
+
+  it('lets a request carry a 4 MB picture and its form, and still refuses before Vercel does (review U1)', () => {
+    // The form's boundaries and headers, and the file's name, ride on top of the picture.
+    expect(MAX_UNDERLAY_REQUEST_BYTES).toBeGreaterThanOrEqual(MAX_UNDERLAY_BYTES + 4 * 1024);
+    expect(MAX_UNDERLAY_REQUEST_BYTES).toBeLessThan(4.5 * 1024 * 1024);
   });
 
   it('takes 100 to 8192 pixels a side, and keeps at most 4096 once decoded', () => {
@@ -82,6 +88,7 @@ describe('what an upload says, in Hebrew', () => {
     expect(uploadRefusalHe('image too large')).toBe('התמונה גדולה מדי — עד 8192 פיקסלים בכל צד.');
     expect(uploadRefusalHe('image too small')).toBe('התמונה קטנה מדי — לפחות 100 פיקסלים בכל צד.');
     expect(uploadRefusalHe('storage unavailable')).toBe('לא הצלחנו לשמור את התמונה. אפשר לנסות שוב.');
+    expect(uploadRefusalHe('file name too long')).toBe('שם הקובץ ארוך מדי — עד 200 תווים. אפשר לקצר אותו ולהעלות שוב.');
   });
 
   it('falls back to Hebrew for a code it does not know, or no code at all', () => {
@@ -100,7 +107,7 @@ describe('what an upload says, in Hebrew', () => {
 
   it('carries no Latin word but the formats it names', () => {
     const codes = ['unauthorized', 'unknown plan', 'missing file', 'file too large', 'pdf', 'heic',
-      'unsupported file type', 'image too large', 'image too small', 'storage unavailable', 'unknown'];
+      'unsupported file type', 'image too large', 'image too small', 'storage unavailable', 'file name too long', 'unknown'];
     for (const sentence of [...codes.map(uploadRefusalHe), UNDERLAY_RULES_HE]) {
       expect(sentence).toMatch(/[֐-׿]/);
       const latin = sentence.match(/[A-Za-z]+/g) ?? [];

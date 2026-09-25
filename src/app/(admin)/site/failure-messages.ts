@@ -56,6 +56,7 @@ export const SITE_ERRORS: HebrewErrors = [
   ['an underlay file must be', 'קובץ תמונת הרקע לא שייך למפה הזו. טעינה מחדש של המפה תסדר את זה'],
   ['an underlay placement must be', 'מיקום תמונת הרקע נמדד במספר שלם של סנטימטרים'],
   ['an underlay calibration must be', 'הכיול של תמונת הרקע לא נשמר כמו שצריך. אפשר לכייל שוב'],
+  ['an underlay file name must be', 'שם הקובץ של תמונת הרקע ארוך מדי — עד 200 תווים'],
 ];
 
 export function siteFailureMessage(error: unknown): string {

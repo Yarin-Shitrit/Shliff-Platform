@@ -79,6 +79,8 @@ export async function uploadUnderlay(file: File, planId: string, deps: UploadDep
   } catch {
     return failed; // offline, aborted, DNS
   }
+  // A 413 is the size whoever said it: the route, or the platform before it, in English (review U1).
+  if (response.status === 413) return { ok: false, error: uploadRefusalHe('file too large') };
   const body = await readJson(response);
   if (response.status !== 201) return { ok: false, error: uploadRefusalHe(body.error) };
   const stored = storedFile(body, planId);

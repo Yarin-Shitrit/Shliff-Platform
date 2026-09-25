@@ -94,14 +94,29 @@ describe('the picture’s card', () => {
     expect(screen.getByText('הכיול יתחיל מחדש')).toBeTruthy();
   });
 
-  it('sets this viewer’s opacity, from 10% to 100% in tens', () => {
-    const { props } = renderCard();
-    const slider = screen.getByRole('slider', { name: 'שקיפות' }) as HTMLInputElement;
+  it('sets this viewer’s opacity, from 10% to 100% in tens, and names it for what it sets (review U1)', () => {
+    const { props, rerenderWith } = renderCard();
+    const slider = screen.getByRole('slider', { name: 'אטימות' }) as HTMLInputElement;
     expect([slider.min, slider.max, slider.step, slider.value]).toEqual(['10', '100', '10', '50']);
     expect(slider.getAttribute('aria-valuetext')).toBe('50%');
-    expect(screen.getByText(`שקיפות ${LRI}50%${PDI}`)).toBeTruthy();
+    expect(screen.getByText(`אטימות ${LRI}50%${PDI}`)).toBeTruthy();
     fireEvent.change(slider, { target: { value: '30' } });
     expect(props.onOpacity).toHaveBeenCalledWith(0.3);
+    // "אטימות 30%" is a picture 30% opaque — nearly see-through — which is what 0.3 draws.
+    rerenderWith({ view: { shown: true, opacity: 0.3 } });
+    expect(screen.getByText(`אטימות ${LRI}30%${PDI}`)).toBeTruthy();
+    expect(screen.queryByText(/שקיפות/)).toBeNull();
+  });
+
+  it('says what a replacement starts over: the calibration, the turn, or both (spec §18.7, review U1)', () => {
+    const { rerenderWith } = renderCard({ underlay: { ...CALIBRATED, rotationTenths: 900 } });
+    expect(screen.getByText('הכיול והסיבוב יתחילו מחדש')).toBeTruthy();
+    rerenderWith({ underlay: { ...IMAGE, rotationTenths: 37 } });
+    expect(screen.getByText('הסיבוב יתחיל מחדש')).toBeTruthy();
+    rerenderWith({ underlay: CALIBRATED });
+    expect(screen.getByText('הכיול יתחיל מחדש')).toBeTruthy();
+    rerenderWith({ underlay: IMAGE });
+    expect(screen.queryByText(/יתחיל(ו)? מחדש/)).toBeNull();
   });
 
   it('moves, replaces and removes the picture', () => {
@@ -128,6 +143,18 @@ describe('the picture’s card', () => {
     expect(props.onApplyCalibration).toHaveBeenCalledWith('26', true);
     fireEvent.click(button('ביטול'));
     expect(props.onCancelCalibration).toHaveBeenCalled();
+  });
+
+  it('ends the calibration on Esc in its form, the distance box included (review U1)', () => {
+    const { props } = renderCard({ tool: 'calibrate', draft: { points: [[0.1, 0.5], [0.9, 0.5]], refusal: null } });
+    const distance = screen.getByLabelText('המרחק בין שתי הנקודות, במטרים');
+    fireEvent.change(distance, { target: { value: '2' } });
+    fireEvent.keyDown(distance, { key: 'Escape', code: 'Escape' });
+    expect(props.onCancelCalibration).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(screen.getByRole('checkbox', { name: 'הקו הזה מקביל לגדר' }), { key: 'Escape', code: 'Escape' });
+    expect(props.onCancelCalibration).toHaveBeenCalledTimes(2);
+    fireEvent.keyDown(distance, { key: 'Enter', code: 'Enter' });
+    expect(props.onCancelCalibration).toHaveBeenCalledTimes(2);
   });
 
   it('shows a calibration refusal in Hebrew, beside the distance it is about', () => {

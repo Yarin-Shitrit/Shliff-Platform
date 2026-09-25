@@ -145,6 +145,7 @@ function Picture(props: UnderlayCardProps & { underlay: EditorUnderlay; onChoose
   const ready = status.state === 'ready';
   const percent = Math.round(view.opacity * 100);
   const { calibration } = underlay;
+  const hint = replaceHint(underlay);
   const cover = status.state === 'ready' ? coverSize(underlay, status.aspect) : null;
 
   return (
@@ -183,14 +184,15 @@ function Picture(props: UnderlayCardProps & { underlay: EditorUnderlay; onChoose
       )}
 
       <label className={styles.opacity}>
-        <span>{`שקיפות ${isolate(`${percent}%`)}`}</span>
+        {/* Opacity, named for what it sets: at 10% the picture is barely there (review U1). */}
+        <span>{`אטימות ${isolate(`${percent}%`)}`}</span>
         <input
           type="range"
           min={10}
           max={100}
           step={10}
           value={percent}
-          aria-label="שקיפות"
+          aria-label="אטימות"
           aria-valuetext={`${percent}%`}
           onChange={(event) => { props.onOpacity(Number(event.target.value) / 100); }}
         />
@@ -201,10 +203,24 @@ function Picture(props: UnderlayCardProps & { underlay: EditorUnderlay; onChoose
         <Button size="sm" onClick={props.onChoose}>החלפת תמונה</Button>
         <Button size="sm" tone="danger" onClick={props.onRemove}>הסרת התמונה</Button>
       </div>
-      {calibration === null ? null : <p className={chrome.meta}>הכיול יתחיל מחדש</p>}
+      {hint === null ? null : <p className={chrome.meta}>{hint}</p>}
       <p className={chrome.meta}>כשהתמונה מוצגת, היא נכללת גם בייצוא התמונה של המפה.</p>
     </>
   );
+}
+
+/**
+ * What replacing the picture starts over (spec §18.7): its calibration and its
+ * turn both belonged to the old picture — the turn most likely set by the
+ * parallel box. Null when it has neither (review U1).
+ */
+function replaceHint(underlay: EditorUnderlay): string | null {
+  const calibrated = underlay.calibration !== null;
+  const turned = underlay.rotationTenths !== 0;
+  if (calibrated && turned) return 'הכיול והסיבוב יתחילו מחדש';
+  if (calibrated) return 'הכיול יתחיל מחדש';
+  if (turned) return 'הסיבוב יתחיל מחדש';
+  return null;
 }
 
 function Calibration({ draft, onApply, onCancel }: {
@@ -229,7 +245,16 @@ function Calibration({ draft, onApply, onCancel }: {
           </div>
         </>
       ) : (
-        <form className={styles.form} onSubmit={(event) => { event.preventDefault(); onApply(distance, parallel); }}>
+        <form
+          className={styles.form}
+          onSubmit={(event) => { event.preventDefault(); onApply(distance, parallel); }}
+          onKeyDown={(event) => {
+            // The editor leaves keys typed into a box alone, so Esc here is the form's to end the calibration (review U1).
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            onCancel();
+          }}
+        >
           <label htmlFor={distanceId} className={styles.label}>המרחק בין שתי הנקודות, במטרים</label>
           <input
             id={distanceId}
