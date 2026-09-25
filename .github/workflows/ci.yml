@@ -1,4 +1,7 @@
 name: CI
+# The name is load-bearing: deploy.yml fires on `workflow_run` of the workflow
+# named `CI`, and deploys only when its conclusion is `success`. Every job below
+# counts toward that conclusion -- one failed shard fails the whole workflow.
 
 # Pushes to main, and every pull request. A feature branch without a PR is not
 # tested -- open the PR early if you want the signal.
@@ -13,27 +16,17 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-jobs:
-  verify:
-    name: typecheck · lint · test
-    runs-on: ubuntu-latest
-    # Measured 2026-09-18 on main: 903 tests in 77 files, 11m20s at
-    # --maxWorkers=2 -- about 0.75s per test. Phase 4 completed 2026-09-19 at
-    # 2606 tests in 203 files, so expect roughly 33 minutes once it merges, and
-    # more if the runner is slow or pglite setup dominates at that file count.
-    # Headroom is deliberate: a timeout kills the run before the report is
-    # written, so it surfaces as a hang rather than as a slow suite -- and it
-    # would do so on the same day as the largest merge in the project.
-    timeout-minutes: 60
+# Shape: typecheck+lint, eight test shards and the build all start at once; a
+# last job waits for all of them and decides the result. Until 2026-09-25 this
+# was one job running typecheck, lint and the whole suite in a row -- 3749
+# tests in 270 files, measured at 1421s for the Test step alone (run
+# 36071133680), about 25 minutes end to end.
 
-    env:
-      # src/db/index.ts reads DATABASE_URL at import time. The suite never talks
-      # to this address -- tests use an in-process PGlite from src/test/db.ts --
-      # but a bare runner would throw on import without it.
-      DATABASE_URL: postgres://ci:ci@127.0.0.1:5432/ci
-      AUTH_SECRET: ci-not-a-real-secret
-      STORAGE_DRIVER: local
-      LOCAL_STORAGE_DIR: ./.uploads
+jobs:
+  checks:
+    name: typecheck · lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -53,33 +46,77 @@ jobs:
       - name: Lint
         run: npm run lint
 
+  test:
+    name: test ${{ matrix.shard }}/${{ strategy.job-total }}
+    runs-on: ubuntu-latest
+    # A shard is measured at about 5 minutes. Headroom is deliberate: a timeout
+    # kills the job before the report is written, which the verdict job below
+    # then reports as a shard that left no report.
+    timeout-minutes: 20
+
+    strategy:
+      # Let every shard finish. A failure in one must not cancel the others and
+      # hide their failures behind it.
+      fail-fast: false
+      matrix:
+        # vitest splits by FILE COUNT over a hash of each path, not by duration,
+        # so shards are uneven. Eight is the fewest that keeps the heaviest shard
+        # near its floor: the one holding src/lib/import/promote/promote.test.ts
+        # (226s on its own, in one worker) -- at six, that shard modelled at
+        # ~6.6 minutes of tests. The count comes from this list via
+        # strategy.job-total, so adding a shard is one edit.
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+
+    env:
+      # src/db/index.ts reads DATABASE_URL at import time. The suite never talks
+      # to this address -- tests use an in-process PGlite from src/test/db.ts --
+      # but a bare runner would throw on import without it.
+      DATABASE_URL: postgres://ci:ci@127.0.0.1:5432/ci
+      AUTH_SECRET: ci-not-a-real-secret
+      STORAGE_DRIVER: local
+      LOCAL_STORAGE_DIR: ./.uploads
+      REPORT: vitest-report-${{ matrix.shard }}-of-${{ strategy.job-total }}.json
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
       # Every flag is load-bearing; CLAUDE.md explains why. Two differences from
       # the local command, both deliberate:
       #   --maxWorkers=2, not 4 -- a standard runner is 2-core/7GB, and four
       #     in-process Postgres instances on it is the contention that fabricates
       #     ~110 beforeEach timeouts.
-      #   a fixed --outputFile -- the local command needs a unique path because
-      #     two people share a machine. A runner is nobody else's.
+      #   the --outputFile is unique per shard rather than per process -- each
+      #     shard is its own runner, and the verdict job needs the reports apart.
       # Never drop --reporter=default: --reporter=json alone REPLACES it, and the
       # run loses the Unhandled Errors block where a SIGKILLed worker shows up.
       - name: Test
         run: |
           npx vitest run \
+            --shard=${{ matrix.shard }}/${{ strategy.job-total }} \
             --maxWorkers=2 \
             --hookTimeout 60000 \
             --testTimeout 60000 \
             --reporter=default \
             --reporter=json \
-            --outputFile vitest-report.json || VITEST_EXIT=$?
+            --outputFile "$REPORT" || VITEST_EXIT=$?
           echo "vitest exited ${VITEST_EXIT:-0}"
-          node scripts/verify-test-report.mjs vitest-report.json "${VITEST_EXIT:-0}"
+          node scripts/verify-test-report.mjs "$REPORT" "${VITEST_EXIT:-0}"
 
-      - name: Keep the report when something went wrong
-        if: failure()
+      # Always, not only on failure: the verdict job reads every shard's report,
+      # and a missing one is exactly what it exists to catch.
+      - name: Hand the report to the verdict job
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: vitest-report
-          path: vitest-report.json
+          name: vitest-report-${{ matrix.shard }}-of-${{ strategy.job-total }}
+          path: ${{ env.REPORT }}
           if-no-files-found: warn
           retention-days: 14
 
@@ -99,7 +136,7 @@ jobs:
     timeout-minutes: 20
 
     env:
-      # Same reason as the verify job: src/db/index.ts reads DATABASE_URL at
+      # Same reason as the test job: src/db/index.ts reads DATABASE_URL at
       # import time and every route reaches it through src/lib/auth/config.ts,
       # so the build needs the variable to exist. Nothing connects to it --
       # every admin page is dynamic behind requireAdmin().
@@ -154,3 +191,46 @@ jobs:
             exit 1
           fi
           echo "no reference-data paths under .next"
+
+  # The one job that answers "did CI pass". Each shard checks its own report,
+  # but no shard can see a shard that is missing: a matrix job that never ran,
+  # or died before writing, leaves every report that DID arrive clean. So this
+  # job takes the expected test files from git, not from the reports, and
+  # requires the reports to cover them exactly once. It also re-reads every
+  # other job's result, so a red anything is a red verdict here too.
+  #
+  # `!cancelled()` rather than `always()`: it must run when a shard failed
+  # (that is when it matters), but not spin up for a run a newer push replaced.
+  verdict:
+    name: verdict · every shard accounted for
+    needs: [checks, test, build]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Collect the shard reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: vitest-report-*
+          path: shard-reports
+          merge-multiple: true
+
+      - name: Every test file ran exactly once, and passed
+        run: node scripts/verify-shard-reports.mjs shard-reports
+
+      - name: Every other job passed
+        if: ${{ !cancelled() }}
+        run: |
+          echo "typecheck · lint: ${{ needs.checks.result }}"
+          echo "test shards:      ${{ needs.test.result }}"
+          echo "next build:       ${{ needs.build.result }}"
+          [ "${{ needs.checks.result }}" = success ] &&
+            [ "${{ needs.test.result }}" = success ] &&
+            [ "${{ needs.build.result }}" = success ]
