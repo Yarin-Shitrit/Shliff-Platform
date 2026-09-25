@@ -14,8 +14,10 @@
 // If vitest.config.ts's `include` ever changes, change INCLUDE below with it.
 // Until then this fails, which is the safe direction.
 //
-// Usage: node scripts/verify-shard-reports.mjs <directory of shard reports>
-// Reports are named vitest-report-<i>-of-<n>.json.
+// Usage: node scripts/verify-shard-reports.mjs <directory of shard reports> [timings-out.json]
+// Reports are named vitest-report-<i>-of-<n>.json. With a second argument it
+// also writes each file's measured seconds -- the table vitest.ci.config.ts
+// balances the shards by -- whether or not the run was green.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -26,8 +28,9 @@ import { execFileSync } from 'node:child_process';
 const INCLUDE = [':(glob)src/**/*.test.ts', ':(glob)src/**/*.test.tsx'];
 
 const dir = process.argv[2];
+const timingsOut = process.argv[3];
 if (!dir) {
-  console.error('usage: verify-shard-reports.mjs <directory of shard reports>');
+  console.error('usage: verify-shard-reports.mjs <directory of shard reports> [timings-out.json]');
   process.exit(2);
 }
 
@@ -68,6 +71,7 @@ for (let i = 1; i <= shardCount; i++) {
 }
 
 const seen = new Map(); // file -> shard index
+const seconds = new Map(); // file -> measured seconds
 const rows = [];
 let tests = 0;
 let failed = 0;
@@ -96,6 +100,7 @@ for (const r of reports.sort((a, b) => a.index - b.index)) {
       problems.push(`${file} ran in shard ${seen.get(file)} and again in shard ${r.index}.`);
     }
     seen.set(file, r.index);
+    seconds.set(file, Math.round((t.endTime - t.startTime) / 100) / 10);
     if (t.status !== 'passed') problems.push(`Shard ${r.index}: ${file} is ${t.status}.`);
     start = Math.min(start, t.startTime);
     end = Math.max(end, t.endTime);
@@ -155,6 +160,13 @@ if (process.env.GITHUB_STEP_SUMMARY) {
     '',
   ];
   fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n'));
+}
+
+if (timingsOut) {
+  const table = {};
+  for (const file of [...seconds.keys()].sort()) table[file] = seconds.get(file);
+  fs.writeFileSync(timingsOut, JSON.stringify(table, null, 2) + '\n');
+  console.log(`wrote ${seconds.size} file timings to ${timingsOut}`);
 }
 
 if (problems.length > 0) {
