@@ -176,3 +176,41 @@ export const siteLines = pgTable('site_lines', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   updatedBy: text('updated_by'),
 });
+
+/**
+ * The picture under a season's map (spec §16–§17, migration `0015`): a photo
+ * or a scan of the camp's sketch, traced over by hand. One per plan — the
+ * plan's id is the key — and gone with the plan. `copyPlan` does not copy it:
+ * last year's sketch is not this year's plot.
+ *
+ * The file is not here. It is in storage (`STORAGE_DRIVER`: private Vercel
+ * Blob in production), at `site-underlays/<planId>/<sha256>.<ext>`
+ * (`src/lib/site/underlay-limits.ts`), and only
+ * `GET /site/underlay/<planId>/<file>` reads it back, to admins. This row says
+ * which file and where it lies: the map length of its width, its middle, its
+ * turn in tenths of a degree, and the two points and the distance it was
+ * calibrated from — fractions of the picture as shown, null until
+ * calibrated. How see-through it is, and whether it is shown, are each
+ * viewer's own and never stored (D19).
+ *
+ * `uploaded_at` and `uploaded_by` change only when the file does: a move is
+ * an update, a new picture is an upload.
+ */
+export const siteUnderlays = pgTable('site_underlays', {
+  planId: uuid('plan_id').primaryKey()
+    .references(() => sitePlans.id, { onDelete: 'cascade' }),
+  storageKey: text('storage_key').notNull(),
+  contentType: text('content_type').$type<'image/png' | 'image/jpeg' | 'image/webp'>().notNull(),
+  sizeBytes: integer('size_bytes').notNull(),
+  filename: text('filename').notNull(),
+  centreXCm: integer('centre_x_cm').notNull(),
+  centreYCm: integer('centre_y_cm').notNull(),
+  widthCm: integer('width_cm').notNull(),
+  rotationTenths: integer('rotation_tenths').notNull().default(0),
+  /** `UnderlayCalibration` (`src/lib/site/underlay.ts`), written here so the schema imports nothing from `lib`. */
+  calibration: jsonb('calibration').$type<{ from: [number, number]; to: [number, number]; distanceCm: number }>(),
+  uploadedAt: timestamp('uploaded_at', { withTimezone: true }).notNull().defaultNow(),
+  uploadedBy: text('uploaded_by'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: text('updated_by'),
+});
