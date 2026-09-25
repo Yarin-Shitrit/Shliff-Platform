@@ -36,6 +36,9 @@ describe('the plot settings', () => {
     renderDrawer();
     expect(screen.getByRole('heading', { name: 'הגדרות המגרש' })).toBeTruthy();
     expect(north().value).toBe('30');
+    // Since N1 the compass needle and "north up" read it too: the hint says every use, not "only shade".
+    expect(screen.getByText(/משמש לצל לפי שעה, למחט המצפן ולכפתור ״צפון למעלה״\./)).toBeTruthy();
+    expect(screen.queryByText(/משמש רק לצל לפי שעה/)).toBeNull();
   });
 
   it('refuse a north that is not a whole degree from 0 to 359, in Hebrew, and send nothing', () => {

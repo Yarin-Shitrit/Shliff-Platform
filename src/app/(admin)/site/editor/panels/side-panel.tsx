@@ -9,6 +9,7 @@
 
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
 import { cx } from '@/components/ui/cx';
+import { EMPTY_MAP } from '../notices';
 import chrome from './panel.module.css';
 import styles from './side-panel.module.css';
 
@@ -82,7 +83,7 @@ export function SidePanel({ tab, onTab, library, objects, count }: {
       </div>
       <div className={chrome.body} role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${tab}`}>
         {count === 0 && tab === 'library' ? (
-          <p className={chrome.invite}>המפה ריקה. אפשר להתחיל מכל פריט שכאן.</p>
+          <p className={chrome.invite}>{EMPTY_MAP}</p>
         ) : null}
         {tab === 'library' ? library : objects}
       </div>

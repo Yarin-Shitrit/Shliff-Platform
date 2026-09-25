@@ -37,6 +37,7 @@ import {
 } from '@/lib/site/editor/metres';
 import { LABEL_REQUIRED } from '../../failure-messages';
 import type { EditorFlags } from '../use-editor-store';
+import { LOCKED_NOTICE } from '../notices';
 import { size3 } from './size-text';
 import chrome from './panel.module.css';
 import styles from './inspector.module.css';
@@ -253,7 +254,7 @@ export function ItemInspector({ doc, item, flags, buildTasks, onRun, onPickIds, 
 
         {refusal === null ? null : <p className={styles.error} id={errorId} role="alert">{refusal.message}</p>}
         {item.locked ? (
-          <p className={chrome.hint}>הפריט נעול. שחרור הנעילה מאפשר להזיז אותו ולשנות את מידותיו.</p>
+          <p className={chrome.hint}>{LOCKED_NOTICE}</p>
         ) : null}
 
         <div className={styles.section}>

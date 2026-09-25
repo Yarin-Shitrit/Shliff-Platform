@@ -54,9 +54,13 @@ export function isLineOp(op: SiteOp): op is Extract<SiteOp, { type: 'addLine' | 
   return op.type === 'addLine' || op.type === 'updateLine' || op.type === 'removeLine';
 }
 
-/** What `saveSiteChangesAction` answers (spec §6.4). */
+/**
+ * What `saveSiteChangesAction` answers (spec §6.4). `skipped` (review C2,
+ * additive): the ids of updates and removals the server passed over because
+ * the plan no longer has that item — present only when there were any.
+ */
 export type SaveResult =
-  | { ok: true; version: number }
+  | { ok: true; version: number; skipped?: string[] }
   | { ok: false; reason: 'conflict'; version: number }
   | { ok: false; reason: 'refused'; error: string };
 

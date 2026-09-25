@@ -52,6 +52,8 @@ vi.mock('./scene/scene-view', () => ({
 import { SiteEditor, type SiteEditorProps } from './site-editor';
 
 const CONFLICT = 'המפה שונתה ממקום אחר מאז שנפתחה. השינויים האחרונים שלך עוד לא נשמרו.';
+const PLOT_SAVED = 'הגדרות המגרש נשמרו, ויש כאן שינויים שעוד לא נשמרו. אפשר לשמור אותם מעל המפה המעודכנת, או לטעון אותה בלעדיהם.';
+const SITE_UPDATED = 'האתר עודכן בזמן העבודה. צריך לרענן את הדף; השינויים שלא נשמרו יחכו אחרי הרענון.';
 const WAIT = { timeout: 3000 };
 
 beforeAll(() => {
@@ -148,6 +150,121 @@ describe('saving, through the store and the queue', () => {
     expect(screen.getByText('כל השינויים נשמרו')).toBeTruthy();
   });
 
+  /*
+   * Review C2, end to end: another lead locked the tent this lead just turned.
+   * Every retry resent the same refused batch, and the only other button
+   * threw away everything unsent. Keeping mine reloads, names the locked
+   * item, drops only that change, and the queue is free again.
+   */
+  it('gets out of a refused batch by keeping my changes over the latest map, naming what was locked', async () => {
+    saveSiteChangesAction.mockResolvedValueOnce({ ok: false, reason: 'refused', error: 'הפריט נעול.' });
+    loadSiteDocAction.mockResolvedValue({
+      ok: true,
+      value: { doc: siteDoc([siteItem({ id: 'a', locked: true }), siteItem({ id: 'b', label: 'אוהל 2', xCm: 1500 })]), version: 2 },
+    });
+    await renderEditor();
+    turn();
+    expect(await screen.findByText('הפריט נעול.', undefined, WAIT)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'שמירת השינויים שלי מעליה' }));
+    await waitFor(() => { expect(loadSiteDocAction).toHaveBeenCalledWith('p1'); });
+    expect(await screen.findByText(/לא נשמרו שינויים בפריטים נעולים/)).toBeTruthy();
+    expect(firstItem()).toMatchObject({ widthCm: 300, depthCm: 200, locked: true });
+    expect(await saved()).toBeTruthy();
+    expect(screen.queryByText('הפריט נעול.')).toBeNull();
+    // Nothing was left to send: the refused turn is not tried again.
+    expect(saveSiteChangesAction).toHaveBeenCalledTimes(1);
+  });
+
+  /*
+   * Review I2: after a deploy, an editor left open calls a server action the
+   * new build no longer has. Next throws `UnrecognizedActionError` ("Server
+   * Action … was not found on the server", node_modules/next/dist/client/
+   * components/unrecognized-action-error.js); it was read as a dropped
+   * connection, and every retry failed the same way.
+   */
+  it('says the site was updated when a save reaches an older build, keeps the work for after the refresh, and offers it', async () => {
+    const stale = Object.assign(
+      new Error('Server Action "7f00aa" was not found on the server. \nRead more: https://nextjs.org/docs/messages/failed-to-find-server-action'),
+      { name: 'UnrecognizedActionError' },
+    );
+    saveSiteChangesAction.mockRejectedValue(stale);
+    const reload = vi.fn();
+    const location = window.location;
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...location, reload } });
+    try {
+      await renderEditor();
+      turn();
+      expect(await screen.findByText(SITE_UPDATED, undefined, WAIT)).toBeTruthy();
+      expect(screen.queryByText(NETWORK_FAILURE)).toBeNull();
+      // Neither reload nor keep-mine: both would call the same missing actions.
+      expect(screen.queryByRole('button', { name: 'טעינת הגרסה העדכנית' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'שמירת השינויים שלי מעליה' })).toBeNull();
+      const kept = () => JSON.parse(window.sessionStorage.getItem('site-editor:pending:p1') ?? 'null') as unknown;
+      const turned = [{ type: 'update', id: 'a', patch: { xCm: 550, yCm: 450, widthCm: 200, depthCm: 300 } }];
+      // The unsaved turn waits in this tab for the page after the refresh — kept by an effect
+      // once the banner is up, which under load can land a moment after it.
+      await waitFor(() => { expect(kept()).toEqual(turned); });
+      // The refresh keeps it too, so a press quicker than that effect loses nothing.
+      window.sessionStorage.clear();
+      fireEvent.click(screen.getByRole('button', { name: 'רענון הדף' }));
+      expect(reload).toHaveBeenCalledTimes(1);
+      expect(kept()).toEqual(turned);
+    } finally {
+      Object.defineProperty(window, 'location', { configurable: true, value: location });
+      window.sessionStorage.clear();
+    }
+  });
+
+  it('replays the work an older build left unsaved, through keeping mine over the latest map', async () => {
+    window.sessionStorage.setItem('site-editor:pending:p1', JSON.stringify([
+      { type: 'update', id: 'a', patch: { xCm: 550, yCm: 450, widthCm: 200, depthCm: 300 } },
+    ]));
+    loadSiteDocAction.mockResolvedValue({ ok: true, value: { doc: siteDoc([siteItem({ id: 'a' })]), version: 3 } });
+    saveSiteChangesAction.mockResolvedValue({ ok: true, version: 4 });
+    try {
+      await renderEditor();
+      await waitFor(() => { expect(loadSiteDocAction).toHaveBeenCalledWith('p1'); });
+      await waitFor(() => { expect(firstItem()).toMatchObject({ widthCm: 200, depthCm: 300 }); });
+      await waitFor(() => {
+        expect(saveSiteChangesAction).toHaveBeenCalledWith('p1', 3, [
+          { type: 'update', id: 'a', patch: { xCm: 550, yCm: 450, widthCm: 200, depthCm: 300 } },
+        ]);
+      }, WAIT);
+      expect(await saved()).toBeTruthy();
+      // Taken once: a later refresh does not replay it again.
+      expect(window.sessionStorage.getItem('site-editor:pending:p1')).toBeNull();
+    } finally {
+      window.sessionStorage.clear();
+    }
+  });
+
+  /*
+   * Review minor (H1 5), the P6 blind spot: 'mine' has just landed a map in
+   * which the other lead locked the tent, but the editor has not re-rendered
+   * yet — a Delete pressed in that gap builds its remove from the map it last
+   * drew. The store skips it (the lock holds) and records nothing, so there
+   * is nothing to say "removed" about, and no ביטול to offer.
+   */
+  it('says nothing was removed when the store recorded nothing — a remove the map under it had just made impossible', async () => {
+    saveSiteChangesAction.mockResolvedValueOnce({ ok: false, reason: 'conflict', version: 5 });
+    let settle: (value: unknown) => void = () => {};
+    loadSiteDocAction.mockReturnValue(new Promise((resolve) => { settle = resolve; }));
+    await renderEditor();
+    fireEvent.keyDown(stage(), { code: 'ArrowRight' });
+    expect(await screen.findByText(CONFLICT, undefined, WAIT)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'שמירת השינויים שלי מעליה' }));
+    await act(async () => {
+      settle({ ok: true, value: { doc: siteDoc([siteItem({ id: 'a', locked: true })]), version: 5 } });
+      // Let 'mine' land in the store — and the Delete come before any re-render.
+      await Promise.resolve();
+      await Promise.resolve();
+      fireEvent.keyDown(stage(), { code: 'Delete' });
+    });
+    expect(firstItem()).toMatchObject({ id: 'a', locked: true });
+    expect(screen.queryByText(/הוסר מהמפה/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'ביטול' })).toBeNull();
+  });
+
   it('turns a stale version into a choice, and the other lead’s map replaces mine when chosen', async () => {
     saveSiteChangesAction.mockResolvedValue({ ok: false, reason: 'conflict', version: 4 });
     loadSiteDocAction.mockResolvedValue({
@@ -207,7 +324,7 @@ describe('a plot saved in the drawer', () => {
     const { rerenderWith } = await renderEditor();
     turn(); // waiting: the queue sends after 500 ms
     rerenderWith({ initial: widened() });
-    expect(screen.getByText(CONFLICT)).toBeTruthy();
+    expect(screen.getByText(PLOT_SAVED)).toBeTruthy();
     expect(loadSiteDocAction).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'שמירת השינויים שלי מעליה' }));
     await waitFor(() => { expect(plotWidth()).toBe(3000); });

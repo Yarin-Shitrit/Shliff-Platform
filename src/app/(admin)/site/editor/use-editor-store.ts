@@ -8,6 +8,7 @@ import {
   applyOps, invertOps, lineEndsRefusal, lockRefusal, type ItemPatch, type LinePatch, type SiteOp,
 } from '@/lib/site/editor/ops';
 import { SaveQueue, type QueueSnapshot, type SaveFn } from './save-queue';
+import { isolate } from './notices';
 
 /**
  * The editor's single source of truth once the page has loaded (spec §6.1).
@@ -31,6 +32,12 @@ export interface EditorStoreInit {
   selection?: string[];
   save: SaveFn;
   load: () => Promise<ActionResult<{ doc: EditorDoc; version: number }>>;
+  /**
+   * Edits an earlier page of this map left unsaved — its build was replaced
+   * by a deploy (review I2). Replayed once the store is up, through 'mine':
+   * the latest map, with what still applies on top and the rest named.
+   */
+  pending?: SiteOp[];
 }
 
 export interface EditorStore {
@@ -42,13 +49,16 @@ export interface EditorStore {
   save: QueueSnapshot;
   conflict: { version: number } | null;
   notice: string | null;
-  run(label: string, ops: SiteOp[], selection?: string[]): void;
+  /** Applies, records and enqueues; true when a step was recorded (review minor, additive). */
+  run(label: string, ops: SiteOp[], selection?: string[]): boolean;
   undo(): string | null;
   redo(): string | null;
   select(ids: string[]): void;
   resolveConflict(choice: 'theirs' | 'mine'): Promise<void>;
   retrySave(): void;
   dismissNotice(): void;
+  /** What is not yet confirmed saved, in order — for keeping it across a page refresh (review I2). */
+  pendingOps(): SiteOp[];
 }
 
 interface StoreState {
@@ -69,15 +79,9 @@ const LOAD_FAILED = 'לא הצלחנו לטעון את המפה העדכנית. 
  */
 const PARTLY_APPLIED = 'חלק מהפעולה לא בוצע, כי פריטים שהיא נוגעת בהם כבר לא במפה.';
 
-/**
- * Bidi isolates (LRI…PDI) around a name dropped into a Hebrew sentence — an
- * item label may be Latin, a number, or mixed, and must not drag the rest of
- * the sentence out of order (matches the A17 convention this repo uses for
- * every other phrase that carries a variable name or number).
- */
-const LRI = '⁦';
-const PDI = '⁩';
-const isolate = (name: string) => `${LRI}${name}${PDI}`;
+/** Changes to items another lead removed: not saved, named by what this lead called them. */
+const goneSentence = (names: readonly string[]) =>
+  `לא נשמרו שינויים בפריטים שכבר לא במפה: ${names.map(isolate).join(', ')}.`;
 
 /** Only ids the map still has — items and lines — each once, in the order given. */
 function existing(doc: EditorDoc, ids: readonly string[]): string[] {
@@ -210,6 +214,18 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
         versionRef.current = snapshot.version;
         setSave(snapshot);
       },
+      /* The server skipped changes to items another lead removed (review
+         C2). They leave this map too — the server has no such item — named
+         by what this lead called them. A removal already gone here says
+         nothing: it did what it was asked. */
+      onSkipped: (ids) => {
+        const current = latest.current;
+        const gone = new Set(ids.filter((id) => findItem(current.doc, id) !== undefined));
+        if (gone.size === 0) return;
+        const names = current.doc.items.filter((entry) => gone.has(entry.id)).map((entry) => entry.label);
+        const doc = { ...current.doc, items: current.doc.items.filter((entry) => !gone.has(entry.id)) };
+        commit({ ...current, doc, selection: existing(doc, current.selection), notice: goneSentence(names) });
+      },
     });
     queueRef.current = queue;
 
@@ -237,15 +253,19 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
       queue.dispose();
       if (queueRef.current === queue) queueRef.current = null;
     };
-  }, [initial]);
+  }, [initial, commit]); // `commit` is stable: the queue is still made once per `initial`
 
-  const run = useCallback((label: string, ops: SiteOp[], selection?: string[]) => {
+  /* True when a step was recorded. The ops are checked against the map as it
+     is now, which can be newer than the one the caller built them from (a
+     conflict answer landing between two renders): a caller that says what
+     its edit did says so only when there was one (review minor, P6). */
+  const run = useCallback((label: string, ops: SiteOp[], selection?: string[]): boolean => {
     const current = latest.current;
     const { doc, applied } = applyEach(current.doc, ops);
     const nextSelection = existing(doc, selection ?? current.selection);
     if (applied.length === 0) {
       if (selection !== undefined) commit({ ...current, selection: nextSelection });
-      return;
+      return false;
     }
     const inverse = invertOps(current.doc, applied);
     commit({
@@ -255,6 +275,7 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
       history: record(current.history, { label, ops: applied, inverse }),
     });
     queueRef.current?.enqueue(applied);
+    return true;
   }, [commit]);
 
   const step = useCallback((direction: 'undo' | 'redo'): string | null => {
@@ -276,20 +297,24 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
   const undo = useCallback(() => step('undo'), [step]);
   const redo = useCallback(() => step('redo'), [step]);
 
+  /* A marquee asks for the same selection on every pointer move: an
+     unchanged one commits nothing, so nothing re-renders (review minor). */
   const select = useCallback((ids: string[]) => {
     const current = latest.current;
-    commit({ ...current, selection: existing(current.doc, ids) });
+    const next = existing(current.doc, ids);
+    if (next.length === current.selection.length && next.every((id, index) => id === current.selection[index])) return;
+    commit({ ...current, selection: next });
   }, [commit]);
 
   /**
    * The conflict banner's two answers (spec §6.4). Both start from the map
-   * as the server has it now. 'theirs' takes it as it is and clears undo/redo
-   * — every entry's inverse was computed against a document that no longer
-   * exists, so an undo replayed against theirs could silently overwrite the
-   * other lead's own change (a ruling that overrides the plan's original
-   * test: 'theirs' used to leave history standing). 'mine' replays what is
-   * unsent on top of theirs and keeps history, since every op it keeps (or
-   * drops) is checked against the doc it is about to touch, same as `run`.
+   * as the server has it now. 'theirs' takes it as it is; 'mine' replays what
+   * is unsent on top of theirs, every op checked against the doc it is about
+   * to touch, same as `run`. Both clear undo/redo: every entry's inverse was
+   * computed against a document that no longer exists, so an undo replayed
+   * on the server's map could silently overwrite the other lead's newer
+   * values (a ruling that overrides the plan's original test for 'theirs';
+   * review I5 extends it to 'mine', which used to keep history).
    * Either way, a dropped op says which items those were, by the names the
    * lead knew them by, never by id (controller ruling S2) — a lock refusal
    * and a missing item get their own sentence (Review Focus #4), so "locked"
@@ -421,12 +446,13 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
       const sentences: string[] = [];
       const gone = [...new Set(goneNames)];
       const locked = [...new Set(lockedNames)];
-      if (gone.length > 0) sentences.push(`לא נשמרו שינויים בפריטים שכבר לא במפה: ${gone.map(isolate).join(', ')}.`);
+      if (gone.length > 0) sentences.push(goneSentence(gone));
       if (locked.length > 0) sentences.push(`לא נשמרו שינויים בפריטים נעולים: ${locked.map(isolate).join(', ')}.`);
       commit({
         ...current,
         doc: merging,
         selection: existing(merging, current.selection),
+        history: EMPTY_HISTORY, // review I5: the map under every entry was replaced
         notice: sentences.length === 0 ? null : sentences.join(' '),
       });
     } finally {
@@ -439,6 +465,23 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
   const dismissNotice = useCallback(() => {
     commit({ ...latest.current, notice: null });
   }, [commit]);
+
+  const pendingOps = useCallback(() => queueRef.current?.pendingOps() ?? [], []);
+
+  /* Review I2: edits an earlier page of this map left unsaved (its build was
+     replaced by a deploy) are put back in the queue and replayed through
+     'mine' — the latest map, with what still applies on top and the rest
+     named — never simply resent against whatever the page loaded. Keyed on
+     the queue rather than a flag, so a remount's new queue gets them too. */
+  const replayedInto = useRef<SaveQueue | null>(null);
+  useEffect(() => {
+    const queue = queueRef.current;
+    const carried = initial.pending ?? [];
+    if (queue === null || carried.length === 0 || replayedInto.current === queue) return;
+    replayedInto.current = queue;
+    queue.enqueue(carried);
+    void resolveConflict('mine');
+  }, [initial, resolveConflict]);
 
   const flags = useMemo(() => computeFlags(state.doc), [state.doc]);
 
@@ -458,5 +501,6 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
     resolveConflict,
     retrySave,
     dismissNotice,
+    pendingOps,
   };
 }

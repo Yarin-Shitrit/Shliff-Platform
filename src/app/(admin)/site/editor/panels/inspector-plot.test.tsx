@@ -7,6 +7,7 @@ import { derive, toPlaced } from '@/lib/site/derive';
 import { overlapPairs } from '@/lib/site/geometry';
 import type { EditorDoc, EditorItem } from '@/lib/site/editor/model';
 import type { EditorFlags } from '../use-editor-store';
+import { EMPTY_MAP } from '../notices';
 import { PlotInspector } from './inspector-plot';
 import { northText } from './north';
 
@@ -54,7 +55,7 @@ describe('the plot, when nothing is selected', () => {
 
   it('invites the first item and the first net on an empty map, and finds nothing wrong with it', () => {
     renderPlot(doc([]));
-    expect(screen.getByText('המפה ריקה. גרירה של פריט מהספרייה אל המפה, או לחיצה עליו, מניחה את הראשון.')).toBeTruthy();
+    expect(screen.getByText(EMPTY_MAP)).toBeTruthy();
     expect(screen.getByText('הכול בתוך הגדר, ושום דבר לא יושב על משהו אחר.')).toBeTruthy();
     // Ruling P10: with no nets, an invitation rather than a statement.
     expect(screen.getByText('אין עדיין רשתות צל. גרירה של רשת צל מהספרייה תוסיף אחת.')).toBeTruthy();

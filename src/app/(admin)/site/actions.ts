@@ -75,7 +75,9 @@ export async function saveSiteChangesAction(
   try {
     const result = await applySiteOps(db, planId, baseVersion, ops, admin.email);
     if (result.status === 'conflict') return { ok: false, reason: 'conflict', version: result.version };
-    return { ok: true, version: result.version };
+    return result.skipped.length === 0
+      ? { ok: true, version: result.version }
+      : { ok: true, version: result.version, skipped: result.skipped };
   } catch (error) {
     return { ok: false, reason: 'refused', error: siteFailureMessage(error) };
   }

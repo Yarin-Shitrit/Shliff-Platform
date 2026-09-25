@@ -34,6 +34,12 @@ describe('the library', () => {
     expect(unnamedControls(container)).toEqual([]);
   });
 
+  it('names the kind אחר through a fixed noun, so it never reads "הוספת אחר"', () => {
+    renderLibrary();
+    expect(screen.getByRole('button', { name: 'הוספת פריט מסוג אחר, 1 × 1 מ׳' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^הוספת אחר/ })).toBeNull();
+  });
+
   it('shows the camp’s own default size, and says it was changed', () => {
     renderLibrary({ tent: { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: null } });
     expect(screen.getByRole('button', { name: 'הוספת אוהל, 3.5 × 3 מ׳, גודל ברירת המחדל שונה' })).toBeTruthy();

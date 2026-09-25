@@ -161,6 +161,7 @@ vi.mock('./use-editor-store', async () => {
           selection: selection ?? current.selection,
           past: history.record(current.past, { label, ops, inverse: invertOps(current.doc, ops) }),
         });
+        return ops.length > 0; // `record` ignores an entry with no ops
       },
       undo: () => step(history.undo(latest.current.past)),
       redo: () => step(history.redo(latest.current.past)),
@@ -170,6 +171,7 @@ vi.mock('./use-editor-store', async () => {
       resolveConflict: fake.resolveConflict,
       retrySave: fake.retrySave,
       dismissNotice: fake.dismissNotice,
+      pendingOps: () => [],
     };
   }
 
@@ -182,6 +184,7 @@ const PLOT_HREF = '/site?season=s26&act=plot';
 const DATE_HREF = '/site?season=s26&act=season-date';
 const VIEW: ViewInfo = { yaw: 0, zoomPct: 100, pxPerM: 20, groundCorners: [], selectionBox: null, moving: false };
 const CONFLICT = 'המפה שונתה ממקום אחר מאז שנפתחה. השינויים האחרונים שלך עוד לא נשמרו.';
+const PLOT_SAVED = 'הגדרות המגרש נשמרו, ויש כאן שינויים שעוד לא נשמרו. אפשר לשמור אותם מעל המפה המעודכנת, או לטעון אותה בלעדיהם.';
 
 const EXPORTED = 'התמונה נשמרה, בלי התוויות שעל המפה.';
 const EXPORT_FAILED = 'לא הצלחנו לשמור תמונה של המפה. אפשר לנסות שוב.';
@@ -287,6 +290,10 @@ function held(): { promise: Promise<void>; settle: () => void } {
 const stage = () => screen.getByRole('region', { name: 'מפת הקאמפ' });
 const firstItem = () => lastScene().store.doc.items[0];
 const button = (name: string | RegExp) => screen.getByRole('button', { name }) as HTMLButtonElement;
+/** An item's name inside a Hebrew toast, bidi-isolated as the store's notices isolate names (A17). */
+const named = (label: string) => `⁦${label}⁩`;
+/** Inside the properties panel. */
+const inspectorRegion = () => within(screen.getByRole('region', { name: 'מאפיינים' }));
 
 describe('the editor shell', () => {
   it('mounts the scene with the loaded map, the room the panels leave, and the page’s theme', async () => {
@@ -375,6 +382,8 @@ describe('saving', () => {
     expect(fake.retrySave).toHaveBeenCalledTimes(1);
     // A reload would throw away what the lead did while offline (ruling P8).
     expect(screen.queryByRole('button', { name: 'טעינת הגרסה העדכנית' })).toBeNull();
+    // Nor is a dropped connection a reason to rebuild over the server's map: the retry is the way.
+    expect(screen.queryByRole('button', { name: 'שמירת השינויים שלי מעליה' })).toBeNull();
     expect(fake.resolveConflict).not.toHaveBeenCalled();
   });
 
@@ -396,6 +405,23 @@ describe('saving', () => {
     await act(async () => { loading.settle(); await loading.promise; });
     expect(button('טעינת הגרסה העדכנית').disabled).toBe(false);
     expect(button('ניסיון חוזר').disabled).toBe(false);
+  });
+
+  /* Review C2: a refused batch is resent unchanged by every retry, and the
+     reload throws away everything unsent. The third way keeps the work: the
+     latest map, with what can still apply replayed on top and the rest named. */
+  it('offers to keep my changes over the latest map when a batch is refused', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    saving({ status: 'error', errorKind: 'refused', error: 'הפריט נעול.', pending: 1 });
+    const loading = held();
+    fake.resolveConflict.mockReturnValueOnce(loading.promise);
+    fireEvent.click(button('שמירת השינויים שלי מעליה'));
+    expect(fake.resolveConflict).toHaveBeenCalledWith('mine');
+    // One answer at a time.
+    expect(button('שמירת השינויים שלי מעליה').disabled).toBe(true);
+    expect(button('טעינת הגרסה העדכנית').disabled).toBe(true);
+    await act(async () => { loading.settle(); await loading.promise; });
   });
 
   it('turns a stale version into a choice, and takes the other lead’s map only when chosen', async () => {
@@ -427,6 +453,69 @@ describe('saving', () => {
     fireEvent.click(button('שמירת השינויים שלי מעליה'));
     await waitFor(() => { expect(fake.resolveConflict).toHaveBeenCalledWith('mine'); });
     expect(fake.resolveConflict).toHaveBeenCalledTimes(1);
+  });
+
+  /*
+   * Review I3: with saving halted (a refusal, a dropped connection, a
+   * conflict), a click on a link to another page unmounted the editor and
+   * its unsent edits with it — silently. The browser asks before a full
+   * page leave (beforeunload); an in-app link now asks too.
+   */
+  describe('leaving while saving is stopped', () => {
+    const LEAVE = 'השינויים האחרונים עוד לא נשמרו, ומעבר לדף אחר יאבד אותם. לעבור בכל זאת?';
+
+    /** Whether the editor stopped the link; jsdom's own navigation is always stopped after that is read. */
+    function clickLink(href: string, init: MouseEventInit = {}): { prevented: boolean } {
+      const link = document.createElement('a');
+      link.href = href;
+      link.textContent = 'קישור';
+      let seenAtLink: boolean | null = null;
+      link.addEventListener('click', (event) => { seenAtLink = event.defaultPrevented; event.preventDefault(); });
+      document.body.appendChild(link);
+      const click = createEvent.click(link, { button: 0, ...init });
+      fireEvent(link, click);
+      link.remove();
+      // A stopped click never reaches the link: then the editor's own preventDefault is what shows.
+      return { prevented: seenAtLink ?? click.defaultPrevented };
+    }
+
+    it('asks before a link to another page, and stays when the lead says no', async () => {
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      renderEditor();
+      await screen.findByTestId('scene');
+      saving({ status: 'error', errorKind: 'network', error: NETWORK_FAILURE, pending: 2 });
+      expect(clickLink('/members')).toEqual({ prevented: true });
+      expect(confirm).toHaveBeenCalledWith(LEAVE);
+      confirm.mockReturnValue(true);
+      expect(clickLink('/members')).toEqual({ prevented: false });
+      confirm.mockRestore();
+    });
+
+    it('asks while a conflict waits too', async () => {
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      renderEditor();
+      await screen.findByTestId('scene');
+      saving({ status: 'conflict', version: 4, pending: 1 });
+      expect(clickLink('/fees')).toEqual({ prevented: true });
+      confirm.mockRestore();
+    });
+
+    it('asks nothing when nothing is stuck, or when the link keeps this editor', async () => {
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      renderEditor();
+      await screen.findByTestId('scene');
+      // Saving normally: leaving flushes the queue on the way out.
+      saving({ status: 'pending', pending: 1 });
+      expect(clickLink('/members')).toEqual({ prevented: false });
+      saving({ status: 'error', errorKind: 'refused', error: 'הפריט נעול.', pending: 1 });
+      // The same page with a drawer open keeps the editor mounted.
+      expect(clickLink(`${window.location.pathname}?act=plot`)).toEqual({ prevented: false });
+      // A new tab, or another site (the browser's own leave warning covers that).
+      expect(clickLink('/members', { metaKey: true })).toEqual({ prevented: false });
+      expect(clickLink('https://example.org/')).toEqual({ prevented: false });
+      expect(confirm).not.toHaveBeenCalled();
+      confirm.mockRestore();
+    });
   });
 
   it('says what the store could not do, until the lead has read it', async () => {
@@ -565,11 +654,41 @@ describe('placing from the library', () => {
     scene.handle.centreGround.mockReturnValue([1300, 1200]);
     renderEditor();
     await screen.findByTestId('scene');
-    fireEvent.click(screen.getByRole('button', { name: /^הוספת אחר,/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^הוספת פריט מסוג אחר,/ }));
     let label: string | null = null;
     act(() => { label = lastScene().store.undo(); });
     expect(label).toBe('הוספת פריט מסוג אחר');
     expect(lastScene().store.doc.items).toHaveLength(1);
+  });
+
+  /* Review (post-landing), G2: an item added while its group is hidden was
+     selected but not drawn — a selection nobody could see. */
+  it('shows a hidden group before it selects the item just added to it', async () => {
+    scene.handle.centreGround.mockReturnValue([1300, 1200]);
+    renderEditor({ initialSelection: null });
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('tab', { name: /במפה/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'הסתרת לינה וצל' }));
+    expect(lastScene().ui.hiddenGroups).toEqual(['sleep']);
+    fireEvent.click(screen.getByRole('tab', { name: /הוספה למפה/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^הוספת אוהל,/ }));
+    const added = lastScene().store.doc.items.find((entry) => entry.id !== 'a');
+    if (added === undefined) throw new Error('no tent was added');
+    expect(lastScene().ui.hiddenGroups).toEqual([]);
+    expect(lastScene().store.selection).toEqual([added.id]);
+  });
+
+  it('shows the nets before it selects a net just added while they are hidden', async () => {
+    scene.handle.centreGround.mockReturnValue([1300, 1200]);
+    renderEditor({ initialSelection: null });
+    await screen.findByTestId('scene');
+    fireEvent.click(button('הסתרת רשתות צל'));
+    expect(lastScene().ui.netsHidden).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: /^הוספת רשת צל,/ }));
+    const net = lastScene().store.doc.items.find((entry) => entry.kind === 'shade');
+    if (net === undefined) throw new Error('no net was added');
+    expect(lastScene().ui.netsHidden).toBe(false);
+    expect(lastScene().store.selection).toEqual([net.id]);
   });
 
   it('says there is no room instead of guessing a spot', async () => {
@@ -756,6 +875,32 @@ describe('the inspector', () => {
     expect(inspector().getByRole('heading', { name: 'המגרש' })).toBeTruthy();
   });
 
+  /* Review minor: the several-items inspector was keyed by the selected ids,
+     so every item a marquee took in remounted it — a re-render per pointer
+     move, and a value half-typed into it thrown away. Keyed by the kinds. */
+  it('keeps what is typed in the several-items inspector while the selection grows within the same kinds', async () => {
+    renderEditor({
+      initial: {
+        doc: siteDoc([
+          siteItem({ id: 'a' }),
+          siteItem({ id: 'b', label: 'אוהל 2', xCm: 1000 }),
+          siteItem({ id: 'c', label: 'אוהל 3', xCm: 1500 }),
+        ]),
+        version: 0,
+      },
+      initialSelection: null,
+    });
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('tab', { name: /במפה/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^אוהל 1/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^אוהל 2/ }), { shiftKey: true });
+    const gap = () => inspector().getByLabelText('מרווח בשורה') as HTMLInputElement;
+    fireEvent.change(gap(), { target: { value: '1.5' } });
+    fireEvent.click(screen.getByRole('button', { name: /^אוהל 3/ }), { shiftKey: true });
+    expect(inspector().getByRole('heading', { name: 'נבחרו 3 פריטים' })).toBeTruthy();
+    expect(gap().value).toBe('1.5');
+  });
+
   it('shows a hidden group before a figure of the plot selects it — the one pickIds', async () => {
     renderEditor({ initialSelection: null });
     await screen.findByTestId('scene');
@@ -790,7 +935,7 @@ describe('what an edit says', () => {
     await screen.findByTestId('scene');
     fireEvent.keyDown(stage(), { code: 'Delete' });
     expect(lastScene().store.doc.items).toEqual([]);
-    fireEvent.click((await toastOf('הפריט אוהל 1 הוסר מהמפה')).getByRole('button', { name: 'ביטול' }));
+    fireEvent.click((await toastOf(`הפריט ${named('אוהל 1')} הוסר מהמפה`)).getByRole('button', { name: 'ביטול' }));
     await waitFor(() => { expect(lastScene().store.doc.items.map((entry) => entry.id)).toEqual(['a']); });
   });
 
@@ -798,8 +943,11 @@ describe('what an edit says', () => {
     renderEditor({ initial: { doc: siteDoc([siteItem({ id: 'a', locked: true })]), version: 0 } });
     await screen.findByTestId('scene');
     fireEvent.keyDown(stage(), { code: 'Delete' });
-    // Ruling P14: the one sentence every surface says about a locked item.
-    expect(await screen.findByText(LOCKED_NOTICE)).toBeTruthy();
+    // Ruling P14: the one sentence every surface says about a locked item —
+    // the toast, and the selected item's inspector, say the same words.
+    const said = await screen.findAllByText(LOCKED_NOTICE);
+    expect(said.some((node) => node.closest('li') !== null)).toBe(true);
+    expect(within(screen.getByRole('region', { name: 'מאפיינים' })).getByText(LOCKED_NOTICE)).toBeTruthy();
     expect(lastScene().store.doc.items).toHaveLength(1);
     fireEvent.keyDown(stage(), { code: 'KeyR' });
     expect(firstItem().widthCm).toBe(300);
@@ -819,7 +967,7 @@ describe('what an edit says', () => {
     await screen.findByTestId('scene');
     fireEvent.keyDown(stage(), { code: 'KeyD', metaKey: true });
     expect(lastScene().store.doc.items).toHaveLength(2);
-    fireEvent.click((await toastOf('נוצר עותק של אוהל 1')).getByRole('button', { name: 'ביטול' }));
+    fireEvent.click((await toastOf(`נוצר עותק של ${named('אוהל 1')}`)).getByRole('button', { name: 'ביטול' }));
     await waitFor(() => { expect(lastScene().store.doc.items).toHaveLength(1); });
   });
 
@@ -828,7 +976,7 @@ describe('what an edit says', () => {
     await screen.findByTestId('scene');
     fireEvent.keyDown(stage(), { code: 'KeyL' });
     expect(firstItem().locked).toBe(true);
-    fireEvent.click((await toastOf('הפריט אוהל 1 ננעל')).getByRole('button', { name: 'ביטול' }));
+    fireEvent.click((await toastOf(`הפריט ${named('אוהל 1')} ננעל`)).getByRole('button', { name: 'ביטול' }));
     await waitFor(() => { expect(firstItem().locked).toBe(false); });
   });
 
@@ -847,7 +995,29 @@ describe('what an edit says', () => {
     await screen.findByTestId('scene');
     fireEvent.keyDown(stage(), { code: 'KeyA', metaKey: true });
     fireEvent.keyDown(stage(), { code: 'KeyL' });
-    expect(await screen.findByText('הפריט אוהל 2 ננעל')).toBeTruthy();
+    expect(await screen.findByText(`הפריט ${named('אוהל 2')} ננעל`)).toBeTruthy();
+  });
+
+  /* Main's lines (#23), under this lane's toast rules: the line's label sits
+     between bidi isolates, behind the fixed noun "הקו" so no verb agrees
+     with a name, and ביטול takes the new line away. */
+  it('says a new pipe landed, by its isolated name, and ביטול takes it away', async () => {
+    renderEditor({
+      initial: {
+        doc: siteDoc([
+          siteItem({ id: 'tank', kind: 'water', label: 'מי שתייה 1', widthCm: 120, depthCm: 120 }),
+          siteItem({ id: 'sink', kind: 'sink', label: 'כיור 1', xCm: 1500, widthCm: 100, depthCm: 50 }),
+        ]),
+        version: 0,
+      },
+      initialSelection: 'tank',
+    });
+    await screen.findByTestId('scene');
+    fireEvent.change(inspectorRegion().getByLabelText('צינור מים חדש אל'), { target: { value: 'sink' } });
+    const line = lastScene().store.doc.lines[0];
+    expect(line).toMatchObject({ fromId: 'tank', toId: 'sink' });
+    fireEvent.click((await toastOf(`הקו ${named(line.label)} נוסף למפה`)).getByRole('button', { name: 'ביטול' }));
+    await waitFor(() => { expect(lastScene().store.doc.lines).toHaveLength(0); });
   });
 
   it('says a library item landed, and ביטול takes it off the map', async () => {
@@ -856,7 +1026,7 @@ describe('what an edit says', () => {
     await screen.findByTestId('scene');
     fireEvent.click(screen.getByRole('button', { name: /^הוספת מטבח,/ }));
     expect(lastScene().store.doc.items).toHaveLength(2);
-    fireEvent.click((await toastOf('הפריט מטבח 1 נוסף למפה')).getByRole('button', { name: 'ביטול' }));
+    fireEvent.click((await toastOf(`הפריט ${named('מטבח 1')} נוסף למפה`)).getByRole('button', { name: 'ביטול' }));
     await waitFor(() => { expect(lastScene().store.doc.items).toHaveLength(1); });
   });
 
@@ -867,9 +1037,9 @@ describe('what an edit says', () => {
     renderEditor();
     await screen.findByTestId('scene');
     fireEvent.keyDown(stage(), { code: 'KeyD', metaKey: true });
-    expect(await screen.findByText('נוצר עותק של אוהל 1')).toBeTruthy();
+    expect(await screen.findByText(`נוצר עותק של ${named('אוהל 1')}`)).toBeTruthy();
     fireEvent.keyDown(stage(), { code: 'KeyR' });
-    expect(screen.queryByText('נוצר עותק של אוהל 1')).toBeNull();
+    expect(screen.queryByText(`נוצר עותק של ${named('אוהל 1')}`)).toBeNull();
     // The newer edit and the copy both stand.
     const items = lastScene().store.doc.items;
     expect(items).toHaveLength(2);
@@ -880,19 +1050,19 @@ describe('what an edit says', () => {
     renderEditor();
     await screen.findByTestId('scene');
     fireEvent.keyDown(stage(), { code: 'KeyD', metaKey: true });
-    expect(await screen.findByText('נוצר עותק של אוהל 1')).toBeTruthy();
+    expect(await screen.findByText(`נוצר עותק של ${named('אוהל 1')}`)).toBeTruthy();
     fireEvent.keyDown(stage(), { code: 'KeyZ', metaKey: true });
     expect(lastScene().store.doc.items).toHaveLength(1);
-    expect(screen.queryByText('נוצר עותק של אוהל 1')).toBeNull();
+    expect(screen.queryByText(`נוצר עותק של ${named('אוהל 1')}`)).toBeNull();
   });
 
   it('takes an undo toast away when a drag in the scene makes a newer edit', async () => {
     renderEditor();
     await screen.findByTestId('scene');
     fireEvent.keyDown(stage(), { code: 'KeyD', metaKey: true });
-    expect(await screen.findByText('נוצר עותק של אוהל 1')).toBeTruthy();
+    expect(await screen.findByText(`נוצר עותק של ${named('אוהל 1')}`)).toBeTruthy();
     act(() => { lastScene().store.run('הזזה', [{ type: 'update', id: 'a', patch: { xCm: 600 } }]); });
-    expect(screen.queryByText('נוצר עותק של אוהל 1')).toBeNull();
+    expect(screen.queryByText(`נוצר עותק של ${named('אוהל 1')}`)).toBeNull();
     expect(firstItem().xCm).toBe(600);
   });
 
@@ -900,13 +1070,32 @@ describe('what an edit says', () => {
     renderEditor();
     await screen.findByTestId('scene');
     fireEvent.keyDown(stage(), { code: 'KeyD', metaKey: true });
-    expect(await screen.findByText('נוצר עותק של אוהל 1')).toBeTruthy();
+    expect(await screen.findByText(`נוצר עותק של ${named('אוהל 1')}`)).toBeTruthy();
     const copy = lastScene().store.doc.items[1];
     fireEvent.keyDown(stage(), { code: 'KeyL' }); // the copy is what is selected
     // Only the newest undo toast is left, and its ביטול takes off only the lock.
-    expect(screen.queryByText('נוצר עותק של אוהל 1')).toBeNull();
-    fireEvent.click((await toastOf(`הפריט ${copy.label} ננעל`)).getByRole('button', { name: 'ביטול' }));
+    expect(screen.queryByText(`נוצר עותק של ${named('אוהל 1')}`)).toBeNull();
+    fireEvent.click((await toastOf(`הפריט ${named(copy.label)} ננעל`)).getByRole('button', { name: 'ביטול' }));
     await waitFor(() => { expect(lastScene().store.doc.items.every((entry) => !entry.locked)).toBe(true); });
+    expect(lastScene().store.doc.items).toHaveLength(2);
+  });
+
+  /* A toast the lead is inside stays (the kit waits while it holds the
+     focus), so a newer edit can land under a ביטול about to be pressed. That
+     ביטול then says why it did nothing, instead of undoing the newer edit. */
+  it('refuses, in words, a ביטול pressed after a newer edit landed under it', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'KeyD', metaKey: true });
+    const undoCopy = (await toastOf(`נוצר עותק של ${named('אוהל 1')}`)).getByRole('button', { name: 'ביטול' });
+    act(() => { undoCopy.focus(); });
+    act(() => { lastScene().store.run('הזזה', [{ type: 'update', id: 'a', patch: { xCm: 600 } }]); });
+    // Still there: taken away only once the focus leaves it.
+    expect(screen.getByText(`נוצר עותק של ${named('אוהל 1')}`)).toBeTruthy();
+    fireEvent.click(undoCopy);
+    expect(await screen.findByText('לא בוטל: אחרי הפעולה הזו נעשו במפה שינויים נוספים.')).toBeTruthy();
+    // Neither the drag nor the copy was undone.
+    expect(firstItem().xCm).toBe(600);
     expect(lastScene().store.doc.items).toHaveLength(2);
   });
 });
@@ -1155,7 +1344,10 @@ describe('a plot saved in the drawer', () => {
     await screen.findByTestId('scene');
     saving({ status: 'pending', pending: 1 });
     rerenderWith({ initial: widened() });
-    expect(screen.getByText(CONFLICT)).toBeTruthy();
+    // The lead's own plot save, not another lead's change: the banner says what happened (review minor).
+    expect(screen.getByText(PLOT_SAVED)).toBeTruthy();
+    expect(screen.queryByText(CONFLICT)).toBeNull();
+    expect(button('שמירת השינויים שלי מעליה')).toBeTruthy();
     expect(fake.resolveConflict).not.toHaveBeenCalled();
   });
 
@@ -1226,8 +1418,12 @@ describe('the checks, the view controls and the minimap', () => {
     expect(firstItem().widthCm).toBe(200);
     fireEvent.click(within(bar).getByRole('button', { name: 'נעילה' }));
     expect(firstItem().locked).toBe(true);
-    act(() => { lastScene().onView({ ...VIEW, moving: true, selectionBox: null }); });
+    // A real box while the view moves (review minor, H1 7): with no box the bar would hide
+    // whatever `moving` says, and this could not fail if the editor stopped reading it.
+    act(() => { lastScene().onView({ ...VIEW, moving: true, selectionBox: { l: 120, t: 220, r: 320, b: 280 } }); });
     expect(screen.queryByRole('group', { name: 'פעולות על הבחירה' })).toBeNull();
+    act(() => { lastScene().onView({ ...VIEW, moving: false, selectionBox: { l: 120, t: 220, r: 320, b: 280 } }); });
+    expect(screen.getByRole('group', { name: 'פעולות על הבחירה' }).style.left).toBe('220px');
   });
 
   it('opens the shortcuts card with ?, and esc closes it without letting go of the selection', async () => {

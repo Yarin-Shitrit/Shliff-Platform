@@ -18,6 +18,7 @@ import { KIND_GROUP_LABELS, KIND_GROUP_ORDER, SITE_KINDS, type SiteKindGroup } f
 import { LINE_KIND_ORDER, LINE_KINDS, lineTotals, unconnected } from '@/lib/site/lines';
 import type { EditorDoc } from '@/lib/site/editor/model';
 import type { EditorFlags } from '../use-editor-store';
+import { EMPTY_MAP } from '../notices';
 import { northText } from './north';
 import chrome from './panel.module.css';
 import styles from './inspector.module.css';
@@ -122,7 +123,7 @@ export function PlotInspector({ doc, flags, plotHref, onPickIds }: {
             )}
           </div>
           {groups.length === 0 ? (
-            <p className={chrome.hint}>המפה ריקה. גרירה של פריט מהספרייה אל המפה, או לחיצה עליו, מניחה את הראשון.</p>
+            <p className={chrome.hint}>{EMPTY_MAP}</p>
           ) : groups.map(({ group, ids }) => (
             <Count
               key={group}

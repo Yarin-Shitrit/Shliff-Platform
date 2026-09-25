@@ -68,6 +68,59 @@ describe('the save queue', () => {
     expect(queue.snapshot).toEqual({ status: 'saved', version: 1, pending: 0, error: null, errorKind: null });
   });
 
+  it('hands on the items the server skipped because they are no longer on the map (review C2)', async () => {
+    const clock = manualTimers();
+    const onSkipped = vi.fn();
+    const send = vi.fn<SaveFn>(async () => ({ ok: true, version: 1, skipped: ['gone'] }));
+    const queue = new SaveQueue({ send, version: 0, timers: clock.timers, onChange: () => {}, onSkipped });
+    queue.enqueue([move('gone', 100), move('b', 20)]);
+    clock.fire();
+    await settle();
+    expect(onSkipped).toHaveBeenCalledWith(['gone']);
+    expect(queue.snapshot).toEqual({ status: 'saved', version: 1, pending: 0, error: null, errorKind: null });
+
+    // A save with nothing skipped says nothing.
+    onSkipped.mockClear();
+    send.mockResolvedValueOnce({ ok: true, version: 2 });
+    queue.enqueue([move('b', 30)]);
+    clock.fire();
+    await settle();
+    expect(onSkipped).not.toHaveBeenCalled();
+  });
+
+  /* Review minor: a request that never answered kept the queue "saving"
+     forever. Past the limit it is a dropped connection — kept apart and
+     resent unchanged on retry, so if it did land, the resend is a conflict. */
+  it('treats a save that never answers as a dropped connection, and resends that batch unchanged', async () => {
+    const clock = manualTimers();
+    const sendClock = manualTimers();
+    const replies: Array<ReturnType<typeof deferred>> = [];
+    const send = vi.fn<SaveFn>(() => { const reply = deferred(); replies.push(reply); return reply.promise; });
+    const queue = new SaveQueue({
+      send, version: 0, timers: clock.timers, sendTimeoutMs: 20_000, sendTimers: sendClock.timers, onChange: () => {},
+    });
+    queue.enqueue([move('a', 100)]);
+    clock.fire();
+    expect(queue.snapshot.status).toBe('saving');
+    expect(sendClock.waitingMs()).toBe(20_000);
+
+    sendClock.fire();
+    await settle();
+    expect(queue.snapshot).toEqual({ status: 'error', version: 0, pending: 1, error: NETWORK_FAILURE, errorKind: 'network' });
+    // The answer that finally comes changes nothing: that request was given up on.
+    replies[0].resolve({ ok: true, version: 1 });
+    await settle();
+    expect(queue.snapshot.status).toBe('error');
+
+    const retried = queue.retry();
+    expect(send).toHaveBeenLastCalledWith(0, [move('a', 100)]);
+    replies[1].resolve({ ok: true, version: 1 });
+    await retried;
+    expect(queue.snapshot).toMatchObject({ status: 'saved', version: 1, pending: 0 });
+    // An answered save leaves no timer behind.
+    expect(sendClock.waitingMs()).toBeNull();
+  });
+
   it('sends nothing for an item added and removed before the save', () => {
     const { queue, send, clock } = setup();
     queue.enqueue([{ type: 'add', item: tent('n1') }]);

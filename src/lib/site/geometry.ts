@@ -218,14 +218,22 @@ export function formatArea(m2: number): string {
 /**
  * A quarter turn about the item's own middle (spec D5): in 3D a lead expects
  * the caravan to spin in place. Whole centimetres: when the sides differ by
- * an odd number the middle moves by half a centimetre, rounded.
+ * an odd number the corner's shift is half a centimetre off whole, and it is
+ * rounded away from zero on both axes — so the next turn's shift, the exact
+ * opposite, rounds to the exact opposite, and the item comes back to where it
+ * started after two turns and after four. Rounding the position instead
+ * (half up) drifted it half a centimetre a turn (review minor).
  */
 export function turnAboutCentre(rect: Rect): Rect {
-  const doubledX = rect.x * 2 + rect.width;
-  const doubledY = rect.y * 2 + rect.depth;
   const width = rect.depth;
   const depth = rect.width;
-  return { x: Math.round((doubledX - width) / 2), y: Math.round((doubledY - depth) / 2), width, depth };
+  const shift = (half: number) => wholeCm(Math.sign(half) * Math.round(Math.abs(half)));
+  return {
+    x: rect.x + shift((rect.width - width) / 2),
+    y: rect.y + shift((rect.depth - depth) / 2),
+    width,
+    depth,
+  };
 }
 
 /** The smallest rectangle holding them all; null for none. */

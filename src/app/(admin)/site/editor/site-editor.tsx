@@ -50,7 +50,8 @@ import { useEditorStore } from './use-editor-store';
 import { SCENE_PALETTE, type SceneTheme } from './scene/palette';
 import type { EditorUi, Insets, SceneHandle, SceneViewProps, ViewInfo } from './scene/scene-view';
 import { shortcutFor, ZOOM_IN, type Arrow, type Shortcut } from './keyboard';
-import { LOCKED_ALL_NOTICE, LOCKED_NOTICE } from './notices';
+import { isolate, LOCKED_ALL_NOTICE, LOCKED_NOTICE } from './notices';
+import { forgetUnsaved, isStaleBuild, keepUnsaved, readUnsaved, SITE_UPDATED } from './unsaved-work';
 import { Toolbar } from './panels/toolbar';
 import { ConflictBanner, SaveErrorBanner, SaveStatus } from './panels/save-status';
 import { LibraryPanel } from './panels/library-panel';
@@ -126,8 +127,14 @@ const INITIAL_UI: EditorUi = {
   hiddenGroups: [], hour: 14, theme: 'light',
 };
 
-/** An undo toast pressed after a newer edit (a race: a newer edit takes the toast away). */
-const STALE_UNDO = 'הפעולה הזו כבר לא האחרונה, ולכן לא בוטלה מכאן.';
+/** An undo toast pressed after a newer edit landed under it (the toast waits while the lead is inside it). */
+const STALE_UNDO = 'לא בוטל: אחרי הפעולה הזו נעשו במפה שינויים נוספים.';
+
+/** The plot settings were saved while edits here still waited to be saved (review minor). */
+const PLOT_SAVED_UNDER_EDITS = 'הגדרות המגרש נשמרו, ויש כאן שינויים שעוד לא נשמרו. אפשר לשמור אותם מעל המפה המעודכנת, או לטעון אותה בלעדיהם.';
+
+/** An in-app link away from the editor while saving is stopped (review I3). */
+const LEAVE_UNSAVED = 'השינויים האחרונים עוד לא נשמרו, ומעבר לדף אחר יאבד אותם. לעבור בכל זאת?';
 
 /** Until the scene reports: no scale bar (`pxPerM` 0), no selection box, nothing moving. */
 const INITIAL_VIEW: ViewInfo = {
@@ -284,13 +291,57 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
   } = props;
   const planId = initial.doc.plot.id;
   const { show } = useToast();
+  /* Review I2: a save that reached an older build (a deploy replaced it)
+     only a page refresh can get past. Until then what is unsaved is kept in
+     this tab, and the page after the refresh replays it (`carried`). */
+  const [staleBuild, setStaleBuild] = useState(false);
+  const [carried] = useState(() => (typeof window === 'undefined' ? [] : readUnsaved(planId)));
   const store = useEditorStore({
     doc: initial.doc,
     version: initial.version,
     selection: initialSelection === null ? [] : [initialSelection],
-    save: (baseVersion, ops) => saveSiteChangesAction(planId, baseVersion, ops),
+    save: async (baseVersion, ops) => {
+      try {
+        return await saveSiteChangesAction(planId, baseVersion, ops);
+      } catch (error) {
+        if (!isStaleBuild(error)) throw error; // a dropped connection stays the queue's to say
+        setStaleBuild(true);
+        return { ok: false, reason: 'refused', error: SITE_UPDATED };
+      }
+    },
     load: () => loadSiteDocAction(planId),
+    pending: carried,
   });
+  // Taken once: a later refresh must not replay the same edits again.
+  useEffect(() => { forgetUnsaved(planId); }, [planId]);
+
+  /* Review I3: while saving is stopped with edits unsent, an in-app link to
+     another page would unmount the editor and drop them without a word — the
+     browser asks before a full page leave (the store's beforeunload), but a
+     client-side navigation never reaches it. So a link that leaves this
+     editor asks first. One that keeps it mounted (the same page and season,
+     a drawer opening) does not; nor a new tab, a download or another site. */
+  const halted = store.save.pending > 0 && (store.save.status === 'error' || store.save.status === 'conflict');
+  useEffect(() => {
+    if (!halted) return;
+    const onClick = (event: MouseEvent) => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const link = event.target instanceof Element ? event.target.closest('a[href]') : null;
+      if (!(link instanceof HTMLAnchorElement) || link.hasAttribute('download')) return;
+      if (link.target !== '' && link.target !== '_self') return;
+      const here = new URL(window.location.href);
+      const to = new URL(link.href, here);
+      if (to.origin !== here.origin) return;
+      if (to.pathname === here.pathname && to.searchParams.get('season') === here.searchParams.get('season')) return;
+      if (window.confirm(LEAVE_UNSAVED)) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    document.addEventListener('click', onClick, true);
+    return () => { document.removeEventListener('click', onClick, true); };
+  }, [halted]);
+  // While the build is stale, what is unsaved is kept for the page after the refresh.
+  useEffect(() => { if (staleBuild) keepUnsaved(planId, store.pendingOps()); });
   const theme = useSyncExternalStore(subscribeTheme, readTheme, serverTheme);
   const wide = useSyncExternalStore(subscribeWide, readWide, serverYes);
   const webgl = useSyncExternalStore(subscribeNever, readWebgl, serverYes);
@@ -309,6 +360,19 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
   /** The burn day a chip picked for shade by hour; null is the gate day. */
   const [pickedDay, setPickedDay] = useState<string | null>(null);
   const stageRef = useRef<HTMLElement>(null);
+  /* The stage's size, so the selection bar stays on it (`placeBar`). Null
+     until measured, and where `ResizeObserver` is missing. */
+  const [stageSize, setStageSize] = useState<{ width: number; height: number } | null>(null);
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (stage === null || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      setStageSize((previous) => (previous?.width === width && previous.height === height ? previous : { width, height }));
+    });
+    observer.observe(stage);
+    return () => { observer.disconnect(); };
+  }, []);
   const reasonId = useId();
   const sceneRef = useRef<SceneHandle>(null);
   const flownToPeek = useRef(false);
@@ -460,15 +524,17 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
   /**
    * The one door every edit goes through — the panels, the keys, the
    * inspector's typed values and the scene's drags alike — so no edit can
-   * leave an older undo toast standing (P6).
+   * leave an older undo toast standing (P6). True when the store recorded a
+   * step: the ops meet the map as it is now, which can be newer than the one
+   * they were built from, so an edit says what it did only when it did.
    */
-  function runEdit(label: string, ops: SiteOp[], selection?: string[]): void {
+  function runEdit(label: string, ops: SiteOp[], selection?: string[]): boolean {
     if (ops.length === 0) {
       if (selection !== undefined) store.select(selection);
-      return;
+      return false;
     }
     historyMoved();
-    store.run(label, ops, selection);
+    return store.run(label, ops, selection);
   }
 
   function undo(): void {
@@ -531,14 +597,14 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     const gone = new Set(ops.flatMap((op) => (op.type === 'remove' ? [op.id] : [])));
     const goneLines = ops.filter((op) => op.type === 'removeLine').length;
     const kept = items.filter((item) => !gone.has(item.id));
-    runEdit('הסרה', ops, kept.map((item) => item.id));
+    if (!runEdit('הסרה', ops, kept.map((item) => item.id))) return;
     if (gone.size === 0) {
-      saidWithUndo(goneLines === 1 ? `הקו ${lines[0].label} הוסר מהמפה` : `${goneLines} קווים הוסרו מהמפה`);
+      saidWithUndo(goneLines === 1 ? `הקו ${isolate(lines[0].label)} הוסר מהמפה` : `${goneLines} קווים הוסרו מהמפה`);
       return;
     }
     const first = items.find((item) => gone.has(item.id));
     const said = gone.size === 1 && first !== undefined
-      ? `הפריט ${first.label} הוסר מהמפה`
+      ? `הפריט ${isolate(first.label)} הוסר מהמפה`
       : `${gone.size} פריטים הוסרו מהמפה`;
     const stayed = kept.length === 0 ? ''
       : kept.length === 1 ? '. פריט נעול אחד נשאר במקומו'
@@ -557,8 +623,9 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
       show({ message: `אי אפשר לחבר את שני הפריטים האלה ב${LINE_KINDS[kind].label}. אולי אחד מהם השתנה בינתיים.`, tone: 'bad' });
       return;
     }
-    runEdit(`הוספת ${LINE_KINDS[kind].label}`, ops, [id]);
-    saidWithUndo(`${added.line.label} נוסף למפה`);
+    if (!runEdit(`הוספת ${LINE_KINDS[kind].label}`, ops, [id])) return;
+    // Behind a fixed noun, as a removed line is said: no verb agrees with a name.
+    saidWithUndo(`הקו ${isolate(added.line.label)} נוסף למפה`);
   }
 
   /** A splitter fed from `fromId`, with a run to each of `toIds` (`splitOps`); the splitter is selected so it can be dragged at once. */
@@ -577,8 +644,8 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     const items = selected();
     const { ops, ids } = duplicateOps(store.doc, store.selection, () => crypto.randomUUID());
     if (ops.length === 0) return;
-    runEdit('שכפול', ops, ids);
-    saidWithUndo(items.length === 1 ? `נוצר עותק של ${items[0].label}` : `נוצרו ${ids.length} עותקים`);
+    if (!runEdit('שכפול', ops, ids)) return;
+    saidWithUndo(items.length === 1 ? `נוצר עותק של ${isolate(items[0].label)}` : `נוצרו ${ids.length} עותקים`);
   }
 
   /** A square turns into itself (no ops); only an all-locked selection is told it is locked. */
@@ -598,14 +665,14 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     const locking = !items.every((item) => item.locked);
     const ops = lockOps(store.doc, store.selection, locking);
     if (ops.length === 0) return;
-    runEdit(locking ? 'נעילה' : 'שחרור נעילה', ops);
+    if (!runEdit(locking ? 'נעילה' : 'שחרור נעילה', ops)) return;
     /* Ruling P12: the toast counts what changed — an item already locked (or
        already free) is not in `ops`, so it is neither counted nor named. */
     const only = ops.length === 1 && ops[0].type === 'update' ? findItem(store.doc, ops[0].id) : undefined;
     const one = only === undefined ? null : only.label;
     saidWithUndo(locking
-      ? (one === null ? `${ops.length} פריטים ננעלו` : `הפריט ${one} ננעל`)
-      : (one === null ? `הנעילה של ${ops.length} פריטים שוחררה` : `הנעילה של ${one} שוחררה`));
+      ? (one === null ? `${ops.length} פריטים ננעלו` : `הפריט ${isolate(one)} ננעל`)
+      : (one === null ? `הנעילה של ${ops.length} פריטים שוחררה` : `הנעילה של ${isolate(one)} שוחררה`));
   }
 
   /** Arrows follow the screen, so "up" is away from the viewer however the view is turned (§8). */
@@ -628,9 +695,11 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     const ops = addOps(store.doc, kind, at, id);
     const added = ops.find((op): op is Extract<SiteOp, { type: 'add' }> => op.type === 'add');
     if (added === undefined) return;
+    // The new item is selected, so its group — or the nets — is shown first (G2).
+    revealFor([kind]);
     // Through a fixed noun: "הוספת" + the kind's name would read "הוספת אחר" for the kind אחר.
-    runEdit(`הוספת פריט מסוג ${SITE_KINDS[kind].label}`, ops, [id]);
-    saidWithUndo(`הפריט ${added.item.label} נוסף למפה`);
+    if (!runEdit(`הוספת פריט מסוג ${SITE_KINDS[kind].label}`, ops, [id])) return;
+    saidWithUndo(`הפריט ${isolate(added.item.label)} נוסף למפה`);
   }
   // ── end of edits ──────────────────────────────────────────────────────
 
@@ -683,20 +752,25 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
 
   /**
    * A hidden item is never selected — the rule `patchUi` keeps for the nets
-   * (ruling G2). Anything about to select items shows their group, or the
-   * nets, first.
+   * (ruling G2). Anything about to select items of these kinds shows their
+   * group, or the nets, first — an item just added included, which is not in
+   * the map yet when this runs.
    */
-  function revealFor(ids: readonly string[]): void {
-    const items = ids
-      .map((id) => findItem(store.doc, id))
-      .filter((item): item is EditorItem => item !== undefined);
-    const groups = new Set(items.map((item) => SITE_KINDS[item.kind].group));
+  function revealFor(kinds: readonly SiteItemKind[]): void {
+    const groups = new Set(kinds.map((kind) => SITE_KINDS[kind].group));
     const patch: Partial<EditorUi> = {};
     if (ui.hiddenGroups.some((group) => groups.has(group))) {
       patch.hiddenGroups = ui.hiddenGroups.filter((group) => !groups.has(group));
     }
-    if (ui.netsHidden && items.some((item) => item.kind === 'shade')) patch.netsHidden = false;
+    if (ui.netsHidden && kinds.includes('shade')) patch.netsHidden = false;
     if (patch.hiddenGroups !== undefined || patch.netsHidden !== undefined) patchUi(patch);
+  }
+
+  /** `revealFor` the kinds of these items. */
+  function revealIds(ids: readonly string[]): void {
+    revealFor(ids
+      .map((id) => findItem(store.doc, id)?.kind)
+      .filter((kind): kind is SiteItemKind => kind !== undefined));
   }
 
   /**
@@ -706,7 +780,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
    * select a hidden item. An empty list clears the selection.
    */
   function pickIds(ids: string[]): void {
-    revealFor(ids);
+    revealIds(ids);
     store.select(ids);
     if (ids.length > 0) sceneRef.current?.fitIds(ids);
   }
@@ -722,7 +796,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
       return;
     }
     if (additive) {
-      revealFor([id]);
+      revealIds([id]);
       store.select([...store.selection, id]);
       return;
     }
@@ -809,7 +883,9 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     }
     return (
       <MultiInspector
-        key={items.map((item) => item.id).join(' ')}
+        /* Keyed by the kinds, not the ids: a marquee taking in one more tent
+           keeps the panel — and what is half-typed in it (review minor). */
+        key={[...new Set(items.map((item) => item.kind))].sort().join(' ')}
         doc={store.doc}
         ids={items.map((item) => item.id)}
         onRun={runEdit}
@@ -937,6 +1013,10 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
           busy={resolving}
           onTheirs={() => { void resolve('theirs'); }}
           onMine={() => { void resolve('mine'); }}
+          /* A newer map the page itself handed down is the lead's own plot
+             save (the drawer refreshes the page) — not a change "from
+             elsewhere", which only the save queue's conflict can report. */
+          message={store.conflict === null ? PLOT_SAVED_UNDER_EDITS : undefined}
         />
       )}
       {saveError === null ? null : (
@@ -944,7 +1024,9 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
           id={reasonId}
           message={saveError}
           busy={resolving}
-          onReload={refused ? () => { void resolve('theirs'); } : undefined}
+          onReload={refused && !staleBuild ? () => { void resolve('theirs'); } : undefined}
+          onMine={refused && !staleBuild ? () => { void resolve('mine'); } : undefined}
+          onRefresh={staleBuild ? () => { keepUnsaved(planId, store.pendingOps()); window.location.reload(); } : undefined}
         />
       )}
       {store.notice === null ? null : (
@@ -1036,6 +1118,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
         />
         <SelectionBar
           box={view.moving || selectedNow.length === 0 ? null : view.selectionBox}
+          stage={stageSize}
           locked={selectedNow.length > 0 && selectedNow.every((item) => item.locked)}
           onTurn={turnSelection}
           onDuplicate={duplicateSelection}

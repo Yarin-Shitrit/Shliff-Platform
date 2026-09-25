@@ -44,17 +44,22 @@ export function SaveStatus({ snapshot, onRetry, busy = false, reasonId }: {
   );
 }
 
-/** Another lead saved since this map was loaded: the lead chooses, nothing is overwritten (§6.4). */
-export function ConflictBanner({ busy, onTheirs, onMine }: {
+const CHANGED_ELSEWHERE = 'המפה שונתה ממקום אחר מאז שנפתחה. השינויים האחרונים שלך עוד לא נשמרו.';
+
+/**
+ * Another lead saved since this map was loaded: the lead chooses, nothing is
+ * overwritten (§6.4). `message` says what happened when it was not another
+ * lead — the lead's own plot settings, saved with edits still waiting.
+ */
+export function ConflictBanner({ busy, onTheirs, onMine, message = CHANGED_ELSEWHERE }: {
   busy: boolean;
   onTheirs: () => void;
   onMine: () => void;
+  message?: string;
 }): ReactElement {
   return (
     <div className={styles.banner} data-tone="warn" role="alert">
-      <p className={styles.bannerText}>
-        המפה שונתה ממקום אחר מאז שנפתחה. השינויים האחרונים שלך עוד לא נשמרו.
-      </p>
+      <p className={styles.bannerText}>{message}</p>
       <span className={styles.bannerActions}>
         <Button size="sm" onClick={onTheirs} disabled={busy}>טעינת הגרסה העדכנית</Button>
         <Button size="sm" onClick={onMine} disabled={busy}>שמירת השינויים שלי מעליה</Button>
@@ -72,21 +77,41 @@ export function ConflictBanner({ busy, onTheirs, onMine }: {
  * `onReload` — the way back — only for a refusal. A lost connection gets the
  * reason and the retry, never a reload (plan 04, ruling P8): a reload must not
  * be the only way out of a dropped connection.
+ *
+ * `onMine` — also only for a refusal (review C2): the retry resends the same
+ * refused batch, and the reload drops everything unsent, so the third way
+ * keeps the work — the latest map, with what can still apply replayed on top
+ * and the rest named.
+ *
+ * `onRefresh` — when a deploy replaced the build this page runs (review I2):
+ * the reload and keep-mine would call the same missing server actions, so
+ * the one way out is refreshing the page, and the unsaved work waits for it.
  */
-export function SaveErrorBanner({ message, busy, onReload, id }: {
+export function SaveErrorBanner({ message, busy, onReload, onMine, onRefresh, id }: {
   message: string;
   busy: boolean;
   onReload?: () => void;
+  onMine?: () => void;
+  onRefresh?: () => void;
   id?: string;
 }): ReactElement {
+  const actions = onReload !== undefined || onMine !== undefined || onRefresh !== undefined;
   return (
     <div className={styles.banner} data-tone="bad" role="alert">
       <p className={styles.bannerText} id={id}>{message}</p>
-      {onReload === undefined ? null : (
+      {actions ? (
         <span className={styles.bannerActions}>
-          <Button size="sm" onClick={onReload} disabled={busy}>טעינת הגרסה העדכנית</Button>
+          {onReload === undefined ? null : (
+            <Button size="sm" onClick={onReload} disabled={busy}>טעינת הגרסה העדכנית</Button>
+          )}
+          {onMine === undefined ? null : (
+            <Button size="sm" onClick={onMine} disabled={busy}>שמירת השינויים שלי מעליה</Button>
+          )}
+          {onRefresh === undefined ? null : (
+            <Button size="sm" onClick={onRefresh}>רענון הדף</Button>
+          )}
         </span>
-      )}
+      ) : null}
     </div>
   );
 }

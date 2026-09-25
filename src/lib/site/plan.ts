@@ -473,7 +473,8 @@ async function inTransaction<T>(db: AnyDb, fn: (tx: AnyDb) => Promise<T>): Promi
 }
 
 export type ApplyResult =
-  | { status: 'saved'; version: number }
+  /** `skipped`: the ids of updates and removals naming an item this plan does not have (gone, or never here). */
+  | { status: 'saved'; version: number; skipped: string[] }
   | { status: 'conflict'; version: number };
 
 /**
@@ -483,8 +484,15 @@ export type ApplyResult =
  * another lead saved in between, and the answer is the current version with
  * nothing written — the editor turns that into a decision on screen. Every
  * op is checked with the same refusals the client ran, plus what only the
- * database can know: the item is on this plan, the id is free, the task is a
- * build task of this season, the item is not locked.
+ * database can know: the id is free, the task is a build task of this
+ * season, the item is not locked.
+ *
+ * An update or a removal naming an item this plan does not have — another
+ * lead removed it, or it was never here — is skipped and reported in
+ * `skipped`, the rule `applyOps` keeps on the client, rather than refusing the
+ * whole batch: a refusal would be resent unchanged forever (review C2), and
+ * there is nothing left to change. A batch that wrote nothing keeps the
+ * version, as an empty one does.
  */
 export async function applySiteOps(
   db: AnyDb, planId: string, baseVersion: number, ops: readonly SiteOp[], actor: string,
@@ -499,7 +507,7 @@ export async function applySiteOps(
       .from(sitePlans).where(eq(sitePlans.id, planId)).limit(1).for('update');
     if (!plan) throw new Error(`unknown site plan ${planId}`);
     if (plan.version !== baseVersion) return { status: 'conflict', version: plan.version };
-    if (ops.length === 0) return { status: 'saved', version: plan.version };
+    if (ops.length === 0) return { status: 'saved', version: plan.version, skipped: [] };
 
     const rows = await tx.select().from(siteItems).where(eq(siteItems.planId, planId));
     const byId = new Map(rows.map((row) => [row.id, row]));
@@ -510,6 +518,8 @@ export async function applySiteOps(
       const row = byId.get(id);
       return row === undefined ? undefined : { id: row.id, kind: row.kind };
     };
+
+    const skipped: string[] = [];
 
     for (const op of ops) {
       if (isLineOp(op)) {
@@ -545,6 +555,10 @@ export async function applySiteOps(
         }
         continue;
       }
+      if ((op.type === 'update' || op.type === 'remove') && !byId.has(op.id)) {
+        skipped.push(op.id);
+        continue;
+      }
       if (op.type === 'add') {
         const [taken] = await tx.select({ id: siteItems.id }).from(siteItems)
           .where(eq(siteItems.id, op.item.id)).limit(1);
@@ -563,7 +577,7 @@ export async function applySiteOps(
         byId.set(row.id, row);
       } else if (op.type === 'update') {
         const existing = byId.get(op.id);
-        if (!existing) throw new Error(`unknown site item ${op.id}`);
+        if (!existing) throw new Error(`unknown site item ${op.id}`); // unreachable: skipped above
         const locked = lockRefusal(existing.locked, op.patch);
         if (locked !== null) throw new Error(locked);
         if (op.patch.taskId !== undefined && op.patch.taskId !== null) {
@@ -578,7 +592,7 @@ export async function applySiteOps(
         byId.set(op.id, { ...existing, ...set } as ItemRow);
       } else if (op.type === 'remove') {
         const existing = byId.get(op.id);
-        if (!existing) throw new Error(`unknown site item ${op.id}`);
+        if (!existing) throw new Error(`unknown site item ${op.id}`); // unreachable: skipped above
         if (existing.locked) throw new Error('that item is locked');
         await tx.delete(siteItems).where(eq(siteItems.id, op.id));
         byId.delete(op.id);
@@ -597,9 +611,10 @@ export async function applySiteOps(
       }
     }
 
+    if (skipped.length === ops.length) return { status: 'saved', version: plan.version, skipped };
     const version = plan.version + 1;
     await tx.update(sitePlans).set({ version, updatedAt: new Date(), updatedBy: actor })
       .where(eq(sitePlans.id, planId));
-    return { status: 'saved', version };
+    return { status: 'saved', version, skipped };
   });
 }

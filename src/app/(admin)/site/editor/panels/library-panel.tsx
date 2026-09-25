@@ -176,7 +176,8 @@ function KindTile({ kind, defaults, onActivate, onDragMove, onDrop, onDragCancel
     <button
       type="button"
       className={styles.tile}
-      aria-label={`הוספת ${label}, ${sizeText}${customised ? ', גודל ברירת המחדל שונה' : ''}`}
+      // Through a fixed noun for the kind אחר: "הוספת אחר" does not read as adding an item.
+      aria-label={`הוספת ${kind === 'other' ? `פריט מסוג ${label}` : label}, ${sizeText}${customised ? ', גודל ברירת המחדל שונה' : ''}`}
       onPointerDown={down}
       onPointerMove={move}
       onPointerUp={up}

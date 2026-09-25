@@ -34,6 +34,7 @@ import {
 import {
   GAP_RANGE, HEIGHT_RANGE, NOT_A_LENGTH, SIDE_RANGE, readMetres, type MetresRange,
 } from '@/lib/site/editor/metres';
+import { LOCKED_ALL_NOTICE } from '../notices';
 import { EditorIcon, type EditorIconName } from './editor-icons';
 import { size3 } from './size-text';
 import chrome from './panel.module.css';
@@ -210,9 +211,17 @@ export function MultiInspector({ doc, ids, onRun, onPickIds, onClear, footer }: 
     .filter((entry) => entry.ids.length > 0);
   const unlocked = items.filter((entry) => !entry.locked).length;
   const lockedCount = items.length - unlocked;
+  /* An edit that did nothing because every selected item is locked says why
+     (review minor) — shown only while that is still so. */
+  const [said, setSaid] = useState<string | null>(null);
 
   function run(label: string, ops: SiteOp[]): void {
-    if (ops.length > 0) onRun(label, ops);
+    if (ops.length > 0) {
+      setSaid(null);
+      onRun(label, ops);
+    } else if (unlocked === 0) {
+      setSaid(LOCKED_ALL_NOTICE);
+    }
   }
 
   function arrangeRow(): void {
@@ -240,6 +249,7 @@ export function MultiInspector({ doc, ids, onRun, onPickIds, onClear, footer }: 
       </header>
 
       <div className={chrome.body}>
+        {said !== null && unlocked === 0 ? <p className={chrome.hint} role="status">{said}</p> : null}
         <div className={styles.pills}>
           {kinds.map(({ kind, ids: ofKind }) => (
             <button key={kind} type="button" className={styles.kindChip} onClick={() => { onPickIds(ofKind); }}>

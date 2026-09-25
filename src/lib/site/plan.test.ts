@@ -98,7 +98,7 @@ describe('the camp map', () => {
     const plan = await planById(db, planId);
     if (plan === null) throw new Error(`no map ${planId}`);
     const result = await applySiteOps(db, planId, plan.version, items.map((item) => ({ type: 'add' as const, item })), LEAD);
-    expect(result).toEqual({ status: 'saved', version: plan.version + 1 });
+    expect(result).toEqual({ status: 'saved', version: plan.version + 1, skipped: [] });
   }
 
   describe('the plot', () => {
@@ -225,14 +225,17 @@ describe('the camp map', () => {
       expect((await itemById(db, kitchen.id))?.taskId).toBeNull();
     });
 
-    it('removes an item, and refuses to remove or change it once it is gone', async () => {
+    // Review C2 (hotfix lane): once the item is gone, removing or changing it
+    // again is skipped and reported — no longer a refusal the queue would
+    // resend forever — and, writing nothing, keeps the version.
+    it('removes an item, and skips a removal or a change of it once it is gone, saying which', async () => {
       const tent = tentOf();
       await seed(planId, tent);
       await applySiteOps(db, planId, 1, [{ type: 'remove', id: tent.id }], LEAD);
       expect(await itemById(db, tent.id)).toBeNull();
-      await expect(applySiteOps(db, planId, 2, [{ type: 'remove', id: tent.id }], LEAD))
-        .rejects.toThrow('unknown site item');
-      await expect(update(2, tent.id, { xCm: 0 })).rejects.toThrow('unknown site item');
+      expect(await applySiteOps(db, planId, 2, [{ type: 'remove', id: tent.id }], LEAD))
+        .toEqual({ status: 'saved', version: 2, skipped: [tent.id] });
+      expect(await update(2, tent.id, { xCm: 0 })).toEqual({ status: 'saved', version: 2, skipped: [tent.id] });
     });
   });
 
@@ -380,7 +383,7 @@ describe('the camp map', () => {
         { type: 'setKindDefault', kind: 'tent', size: { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: null } },
       ], LEAD);
 
-      expect(result).toEqual({ status: 'saved', version: 1 });
+      expect(result).toEqual({ status: 'saved', version: 1, skipped: [] });
       const [row] = await listItems(db, planId);
       expect(row).toMatchObject({ id: tent.id, xCm: 400, heightCm: 180, sort: 0 });
       expect(await kindDefaults(db)).toEqual({ tent: { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: null } });
@@ -406,13 +409,45 @@ describe('the camp map', () => {
       expect((await planForSeason(db, s26))?.version).toBe(0);
     });
 
-    it('refuses an item that belongs to another season’s map', async () => {
+    it('leaves an item of another season’s map alone, and says it skipped it', async () => {
       const mine = await createPlan(db, s26, PLOT, LEAD);
       const theirs = await createPlan(db, s25, PLOT, LEAD);
       const other = tentOf();
       await seed(theirs, other);
-      await expect(applySiteOps(db, mine, 0, [{ type: 'remove', id: other.id }], LEAD))
-        .rejects.toThrow('unknown site item');
+      // Not on this plan is the same as gone from it: skipped and reported, never touched.
+      expect(await applySiteOps(db, mine, 0, [{ type: 'remove', id: other.id }], LEAD))
+        .toEqual({ status: 'saved', version: 0, skipped: [other.id] });
+      expect((await listItems(db, theirs)).map((row) => row.id)).toEqual([other.id]);
+    });
+
+    /*
+     * Review C2: an update or a removal of an item another lead has removed
+     * used to throw `unknown site item`, refusing the whole batch — and the
+     * queue resent that same batch forever. Now it is skipped and reported,
+     * the rule `applyOps` keeps on the client, and the rest of the batch saves.
+     */
+    it('skips and reports an update or a removal of an item no longer on the map, and saves the rest', async () => {
+      const planId = await createPlan(db, s26, PLOT, LEAD);
+      const kept = tentOf();
+      await applySiteOps(db, planId, 0, [{ type: 'add', item: kept }], LEAD);
+      const goneMoved = crypto.randomUUID();
+      const goneRemoved = crypto.randomUUID();
+      const result = await applySiteOps(db, planId, 1, [
+        { type: 'update', id: goneMoved, patch: { xCm: 700 } },
+        { type: 'update', id: kept.id, patch: { xCm: 400 } },
+        { type: 'remove', id: goneRemoved },
+      ], LEAD);
+      expect(result).toEqual({ status: 'saved', version: 2, skipped: [goneMoved, goneRemoved] });
+      const rows = await listItems(db, planId);
+      expect(rows.map((row) => [row.id, row.xCm])).toEqual([[kept.id, 400]]);
+    });
+
+    it('keeps the version when every op of a batch was skipped, since nothing was written', async () => {
+      const planId = await createPlan(db, s26, PLOT, LEAD);
+      const gone = crypto.randomUUID();
+      expect(await applySiteOps(db, planId, 0, [{ type: 'update', id: gone, patch: { xCm: 10 } }], LEAD))
+        .toEqual({ status: 'saved', version: 0, skipped: [gone] });
+      expect((await planForSeason(db, s26))?.version).toBe(0);
     });
 
     it('refuses an id that is already taken', async () => {
@@ -510,7 +545,7 @@ describe('the camp map', () => {
     it('answers an empty batch with the current version, unbumped', async () => {
       const planId = await createPlan(db, s26, PLOT, LEAD);
       const result = await applySiteOps(db, planId, 0, [], LEAD);
-      expect(result).toEqual({ status: 'saved', version: 0 });
+      expect(result).toEqual({ status: 'saved', version: 0, skipped: [] });
       expect((await planForSeason(db, s26))?.version).toBe(0);
     });
 
@@ -564,7 +599,7 @@ describe('the camp map’s lines', () => {
 
   it('adds a pipe between a tank and a shower, lists it, and loads it for the editor with its length', async () => {
     const line = pipe({ points: [[50, 300], [550, 300]], notes: ' לאורך הגדר ' });
-    expect(await batch(1, [{ type: 'addLine', line }])).toEqual({ status: 'saved', version: 2 });
+    expect(await batch(1, [{ type: 'addLine', line }])).toEqual({ status: 'saved', version: 2, skipped: [] });
     const rows = await listLines(db, planId);
     expect(rows).toEqual([expect.objectContaining({
       id: line.id, planId, kind: 'water', label: 'צינור מים 1', fromItemId: tank.id, toItemId: shower.id,

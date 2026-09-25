@@ -1,13 +1,33 @@
 /**
  * The camp map's Hebrew notices that more than one surface raises — the
  * scene on a drag, the keyboard on a nudge, the inspector on a typed size.
- * Plain strings and nothing else: a panel may import this file, but never
+ * Plain strings, and the one helper that places a name inside them: a panel
+ * — and `failure-messages.ts`, on the server — may import this file, but never
  * `scene/engine.ts`, which would put `three` in the page's first bundle
  * (plan 04, ruling P14).
  */
 
-/** A locked item was dragged, nudged or resized. */
+/**
+ * A locked item was dragged, nudged, resized or refused by the server — the
+ * one sentence for it everywhere (ruling P14): the scene, the keys, the
+ * inspector and `failure-messages.ts` all say this.
+ */
 export const LOCKED_NOTICE = 'הפריט נעול. אפשר לשחרר אותו בכפתור הנעילה.';
 
 /** The same, when several items are selected and every one of them is locked. */
 export const LOCKED_ALL_NOTICE = 'הפריטים הנבחרים נעולים. אפשר לשחרר אותם בכפתור הנעילה.';
+
+/**
+ * A map with nothing on it — the side panel, the list and the plot inspector
+ * say the same invitation. How a tile is placed is the library's own hint.
+ */
+export const EMPTY_MAP = 'המפה ריקה. אפשר להתחיל מכל פריט בלשונית ״הוספה למפה״.';
+
+/**
+ * A name dropped into a Hebrew sentence, between bidi isolates (LRI…PDI): an
+ * item's label may be Latin, a number or mixed, and must not drag the rest
+ * of the sentence out of order (the A17 convention).
+ */
+export function isolate(name: string): string {
+  return `⁦${name}⁩`;
+}
