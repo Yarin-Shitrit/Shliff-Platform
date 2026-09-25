@@ -94,14 +94,18 @@ describe('the picture’s card', () => {
     expect(screen.getByText('הכיול יתחיל מחדש')).toBeTruthy();
   });
 
-  it('sets this viewer’s opacity, from 10% to 100% in tens', () => {
-    const { props } = renderCard();
-    const slider = screen.getByRole('slider', { name: 'שקיפות' }) as HTMLInputElement;
+  it('sets this viewer’s opacity, from 10% to 100% in tens, and names it for what it sets (review U1)', () => {
+    const { props, rerenderWith } = renderCard();
+    const slider = screen.getByRole('slider', { name: 'אטימות' }) as HTMLInputElement;
     expect([slider.min, slider.max, slider.step, slider.value]).toEqual(['10', '100', '10', '50']);
     expect(slider.getAttribute('aria-valuetext')).toBe('50%');
-    expect(screen.getByText(`שקיפות ${LRI}50%${PDI}`)).toBeTruthy();
+    expect(screen.getByText(`אטימות ${LRI}50%${PDI}`)).toBeTruthy();
     fireEvent.change(slider, { target: { value: '30' } });
     expect(props.onOpacity).toHaveBeenCalledWith(0.3);
+    // "אטימות 30%" is a picture 30% opaque — nearly see-through — which is what 0.3 draws.
+    rerenderWith({ view: { shown: true, opacity: 0.3 } });
+    expect(screen.getByText(`אטימות ${LRI}30%${PDI}`)).toBeTruthy();
+    expect(screen.queryByText(/שקיפות/)).toBeNull();
   });
 
   it('moves, replaces and removes the picture', () => {

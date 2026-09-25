@@ -844,7 +844,8 @@ adjective agrees with a noun that varies: the toasts put a fixed noun first
   קרובות מדי זו לזו. מרחק ארוך, כמו צלע של הגדר, נותן כיול מדויק יותר." and
   "הנקודה מחוץ לתמונה."
 - After calibration: "כויל לפי 26 מ׳ שסומנו על התמונה", with "כיול מחדש";
-  "מכסה על המפה 31.2 × 27.6 מ׳"; "שקיפות 50%".
+  "מכסה על המפה 31.2 × 27.6 מ׳"; "אטימות 50%" (the slider sets opacity, so it is
+  named for it: at 10% the picture is barely there).
 - Alignment: "הזזה"; hint "גרירה מזיזה את התמונה · החצים — 10 ס״מ, עם Shift —
   מטר · Esc — סיום"; "סיבוב רבע ימינה", "סיבוב רבע שמאלה", "סיום".
 - Export note: "כשהתמונה מוצגת, היא נכללת גם בייצוא התמונה של המפה."

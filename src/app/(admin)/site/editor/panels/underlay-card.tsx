@@ -183,14 +183,15 @@ function Picture(props: UnderlayCardProps & { underlay: EditorUnderlay; onChoose
       )}
 
       <label className={styles.opacity}>
-        <span>{`שקיפות ${isolate(`${percent}%`)}`}</span>
+        {/* Opacity, named for what it sets: at 10% the picture is barely there (review U1). */}
+        <span>{`אטימות ${isolate(`${percent}%`)}`}</span>
         <input
           type="range"
           min={10}
           max={100}
           step={10}
           value={percent}
-          aria-label="שקיפות"
+          aria-label="אטימות"
           aria-valuetext={`${percent}%`}
           onChange={(event) => { props.onOpacity(Number(event.target.value) / 100); }}
         />

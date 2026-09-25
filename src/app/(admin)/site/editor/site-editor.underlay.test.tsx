@@ -216,7 +216,7 @@ describe('the picture under the map, in the editor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'תמונת רקע' }));
     expect(lastScene().ui.underlay).toEqual({ shown: false, opacity: 0.5 });
     fireEvent.click(inspector().getByRole('button', { name: 'לא כוילה' }));
-    fireEvent.change(card().getByRole('slider', { name: 'שקיפות' }), { target: { value: '30' } });
+    fireEvent.change(card().getByRole('slider', { name: 'אטימות' }), { target: { value: '30' } });
     expect(lastScene().ui.underlay).toEqual({ shown: false, opacity: 0.3 });
     await new Promise((done) => { setTimeout(done, 700); });
     expect(saveSiteChangesAction).not.toHaveBeenCalled();
