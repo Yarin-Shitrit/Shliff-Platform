@@ -1,10 +1,10 @@
 import type { SiteItemKind, SiteLineKind, SiteLinePoint } from '@/db/schema/site';
 import { effectiveSize, itemHeight, type KindSize } from '../defaults';
-import { contains, overlap, turnAboutCentre, unionRect, wholeCm, type Rect } from '../geometry';
+import { turnAboutCentre, unionRect, wholeCm, type Rect } from '../geometry';
 import { DEFAULT_SHADE_INSET_CM } from '../kinds';
 import { centreOfItem, eligibleEnds, geometricMedian, splits } from '../lines';
 import { findItem, findLine, linesAt, nextLabel, nextLineLabel, rectOf, type EditorDoc, type EditorItem, type EditorLine } from './model';
-import { nearestFreeSpot } from './placement';
+import { landingRule, nearestFreeSpot } from './placement';
 import {
   lineEndsRefusal, lockRefusal, rekindRefusal, samePoints, storedLinePatch, storedPatch,
   type ItemPatch, type LinePatch, type SiteOp,
@@ -105,7 +105,8 @@ export function turnOps(doc: EditorDoc, ids: readonly string[]): SiteOp[] {
  * A new item of `kind` with its north-west corner at `at`, at the kind's
  * effective size (the camp's own default, else the preset). Its height is
  * the kind's (null); a net gets the kind's unshaded strip, or the standard
- * one, exactly as the server would give it (`applySiteOps`).
+ * one, exactly as the server would give it (`applySiteOps`). A net follows
+ * the camp's rope angle (null), as it follows its kind's height.
  */
 export function addOps(
   doc: EditorDoc, kind: SiteItemKind, at: { xCm: number; yCm: number }, id: string,
@@ -117,7 +118,7 @@ export function addOps(
     item: {
       id, kind, label: nextLabel(doc.items, kind),
       xCm: wholeCm(at.xCm), yCm: wholeCm(at.yCm), widthCm: size.widthCm, depthCm: size.depthCm,
-      heightCm: null, insetCm: kind === 'shade' ? (size.insetCm ?? DEFAULT_SHADE_INSET_CM) : null,
+      heightCm: null, insetCm: kind === 'shade' ? (size.insetCm ?? DEFAULT_SHADE_INSET_CM) : null, ropeAngleDeg: null,
       sort: nextSort(doc.items), taskId: null, notes: null, locked: false,
     },
   }];
@@ -144,18 +145,14 @@ export function removeOps(doc: EditorDoc, ids: readonly string[]): SiteOp[] {
   return ops;
 }
 
-/** Whether a copy could land here: inside the fence, and on nothing solid unless it is a net. */
-function landsClear(doc: EditorDoc, kind: SiteItemKind, rect: Rect): boolean {
-  if (!contains(doc.plot, rect)) return false;
-  if (kind === 'shade') return true;
-  return !doc.items.some((other) => other.kind !== 'shade' && overlap(rectOf(other), rect));
-}
-
 /**
  * Copies of the items, placed together beside the originals: east of them by
  * the group's width and a metre, else south, west, north, and when none of
  * those is clear, a metre east and south — on top of something, which the
- * overlap flag then says, rather than nowhere. A locked item may be copied;
+ * overlap flag then says, rather than nowhere. Clear is `landingRule`'s 'ok'
+ * (`placement.ts`): the copy's footprint inside the fence — a copied net
+ * keeps its own angle — on nothing solid, and out of every net's rope band.
+ * A locked item may be copied;
  * its copy is unlocked, because the lock was about where the original goes.
  * Each copy gets the kind's next label, so no two items share a name.
  */
@@ -168,9 +165,10 @@ export function duplicateOps(
   const shifts: Array<[number, number]> = [
     [group.width + 100, 0], [0, group.depth + 100], [-(group.width + 100), 0], [0, -(group.depth + 100)],
   ];
-  const clear = ([dx, dy]: [number, number]) => sources.every((source) => landsClear(
-    doc, source.kind, { ...rectOf(source), x: source.xCm + dx, y: source.yCm + dy },
-  ));
+  const lands = landingRule(doc);
+  const clear = ([dx, dy]: [number, number]) => sources.every((source) => lands(
+    source, { ...rectOf(source), x: source.xCm + dx, y: source.yCm + dy },
+  ) === 'ok');
   const [dx, dy] = shifts.find(clear) ?? [100, 100];
   const made: EditorItem[] = [];
   let sort = nextSort(doc.items);
@@ -305,7 +303,7 @@ export function splitOps(
   const splitter: EditorItem = {
     id: ids.splitter, kind: 'splitter', label: nextLabel(doc.items, 'splitter'),
     xCm: spot.xCm, yCm: spot.yCm, widthCm: size.widthCm, depthCm: size.depthCm,
-    heightCm: null, insetCm: null, sort: nextSort(doc.items), taskId: null, notes: null, locked: false,
+    heightCm: null, insetCm: null, ropeAngleDeg: null, sort: nextSort(doc.items), taskId: null, notes: null, locked: false,
   };
   const made: EditorLine[] = [];
   let sort = nextLineSort(doc.lines);
@@ -389,13 +387,14 @@ export function resetSizeOps(doc: EditorDoc, ids: readonly string[]): SiteOp[] {
 
 function sameSize(a: KindSize | null, b: KindSize | null): boolean {
   if (a === null || b === null) return a === b;
-  return a.widthCm === b.widthCm && a.depthCm === b.depthCm && a.heightCm === b.heightCm && a.insetCm === b.insetCm;
+  return a.widthCm === b.widthCm && a.depthCm === b.depthCm && a.heightCm === b.heightCm && a.insetCm === b.insetCm
+    && a.ropeAngleDeg === b.ropeAngleDeg;
 }
 
 /**
  * The camp's own size for a kind (spec D4); null goes back to the preset.
  * Sides and height are rounded to whole centimetres; a non-net kind never
- * carries an inset — the server stores null for one regardless of what was
+ * carries an inset or a rope angle — the server stores null for one regardless of what was
  * passed in.
  */
 export function setKindDefaultOps(doc: EditorDoc, kind: SiteItemKind, size: KindSize | null): SiteOp[] {
@@ -404,6 +403,7 @@ export function setKindDefaultOps(doc: EditorDoc, kind: SiteItemKind, size: Kind
     depthCm: wholeCm(size.depthCm),
     heightCm: wholeCm(size.heightCm),
     insetCm: kind === 'shade' && size.insetCm !== null ? wholeCm(size.insetCm) : null,
+    ropeAngleDeg: kind === 'shade' ? size.ropeAngleDeg : null,
   };
   if (sameSize(doc.defaults[kind] ?? null, rounded)) return [];
   return [{ type: 'setKindDefault', kind, size: rounded }];

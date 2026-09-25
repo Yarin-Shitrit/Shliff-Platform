@@ -16,7 +16,7 @@ const EVERY_OP: SiteOp[] = [
     type: 'add',
     item: {
       id: SINK_ID, kind: 'sink', label: 'כיור 1', xCm: 500, yCm: 300, widthCm: 100, depthCm: 50,
-      heightCm: null, insetCm: null, sort: 3, taskId: null, notes: null, locked: false,
+      heightCm: null, insetCm: null, ropeAngleDeg: null, sort: 3, taskId: null, notes: null, locked: false,
     },
   },
   { type: 'update', id: TANK_ID, patch: { xCm: 620, label: 'מי שתייה 2' } },
@@ -25,7 +25,7 @@ const EVERY_OP: SiteOp[] = [
     line: { id: PIPE_ID, kind: 'water', label: 'צינור מים 1', fromId: TANK_ID, toId: SINK_ID, points: [[550, 300]], sort: 0, notes: null },
   },
   { type: 'updateLine', id: PIPE_ID, patch: { points: [[560, 320]] } },
-  { type: 'setKindDefault', kind: 'tent', size: { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: null } },
+  { type: 'setKindDefault', kind: 'tent', size: { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: null, ropeAngleDeg: null } },
   { type: 'removeLine', id: PIPE_ID },
   { type: 'remove', id: TANK_ID },
   {

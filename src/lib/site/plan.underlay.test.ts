@@ -94,7 +94,7 @@ describe('the picture under a map', () => {
   it('refuses a batch whole when the picture in it is malformed', async () => {
     const tent: EditorItem = {
       id: crypto.randomUUID(), kind: 'tent', label: 'אוהל 1', xCm: 100, yCm: 100, widthCm: 300, depthCm: 300,
-      heightCm: null, insetCm: null, sort: 0, taskId: null, notes: null, locked: false,
+      heightCm: null, insetCm: null, sort: 0, taskId: null, notes: null, locked: false, ropeAngleDeg: null,
     };
     await expect(applySiteOps(db, planId, 0, [
       { type: 'add', item: tent },

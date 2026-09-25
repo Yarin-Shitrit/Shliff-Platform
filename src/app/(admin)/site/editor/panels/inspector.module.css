@@ -268,3 +268,11 @@ textarea.input { block-size: 56px; padding-block: 6px; resize: none; }
   border-block-start: 1px solid var(--line);
   background: var(--sunken);
 }
+
+/* A number box with its unit after it — the rope angle's "°" (spec §15). */
+.suffixed {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.suffixed > input { flex: 1; min-inline-size: 0; }

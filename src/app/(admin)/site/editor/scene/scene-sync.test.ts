@@ -6,7 +6,7 @@ import { isShown, SceneSync, type SyncInput } from './scene-sync';
 function item(over: Partial<EditorItem> & { id: string }): EditorItem {
   return {
     kind: 'tent', label: 'אוהל 1', xCm: 100, yCm: 200, widthCm: 300, depthCm: 300,
-    heightCm: null, insetCm: null, sort: 0, taskId: null, notes: null, locked: false, ...over,
+    heightCm: null, insetCm: null, ropeAngleDeg: null, sort: 0, taskId: null, notes: null, locked: false, ...over,
   };
 }
 
@@ -91,7 +91,7 @@ describe('keeping the scene in step with the store', () => {
     sync.sync(input([TENT]));
     const before = sync.objectOf('tent');
     const withDefault = input([TENT]);
-    withDefault.doc.defaults = { tent: { widthCm: 300, depthCm: 300, heightCm: 260, insetCm: null } };
+    withDefault.doc.defaults = { tent: { widthCm: 300, depthCm: 300, heightCm: 260, insetCm: null, ropeAngleDeg: null } };
     sync.sync(withDefault);
     expect(sync.objectOf('tent')).not.toBe(before);
   });
@@ -165,5 +165,24 @@ describe('keeping the scene in step with the store', () => {
     sync.dispose();
     expect(sync.root.children).toHaveLength(0);
     expect(sync.objectOf('tent')).toBeUndefined();
+  });
+
+  it('rebuilds a net when the camp sets its rope angle, and draws its ropes then', () => {
+    const count = (object: THREE.Object3D | undefined, part: string) => {
+      let found = 0;
+      object?.traverse((child) => { if (child.userData.part === part) found += 1; });
+      return found;
+    };
+    const sync = new SceneSync();
+    sync.sync(input([NET]));
+    const before = sync.objectOf('net');
+    expect(count(before, 'stake')).toBe(0);
+    const roped = input([NET]);
+    roped.doc.defaults = { shade: { widthCm: 800, depthCm: 800, heightCm: 300, insetCm: 50, ropeAngleDeg: 45 } };
+    sync.sync(roped);
+    const after = sync.objectOf('net');
+    expect(after).not.toBe(before);
+    expect(count(after, 'rope')).toBe(1);
+    expect(count(after, 'stake')).toBe(8);
   });
 });

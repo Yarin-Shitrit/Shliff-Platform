@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { SiteItemKind } from '@/db/schema/site';
 import { effectiveSize, itemHeight } from '@/lib/site/defaults';
+import { toPlaced } from '@/lib/site/derive';
 import {
   fitRect, groundAt, interpolate, orbit, panBy, project, pxPerCm, zoomAt,
   type CameraState, type ScreenBox, type Vec3, type ViewMode, type Viewport,
@@ -8,12 +9,13 @@ import {
 import { moveOps, setRectOps } from '@/lib/site/editor/commands';
 import { layoutLabels, type LabelInput, type PlacedLabel } from '@/lib/site/editor/label-layout';
 import { findItem, findLine, rectOf, underlayOf, type EditorItem } from '@/lib/site/editor/model';
+import { landingRule, type Landing } from '@/lib/site/editor/placement';
 import { placeOps } from '@/lib/site/editor/underlay-commands';
 import { pathOf } from '@/lib/site/lines';
 import { snapMove, snapResize, type GuideLine } from '@/lib/site/editor/snapping';
 import { CAMP_SITE, jerusalemInstant, sunDirection, sunPosition } from '@/lib/site/editor/sun';
 import {
-  contains, formatMetres, formatSize, gapsAround, overlap, unionRect, type Gap, type Handle, type Rect,
+  formatMetres, formatSize, gapObstacles, gapsAround, groundRect, unionRect, type Gap, type Handle, type Rect,
 } from '@/lib/site/geometry';
 import { SITE_KINDS, type SiteKindGroup } from '@/lib/site/kinds';
 import {
@@ -1126,23 +1128,28 @@ export class SceneEngine {
       const verdict = this.ghostVerdict();
       const text = verdict === 'outside' ? 'מחוץ לגדר'
         : verdict === 'overlapping' ? 'חפיפה עם פריט אחר'
-          : `${SITE_KINDS[this.ghost.kind].label} · ${formatSize(size.widthCm, size.depthCm)}`;
+          : verdict === 'ropes' ? 'בשטח החבלים של רשת צל'
+            : `${SITE_KINDS[this.ghost.kind].label} · ${formatSize(size.widthCm, size.depthCm)}`;
       if (at !== null) model.pills.push({ x: at[0], y: at[1] - 16, text, tone: verdict === 'ok' ? 'focus' : 'bad' });
     }
     return model;
   }
 
-  /** Whether a new item dropped where the ghost is would be inside the fence and on free ground. */
-  private ghostVerdict(): 'ok' | 'outside' | 'overlapping' {
+  /**
+   * Whether a new item dropped where the ghost is would land clear:
+   * `landingRule`, the one rule the library's click and a copy use too — a
+   * net's ropes inside the fence, and nothing in a net's rope band.
+   */
+  private ghostVerdict(): Landing {
     const ghost = this.ghost;
     if (ghost === null) return 'ok';
     const { doc } = this.options.props().store;
     const size = effectiveSize(ghost.kind, doc.defaults);
-    const rect: Rect = { x: ghost.xCm, y: ghost.yCm, width: size.widthCm, depth: size.depthCm };
-    if (!contains(doc.plot, rect)) return 'outside';
-    if (ghost.kind === 'shade') return 'ok';
-    const blocked = doc.items.some((entry) => SITE_KINDS[entry.kind].shape !== 'net' && overlap(rectOf(entry), rect));
-    return blocked ? 'overlapping' : 'ok';
+    // A new item follows its kind's height and the camp's rope angle, as `addOps` makes it.
+    return landingRule(doc)(
+      { kind: ghost.kind, heightCm: null, ropeAngleDeg: null },
+      { x: ghost.xCm, y: ghost.yCm, width: size.widthCm, depth: size.depthCm },
+    );
   }
 
   /* ── intents ────────────────────────────────────────────────────────── */
@@ -1356,9 +1363,25 @@ export class SceneEngine {
     }]));
     this.guides = snapped.guides;
     const only = snapped.moving.length === 1 ? this.preview.get(snapped.moving[0].id) : undefined;
-    this.gaps = only === undefined ? [] : gapsAround(toRect(only), snapped.others, this.plot());
+    this.gaps = only === undefined ? [] : this.gapsOf(ids, snapped.moving[0], only);
     this.sceneDirty = true;
     this.labelsDirty = true;
+  }
+
+  /**
+   * The gap readouts around one dragged item — the "walkway" (spec §3,
+   * §14): from its footprint (a net's reaches its stakes) to every solid
+   * item, and to the rope footprint of every net it is not under
+   * (`gapObstacles`). Snapping still ignores nets (`snapMoveOf`).
+   */
+  private gapsOf(ids: readonly string[], item: EditorItem, at: RectCm): Gap[] {
+    const { store } = this.options.props();
+    const { defaults } = store.doc;
+    const others = store.doc.items
+      .filter((entry) => !ids.includes(entry.id) && this.visible(entry))
+      .map((entry) => toPlaced(entry, defaults));
+    const moving = toPlaced({ ...item, ...at }, defaults);
+    return gapsAround(groundRect(moving), gapObstacles(others, toRect(at)), this.plot());
   }
 
   private snapResizeOf(id: string, handle: Handle, dxCm: number, dyCm: number, free: boolean): RectCm | null {

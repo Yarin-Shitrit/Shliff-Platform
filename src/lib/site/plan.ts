@@ -57,6 +57,8 @@ export interface SiteItem {
   depthCm: number;
   insetCm: number | null;
   heightCm: number | null;
+  /** Shade nets only; null follows the camp's angle (spec §13). */
+  ropeAngleDeg: number | null;
   locked: boolean;
   sort: number;
   taskId: string | null;
@@ -214,6 +216,7 @@ export async function copyPlan(
       depthCm: row.depthCm,
       insetCm: row.insetCm,
       heightCm: row.heightCm,
+      ropeAngleDeg: row.ropeAngleDeg,
       sort: row.sort,
       notes: row.notes,
       updatedBy: actor,
@@ -270,6 +273,7 @@ const ITEM_COLUMNS = {
   depthCm: siteItems.depthCm,
   insetCm: siteItems.insetCm,
   heightCm: siteItems.heightCm,
+  ropeAngleDeg: siteItems.ropeAngleDeg,
   locked: siteItems.locked,
   sort: siteItems.sort,
   taskId: siteItems.taskId,
@@ -368,6 +372,7 @@ function patchSet(
   if (stored.notes !== undefined) set.notes = stored.notes;
   if (stored.locked !== undefined) set.locked = stored.locked;
   if (stored.insetCm !== undefined) set.insetCm = stored.insetCm;
+  if (stored.ropeAngleDeg !== undefined) set.ropeAngleDeg = stored.ropeAngleDeg;
   return set;
 }
 
@@ -404,21 +409,24 @@ export async function siteView(db: AnyDb, seasonId: string): Promise<SiteView | 
   if (!plan) return null;
   const items = await listItems(db, plan.id);
   const lines = await listLines(db, plan.id);
-  return deriveView(plan, items, lines);
+  // The camp's rope angle moves nets' footprints: the table the page prints without WebGL flags what the editor flags (spec §14).
+  return deriveView(plan, items, lines, await kindDefaults(db));
 }
 
-/** The same derivation the editor's store runs in the browser (`derive.ts`, `lines.ts`), over the server's rows. */
-export function deriveView(plan: SitePlan, items: readonly SiteItem[], lines: readonly SiteLine[] = []): SiteView {
+/** The same derivation the editor's store runs in the browser (`derive.ts`, `lines.ts`), over the server's rows and the camp's kind defaults. */
+export function deriveView(
+  plan: SitePlan, items: readonly SiteItem[], lines: readonly SiteLine[] = [], defaults: KindDefaults = {},
+): SiteView {
   const doc: EditorDoc = {
     plot: { id: plan.id, widthCm: plan.widthCm, depthCm: plan.depthCm, gridCm: plan.gridCm, northDeg: plan.northDeg },
     items: items.map(toEditorItem),
     lines: lines.map(toEditorLine),
-    defaults: {},
+    defaults,
   };
   const labelOf = (id: string) => items.find((item) => item.id === id)?.label ?? '';
   return {
     plan,
-    ...derive(plan, items),
+    ...derive(plan, items, defaults),
     lines: lines.map((line) => ({
       ...line,
       fromLabel: labelOf(line.fromItemId),
@@ -434,7 +442,11 @@ export async function kindDefaults(db: AnyDb): Promise<KindDefaults> {
   const out: KindDefaults = {};
   for (const row of rows) {
     if (!isSiteItemKind(row.kind)) continue;
-    out[row.kind] = { widthCm: row.widthCm, depthCm: row.depthCm, heightCm: row.heightCm, insetCm: row.insetCm };
+    // The rope angle is read on the nets' row only (spec §13).
+    out[row.kind] = {
+      widthCm: row.widthCm, depthCm: row.depthCm, heightCm: row.heightCm, insetCm: row.insetCm,
+      ropeAngleDeg: row.kind === 'shade' ? row.ropeAngleDeg : null,
+    };
   }
   return out;
 }
@@ -460,7 +472,7 @@ export function toEditorItem(row: SiteItem): EditorItem {
   return {
     id: row.id, kind: row.kind, label: row.label,
     xCm: row.xCm, yCm: row.yCm, widthCm: row.widthCm, depthCm: row.depthCm,
-    heightCm: row.heightCm, insetCm: row.insetCm, sort: row.sort,
+    heightCm: row.heightCm, insetCm: row.insetCm, ropeAngleDeg: row.ropeAngleDeg, sort: row.sort,
     taskId: row.taskId, notes: row.notes, locked: row.locked,
   };
 }
@@ -632,6 +644,8 @@ export async function applySiteOps(
           xCm: entry.xCm, yCm: entry.yCm, widthCm: entry.widthCm, depthCm: entry.depthCm,
           heightCm: entry.heightCm,
           insetCm: entry.kind === 'shade' ? (entry.insetCm ?? DEFAULT_SHADE_INSET_CM) : null,
+          // A net's own angle; none on anything else, and none from a page older than rope angles.
+          ropeAngleDeg: entry.kind === 'shade' ? (entry.ropeAngleDeg ?? null) : null,
           // The client owns draw order (spec §6.2): what it sent is what is drawn.
           sort: entry.sort, taskId: entry.taskId, notes: cleanNotes(entry.notes), locked: entry.locked,
           updatedBy: actor,
@@ -664,10 +678,15 @@ export async function applySiteOps(
         if (op.size === null) {
           await tx.delete(siteKindDefaults).where(eq(siteKindDefaults.kind, op.kind));
         } else {
-          // Inset is a fact about nets only, same as an item's (`patchSet` above).
+          /* Inset and rope angle are facts about nets only, same as an item's
+             (`patchSet` above). A size from a page older than rope angles has
+             no `ropeAngleDeg` key at all: it leaves the camp's angle as it was
+             rather than wiping it (Review Focus #3). */
+          const angle: number | null | undefined = op.kind === 'shade' ? op.size.ropeAngleDeg : null;
           const size = {
             widthCm: op.size.widthCm, depthCm: op.size.depthCm, heightCm: op.size.heightCm,
             insetCm: op.kind === 'shade' ? op.size.insetCm : null,
+            ...(angle === undefined ? {} : { ropeAngleDeg: angle }),
           };
           await tx.insert(siteKindDefaults).values({ kind: op.kind, ...size, updatedBy: actor })
             .onConflictDoUpdate({ target: siteKindDefaults.kind, set: { ...size, updatedAt: new Date(), updatedBy: actor } });

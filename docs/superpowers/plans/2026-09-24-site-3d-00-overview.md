@@ -425,6 +425,24 @@ export function SiteEditor(props: SiteEditorProps): ReactElement;
 
 - `QueueSnapshot` gains `errorKind: 'network' | 'refused' | null`. The top bar offers retry for `network` and the reload for `refused` (plan 04 ruling P8 reads it). `pending === pendingOps().length`, and a batch that failed on the network stays pending (and is resent unchanged against its own base version) until it is answered. A `flush()` begun before `dispose()` finishes sending what waited behind an in-flight batch.
 
+### Amendments for Part B — shade-net ropes (plan `2026-09-25-site-ropes.md`; additive; binding)
+
+Spec `2026-09-25-site-map-pipes-ropes-underlay-design.md` §§12–15 and §23, with the camp lead's §27 answers. Written on `origin/main` at `6c92ce9` (#23's utility lines); built on `d5d71b1` (#24, #25/#31, #26 and #29 landed).
+
+- `editor/degrees.ts` (new): `MIN_ROPE_ANGLE_DEG = 20`, `MAX_ROPE_ANGLE_DEG = 80`, `isRopeAngle(value: unknown): value is number`, `NOT_WHOLE_DEGREES`, `ROPE_ANGLE_OUT_OF_RANGE`, `type DegreesReading = { ok: true; deg: number | null } | { ok: false; error: string }`, `readDegrees(text: string): DegreesReading`. Panels read every typed angle with `readDegrees`; no panel writes its own angle refusal.
+- `model.ts`: `EditorItem.ropeAngleDeg: number | null` — nets only; null follows the camp's angle. `defaults.ts`: `KindSize.ropeAngleDeg: number | null` — read on the `shade` row only; `presetSize` gives null.
+- `ops.ts`: `ItemPatch.ropeAngleDeg?: number | null`. `patchRefusal`, `newItemRefusal` and `kindSizeRefusal` refuse an angle that is not a whole 20–80 with the prefix `a rope angle must be`; a `KindSize` with no `ropeAngleDeg` key (a page older than rope angles) is not refused. `LOCKED_FIELDS` gains `ropeAngleDeg`. `storedPatch` stores `ropeAngleDeg: null` whenever the kind is not `shade` and the patch sets a kind or an angle. No op is added.
+- `commands.ts`: `addOps` gives a new item `ropeAngleDeg: null`. `setKindDefaultOps` keeps a net's angle and stores null for any other kind. `duplicateOps` lands copies by `placement.ts`'s `landingRule`.
+- `geometry.ts`: `PlacedItem.ropeCm: number`; `ropeOffsetCm(heightCm, angleDeg)`; `groundRect(item)`; `inRopeBand(rect, net)`; `ropeBandPairs(items)`; `unionAreaM2(rects, plot)`; `gapObstacles(others, moving)`. `outsideIds` measures `groundRect`. `overlapPairs`, `shadedRect`, `shadeState`, `shadeCounts`, `gapsAround`, `resize` and `turnAboutCentre` are unchanged.
+- `derive.ts`: `ItemShape` gains `heightCm` and `ropeAngleDeg`; `ropeCmOf(item, defaults)`; `toPlaced(item, defaults = {})`; `derive(plot, items, defaults = {})` adds `ropePairs: Array<[netId, itemId]>` and `counts.takenAreaM2`; `interface TakenArea { areaM2; ids; withRopes }`, `takenArea(plot, placed)`.
+- `plan.ts`: `SiteItem.ropeAngleDeg`; `deriveView(plan, items, lines = [], defaults = {})`; `siteView` passes `kindDefaults`. A `setKindDefault` whose size has no `ropeAngleDeg` key leaves the stored angle as it was.
+- `placement.ts`: `type Landing = 'ok' | 'outside' | 'overlapping' | 'ropes'`; `type Lander = Pick<EditorItem, 'kind' | 'heightCm' | 'ropeAngleDeg'>`; `landingRule(doc): (entry: Lander, rect: Rect) => Landing`. `nearestFreeSpot`'s signature is unchanged.
+- `use-editor-store.ts`: `EditorFlags` gains `onRopes: Set<string>` and `ropePairs: Array<[string, string]>`.
+- `scene/meshes.ts`: `geometryKey(item, heightCm, ropeCm = 0)`, `buildItemObject(item, heightCm, look, ropeCm = 0)`; new parts `rope`, `stake`, `ropeEdge`, all `userData.pick === false`.
+- `plot-drawer.tsx`: `PlotDrawer` gains `defaults?: KindDefaults`.
+- Panels: new `panels/ropes.tsx` — `campRopeAngle(doc)`, `outsideText(doc, item)`, `RopePills({ doc, item, flags, onPickIds })`, `RopeSection({ doc, item, onRun })`, `PlotTaken({ doc, onPickIds })`, `PlotRopes({ doc, onPickIds })`, `ropeProblems(doc, flags)`. `ItemInspector`, `PlotInspector`, `MultiInspector`, `ChecksBar` and `Minimap` keep their props.
+- The camp's angle, typed into a net's box, leaves the net on the camp's angle (null), as ruling P13 does for a height.
+
 ### Amendments for Part C — the image to trace (spec `2026-09-25-site-map-pipes-ropes-underlay-design.md` §16–19; plan `2026-09-25-site-underlay.md`)
 
 Recorded before any of Part C's code, by this section's own rule. Additive except where marked.

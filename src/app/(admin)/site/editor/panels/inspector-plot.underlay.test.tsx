@@ -12,7 +12,7 @@ const IMAGE: EditorUnderlay = {
   storageKey: `site-underlays/${PLAN}/${'a'.repeat(64)}.png`, contentType: 'image/png', sizeBytes: 1000, filename: 'שרטוט.png',
   centreXCm: 1300, centreYCm: 1200, widthCm: 2600, rotationTenths: 0, calibration: null,
 };
-const FLAGS: EditorFlags = { outside: new Set(), overlapping: new Set(), partly: new Set(), pairs: [] };
+const FLAGS: EditorFlags = { outside: new Set(), overlapping: new Set(), partly: new Set(), pairs: [], onRopes: new Set(), ropePairs: [] };
 
 function renderPlot(underlay: EditorUnderlay | null, onUnderlay?: () => void) {
   const doc: EditorDoc = { plot: { id: PLAN, widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0 }, items: [], lines: [], defaults: {}, underlay };

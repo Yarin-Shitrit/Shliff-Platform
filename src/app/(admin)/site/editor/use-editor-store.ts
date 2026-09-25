@@ -24,6 +24,10 @@ export interface EditorFlags {
   /** Touching a net but not inside what it shades — the sofa in the sag strip. */
   partly: Set<string>;
   pairs: Array<[string, string]>;
+  /** Standing in a net's rope band (spec §15): every item named second in `ropePairs`. */
+  onRopes: Set<string>;
+  /** `[net id, item id]` — what the checks bar's "בשטח החבלים" chip goes through. */
+  ropePairs: Array<[string, string]>;
 }
 
 export interface EditorStoreInit {
@@ -161,7 +165,7 @@ function itemPatch(item: EditorItem): ItemPatch {
   return {
     label: item.label, kind: item.kind, xCm: item.xCm, yCm: item.yCm,
     widthCm: item.widthCm, depthCm: item.depthCm, heightCm: item.heightCm,
-    insetCm: item.insetCm, taskId: item.taskId, notes: item.notes,
+    insetCm: item.insetCm, ropeAngleDeg: item.ropeAngleDeg, taskId: item.taskId, notes: item.notes,
   };
 }
 
@@ -171,8 +175,11 @@ function linePatch(line: EditorLine): LinePatch {
 }
 
 function computeFlags(doc: EditorDoc): EditorFlags {
-  const derived = derive(doc.plot, doc.items);
-  const flags: EditorFlags = { outside: new Set(), overlapping: new Set(), partly: new Set(), pairs: derived.pairs };
+  const derived = derive(doc.plot, doc.items, doc.defaults);
+  const flags: EditorFlags = {
+    outside: new Set(), overlapping: new Set(), partly: new Set(), pairs: derived.pairs,
+    onRopes: new Set(derived.ropePairs.map(([, id]) => id)), ropePairs: derived.ropePairs,
+  };
   for (const item of derived.items) {
     if (item.outside) flags.outside.add(item.id);
     if (item.overlapping) flags.overlapping.add(item.id);

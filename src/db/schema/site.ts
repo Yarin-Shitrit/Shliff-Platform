@@ -115,6 +115,14 @@ export const siteItems = pgTable('site_items', {
    * kind). Drawn and shadowed, never validated against anything.
    */
   heightCm: integer('height_cm'),
+  /**
+   * Shade nets only: the angle the net's ropes make with the ground, whole
+   * degrees from 20 to 80 (migration `0014`). Null means the camp's angle for
+   * nets (`site_kind_defaults`), and while the camp has none, the net has no
+   * rope footprint and is checked by its cloth (spec D16). Null on anything
+   * that is not a net, like `insetCm`.
+   */
+  ropeAngleDeg: integer('rope_angle_deg'),
   /** A locked item is not dragged, nudged, resized, turned or removed until it is unlocked. */
   locked: boolean('locked').notNull().default(false),
   sort: integer('sort').notNull().default(0),
@@ -137,6 +145,8 @@ export const siteKindDefaults = pgTable('site_kind_defaults', {
   depthCm: integer('depth_cm').notNull(),
   heightCm: integer('height_cm').notNull(),
   insetCm: integer('inset_cm'),
+  /** Read on the `shade` row only: the camp's rope angle for nets. Null means none has been set (spec D16). */
+  ropeAngleDeg: integer('rope_angle_deg'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   updatedBy: text('updated_by'),
 });

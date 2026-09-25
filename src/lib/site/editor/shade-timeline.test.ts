@@ -82,7 +82,7 @@ describe('daylight', () => {
 
 function make(over: Partial<EditorItem> & Pick<EditorItem, 'id' | 'kind'>): EditorItem {
   return {
-    label: 'x', xCm: 0, yCm: 0, widthCm: 100, depthCm: 100, heightCm: null, insetCm: null,
+    label: 'x', xCm: 0, yCm: 0, widthCm: 100, depthCm: 100, heightCm: null, insetCm: null, ropeAngleDeg: null,
     sort: 0, taskId: null, notes: null, locked: false, ...over,
   };
 }

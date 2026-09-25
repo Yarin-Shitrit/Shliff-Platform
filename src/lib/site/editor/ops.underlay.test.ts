@@ -9,7 +9,7 @@ const KEY_B = `site-underlays/${PLAN}/${'b'.repeat(64)}.jpg`;
 /** This file's own fixture: a 26 × 24 m plot and one tent. */
 const TENT: EditorItem = {
   id: 't1', kind: 'tent', label: 'אוהל 1', xCm: 500, yCm: 500, widthCm: 300, depthCm: 300,
-  heightCm: null, insetCm: null, sort: 0, taskId: null, notes: null, locked: false,
+  heightCm: null, insetCm: null, sort: 0, taskId: null, notes: null, locked: false, ropeAngleDeg: null,
 };
 
 function docOf(underlay?: EditorUnderlay | null): EditorDoc {

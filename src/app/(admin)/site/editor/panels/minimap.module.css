@@ -48,3 +48,7 @@
 /* A pipe or a cable: its kind's colour (the shared `.l_*`), drawn over the items it runs between. */
 .mmLine { fill: none; stroke: var(--swatch); stroke-width: 2px; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .mmLine[data-selected='true'] { stroke: var(--focus); stroke-width: 3px; }
+
+/* A net's rope footprint (spec §15): dashed in the net's colour, red when its stakes cross the fence. */
+.mmRopes { fill: none; stroke: var(--swatch); stroke-width: 1px; stroke-dasharray: 3 2; vector-effect: non-scaling-stroke; }
+.mmRopes[data-outside='true'] { stroke: var(--bad); }

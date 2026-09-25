@@ -12,7 +12,7 @@ import { lineTotals, unconnected } from '../lines';
 
 function item(over: Partial<EditorItem> & { id: string; kind: EditorItem['kind'] }): EditorItem {
   return {
-    label: over.id, xCm: 0, yCm: 0, widthCm: 100, depthCm: 100, heightCm: null, insetCm: null,
+    label: over.id, xCm: 0, yCm: 0, widthCm: 100, depthCm: 100, heightCm: null, insetCm: null, ropeAngleDeg: null,
     sort: 0, taskId: null, notes: null, locked: false, ...over,
   };
 }

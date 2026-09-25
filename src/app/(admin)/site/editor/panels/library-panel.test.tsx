@@ -41,7 +41,7 @@ describe('the library', () => {
   });
 
   it('shows the camp’s own default size, and says it was changed', () => {
-    renderLibrary({ tent: { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: null } });
+    renderLibrary({ tent: { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: null, ropeAngleDeg: null } });
     expect(screen.getByRole('button', { name: 'הוספת אוהל, 3.5 × 3 מ׳, גודל ברירת המחדל שונה' })).toBeTruthy();
   });
 

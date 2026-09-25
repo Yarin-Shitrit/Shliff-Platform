@@ -1,16 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import type { SiteLinePoint } from '@/db/schema/site';
+import type { KindSize } from '../defaults';
 import type { EditorDoc, EditorItem, EditorLine } from './model';
 import { nextLabel } from './model';
 import {
-  applyOps, coalesceOps, invertOps, kindSizeRefusal, lineEndsRefusal, linePatchRefusal, lockRefusal, newItemRefusal,
+  applyOps, coalesceOps, invertOps, kindSizeRefusal, LOCKED_FIELDS, lineEndsRefusal, linePatchRefusal, lockRefusal, newItemRefusal,
   newLineRefusal, opRefusal, patchRefusal, rekindRefusal, storedPatch, type SiteOp,
 } from './ops';
 
 export function item(over: Partial<EditorItem> = {}): EditorItem {
   return {
     id: '5b0f3c1e-2a4d-4f6b-9c8e-1d2a3b4c5d6e', kind: 'tent', label: 'אוהל 1',
-    xCm: 0, yCm: 0, widthCm: 300, depthCm: 300, heightCm: null, insetCm: null,
+    xCm: 0, yCm: 0, widthCm: 300, depthCm: 300, heightCm: null, insetCm: null, ropeAngleDeg: null,
     sort: 0, taskId: null, notes: null, locked: false, ...over,
   };
 }
@@ -51,8 +52,8 @@ describe('refusals', () => {
   });
 
   it('refuse a kind default with a bad side', () => {
-    expect(kindSizeRefusal({ widthCm: 300, depthCm: 300, heightCm: 200, insetCm: null })).toBeNull();
-    expect(kindSizeRefusal({ widthCm: 300, depthCm: 0, heightCm: 200, insetCm: null })).toMatch(/^a kind default must be/);
+    expect(kindSizeRefusal({ widthCm: 300, depthCm: 300, heightCm: 200, insetCm: null, ropeAngleDeg: null })).toBeNull();
+    expect(kindSizeRefusal({ widthCm: 300, depthCm: 0, heightCm: 200, insetCm: null, ropeAngleDeg: null })).toMatch(/^a kind default must be/);
   });
 
   it('check every kind of op, and name an unknown one', () => {
@@ -93,7 +94,7 @@ describe('the next label', () => {
 const A = item({ id: 'a', label: 'אוהל 1', xCm: 100, yCm: 100, sort: 0 });
 const B = item({ id: 'b', label: 'אוהל 2', xCm: 500, yCm: 100, sort: 1 });
 const C = item({ id: 'c', kind: 'sofa', label: 'ספה 1', widthCm: 200, depthCm: 90, sort: 2 });
-const TENT_350 = { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: null };
+const TENT_350 = { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: null, ropeAngleDeg: null };
 
 function docOf(items: EditorItem[], defaults: EditorDoc['defaults'] = {}): EditorDoc {
   return { plot: { id: 'p', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0 }, items, lines: [], defaults };
@@ -157,7 +158,7 @@ describe('applying ops', () => {
 });
 
 describe('inverting ops', () => {
-  const SOFA_220 = { widthCm: 220, depthCm: 90, heightCm: 80, insetCm: null };
+  const SOFA_220 = { widthCm: 220, depthCm: 90, heightCm: 80, insetCm: null, ropeAngleDeg: null };
   const MIXED: SiteOp[] = [
     { type: 'update', id: 'a', patch: { xCm: 150, label: 'אוהל הצוות' } },
     { type: 'add', item: C },
@@ -476,5 +477,35 @@ describe('coalescing line ops', () => {
       { type: 'add', item: item({ id: LINE_A }) },
       { type: 'removeLine', id: LINE_A },
     ])).toHaveLength(2);
+  });
+});
+
+describe('a shade net’s rope angle', () => {
+  it('is refused unless it is whole degrees from 20 to 80; null follows the camp’s', () => {
+    for (const bad of [19, 81, 45.5, 0, -45]) expect(patchRefusal({ ropeAngleDeg: bad })).toMatch(/^a rope angle must be/);
+    for (const good of [20, 45, 80, null]) expect(patchRefusal({ ropeAngleDeg: good })).toBeNull();
+    expect(newItemRefusal(item({ kind: 'shade', insetCm: 50, ropeAngleDeg: 90 }))).toMatch(/^a rope angle must be/);
+  });
+
+  it('is refused in a kind default the same way; a default from a page older than angles, with no angle at all, is not', () => {
+    const nets: KindSize = { widthCm: 800, depthCm: 800, heightCm: 300, insetCm: 50, ropeAngleDeg: 45 };
+    expect(kindSizeRefusal(nets)).toBeNull();
+    expect(kindSizeRefusal({ ...nets, ropeAngleDeg: 81 })).toMatch(/^a rope angle must be/);
+    const older = { widthCm: 800, depthCm: 800, heightCm: 300, insetCm: 50 } as unknown as KindSize;
+    expect(kindSizeRefusal(older)).toBeNull();
+  });
+
+  it('is held by a lock, like everything that moves a footprint', () => {
+    expect(LOCKED_FIELDS).toContain('ropeAngleDeg');
+    expect(lockRefusal(true, { ropeAngleDeg: 45 })).toBe('that item is locked');
+    expect(lockRefusal(true, { ropeAngleDeg: 45, locked: false })).toBeNull();
+  });
+
+  it('belongs to nets only: a kind change, or a stray angle on anything else, is stored as none', () => {
+    const roped = item({ kind: 'shade', insetCm: 50, ropeAngleDeg: 45 });
+    expect(storedPatch(roped, { kind: 'tent' })).toMatchObject({ kind: 'tent', insetCm: null, ropeAngleDeg: null });
+    expect(storedPatch(item(), { ropeAngleDeg: 45 }).ropeAngleDeg).toBeNull();
+    expect(storedPatch(roped, { ropeAngleDeg: 30 }).ropeAngleDeg).toBe(30);
+    expect(storedPatch(roped, { label: 'רשת הבר' })).not.toHaveProperty('ropeAngleDeg');
   });
 });

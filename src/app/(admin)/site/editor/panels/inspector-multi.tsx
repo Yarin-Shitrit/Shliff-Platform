@@ -61,12 +61,14 @@ const ALIGN: ReadonlyArray<{ how: Alignment; icon: EditorIconName; label: string
 function agreedSize(doc: EditorDoc, ids: readonly string[], kind: SiteItemKind): KindSize | null {
   const shared = uniformSize(doc, ids, kind);
   if (shared.widthCm === null || shared.depthCm === null || shared.heightCm === null) return null;
+  // The camp's rope angle is not a size: storing sizes keeps it (Review Focus #2).
+  const ropeAngleDeg = effectiveSize(kind, doc.defaults).ropeAngleDeg;
   if (kind !== 'shade') {
-    return { widthCm: shared.widthCm, depthCm: shared.depthCm, heightCm: shared.heightCm, insetCm: null };
+    return { widthCm: shared.widthCm, depthCm: shared.depthCm, heightCm: shared.heightCm, insetCm: null, ropeAngleDeg };
   }
   const insets = new Set(ids.map((id) => findItem(doc, id)?.insetCm ?? DEFAULT_SHADE_INSET_CM));
   if (insets.size !== 1) return null;
-  return { widthCm: shared.widthCm, depthCm: shared.depthCm, heightCm: shared.heightCm, insetCm: [...insets][0] };
+  return { widthCm: shared.widthCm, depthCm: shared.depthCm, heightCm: shared.heightCm, insetCm: [...insets][0], ropeAngleDeg };
 }
 
 function KindRow({ doc, kind, ids, onRun }: {

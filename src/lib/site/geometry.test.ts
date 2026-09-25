@@ -3,12 +3,13 @@ import {
   HANDLES, areaM2, contains, formatArea, formatMetres, formatSize, gapsAround, move, outsideIds,
   overlap, overlapPairs, resize, shadeCounts, shadeState, shadedRect, snap,
   turnAboutCentre, unionRect, wholeCm, type PlacedItem, type Rect,
+  gapObstacles, groundRect, inRopeBand, ropeBandPairs, ropeOffsetCm, unionAreaM2,
 } from './geometry';
 
 const PLOT = { widthCm: 2600, depthCm: 2400 };
 
 function item(over: Partial<PlacedItem> & { id: string }): PlacedItem {
-  return { kind: 'tent', insetCm: null, x: 0, y: 0, width: 300, depth: 300, ...over };
+  return { kind: 'tent', insetCm: null, ropeCm: 0, x: 0, y: 0, width: 300, depth: 300, ...over };
 }
 
 describe('snapping', () => {
@@ -249,5 +250,98 @@ describe('gaps around an item', () => {
       { from: [591, 946], to: [700, 946], lengthCm: 109 },
       { from: [0, 946], to: [500, 946], lengthCm: 500 },
     ]);
+  });
+});
+
+describe('a shade net’s ropes', () => {
+  // Spec §12's example: an 8 × 8 m net, 3 m high, ropes at 45°: stakes 3 m out, a 14 × 14 m footprint.
+  const NET = item({ id: 'net', kind: 'shade', insetCm: 50, x: 500, y: 500, width: 800, depth: 800, ropeCm: 300 });
+  const at = (x: number, y: number): Rect => ({ x, y, width: 300, depth: 300 });
+
+  it('reach out height ÷ tan angle, in whole centimetres', () => {
+    expect(ropeOffsetCm(300, 45)).toBe(300);
+    expect(ropeOffsetCm(300, 20)).toBe(824); // 2.7 times the height: 8.2 m
+    expect(ropeOffsetCm(300, 80)).toBe(53); // 0.18 times the height
+    expect(ropeOffsetCm(400, 20)).toBe(1099);
+    expect(ropeOffsetCm(400, 80)).toBe(71);
+  });
+
+  it('grow a net’s footprint by the offset on every side, and leave a tent’s as it stands', () => {
+    expect(groundRect(NET)).toEqual({ x: 200, y: 200, width: 1400, depth: 1400 });
+    expect(groundRect(item({ id: 't', x: 100, y: 100 }))).toEqual({ x: 100, y: 100, width: 300, depth: 300 });
+  });
+
+  it('put in the band what overlaps the footprint and is not wholly under the cloth', () => {
+    expect(inRopeBand(at(600, 600), NET)).toBe(false); // under the cloth
+    expect(inRopeBand(at(250, 600), NET)).toBe(true); // between the cloth and the stakes
+    expect(inRopeBand(at(400, 600), NET)).toBe(true); // half under the cloth, half in the band
+    expect(inRopeBand(at(1600, 600), NET)).toBe(false); // against the stake line: an edge is not an overlap
+    expect(inRopeBand(at(250, 600), { ...NET, ropeCm: 0 })).toBe(false); // no ropes, no band (D16)
+  });
+
+  it('pair each net with what stands in its band, and never a net with a net', () => {
+    const items = [
+      NET,
+      item({ id: 'under', x: 600, y: 600 }),
+      item({ id: 'band', x: 250, y: 600 }),
+      item({ id: 'far', x: 2000, y: 2000 }),
+      item({ id: 'net2', kind: 'shade', insetCm: 50, x: 1300, y: 500, width: 800, depth: 800, ropeCm: 300 }),
+    ];
+    expect(ropeBandPairs(items)).toEqual([['net', 'band']]);
+    expect(ropeBandPairs(items.map((entry) => ({ ...entry, ropeCm: 0 })))).toEqual([]);
+  });
+
+  it('put a net outside the fence by its ropes, a footprint flush with the fence counting as inside', () => {
+    const flush = item({ id: 'n', kind: 'shade', insetCm: 50, x: 300, y: 300, width: 800, depth: 800, ropeCm: 300 });
+    const plot = { widthCm: 1400, depthCm: 1400 };
+    expect(outsideIds([flush], plot)).toEqual([]);
+    expect(outsideIds([{ ...flush, x: 299 }], plot)).toEqual(['n']);
+    expect(outsideIds([{ ...flush, x: 0, ropeCm: 0 }], plot)).toEqual([]);
+  });
+
+  it('cast no shade: a net shades by its cloth, whatever its ropes (D8)', () => {
+    const sofa = item({ id: 's', kind: 'sofa', x: 250, y: 600, width: 200, depth: 90 });
+    expect(shadedRect(NET)).toEqual({ x: 550, y: 550, width: 700, depth: 700 });
+    expect(shadeState(sofa, [NET])).toBe('unshaded');
+    expect(shadeCounts([NET, sofa])).toEqual(shadeCounts([{ ...NET, ropeCm: 0 }, sofa]));
+  });
+});
+
+describe('the ground the items take', () => {
+  it('counts overlapping ground once', () => {
+    expect(unionAreaM2([{ x: 0, y: 0, width: 1000, depth: 1000 }, { x: 500, y: 500, width: 1000, depth: 1000 }], PLOT)).toBe(175);
+    expect(unionAreaM2([{ x: 0, y: 0, width: 1000, depth: 1000 }, { x: 200, y: 200, width: 300, depth: 300 }], PLOT)).toBe(100);
+  });
+
+  it('counts only what lies inside the fence', () => {
+    expect(unionAreaM2([{ x: -500, y: -500, width: 1000, depth: 1000 }], PLOT)).toBe(25);
+    expect(unionAreaM2([{ x: 2500, y: 0, width: 300, depth: 300 }], PLOT)).toBe(3);
+    expect(unionAreaM2([{ x: 3000, y: 0, width: 300, depth: 300 }], PLOT)).toBe(0);
+  });
+
+  it('is nothing on an empty map, and adds rectangles apart whole', () => {
+    expect(unionAreaM2([], PLOT)).toBe(0);
+    expect(unionAreaM2([{ x: 0, y: 0, width: 300, depth: 300 }, { x: 1000, y: 1000, width: 200, depth: 90 }], PLOT)).toBe(10.8);
+  });
+});
+
+describe('the gaps while dragging, with ropes — the "walkway"', () => {
+  // Cloth 10–18 m east, 5–13 m south; stakes 3 m out: footprint 7–21 m east, 2–16 m south.
+  const NET = item({ id: 'net', kind: 'shade', insetCm: 50, x: 1000, y: 500, width: 800, depth: 800, ropeCm: 300 });
+  const moving: Rect = { x: 200, y: 700, width: 300, depth: 300 };
+
+  it('measure to a net’s stake line from beside it', () => {
+    expect(gapObstacles([NET], moving)).toEqual([{ x: 700, y: 200, width: 1400, depth: 1400 }]);
+    expect(gapsAround(moving, gapObstacles([NET], moving), PLOT)).toContainEqual({ from: [500, 850], to: [700, 850], lengthCm: 200 });
+  });
+
+  it('take a net over the moving item for its roof, not a wall', () => {
+    expect(gapObstacles([NET], { x: 1100, y: 600, width: 300, depth: 300 })).toEqual([]);
+  });
+
+  it('leave a net without ropes out, as before (D16), and a solid item in, as it stands', () => {
+    expect(gapObstacles([{ ...NET, ropeCm: 0 }], moving)).toEqual([]);
+    const sofa = item({ id: 's', kind: 'sofa', x: 700, y: 1800, width: 200, depth: 90 });
+    expect(gapObstacles([sofa], moving)).toEqual([{ x: 700, y: 1800, width: 200, depth: 90 }]);
   });
 });
