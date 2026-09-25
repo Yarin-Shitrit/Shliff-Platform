@@ -18,6 +18,7 @@ import { formatSize } from '@/lib/site/geometry';
 import { KIND_GROUP_LABELS, KIND_GROUP_ORDER, SITE_KINDS, type SiteKindGroup } from '@/lib/site/kinds';
 import type { EditorItem } from '@/lib/site/editor/model';
 import type { EditorFlags } from '../use-editor-store';
+import { EMPTY_MAP } from '../notices';
 import { EditorIcon } from './editor-icons';
 import chrome from './panel.module.css';
 import styles from './objects-panel.module.css';
@@ -75,9 +76,7 @@ export function ObjectsPanel({
   if (items.length === 0) {
     return (
       <div className={styles.offer}>
-        <p className={chrome.invite}>
-          המפה ריקה. בלשונית ״הוספה למפה״ גוררים פריט אל המפה או לוחצים עליו.
-        </p>
+        <p className={chrome.invite}>{EMPTY_MAP}</p>
         {onShowLibrary === undefined ? null : (
           <Button size="sm" onClick={onShowLibrary}>מעבר להוספה למפה</Button>
         )}

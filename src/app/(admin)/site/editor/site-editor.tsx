@@ -41,7 +41,7 @@ import { useEditorStore } from './use-editor-store';
 import { SCENE_PALETTE, type SceneTheme } from './scene/palette';
 import type { EditorUi, Insets, SceneHandle, SceneViewProps, ViewInfo } from './scene/scene-view';
 import { shortcutFor, ZOOM_IN, type Arrow, type Shortcut } from './keyboard';
-import { LOCKED_ALL_NOTICE, LOCKED_NOTICE } from './notices';
+import { isolate, LOCKED_ALL_NOTICE, LOCKED_NOTICE } from './notices';
 import { forgetUnsaved, isStaleBuild, keepUnsaved, readUnsaved, SITE_UPDATED } from './unsaved-work';
 import { Toolbar } from './panels/toolbar';
 import { ConflictBanner, SaveErrorBanner, SaveStatus } from './panels/save-status';
@@ -109,6 +109,9 @@ const INITIAL_UI: EditorUi = {
 
 /** An undo toast pressed after a newer edit (a race: a newer edit takes the toast away). */
 const STALE_UNDO = 'הפעולה הזו כבר לא האחרונה, ולכן לא בוטלה מכאן.';
+
+/** The plot settings were saved while edits here still waited to be saved (review minor). */
+const PLOT_SAVED_UNDER_EDITS = 'הגדרות המגרש נשמרו, ויש כאן שינויים שעוד לא נשמרו. אפשר לשמור אותם מעל המפה המעודכנת, או לטעון אותה בלעדיהם.';
 
 /** An in-app link away from the editor while saving is stopped (review I3). */
 const LEAVE_UNSAVED = 'השינויים האחרונים עוד לא נשמרו, ומעבר לדף אחר יאבד אותם. לעבור בכל זאת?';
@@ -398,7 +401,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     runEdit('הסרה', ops, kept.map((item) => item.id));
     const first = items.find((item) => gone.has(item.id));
     const said = gone.size === 1 && first !== undefined
-      ? `הפריט ${first.label} הוסר מהמפה`
+      ? `הפריט ${isolate(first.label)} הוסר מהמפה`
       : `${gone.size} פריטים הוסרו מהמפה`;
     const stayed = kept.length === 0 ? ''
       : kept.length === 1 ? '. פריט נעול אחד נשאר במקומו'
@@ -411,7 +414,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     const { ops, ids } = duplicateOps(store.doc, store.selection, () => crypto.randomUUID());
     if (ops.length === 0) return;
     runEdit('שכפול', ops, ids);
-    saidWithUndo(items.length === 1 ? `נוצר עותק של ${items[0].label}` : `נוצרו ${ids.length} עותקים`);
+    saidWithUndo(items.length === 1 ? `נוצר עותק של ${isolate(items[0].label)}` : `נוצרו ${ids.length} עותקים`);
   }
 
   /** A square turns into itself (no ops); only an all-locked selection is told it is locked. */
@@ -437,8 +440,8 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     const only = ops.length === 1 && ops[0].type === 'update' ? findItem(store.doc, ops[0].id) : undefined;
     const one = only === undefined ? null : only.label;
     saidWithUndo(locking
-      ? (one === null ? `${ops.length} פריטים ננעלו` : `הפריט ${one} ננעל`)
-      : (one === null ? `הנעילה של ${ops.length} פריטים שוחררה` : `הנעילה של ${one} שוחררה`));
+      ? (one === null ? `${ops.length} פריטים ננעלו` : `הפריט ${isolate(one)} ננעל`)
+      : (one === null ? `הנעילה של ${ops.length} פריטים שוחררה` : `הנעילה של ${isolate(one)} שוחררה`));
   }
 
   /** Arrows follow the screen, so "up" is away from the viewer however the view is turned (§8). */
@@ -465,7 +468,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     revealFor([kind]);
     // Through a fixed noun: "הוספת" + the kind's name would read "הוספת אחר" for the kind אחר.
     runEdit(`הוספת פריט מסוג ${SITE_KINDS[kind].label}`, ops, [id]);
-    saidWithUndo(`הפריט ${added.item.label} נוסף למפה`);
+    saidWithUndo(`הפריט ${isolate(added.item.label)} נוסף למפה`);
   }
   // ── end of edits ──────────────────────────────────────────────────────
 
@@ -722,6 +725,10 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
           busy={resolving}
           onTheirs={() => { void resolve('theirs'); }}
           onMine={() => { void resolve('mine'); }}
+          /* A newer map the page itself handed down is the lead's own plot
+             save (the drawer refreshes the page) — not a change "from
+             elsewhere", which only the save queue's conflict can report. */
+          message={store.conflict === null ? PLOT_SAVED_UNDER_EDITS : undefined}
         />
       )}
       {saveError === null ? null : (

@@ -182,6 +182,7 @@ const PLOT_HREF = '/site?season=s26&act=plot';
 const DATE_HREF = '/site?season=s26&act=season-date';
 const VIEW: ViewInfo = { yaw: 0, zoomPct: 100, pxPerM: 20, groundCorners: [], selectionBox: null, moving: false };
 const CONFLICT = 'המפה שונתה ממקום אחר מאז שנפתחה. השינויים האחרונים שלך עוד לא נשמרו.';
+const PLOT_SAVED = 'הגדרות המגרש נשמרו, ויש כאן שינויים שעוד לא נשמרו. אפשר לשמור אותם מעל המפה המעודכנת, או לטעון אותה בלעדיהם.';
 
 /** jsdom has no `matchMedia`; this answers the editor's two questions. */
 function stubMedia({ wide = true, dark = false }: { wide?: boolean; dark?: boolean } = {}): void {
@@ -255,6 +256,8 @@ function held(): { promise: Promise<void>; settle: () => void } {
 const stage = () => screen.getByRole('region', { name: 'מפת הקאמפ' });
 const firstItem = () => lastScene().store.doc.items[0];
 const button = (name: string | RegExp) => screen.getByRole('button', { name }) as HTMLButtonElement;
+/** An item's name inside a Hebrew toast, bidi-isolated as the store's notices isolate names (A17). */
+const named = (label: string) => `⁦${label}⁩`;
 
 describe('the editor shell', () => {
   it('mounts the scene with the loaded map, the room the panels leave, and the page’s theme', async () => {
@@ -615,7 +618,7 @@ describe('placing from the library', () => {
     scene.handle.centreGround.mockReturnValue([1300, 1200]);
     renderEditor();
     await screen.findByTestId('scene');
-    fireEvent.click(screen.getByRole('button', { name: /^הוספת אחר,/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^הוספת פריט מסוג אחר,/ }));
     let label: string | null = null;
     act(() => { label = lastScene().store.undo(); });
     expect(label).toBe('הוספת פריט מסוג אחר');
@@ -870,7 +873,7 @@ describe('what an edit says', () => {
     await screen.findByTestId('scene');
     fireEvent.keyDown(stage(), { code: 'Delete' });
     expect(lastScene().store.doc.items).toEqual([]);
-    fireEvent.click((await toastOf('הפריט אוהל 1 הוסר מהמפה')).getByRole('button', { name: 'ביטול' }));
+    fireEvent.click((await toastOf(`הפריט ${named('אוהל 1')} הוסר מהמפה`)).getByRole('button', { name: 'ביטול' }));
     await waitFor(() => { expect(lastScene().store.doc.items.map((entry) => entry.id)).toEqual(['a']); });
   });
 
@@ -878,8 +881,11 @@ describe('what an edit says', () => {
     renderEditor({ initial: { doc: siteDoc([siteItem({ id: 'a', locked: true })]), version: 0 } });
     await screen.findByTestId('scene');
     fireEvent.keyDown(stage(), { code: 'Delete' });
-    // Ruling P14: the one sentence every surface says about a locked item.
-    expect(await screen.findByText(LOCKED_NOTICE)).toBeTruthy();
+    // Ruling P14: the one sentence every surface says about a locked item —
+    // the toast, and the selected item's inspector, say the same words.
+    const said = await screen.findAllByText(LOCKED_NOTICE);
+    expect(said.some((node) => node.closest('li') !== null)).toBe(true);
+    expect(within(screen.getByRole('region', { name: 'מאפיינים' })).getByText(LOCKED_NOTICE)).toBeTruthy();
     expect(lastScene().store.doc.items).toHaveLength(1);
     fireEvent.keyDown(stage(), { code: 'KeyR' });
     expect(firstItem().widthCm).toBe(300);
@@ -899,7 +905,7 @@ describe('what an edit says', () => {
     await screen.findByTestId('scene');
     fireEvent.keyDown(stage(), { code: 'KeyD', metaKey: true });
     expect(lastScene().store.doc.items).toHaveLength(2);
-    fireEvent.click((await toastOf('נוצר עותק של אוהל 1')).getByRole('button', { name: 'ביטול' }));
+    fireEvent.click((await toastOf(`נוצר עותק של ${named('אוהל 1')}`)).getByRole('button', { name: 'ביטול' }));
     await waitFor(() => { expect(lastScene().store.doc.items).toHaveLength(1); });
   });
 
@@ -908,7 +914,7 @@ describe('what an edit says', () => {
     await screen.findByTestId('scene');
     fireEvent.keyDown(stage(), { code: 'KeyL' });
     expect(firstItem().locked).toBe(true);
-    fireEvent.click((await toastOf('הפריט אוהל 1 ננעל')).getByRole('button', { name: 'ביטול' }));
+    fireEvent.click((await toastOf(`הפריט ${named('אוהל 1')} ננעל`)).getByRole('button', { name: 'ביטול' }));
     await waitFor(() => { expect(firstItem().locked).toBe(false); });
   });
 
@@ -927,7 +933,7 @@ describe('what an edit says', () => {
     await screen.findByTestId('scene');
     fireEvent.keyDown(stage(), { code: 'KeyA', metaKey: true });
     fireEvent.keyDown(stage(), { code: 'KeyL' });
-    expect(await screen.findByText('הפריט אוהל 2 ננעל')).toBeTruthy();
+    expect(await screen.findByText(`הפריט ${named('אוהל 2')} ננעל`)).toBeTruthy();
   });
 
   it('says a library item landed, and ביטול takes it off the map', async () => {
@@ -936,7 +942,7 @@ describe('what an edit says', () => {
     await screen.findByTestId('scene');
     fireEvent.click(screen.getByRole('button', { name: /^הוספת מטבח,/ }));
     expect(lastScene().store.doc.items).toHaveLength(2);
-    fireEvent.click((await toastOf('הפריט מטבח 1 נוסף למפה')).getByRole('button', { name: 'ביטול' }));
+    fireEvent.click((await toastOf(`הפריט ${named('מטבח 1')} נוסף למפה`)).getByRole('button', { name: 'ביטול' }));
     await waitFor(() => { expect(lastScene().store.doc.items).toHaveLength(1); });
   });
 
@@ -947,9 +953,9 @@ describe('what an edit says', () => {
     renderEditor();
     await screen.findByTestId('scene');
     fireEvent.keyDown(stage(), { code: 'KeyD', metaKey: true });
-    expect(await screen.findByText('נוצר עותק של אוהל 1')).toBeTruthy();
+    expect(await screen.findByText(`נוצר עותק של ${named('אוהל 1')}`)).toBeTruthy();
     fireEvent.keyDown(stage(), { code: 'KeyR' });
-    expect(screen.queryByText('נוצר עותק של אוהל 1')).toBeNull();
+    expect(screen.queryByText(`נוצר עותק של ${named('אוהל 1')}`)).toBeNull();
     // The newer edit and the copy both stand.
     const items = lastScene().store.doc.items;
     expect(items).toHaveLength(2);
@@ -960,19 +966,19 @@ describe('what an edit says', () => {
     renderEditor();
     await screen.findByTestId('scene');
     fireEvent.keyDown(stage(), { code: 'KeyD', metaKey: true });
-    expect(await screen.findByText('נוצר עותק של אוהל 1')).toBeTruthy();
+    expect(await screen.findByText(`נוצר עותק של ${named('אוהל 1')}`)).toBeTruthy();
     fireEvent.keyDown(stage(), { code: 'KeyZ', metaKey: true });
     expect(lastScene().store.doc.items).toHaveLength(1);
-    expect(screen.queryByText('נוצר עותק של אוהל 1')).toBeNull();
+    expect(screen.queryByText(`נוצר עותק של ${named('אוהל 1')}`)).toBeNull();
   });
 
   it('takes an undo toast away when a drag in the scene makes a newer edit', async () => {
     renderEditor();
     await screen.findByTestId('scene');
     fireEvent.keyDown(stage(), { code: 'KeyD', metaKey: true });
-    expect(await screen.findByText('נוצר עותק של אוהל 1')).toBeTruthy();
+    expect(await screen.findByText(`נוצר עותק של ${named('אוהל 1')}`)).toBeTruthy();
     act(() => { lastScene().store.run('הזזה', [{ type: 'update', id: 'a', patch: { xCm: 600 } }]); });
-    expect(screen.queryByText('נוצר עותק של אוהל 1')).toBeNull();
+    expect(screen.queryByText(`נוצר עותק של ${named('אוהל 1')}`)).toBeNull();
     expect(firstItem().xCm).toBe(600);
   });
 
@@ -980,12 +986,12 @@ describe('what an edit says', () => {
     renderEditor();
     await screen.findByTestId('scene');
     fireEvent.keyDown(stage(), { code: 'KeyD', metaKey: true });
-    expect(await screen.findByText('נוצר עותק של אוהל 1')).toBeTruthy();
+    expect(await screen.findByText(`נוצר עותק של ${named('אוהל 1')}`)).toBeTruthy();
     const copy = lastScene().store.doc.items[1];
     fireEvent.keyDown(stage(), { code: 'KeyL' }); // the copy is what is selected
     // Only the newest undo toast is left, and its ביטול takes off only the lock.
-    expect(screen.queryByText('נוצר עותק של אוהל 1')).toBeNull();
-    fireEvent.click((await toastOf(`הפריט ${copy.label} ננעל`)).getByRole('button', { name: 'ביטול' }));
+    expect(screen.queryByText(`נוצר עותק של ${named('אוהל 1')}`)).toBeNull();
+    fireEvent.click((await toastOf(`הפריט ${named(copy.label)} ננעל`)).getByRole('button', { name: 'ביטול' }));
     await waitFor(() => { expect(lastScene().store.doc.items.every((entry) => !entry.locked)).toBe(true); });
     expect(lastScene().store.doc.items).toHaveLength(2);
   });
@@ -1054,7 +1060,10 @@ describe('a plot saved in the drawer', () => {
     await screen.findByTestId('scene');
     saving({ status: 'pending', pending: 1 });
     rerenderWith({ initial: widened() });
-    expect(screen.getByText(CONFLICT)).toBeTruthy();
+    // The lead's own plot save, not another lead's change: the banner says what happened (review minor).
+    expect(screen.getByText(PLOT_SAVED)).toBeTruthy();
+    expect(screen.queryByText(CONFLICT)).toBeNull();
+    expect(button('שמירת השינויים שלי מעליה')).toBeTruthy();
     expect(fake.resolveConflict).not.toHaveBeenCalled();
   });
 

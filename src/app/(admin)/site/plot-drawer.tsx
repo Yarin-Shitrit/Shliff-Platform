@@ -134,7 +134,7 @@ export function PlotDrawer({ seasonId, seasonName, plan, items, closeHref }: {
         <Field
           id="plot-north"
           label="כיוון הצפון"
-          hint="במעלות שלמות, מ־0 עד 359: לאן פונה החלק העליון של המפה. 0 הוא צפון. משמש רק לצל לפי שעה."
+          hint="במעלות שלמות, מ־0 עד 359: לאן פונה החלק העליון של המפה. 0 הוא צפון. משמש לצל לפי שעה, למחט המצפן ולכפתור ״צפון למעלה״."
         >
           <input
             className={styles.plainInput}

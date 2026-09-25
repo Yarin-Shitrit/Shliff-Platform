@@ -52,6 +52,7 @@ vi.mock('./scene/scene-view', () => ({
 import { SiteEditor, type SiteEditorProps } from './site-editor';
 
 const CONFLICT = 'המפה שונתה ממקום אחר מאז שנפתחה. השינויים האחרונים שלך עוד לא נשמרו.';
+const PLOT_SAVED = 'הגדרות המגרש נשמרו, ויש כאן שינויים שעוד לא נשמרו. אפשר לשמור אותם מעל המפה המעודכנת, או לטעון אותה בלעדיהם.';
 const SITE_UPDATED = 'האתר עודכן בזמן העבודה. צריך לרענן את הדף; השינויים שלא נשמרו יחכו אחרי הרענון.';
 const WAIT = { timeout: 3000 };
 
@@ -285,7 +286,7 @@ describe('a plot saved in the drawer', () => {
     const { rerenderWith } = await renderEditor();
     turn(); // waiting: the queue sends after 500 ms
     rerenderWith({ initial: widened() });
-    expect(screen.getByText(CONFLICT)).toBeTruthy();
+    expect(screen.getByText(PLOT_SAVED)).toBeTruthy();
     expect(loadSiteDocAction).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'שמירת השינויים שלי מעליה' }));
     await waitFor(() => { expect(plotWidth()).toBe(3000); });

@@ -44,17 +44,22 @@ export function SaveStatus({ snapshot, onRetry, busy = false, reasonId }: {
   );
 }
 
-/** Another lead saved since this map was loaded: the lead chooses, nothing is overwritten (§6.4). */
-export function ConflictBanner({ busy, onTheirs, onMine }: {
+const CHANGED_ELSEWHERE = 'המפה שונתה ממקום אחר מאז שנפתחה. השינויים האחרונים שלך עוד לא נשמרו.';
+
+/**
+ * Another lead saved since this map was loaded: the lead chooses, nothing is
+ * overwritten (§6.4). `message` says what happened when it was not another
+ * lead — the lead's own plot settings, saved with edits still waiting.
+ */
+export function ConflictBanner({ busy, onTheirs, onMine, message = CHANGED_ELSEWHERE }: {
   busy: boolean;
   onTheirs: () => void;
   onMine: () => void;
+  message?: string;
 }): ReactElement {
   return (
     <div className={styles.banner} data-tone="warn" role="alert">
-      <p className={styles.bannerText}>
-        המפה שונתה ממקום אחר מאז שנפתחה. השינויים האחרונים שלך עוד לא נשמרו.
-      </p>
+      <p className={styles.bannerText}>{message}</p>
       <span className={styles.bannerActions}>
         <Button size="sm" onClick={onTheirs} disabled={busy}>טעינת הגרסה העדכנית</Button>
         <Button size="sm" onClick={onMine} disabled={busy}>שמירת השינויים שלי מעליה</Button>

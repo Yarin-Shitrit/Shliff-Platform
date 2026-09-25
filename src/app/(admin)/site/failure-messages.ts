@@ -1,4 +1,5 @@
 import { toHebrewError, type HebrewErrors } from '@/lib/errors/hebrew';
+import { LOCKED_NOTICE } from './editor/notices';
 
 /**
  * R9: no English reaches a Hebrew screen. Every refusal `src/lib/site/plan.ts`
@@ -28,7 +29,7 @@ export const SITE_ERRORS: HebrewErrors = [
   ['an item id is already in use', 'הפריט הזה כבר נמצא במפה. טעינה מחדש של המפה תסדר את זה'],
   ['an item height must be', 'גובה של פריט צריך להיות בין 10 סנטימטר ל־20 מטר, במספר שלם של סנטימטרים'],
   ['a lock must be', 'נעילה היא כן או לא'],
-  ['that item is locked', 'הפריט נעול. אפשר לשחרר את הנעילה ואז לשנות אותו'],
+  ['that item is locked', LOCKED_NOTICE], // one sentence for a locked item everywhere (P14)
   ['a kind default must be', 'מידות ברירת המחדל צריכות להיות בין 10 סנטימטר ל־500 מטר, והגובה עד 20 מטר'],
   ['north must be', 'כיוון הצפון נמדד במעלות שלמות, מ־0 עד 359'],
   ['unknown operation', 'השינוי הזה לא מוכר למפה. טעינה מחדש של המפה תסדר את זה'],

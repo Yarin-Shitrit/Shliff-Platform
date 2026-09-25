@@ -6,6 +6,7 @@ import { EMPTY_HISTORY, record, redo as redoStep, undo as undoStep, type History
 import { findItem, type EditorDoc, type EditorItem } from '@/lib/site/editor/model';
 import { applyOps, invertOps, lockRefusal, type ItemPatch, type SiteOp } from '@/lib/site/editor/ops';
 import { SaveQueue, type QueueSnapshot, type SaveFn } from './save-queue';
+import { isolate } from './notices';
 
 /**
  * The editor's single source of truth once the page has loaded (spec §6.1).
@@ -74,16 +75,6 @@ const LOAD_FAILED = 'לא הצלחנו לטעון את המפה העדכנית. 
  * once, so this stays generic on purpose.
  */
 const PARTLY_APPLIED = 'חלק מהפעולה לא בוצע, כי פריטים שהיא נוגעת בהם כבר לא במפה.';
-
-/**
- * Bidi isolates (LRI…PDI) around a name dropped into a Hebrew sentence — an
- * item label may be Latin, a number, or mixed, and must not drag the rest of
- * the sentence out of order (matches the A17 convention this repo uses for
- * every other phrase that carries a variable name or number).
- */
-const LRI = '⁦';
-const PDI = '⁩';
-const isolate = (name: string) => `${LRI}${name}${PDI}`;
 
 /** Changes to items another lead removed: not saved, named by what this lead called them. */
 const goneSentence = (names: readonly string[]) =>

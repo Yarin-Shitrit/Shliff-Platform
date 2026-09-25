@@ -10,6 +10,7 @@ import { applyOps, type SiteOp } from '@/lib/site/editor/ops';
 import { NOT_A_LENGTH } from '@/lib/site/editor/metres';
 import { LABEL_REQUIRED } from '../../failure-messages';
 import type { EditorFlags } from '../use-editor-store';
+import { LOCKED_NOTICE } from '../notices';
 import { ItemInspector } from './inspector-item';
 
 /* This file's own fixture. */
@@ -130,7 +131,7 @@ describe('one item', () => {
     renderItem({ locked: true });
     for (const name of ['רוחב', 'עומק', 'גובה', 'ממערב', 'מצפון']) expect(box(name).disabled).toBe(true);
     expect(box('שם').disabled).toBe(false);
-    expect(screen.getByText('הפריט נעול. שחרור הנעילה מאפשר להזיז אותו ולשנות את מידותיו.')).toBeTruthy();
+    expect(screen.getByText(LOCKED_NOTICE)).toBeTruthy();
     // Ruling P11: a noun phrase, never an adjective that must agree with the item's name.
     expect(screen.getByText('בנעילה')).toBeTruthy();
   });

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { HEBREW_FALLBACK } from '@/lib/errors/hebrew';
 import { SITE_ERRORS, siteFailureMessage } from './failure-messages';
+import { LOCKED_NOTICE } from './editor/notices';
 
 describe('site failure messages', () => {
   it('names each refusal the library makes, in Hebrew', () => {
@@ -10,6 +11,8 @@ describe('site failure messages', () => {
       .toBe('לא מצאנו את הפריט הזה במפה — אולי הוסר בינתיים');
     expect(siteFailureMessage(new Error('that task is not a build task of this season')))
       .toBe('אפשר לקשר רק משימת הקמה של השנה הזו');
+    // One sentence for a locked item, wherever it is said (ruling P14).
+    expect(siteFailureMessage(new Error('that item is locked'))).toBe(LOCKED_NOTICE);
   });
 
   it('carries no Latin letter in any mapped sentence', () => {
