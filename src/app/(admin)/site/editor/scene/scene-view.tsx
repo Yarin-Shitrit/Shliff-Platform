@@ -4,14 +4,17 @@ import { forwardRef, useCallback, useImperativeHandle, useLayoutEffect, useRef, 
 import type { SiteItemKind } from '@/db/schema/site';
 import type { ScreenBox, ViewMode } from '@/lib/site/editor/camera';
 import type { SiteKindGroup } from '@/lib/site/kinds';
+import type { ImagePoint } from '@/lib/site/underlay';
 import type { EditorStore } from '../use-editor-store';
 import { NoWebGLError, SceneEngine } from './engine';
 import { LabelsLayer, type LabelsLayerHandle } from './labels-layer';
 import type { SceneTheme } from './palette';
+import type { UnderlayEvent } from './underlay-mesh';
 import styles from './scene.module.css';
 
 export interface EditorUi {
-  tool: 'select' | 'measure';
+  /** 'calibrate' and 'align' are the picture's two tools (spec §18), entered from its card. */
+  tool: 'select' | 'measure' | 'calibrate' | 'align';
   mode: ViewMode;
   labels: boolean;
   sun: boolean;
@@ -20,6 +23,8 @@ export interface EditorUi {
   hiddenGroups: SiteKindGroup[];
   hour: number;
   theme: SceneTheme;
+  /** How this viewer sees the picture under the map — never saved (D19). Shown, at 50%, whenever the map has one. */
+  underlay: { shown: boolean; opacity: number };
 }
 
 export interface ViewInfo {
@@ -47,6 +52,8 @@ export interface SceneHandle {
   jumpTo(xCm: number, yCm: number): void;
   /** The current view as a PNG, without the labels (they are DOM); null when none can be made. */
   exportPng(): Promise<Blob | null>;
+  /** The picture's card's "ניסיון נוסף": load the picture again after it failed. */
+  retryUnderlay(): void;
 }
 
 export interface SceneViewProps {
@@ -58,6 +65,10 @@ export interface SceneViewProps {
   onView: (info: ViewInfo) => void;
   onNotice: (message: string) => void;
   onModeSettled?: (mode: ViewMode) => void;
+  /** Calibration marks to draw, as points on the picture: those marked so far, or the saved pair while its card is open. */
+  underlayMarks?: ReadonlyArray<ImagePoint>;
+  /** What the picture layer and its tools report: whether the picture is loading, shown or failed, and each click while calibrating. */
+  onUnderlay?: (event: UnderlayEvent) => void;
 }
 
 /** What a browser without WebGL shows where the map would be (spec §7). */
@@ -140,6 +151,7 @@ export const SceneView = forwardRef<SceneHandle, SceneViewProps>(function SceneV
     setGhost: (ghost) => engineRef.current?.setGhost(ghost),
     jumpTo: (xCm, yCm) => engineRef.current?.jumpTo(xCm, yCm),
     exportPng: () => engineRef.current?.exportPng() ?? Promise.resolve(null),
+    retryUnderlay: () => engineRef.current?.retryUnderlay(),
   }), []);
 
   if (failed !== null) {

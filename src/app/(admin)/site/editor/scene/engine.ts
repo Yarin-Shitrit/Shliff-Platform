@@ -8,8 +8,9 @@ import {
 } from '@/lib/site/editor/camera';
 import { moveOps, setRectOps } from '@/lib/site/editor/commands';
 import { layoutLabels, type LabelInput, type PlacedLabel } from '@/lib/site/editor/label-layout';
-import { findItem, findLine, rectOf, type EditorItem } from '@/lib/site/editor/model';
+import { findItem, findLine, rectOf, underlayOf, type EditorItem } from '@/lib/site/editor/model';
 import { landingRule, type Landing } from '@/lib/site/editor/placement';
+import { placeOps } from '@/lib/site/editor/underlay-commands';
 import { pathOf } from '@/lib/site/lines';
 import { snapMove, snapResize, type GuideLine } from '@/lib/site/editor/snapping';
 import { CAMP_SITE, jerusalemInstant, sunDirection, sunPosition } from '@/lib/site/editor/sun';
@@ -17,6 +18,10 @@ import {
   formatMetres, formatSize, gapObstacles, gapsAround, groundRect, unionRect, type Gap, type Handle, type Rect,
 } from '@/lib/site/geometry';
 import { SITE_KINDS, type SiteKindGroup } from '@/lib/site/kinds';
+import {
+  imageToMap, isOnImage, mapToImage, moveBy, type ImagePoint, type MapPoint, type UnderlayPlacement,
+} from '@/lib/site/underlay';
+import { MAX_UNDERLAY_TEXTURE_PX, underlayUrl } from '@/lib/site/underlay-limits';
 import { readSunDate } from '@/lib/site/views';
 import { LOCKED_NOTICE } from '../notices';
 import { CameraRig } from './camera-rig';
@@ -27,12 +32,15 @@ import { OverlayLayer, type OverlayClasses, type OverlayModel } from './overlay'
 import { SCENE_LIGHT, SCENE_PALETTE } from './palette';
 import { pickItemId } from './picking';
 import { isShown, SceneSync } from './scene-sync';
+import { loadUnderlayImage, UNDERLAY_LIFT_CM, UnderlayLayer } from './underlay-mesh';
+import { classifyPick, UnderlayGestures, type UnderlayIntent } from './underlay-tool';
 import type { SceneViewProps, ViewInfo } from './scene-view';
 
 /**
  * Everything `SceneView` does that is not React: the renderer, the scene,
  * the camera and its animations, pointer input, snapping previews, the
- * overlay marks and the labels. React renders the DOM once; from then on
+ * overlay marks, the labels, and the picture under the map with its two
+ * tools. React renders the DOM once; from then on
  * the engine reads the latest props through `props()` and draws a frame
  * only when something changed.
  */
@@ -163,9 +171,38 @@ export class SceneEngine {
   private placed: PlacedLabel[] = [];
   private slots = new Map<string, string>();
   private anchors = new Map<string, [number, number]>();
-  private seen: { doc: unknown; selection: unknown; flags: unknown; ui: string; light: string; insets: string; tool: string } = {
-    doc: null, selection: null, flags: null, ui: '', light: '', insets: '', tool: '',
+  private seen: {
+    doc: unknown; selection: unknown; flags: unknown; ui: string; light: string; insets: string; tool: string; marks: string;
+  } = {
+    doc: null, selection: null, flags: null, ui: '', light: '', insets: '', tool: '', marks: '',
   };
+
+  /**
+   * The picture under the map (spec §19). Made with the engine, before the
+   * constructor's body runs, so `teardown` can always free it, even after a
+   * constructor that failed halfway. Its callbacks read the engine only when
+   * they run.
+   */
+  private readonly underlay = new UnderlayLayer({
+    load: loadUnderlayImage,
+    maxSide: () => Math.min(MAX_UNDERLAY_TEXTURE_PX, this.maxTextureSize()),
+    onStatus: (status) => {
+      if (this.alive) this.options.props().onUnderlay?.({ type: 'status', status });
+    },
+    onLoaded: () => {
+      this.sceneDirty = true;
+      this.requestFrame();
+    },
+  });
+  /** The picture's two tools' pointer machine (`underlay-tool.ts`); `gestures` sees the tool as 'select' meanwhile. */
+  private readonly underlayGestures = new UnderlayGestures({
+    tool: () => (this.options.props().ui.tool === 'align' ? 'align' : 'calibrate'),
+    mode: () => this.drawMode,
+    groundAt: (x, y) => (this.cam === null ? null : groundAt(this.cam, this.viewport, this.drawMode, x, y)),
+    onImage: (ground) => this.imagePointAt(ground) !== null,
+  });
+  /** Where an alignment drag has the picture right now; the store is not touched until the drop. */
+  private underlayPreview: UnderlayPlacement | null = null;
 
   constructor(private readonly stage: HTMLElement, private readonly options: EngineOptions) {
     const canvas = document.createElement('canvas');
@@ -187,7 +224,7 @@ export class SceneEngine {
       this.overlay = new OverlayLayer(stage, options.classes);
 
       this.light.shadow.mapSize.set(2048, 2048);
-      this.scene.add(this.hemisphere, this.light, this.light.target, this.sync.root);
+      this.scene.add(this.hemisphere, this.light, this.light.target, this.sync.root, this.underlay.root);
 
       const props = options.props();
       this.mode = props.ui.mode;
@@ -197,7 +234,8 @@ export class SceneEngine {
       if (this.text !== null) this.text.font = this.font;
 
       const world: GestureWorld = {
-        tool: () => this.options.props().ui.tool,
+        // The picture's tools have their own pointer machine; to this one, they are the selection tool.
+        tool: () => (this.options.props().ui.tool === 'measure' ? 'measure' : 'select'),
         mode: () => this.drawMode,
         handleAt: (x, y) => this.handleAt(x, y),
         labelAt: (x, y) => this.labelAt(x, y),
@@ -244,11 +282,13 @@ export class SceneEngine {
    * animates): a render that changed nothing the scene shows draws nothing.
    */
   update(): void {
-    const { store, ui, insets, sunDate } = this.options.props();
+    const { store, ui, insets, sunDate, underlayMarks } = this.options.props();
     const plot = store.doc.plot;
     const uiKey = [
       ui.tool, ui.labels, ui.sun, ui.netsHidden, ui.snap, ui.hiddenGroups.join(','), ui.theme,
+      ui.underlay.shown, ui.underlay.opacity,
     ].join('|');
+    const marksKey = (underlayMarks ?? []).map(([u, v]) => `${u},${v}`).join(';');
     /* What only the light reads (SIM2 fix round 1): shade by hour plays the
        hour up to ten times a second, and a new hour or day moves the sun and
        nothing else — no rebuild, no new label layout. `applyLight` marks the
@@ -277,12 +317,21 @@ export class SceneEngine {
       this.viewDirty = true;
       changed = true;
     }
+    if (marksKey !== this.seen.marks) changed = true;
     if (ui.tool !== this.seen.tool) {
-      // The measure tool's crosshair; back to the plain arrow until the next hover says otherwise.
-      this.canvas.style.cursor = ui.tool === 'measure' ? 'crosshair' : 'default';
+      // The measure and calibration tools' crosshair; back to the plain arrow until the next hover says otherwise.
+      this.canvas.style.cursor = ui.tool === 'measure' || ui.tool === 'calibrate' ? 'crosshair' : 'default';
+      // A drag of the picture does not outlive its tool.
+      this.underlayGestures.cancel();
+      if (this.underlayPreview !== null) {
+        this.underlayPreview = null;
+        this.sceneDirty = true;
+        changed = true;
+      }
     }
     this.seen = {
       doc: store.doc, selection: store.selection, flags: store.flags, ui: uiKey, light: lightKey, insets: insetsKey, tool: ui.tool,
+      marks: marksKey,
     };
     if (ui.tool !== 'measure' && this.measuring !== null && !this.gestures.active) {
       this.measuring = null;
@@ -323,6 +372,7 @@ export class SceneEngine {
     canvas.removeEventListener('webglcontextrestored', this.onContextRestored);
     window.removeEventListener('blur', this.onBlur);
     this.sync.dispose();
+    this.underlay.dispose();
     if (this.ground !== null) disposeObject(this.ground);
     this.setGhost(null);
     this.renderer.dispose();
@@ -487,6 +537,11 @@ export class SceneEngine {
         resolve(null);
       }
     });
+  }
+
+  /** The picture's card's "ניסיון נוסף": load the picture again after it failed or went missing. */
+  retryUnderlay(): void {
+    this.underlay.retry();
   }
 
   /* ── frames ─────────────────────────────────────────────────────────── */
@@ -771,6 +826,13 @@ export class SceneEngine {
       theme: ui.theme,
       sun: this.sunOn,
     });
+    const underlay = underlayOf(store.doc);
+    this.underlay.sync({
+      url: underlay === null ? null : underlayUrl(plot.id, underlay.storageKey),
+      placement: this.underlayPreview ?? underlay,
+      shown: ui.underlay.shown,
+      opacity: ui.underlay.opacity,
+    });
   }
 
   /**
@@ -901,6 +963,36 @@ export class SceneEngine {
     return null;
   }
 
+  /** The GPU's largest texture side. The tests' stand-in renderers have none, and are taken at 4096. */
+  private maxTextureSize(): number {
+    const { capabilities } = this.renderer as { capabilities?: { maxTextureSize?: number } };
+    return capabilities?.maxTextureSize ?? MAX_UNDERLAY_TEXTURE_PX;
+  }
+
+  private underlayTool(): boolean {
+    const { tool } = this.options.props().ui;
+    return tool === 'calibrate' || tool === 'align';
+  }
+
+  /** The picture point under a ground point, or null where no picture is drawn. */
+  private imagePointAt(ground: MapPoint): ImagePoint | null {
+    const underlay = underlayOf(this.options.props().store.doc);
+    const aspect = this.underlay.aspect;
+    if (underlay === null || aspect === null) return null;
+    const point = mapToImage(this.underlayPreview ?? underlay, aspect, ground);
+    return isOnImage(point) ? point : null;
+  }
+
+  /** Where a picture point is on screen, or null. */
+  private screenOfImagePoint(point: ImagePoint): { x: number; y: number } | null {
+    const underlay = underlayOf(this.options.props().store.doc);
+    const aspect = this.underlay.aspect;
+    if (underlay === null || aspect === null) return null;
+    const [x, y] = imageToMap(this.underlayPreview ?? underlay, aspect, point);
+    const at = this.screen(x, y, UNDERLAY_LIFT_CM);
+    return at === null ? null : { x: at[0], y: at[1] };
+  }
+
   /** Eight handles on the ground around the one selected, unlocked, visible item — none while the camera flies. */
   private computeHandles(): Array<{ handle: Handle; x: number; y: number }> {
     const item = this.animation === null ? this.handleOwner() : null;
@@ -1006,6 +1098,14 @@ export class SceneEngine {
         model.pills.push({ x: (drawn[0][0] + drawn[1][0]) / 2, y: (drawn[0][1] + drawn[1][1]) / 2 - 14, text: formatMetres(length), tone: 'guide' });
       }
     }
+    // Calibration marks (spec §18): the points marked so far while calibrating, the saved pair while the card is open.
+    const marks = (this.options.props().underlayMarks ?? [])
+      .map((point) => this.screenOfImagePoint(point))
+      .filter((at): at is { x: number; y: number } => at !== null);
+    if (marks.length === 2) {
+      model.lines.push({ from: [marks[0].x, marks[0].y], to: [marks[1].x, marks[1].y], kind: 'measure' });
+    }
+    for (const at of marks) model.dots.push({ x: at.x, y: at.y, kind: 'measure' });
     for (const label of this.placed) {
       if (!label.group) continue;
       for (const id of label.ids) {
@@ -1142,6 +1242,76 @@ export class SceneEngine {
     this.requestFrame();
   }
 
+  /** The picture's tools' intents (`underlay-tool.ts`). A drop is one edit, through the same `store.run` as a move. */
+  private applyUnderlay(intents: readonly UnderlayIntent[]): void {
+    if (intents.length === 0) return;
+    const { store } = this.options.props();
+    let motion = false;
+    for (const intent of intents) {
+      switch (intent.type) {
+        case 'panBy':
+          if (this.cam !== null) this.setCamera(panBy(this.cam, intent.dxCm, intent.dyCm));
+          motion = true;
+          break;
+        case 'orbitBy':
+          if (this.cam !== null && this.drawMode === '3d') this.setCamera(orbit(this.cam, intent.dYaw, intent.dPitch));
+          motion = true;
+          break;
+        case 'cursor':
+          this.canvas.style.cursor = intent.cursor;
+          break;
+        case 'pick':
+          this.pickOnImage(intent.x, intent.y, intent.ground);
+          break;
+        case 'movePreview': {
+          const underlay = underlayOf(store.doc);
+          this.underlayPreview = underlay === null ? null : moveBy(underlay, intent.dxCm, intent.dyCm);
+          this.sceneDirty = true;
+          motion = true;
+          break;
+        }
+        case 'moveCommit': {
+          const underlay = underlayOf(store.doc);
+          this.underlayPreview = null;
+          this.sceneDirty = true;
+          // Only what the command made: a drop where it started is no edit at all.
+          const ops = underlay === null ? [] : placeOps(store.doc, moveBy(underlay, intent.dxCm, intent.dyCm));
+          if (ops.length > 0) store.run('הזזת תמונת הרקע', ops);
+          break;
+        }
+      }
+    }
+    if (motion && this.underlayGestures.active) {
+      this.dragging = true;
+      this.markMotion(performance.now());
+    }
+    this.requestFrame();
+  }
+
+  /**
+   * A click while calibrating (spec §18.3): a point on the picture, or the
+   * reason it is not one — off the picture, or too near the first point to
+   * measure by — which the card says in Hebrew. Nothing while the picture is
+   * still loading: there is nothing yet to mark.
+   */
+  private pickOnImage(x: number, y: number, ground: MapPoint): void {
+    const props = this.options.props();
+    const underlay = underlayOf(props.store.doc);
+    const aspect = this.underlay.aspect;
+    if (underlay === null || aspect === null) return;
+    const point = mapToImage(underlay, aspect, ground);
+    const marks = props.underlayMarks ?? [];
+    const first = marks.length === 1 ? this.screenOfImagePoint(marks[0]) : null;
+    const verdict = classifyPick(point, { x, y }, first);
+    if (verdict !== 'point') {
+      props.onUnderlay?.({ type: verdict });
+      return;
+    }
+    // Six decimals: a millionth of the picture is far finer than a click, and keeps the saved JSON short.
+    const round = (n: number) => Math.round(n * 1e6) / 1e6;
+    props.onUnderlay?.({ type: 'point', uv: [round(point[0]), round(point[1])] });
+  }
+
   /** The drag is over, however it ended: a view that was moving settles from now. */
   private endDrag(): void {
     if (!this.dragging) return;
@@ -1156,9 +1326,12 @@ export class SceneEngine {
    */
   private abandon(): void {
     this.gesturePointer = null;
-    const open = this.gestures.active || this.preview.size > 0 || this.marquee !== null || this.guides.length > 0;
+    const open = this.gestures.active || this.preview.size > 0 || this.marquee !== null || this.guides.length > 0
+      || this.underlayGestures.active || this.underlayPreview !== null;
     if (!open) return;
     this.apply(this.gestures.cancel());
+    this.underlayGestures.cancel();
+    this.underlayPreview = null;
     this.marquee = null;
     this.clearPreview();
     this.endDrag();
@@ -1273,8 +1446,10 @@ export class SceneEngine {
     if (open !== null && event.pointerId !== open) return;
     if (!event.isPrimary) return;
     this.stopAnimation();
-    this.apply(this.gestures.down(this.pointer(event)));
-    if (!this.gestures.active) return;
+    const input = this.pointer(event);
+    if (this.underlayTool()) this.applyUnderlay(this.underlayGestures.down(input));
+    else this.apply(this.gestures.down(input));
+    if (!this.gestures.active && !this.underlayGestures.active) return;
     this.gesturePointer = event.pointerId;
     try {
       this.canvas.setPointerCapture(event.pointerId);
@@ -1285,7 +1460,12 @@ export class SceneEngine {
 
   private readonly onPointerMove = (event: PointerEvent): void => {
     if (this.cam === null || !this.follows(event)) return;
-    this.apply(this.gestures.move(this.pointer(event)));
+    const input = this.pointer(event);
+    if (this.underlayGestures.active || (this.underlayTool() && !this.gestures.active)) {
+      this.applyUnderlay(this.underlayGestures.move(input));
+    } else {
+      this.apply(this.gestures.move(input));
+    }
   };
 
   private readonly onPointerUp = (event: PointerEvent): void => {
@@ -1293,7 +1473,9 @@ export class SceneEngine {
     // The gesture ends — and commits — before the capture is let go: a browser
     // may fire lostpointercapture inside releasePointerCapture, and that must
     // find nothing open to abandon. (It lets go after pointerup anyway.)
-    this.apply(this.gestures.up(this.pointer(event)));
+    const input = this.pointer(event);
+    if (this.underlayGestures.active) this.applyUnderlay(this.underlayGestures.up(input));
+    else this.apply(this.gestures.up(input));
     this.gesturePointer = null;
     this.endDrag();
     try {
@@ -1343,6 +1525,8 @@ export class SceneEngine {
 
   /** Double-click flies to the item (spec §8). */
   private readonly onDoubleClick = (event: MouseEvent): void => {
+    // Calibrating or aligning, a double-click is two clicks on the picture, not a flight to an item.
+    if (this.underlayTool()) return;
     const { x, y } = this.local(event);
     const hit = this.itemAt(x, y);
     if (hit === null) return;
@@ -1369,6 +1553,8 @@ export class SceneEngine {
     this.sync.dispose();
     this.sync = new SceneSync();
     this.scene.add(this.sync.root);
+    // The kept picture goes up again as a new texture (spec §19).
+    this.underlay.rebuild();
     if (this.ground !== null) {
       this.scene.remove(this.ground);
       disposeObject(this.ground);

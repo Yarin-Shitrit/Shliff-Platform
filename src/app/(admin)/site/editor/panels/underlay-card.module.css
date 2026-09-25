@@ -1,0 +1,114 @@
+/*
+ * The picture's card (spec §18, §20): its width, its rows and its form. The
+ * card itself, the hint, meta and invitation lines and the links are the
+ * shared `panel.module.css` (ruling W10).
+ *
+ * Tokens only, logical properties throughout (A10).
+ */
+
+.card { inline-size: 360px; }
+
+/* A file dragged over the card: where it will land. */
+.over {
+  outline: 2px dashed var(--focus);
+  outline-offset: -4px;
+}
+
+.title {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-dense);
+  font-weight: 600;
+}
+
+.filename {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+  overflow-wrap: anywhere;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  block-size: 20px;
+  padding-inline: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--warn-soft);
+  color: var(--ink);
+  font-size: var(--text-label);
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  color: var(--ink-3);
+  font-size: var(--text-label);
+}
+
+.input {
+  inline-size: 100%;
+  block-size: 32px;
+  padding-inline: var(--space-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: var(--text-dense);
+}
+.input:focus-visible { border-color: var(--focus); }
+.input[aria-invalid='true'] { border-color: var(--bad); }
+
+/* A typed figure reads left to right whatever the page's direction (A11). */
+.number {
+  direction: ltr;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+.opacity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+.opacity input {
+  flex: 1;
+  accent-color: var(--brand);
+}
+
+.error {
+  margin: 0;
+  color: var(--bad);
+  font-size: var(--text-meta);
+}
+
+/* The file picker the buttons open: never shown, never tabbed to. */
+.file { display: none; }

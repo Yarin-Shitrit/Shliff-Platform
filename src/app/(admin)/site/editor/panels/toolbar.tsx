@@ -2,7 +2,8 @@
 
 /**
  * The 48px tool row (spec §10): select or measure, undo and redo, plan or 3D,
- * and the four switches — labels, shade by hour, hiding the nets, snapping.
+ * and the switches — labels, shade by hour, hiding the nets, the picture under
+ * the map (once there is one), snapping.
  * Each switch is a real button with `aria-pressed` and a label that does not
  * change; each keycap is the key `keyboard.ts` reads.
  */
@@ -14,13 +15,15 @@ import type { EditorUi } from '../scene/scene-view';
 import { EditorIcon } from './editor-icons';
 import styles from '../editor.module.css';
 
-export function Toolbar({ ui, onUi, canUndo, canRedo, onUndo, onRedo }: {
+export function Toolbar({ ui, onUi, canUndo, canRedo, onUndo, onRedo, hasUnderlay }: {
   ui: EditorUi;
   onUi: (patch: Partial<EditorUi>) => void;
   canUndo: boolean;
   canRedo: boolean;
   onUndo: () => void;
   onRedo: () => void;
+  /** The map has a picture under it: the switch that shows and hides it appears (spec §18.6). */
+  hasUnderlay?: boolean;
 }): ReactElement {
   return (
     <div className={styles.toolRow} role="group" aria-label="כלי העריכה">
@@ -93,6 +96,17 @@ export function Toolbar({ ui, onUi, canUndo, canRedo, onUndo, onRedo }: {
         <EditorIcon name="eyeOff" size={14} />
         הסתרת רשתות צל
       </button>
+      {hasUnderlay === true ? (
+        <button
+          type="button"
+          className={styles.toggle}
+          aria-pressed={ui.underlay.shown}
+          onClick={() => { onUi({ underlay: { ...ui.underlay, shown: !ui.underlay.shown } }); }}
+        >
+          <Icon name="layers" size={14} />
+          תמונת רקע
+        </button>
+      ) : null}
       <button type="button" className={styles.toggle} aria-pressed={ui.snap} onClick={() => { onUi({ snap: !ui.snap }); }}>
         <EditorIcon name="magnet" size={14} />
         הצמדה
