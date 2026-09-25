@@ -29,6 +29,12 @@ export interface EditorStoreInit {
   selection?: string[];
   save: SaveFn;
   load: () => Promise<ActionResult<{ doc: EditorDoc; version: number }>>;
+  /**
+   * Edits an earlier page of this map left unsaved — its build was replaced
+   * by a deploy (review I2). Replayed once the store is up, through 'mine':
+   * the latest map, with what still applies on top and the rest named.
+   */
+  pending?: SiteOp[];
 }
 
 export interface EditorStore {
@@ -47,6 +53,8 @@ export interface EditorStore {
   resolveConflict(choice: 'theirs' | 'mine'): Promise<void>;
   retrySave(): void;
   dismissNotice(): void;
+  /** What is not yet confirmed saved, in order — for keeping it across a page refresh (review I2). */
+  pendingOps(): SiteOp[];
 }
 
 interface StoreState {
@@ -411,6 +419,23 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
     commit({ ...latest.current, notice: null });
   }, [commit]);
 
+  const pendingOps = useCallback(() => queueRef.current?.pendingOps() ?? [], []);
+
+  /* Review I2: edits an earlier page of this map left unsaved (its build was
+     replaced by a deploy) are put back in the queue and replayed through
+     'mine' — the latest map, with what still applies on top and the rest
+     named — never simply resent against whatever the page loaded. Keyed on
+     the queue rather than a flag, so a remount's new queue gets them too. */
+  const replayedInto = useRef<SaveQueue | null>(null);
+  useEffect(() => {
+    const queue = queueRef.current;
+    const carried = initial.pending ?? [];
+    if (queue === null || carried.length === 0 || replayedInto.current === queue) return;
+    replayedInto.current = queue;
+    queue.enqueue(carried);
+    void resolveConflict('mine');
+  }, [initial, resolveConflict]);
+
   const flags = useMemo(() => computeFlags(state.doc), [state.doc]);
 
   return {
@@ -429,5 +454,6 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
     resolveConflict,
     retrySave,
     dismissNotice,
+    pendingOps,
   };
 }

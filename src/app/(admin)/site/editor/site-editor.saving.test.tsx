@@ -52,6 +52,7 @@ vi.mock('./scene/scene-view', () => ({
 import { SiteEditor, type SiteEditorProps } from './site-editor';
 
 const CONFLICT = 'המפה שונתה ממקום אחר מאז שנפתחה. השינויים האחרונים שלך עוד לא נשמרו.';
+const SITE_UPDATED = 'האתר עודכן בזמן העבודה. צריך לרענן את הדף; השינויים שלא נשמרו יחכו אחרי הרענון.';
 const WAIT = { timeout: 3000 };
 
 beforeEach(() => {
@@ -164,6 +165,65 @@ describe('saving, through the store and the queue', () => {
     expect(screen.queryByText('הפריט נעול.')).toBeNull();
     // Nothing was left to send: the refused turn is not tried again.
     expect(saveSiteChangesAction).toHaveBeenCalledTimes(1);
+  });
+
+  /*
+   * Review I2: after a deploy, an editor left open calls a server action the
+   * new build no longer has. Next throws `UnrecognizedActionError` ("Server
+   * Action … was not found on the server", node_modules/next/dist/client/
+   * components/unrecognized-action-error.js); it was read as a dropped
+   * connection, and every retry failed the same way.
+   */
+  it('says the site was updated when a save reaches an older build, keeps the work for after the refresh, and offers it', async () => {
+    const stale = Object.assign(
+      new Error('Server Action "7f00aa" was not found on the server. \nRead more: https://nextjs.org/docs/messages/failed-to-find-server-action'),
+      { name: 'UnrecognizedActionError' },
+    );
+    saveSiteChangesAction.mockRejectedValue(stale);
+    const reload = vi.fn();
+    const location = window.location;
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...location, reload } });
+    try {
+      await renderEditor();
+      turn();
+      expect(await screen.findByText(SITE_UPDATED, undefined, WAIT)).toBeTruthy();
+      expect(screen.queryByText(NETWORK_FAILURE)).toBeNull();
+      // Neither reload nor keep-mine: both would call the same missing actions.
+      expect(screen.queryByRole('button', { name: 'טעינת הגרסה העדכנית' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'שמירת השינויים שלי מעליה' })).toBeNull();
+      // The unsaved turn waits in this tab for the page that comes after the refresh.
+      expect(JSON.parse(window.sessionStorage.getItem('site-editor:pending:p1') ?? 'null')).toEqual([
+        { type: 'update', id: 'a', patch: { xCm: 550, yCm: 450, widthCm: 200, depthCm: 300 } },
+      ]);
+      fireEvent.click(screen.getByRole('button', { name: 'רענון הדף' }));
+      expect(reload).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.defineProperty(window, 'location', { configurable: true, value: location });
+      window.sessionStorage.clear();
+    }
+  });
+
+  it('replays the work an older build left unsaved, through keeping mine over the latest map', async () => {
+    window.sessionStorage.setItem('site-editor:pending:p1', JSON.stringify([
+      { type: 'update', id: 'a', patch: { xCm: 550, yCm: 450, widthCm: 200, depthCm: 300 } },
+    ]));
+    loadSiteDocAction.mockResolvedValue({ ok: true, value: { doc: siteDoc([siteItem({ id: 'a' })]), version: 3 } });
+    saveSiteChangesAction.mockResolvedValue({ ok: true, version: 4 });
+    try {
+      await renderEditor();
+      await waitFor(() => { expect(loadSiteDocAction).toHaveBeenCalledWith('p1'); });
+      await waitFor(() => { expect(firstItem()).toMatchObject({ widthCm: 200, depthCm: 300 }); });
+      await waitFor(() => {
+        expect(saveSiteChangesAction).toHaveBeenCalledWith('p1', 3, [
+          { type: 'update', id: 'a', patch: { xCm: 550, yCm: 450, widthCm: 200, depthCm: 300 } },
+        ]);
+      }, WAIT);
+      expect(await saved()).toBeTruthy();
+      // Taken once: a later refresh does not replay it again.
+      expect(window.sessionStorage.getItem('site-editor:pending:p1')).toBeNull();
+    } finally {
+      window.sessionStorage.clear();
+    }
   });
 
   it('turns a stale version into a choice, and the other lead’s map replaces mine when chosen', async () => {

@@ -42,6 +42,7 @@ import { SCENE_PALETTE, type SceneTheme } from './scene/palette';
 import type { EditorUi, Insets, SceneHandle, SceneViewProps, ViewInfo } from './scene/scene-view';
 import { shortcutFor, ZOOM_IN, type Arrow, type Shortcut } from './keyboard';
 import { LOCKED_ALL_NOTICE, LOCKED_NOTICE } from './notices';
+import { forgetUnsaved, isStaleBuild, keepUnsaved, readUnsaved, SITE_UPDATED } from './unsaved-work';
 import { Toolbar } from './panels/toolbar';
 import { ConflictBanner, SaveErrorBanner, SaveStatus } from './panels/save-status';
 import { LibraryPanel } from './panels/library-panel';
@@ -176,13 +177,31 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
   const { initial, initialSelection, seasonName, sunDate, plotHref, seasonDateHref } = props;
   const planId = initial.doc.plot.id;
   const { show } = useToast();
+  /* Review I2: a save that reached an older build (a deploy replaced it)
+     only a page refresh can get past. Until then what is unsaved is kept in
+     this tab, and the page after the refresh replays it (`carried`). */
+  const [staleBuild, setStaleBuild] = useState(false);
+  const [carried] = useState(() => (typeof window === 'undefined' ? [] : readUnsaved(planId)));
   const store = useEditorStore({
     doc: initial.doc,
     version: initial.version,
     selection: initialSelection === null ? [] : [initialSelection],
-    save: (baseVersion, ops) => saveSiteChangesAction(planId, baseVersion, ops),
+    save: async (baseVersion, ops) => {
+      try {
+        return await saveSiteChangesAction(planId, baseVersion, ops);
+      } catch (error) {
+        if (!isStaleBuild(error)) throw error; // a dropped connection stays the queue's to say
+        setStaleBuild(true);
+        return { ok: false, reason: 'refused', error: SITE_UPDATED };
+      }
+    },
     load: () => loadSiteDocAction(planId),
+    pending: carried,
   });
+  // Taken once: a later refresh must not replay the same edits again.
+  useEffect(() => { forgetUnsaved(planId); }, [planId]);
+  // While the build is stale, what is unsaved is kept for the page after the refresh.
+  useEffect(() => { if (staleBuild) keepUnsaved(planId, store.pendingOps()); });
   const theme = useSyncExternalStore(subscribeTheme, readTheme, serverTheme);
   const [ui, setUi] = useState<EditorUi>(INITIAL_UI);
   const [view, setView] = useState<ViewInfo>(INITIAL_VIEW);
@@ -681,8 +700,9 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
           id={reasonId}
           message={saveError}
           busy={resolving}
-          onReload={refused ? () => { void resolve('theirs'); } : undefined}
-          onMine={refused ? () => { void resolve('mine'); } : undefined}
+          onReload={refused && !staleBuild ? () => { void resolve('theirs'); } : undefined}
+          onMine={refused && !staleBuild ? () => { void resolve('mine'); } : undefined}
+          onRefresh={staleBuild ? () => { window.location.reload(); } : undefined}
         />
       )}
       {store.notice === null ? null : (

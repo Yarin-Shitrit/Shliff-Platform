@@ -77,18 +77,24 @@ export function ConflictBanner({ busy, onTheirs, onMine }: {
  * refused batch, and the reload drops everything unsent, so the third way
  * keeps the work — the latest map, with what can still apply replayed on top
  * and the rest named.
+ *
+ * `onRefresh` — when a deploy replaced the build this page runs (review I2):
+ * the reload and keep-mine would call the same missing server actions, so
+ * the one way out is refreshing the page, and the unsaved work waits for it.
  */
-export function SaveErrorBanner({ message, busy, onReload, onMine, id }: {
+export function SaveErrorBanner({ message, busy, onReload, onMine, onRefresh, id }: {
   message: string;
   busy: boolean;
   onReload?: () => void;
   onMine?: () => void;
+  onRefresh?: () => void;
   id?: string;
 }): ReactElement {
+  const actions = onReload !== undefined || onMine !== undefined || onRefresh !== undefined;
   return (
     <div className={styles.banner} data-tone="bad" role="alert">
       <p className={styles.bannerText} id={id}>{message}</p>
-      {onReload === undefined && onMine === undefined ? null : (
+      {actions ? (
         <span className={styles.bannerActions}>
           {onReload === undefined ? null : (
             <Button size="sm" onClick={onReload} disabled={busy}>טעינת הגרסה העדכנית</Button>
@@ -96,8 +102,11 @@ export function SaveErrorBanner({ message, busy, onReload, onMine, id }: {
           {onMine === undefined ? null : (
             <Button size="sm" onClick={onMine} disabled={busy}>שמירת השינויים שלי מעליה</Button>
           )}
+          {onRefresh === undefined ? null : (
+            <Button size="sm" onClick={onRefresh}>רענון הדף</Button>
+          )}
         </span>
-      )}
+      ) : null}
     </div>
   );
 }

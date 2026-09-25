@@ -240,7 +240,8 @@ export class SaveQueue {
 // use-editor-store.ts — Task 16
 export interface EditorFlags { outside: Set<string>; overlapping: Set<string>; partly: Set<string>; pairs: Array<[string, string]> }
 export interface EditorStoreInit { doc: EditorDoc; version: number; selection?: string[]; save: SaveFn;
-  load: () => Promise<ActionResult<{ doc: EditorDoc; version: number }>> }
+  load: () => Promise<ActionResult<{ doc: EditorDoc; version: number }>>;
+  pending?: SiteOp[] }   // edits an earlier page left unsaved (a deploy replaced its build, review I2): replayed once through 'mine'
 export interface EditorStore {
   doc: EditorDoc; selection: string[]; flags: EditorFlags;
   canUndo: boolean; canRedo: boolean;
@@ -251,8 +252,12 @@ export interface EditorStore {
   resolveConflict(choice: 'theirs' | 'mine'): Promise<void>;
   retrySave(): void;
   dismissNotice(): void;
+  pendingOps(): SiteOp[];                                           // not yet confirmed saved — kept across a refresh (I2)
 }
 export function useEditorStore(init: EditorStoreInit): EditorStore;
+// unsaved-work.ts (review I2): SITE_UPDATED, isStaleBuild(error) — Next's UnrecognizedActionError, by name or sentence —
+//   readUnsaved / keepUnsaved / forgetUnsaved(planId), sessionStorage under `site-editor:pending:<planId>`. SiteEditor's save
+//   turns a stale build into a refusal saying SITE_UPDATED, keeps pendingOps() while it lasts, and offers only "רענון הדף".
 
 // scene/palette.ts — Task 17 (scoped scene colours, light and dark)
 export type SceneTheme = 'light' | 'dark';
@@ -403,7 +408,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement;
 - `SiteEditorProps.fallback?: ReactNode` carries the item table. `SiteEditor` probes WebGL once; without it, it renders `SceneView` (for its `NO_WEBGL` notice) with the table under it. It never imports `NO_WEBGL` statically — a static import of `scene-view.tsx` would put `three` in the page's first bundle.
 - A newer `initial.version` after a plot save: `SiteEditor` is never keyed; with nothing pending it calls `resolveConflict('mine')` — never 'theirs', which empties the queue and so dropped every edit made while the map loaded (hotfix H1) — and moves the P6 history mark only after the await; it asks nothing while that load runs. With pending ops it shows the conflict banner, with a batch in flight it waits for the answer (Task 25).
 - `SiteEditor` exposes `SCENE_PALETTE` as `--group-*` / `--scene-*` CSS variables (a static import of `palette.ts`, which must stay free of `three`).
-- New panel pieces: `SaveErrorBanner({ message, busy, onReload, onMine })` (`onMine` for a refusal: keep my changes over the latest map, review C2), `panels/selection-actions.tsx` (shared by the inspector footer and `SelectionBar`), `ItemInspector.footer?`, `MultiInspector.footer?`/`onClear?`, `panels/north.ts` (`northText`), pure helpers `scaleFor`, `minimapBounds`, `minimapPoint`, `hourText`; `views.ts` gains `sunDateOf` and `seasonDateHref`; `failure-messages.ts` gains `NORTH_INVALID`.
+- New panel pieces: `SaveErrorBanner({ message, busy, onReload, onMine, onRefresh })` (`onMine` for a refusal: keep my changes over the latest map, review C2; `onRefresh` alone when a deploy replaced the build, review I2), `panels/selection-actions.tsx` (shared by the inspector footer and `SelectionBar`), `ItemInspector.footer?`, `MultiInspector.footer?`/`onClear?`, `panels/north.ts` (`northText`), pure helpers `scaleFor`, `minimapBounds`, `minimapPoint`, `hourText`; `views.ts` gains `sunDateOf` and `seasonDateHref`; `failure-messages.ts` gains `NORTH_INVALID`.
 - Toasts keep the kit's dwell (10 s with an undo), not the spec's 5 s — one timing across the platform. An undo toast undoes only its own history entry (P6): every history change `SiteEditor` makes (an edit from any panel, the keys or the scene — the scene is handed the store with its `run` routed through the same door — an undo, a redo, a reload) takes the open undo toasts away, through the kit's `show`, which returns a dismiss function; a stale ביטול says so instead of undoing. The lock toast counts `ops.length` (P12); the locked sentence is `notices.ts` `LOCKED_NOTICE`, with `LOCKED_ALL_NOTICE` beside it for an all-locked selection (P14).
 - The plot drawer is titled "הגדרות המגרש" (it now holds north too).
 - An existing season's gate date (`seasons.startsOn`) is edited in the shell's `?act=season-date` drawer (rulings SD1–SD3, the separate season-opening-date branch). The sun card links there (SD4) through `views.ts` `seasonDateHref` / `SEASON_DATE_ACT`: its no-date state invites the date, and a shown date links to it. Until that branch is on main the link opens nothing.
