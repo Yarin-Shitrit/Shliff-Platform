@@ -2,10 +2,11 @@
  * Lands the hand-drawn camp layout on a season's map, as data.
  *
  * The source is the 26 × 24 m sketch from 2026-09-25 (graph paper, one cell
- * = 0.5 m): a shade lounge in the north-west corner, sixteen tents in facing
- * rows on the east, showers and a sink on the east edge, the kitchen,
- * dressing area, stalls and water tanks down the west side, and four
- * caravans along the south. Every number below is that sketch read off the
+ * = 0.5 m), landed on the 32 × 24 m plot the camp was given: one shade sail
+ * over the whole 28 × 20 m built area with a 2 m margin for its guy lines, a sofa lounge in the north-west corner, sixteen
+ * 2.3 m tents in facing rows on the east, showers and a sink on the east
+ * edge, the kitchen, dressing area, stalls and water tanks down the west
+ * side, and four caravans along the south. Every number below is that sketch read off the
  * grid — `notes` on each item says so — and the readings the sketch leaves
  * unclear are labelled as unclear rather than guessed (product rule: the
  * system never guesses).
@@ -27,9 +28,11 @@
  * them worth printing.
  *
  * `--commit` does the same against `DATABASE_URL`, in the library's own
- * transaction. It refuses when the season already has a map; it never
- * replaces one. Delete the map in the app first if the layout should be
- * landed again.
+ * transaction. It refuses when the season already has a map, unless
+ * `--replace` is passed too: then that map and everything on it are deleted
+ * first and the sketch is landed fresh. Edits made in the editor since the
+ * last landing are gone with it, so `--replace` is for when the sketch is
+ * still the truth.
  *
  * ## Usage
  *
@@ -37,6 +40,7 @@
  *   npx tsx scripts/land-camp-layout.ts "ברן 26"               # dry run, named season
  *   set -a; . ./.env.local; set +a
  *   npx tsx scripts/land-camp-layout.ts "ברן 26" --commit --actor=lead@shliff.camp
+ *   npx tsx scripts/land-camp-layout.ts "ברן 26" --commit --replace   # land it again
  *
  * The database must be at migration 0012 (`site_plans.version`,
  * `site_kind_defaults`): the commit refuses with the plain Postgres error
@@ -44,7 +48,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
-import type { SiteItemKind } from '@/db/schema/site';
+import { sitePlans, type SiteItemKind } from '@/db/schema/site';
 import { seasons } from '@/db/schema/camp';
 import type { AnyDb } from '@/lib/db-types';
 import { derive } from '@/lib/site/derive';
@@ -60,13 +64,20 @@ import { applySiteOps, createPlan, listItems, planForSeason } from '@/lib/site/p
 
 export const SKETCH_DATE = '2026-09-25';
 
+/**
+ * The sketch is drawn at 26 × 24 m. The plot the camp was given is 32 × 24
+ * (the lead, 2026-09-25), so the sketch's west column stays where it is and
+ * the east block — tents, showers, caravans — takes the extra six metres.
+ * The 2 m guy-line margin holds on every side, so the built area is 28 × 20.
+ */
 export const SKETCH_PLOT = {
-  widthCm: 2600,
+  widthCm: 3200,
   depthCm: 2400,
   gridCm: 50,
   northDeg: 0,
-  notes: `מהסקיצה ${SKETCH_DATE}: מגרש 26×24 מ'. שוליים של 2 מ' מכל צד למיתרי הציליה; `
-    + 'השטח הבנוי בפנים 22×20 מ׳.',
+  notes: `מהסקיצה ${SKETCH_DATE} (צוירה 26×24 מ׳), על מגרש של 32×24 מ׳ לפי ראש הקאמפ. `
+    + 'שוליים של 2 מ׳ מכל צד למיתרי הציליה; השטח הבנוי בפנים 28×20 מ׳. '
+    + 'העמודה המערבית כמו בסקיצה; האוהלים, המקלחות והקראוונים נפרשו מזרחה.',
 };
 
 interface SketchItem {
@@ -76,6 +87,8 @@ interface SketchItem {
   yCm: number;
   widthCm: number;
   depthCm: number;
+  /** Only where the sketch or the lead says so; otherwise the kind's height. */
+  heightCm?: number;
   /** What the sketch left unclear about this item, in the lead's language. */
   unclear?: string;
 }
@@ -97,10 +110,20 @@ function repeat(
  */
 export function sketchItems(): SketchItem[] {
   return [
-    // -- The shade lounge: an 8 × 10 m net two metres in from the corner ----
+    // -- One shade over the whole built area ----------------------------------
+    // The sketch's 2 m margin on every side is labelled "מיתרים ציליה": the
+    // guy lines of a sail that covers the inner 22 × 20 m. It is drawn first
+    // (sort 0) and stands at 4 m, above the tallest thing under it (a caravan
+    // at 2.7 m).
     {
-      kind: 'shade', label: 'רשת צל · שיין', xCm: 200, yCm: 200, widthCm: 800, depthCm: 1000,
-      unclear: 'הכיתוב בסקיצה "שיין" — לא ברור אם זה שם הפינה או משהו אחר',
+      kind: 'shade', label: 'ציליה ראשית', xCm: 200, yCm: 200, widthCm: 2800, depthCm: 2000, heightCm: 400,
+    },
+    // -- The lounge: the 8 × 10 m blue box in the north-west corner ---------
+    // Drawn as a lower net of its own under the main sail; the sketch's word
+    // for it is not certain, so the note says so.
+    {
+      kind: 'shade', label: 'רשת צל · שיין', xCm: 200, yCm: 200, widthCm: 800, depthCm: 1000, heightCm: 280,
+      unclear: 'הכיתוב בסקיצה "שיין" — לא ברור אם זה שם הפינה, רשת נפרדת מתחת לציליה הראשית, או משהו אחר',
     },
     // Sofas along the net's north and south edges lie east–west (2 × 0.9);
     // the ones down its sides are turned (0.9 × 2).
@@ -114,21 +137,24 @@ export function sketchItems(): SketchItem[] {
     ...repeat('table', 'שולחן', [90, 90], [[370, 650], [760, 650], [360, 1050], [760, 1050]], 3)
       .map((item) => ({ ...item, unclear: 'ריבוע קטן ללא כיתוב בסקיצה; נקרא כשולחן' })),
 
-    // -- Sixteen 2.5 × 2.5 m tents in facing pairs, openings on the paths ---
+    // -- Sixteen 2.3 × 2.3 m tents in facing pairs, openings on the paths ---
+    // The sketch draws each tent in a 2.5 m cell; the camp's tents are 2.3 m,
+    // so each stands centred in its cell with 10 cm to spare on every side.
     // Rows one and two face each other across a 2 m path; rows three and
-    // four across a 1.5 m one. Rows two and three stand back to back.
-    ...repeat('tent', 'אוהל', [250, 250], [
-      [1150, 200], [1400, 200], [1650, 200], [1900, 200], [2150, 200],
-      [1150, 650], [1400, 650], [1650, 650], [1900, 650], [2150, 650],
-      [1150, 900], [1400, 900], [1650, 900],
-      [1150, 1300], [1400, 1300], [1650, 1300],
+    // four across a 1.5 m one. Rows two and three stand back to back. The
+    // block sits 3 m further east than the sketch draws it, in the wider plot.
+    ...repeat('tent', 'אוהל', [230, 230], [
+      [1460, 210], [1710, 210], [1960, 210], [2210, 210], [2460, 210],
+      [1460, 660], [1710, 660], [1960, 660], [2210, 660], [2460, 660],
+      [1460, 910], [1710, 910], [1960, 910],
+      [1460, 1310], [1710, 1310], [1960, 1310],
     ]),
 
     // -- Showers and a sink on the east edge ---------------------------------
-    { kind: 'shower', label: 'מקלחת 1', xCm: 2200, yCm: 1050, widthCm: 200, depthCm: 200 },
-    { kind: 'shower', label: 'מקלחת 2', xCm: 2200, yCm: 1250, widthCm: 200, depthCm: 250 },
+    { kind: 'shower', label: 'מקלחת 1', xCm: 2800, yCm: 1050, widthCm: 200, depthCm: 200 },
+    { kind: 'shower', label: 'מקלחת 2', xCm: 2800, yCm: 1250, widthCm: 200, depthCm: 250 },
     {
-      kind: 'other', label: 'כיור', xCm: 2100, yCm: 1250, widthCm: 100, depthCm: 250,
+      kind: 'other', label: 'כיור', xCm: 2700, yCm: 1250, widthCm: 100, depthCm: 250,
       unclear: 'הכיתוב המסובב בסקיצה ליד המקלחות לא קריא בוודאות; נקרא "כיור"',
     },
 
@@ -159,8 +185,8 @@ export function sketchItems(): SketchItem[] {
     { kind: 'greywater', label: 'מים אפורים', xCm: 320, yCm: 2200, widthCm: 150, depthCm: 150 },
     ...repeat('water', 'מי שתייה', [150, 150], [[480, 2200], [630, 2200]]),
 
-    // -- Four caravans along the south, 2.5 wide × 6.5 deep --------------------
-    ...repeat('caravan', 'קראוון', [250, 650], [[950, 1650], [1350, 1650], [1750, 1650], [2150, 1650]]),
+    // -- Four caravans along the south, 2.5 wide × 6.5 deep, 5 m apart -------
+    ...repeat('caravan', 'קראוון', [250, 650], [[1150, 1650], [1650, 1650], [2150, 1650], [2650, 1650]]),
   ];
 }
 
@@ -173,7 +199,7 @@ export function toEditorItems(items: readonly SketchItem[]): EditorItem[] {
     yCm: item.yCm,
     widthCm: item.widthCm,
     depthCm: item.depthCm,
-    heightCm: null,
+    heightCm: item.heightCm ?? null,
     insetCm: null,
     sort,
     taskId: null,
@@ -197,9 +223,15 @@ export interface Landed {
 
 /**
  * One plot and every item, through the library. Throws the library's own
- * refusal when the season already has a map.
+ * refusal when the season already has a map — unless `replace` is set, in
+ * which case that map goes first, items and all (the schema cascades), and
+ * the sketch is landed fresh. Replacing is the one thing here the library
+ * has no verb for, so it is the one raw delete, and it is opt-in.
  */
-export async function landSketch(db: AnyDb, seasonId: string, actor: string): Promise<Landed> {
+export async function landSketch(
+  db: AnyDb, seasonId: string, actor: string, replace = false,
+): Promise<Landed> {
+  if (replace) await db.delete(sitePlans).where(eq(sitePlans.seasonId, seasonId));
   const planId = await createPlan(db, seasonId, SKETCH_PLOT, actor);
   const items = toEditorItems(sketchItems());
   const ops: SiteOp[] = items.map((item) => ({ type: 'add', item }));
@@ -232,6 +264,7 @@ const say = (line = ''): void => { console.log(line); };
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const commit = argv.includes('--commit');
+  const replace = argv.includes('--replace');
   const actor = argv.find((arg) => arg.startsWith('--actor='))?.slice('--actor='.length)
     ?? 'land-camp-layout';
   const seasonName = argv.find((arg) => !arg.startsWith('--')) ?? 'ברן 26';
@@ -259,10 +292,11 @@ async function main(): Promise<void> {
     db = (await import('@/db')).db;
     season = await seasonNamed(db, seasonName);
     const existing = await planForSeason(db, season.id);
-    if (existing) {
+    if (existing && !replace) {
       throw new Error(`"${season.name}" already has a map (${existing.id}, version ${existing.version}). `
-        + 'This script never replaces one; delete it in the app first.');
+        + 'Pass --replace to delete it and land the sketch again, or delete it in the app first.');
     }
+    if (existing) say(`replacing map ${existing.id} (version ${existing.version}) and everything on it`);
   } else {
     // The test suite's in-memory Postgres, with every migration applied.
     const { createTestDb } = await import('@/test/db');
@@ -272,7 +306,7 @@ async function main(): Promise<void> {
     season = { id: row.id, name: row.name };
   }
 
-  const landed = await landSketch(db, season.id, actor);
+  const landed = await landSketch(db, season.id, actor, commit && replace);
   say('## Landed');
   say(`plan ${landed.planId}, version ${landed.version}`);
   say(`items ${landed.items}, outside the fence ${landed.outside}, overlapping pairs ${landed.overlapPairs}`);
