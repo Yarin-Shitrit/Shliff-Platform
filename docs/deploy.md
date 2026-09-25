@@ -282,14 +282,17 @@ docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine s
 Measured before: the four columns and the table absent, 1 plan and 29 items.
 After: all present, still 1 plan and 29 items.
 
-### Migration `0013` — generated 2026-09-25, **not yet applied**
+### Migration `0013` — applied to Railway on 2026-09-25
 
 `0013_site_lines` is the camp map's pipes and cables: one new, empty table,
 `site_lines`, with three foreign keys (to `site_plans` and twice to
 `site_items`, all `ON DELETE cascade`). Additive: no existing table or row
 changes. It must be on Railway **before** the code that reads it deploys,
-because every `/site` load selects from it. Applying it is the camp lead's
-step, by the same procedure as `0012`:
+because every `/site` load selects from it — and it was not: PR #23 merged
+at 10:35, the deploy went out at 10:38, and `/site` showed the error boundary
+(digest `1186279597`) until the camp lead applied the migration by hand a few
+minutes later, with the same procedure as `0012`. The order for a schema
+change is migration first, merge second; this one got it backwards.
 
 ```sh
 docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine sh -euc '
@@ -297,9 +300,16 @@ docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine s
 '
 ```
 
-Read-only check before and after: `select count(*) from site_lines` fails
-before (no such table) and answers `0` after; the plan and item counts do not
-move. Record the measured numbers here when it is done.
+Measured before: `to_regclass('site_lines')` null, 1 plan and 63 items.
+After: `CREATE TABLE` plus three `ALTER TABLE`, `select count(*) from
+site_lines` = 0, still 1 plan and 63 items. The map page recovered on reload
+with no redeploy.
+
+Right after, the 2026 sketch was landed again with `--replace` from the merged
+tree (`scripts/land-camp-layout.ts`, actor `yarin`): 68 items — the sink at
+1.5 × 0.6 m, the fridge and four lights among them — 0 outside the fence, 0
+overlapping pairs. The map it replaced was at version 2, so one editor save
+made since the morning's landing went with it.
 
 ### Copying the laptop's database up
 
