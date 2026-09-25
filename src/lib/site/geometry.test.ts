@@ -213,6 +213,25 @@ describe('turning about the centre', () => {
     const turned = turnAboutCentre({ x: 0, y: 0, width: 91, depth: 90 });
     expect(Number.isInteger(turned.x) && Number.isInteger(turned.y)).toBe(true);
   });
+
+  /* Review minor: rounding the position, half up, moved the item half a
+     centimetre per quarter turn when its sides differ by an odd number —
+     four turns left it about 2 cm from where it began. */
+  it('comes back to exactly where it started after two and after four turns, whatever the sides', () => {
+    for (const rect of [
+      { x: 0, y: 0, width: 91, depth: 90 },
+      { x: 1000, y: 700, width: 305, depth: 200 },
+      { x: 13, y: 7, width: 90, depth: 91 },
+      { x: -40, y: 2500, width: 777, depth: 100 },
+    ]) {
+      const once = turnAboutCentre(rect);
+      expect(turnAboutCentre(once)).toEqual(rect);
+      expect(turnAboutCentre(turnAboutCentre(turnAboutCentre(once)))).toEqual(rect);
+      // Each turn keeps the middle within half a centimetre of where it was.
+      expect(Math.abs(once.x + once.width / 2 - (rect.x + rect.width / 2))).toBeLessThanOrEqual(0.5);
+      expect(Math.abs(once.y + once.depth / 2 - (rect.y + rect.depth / 2))).toBeLessThanOrEqual(0.5);
+    }
+  });
 });
 
 describe('union of rectangles', () => {
