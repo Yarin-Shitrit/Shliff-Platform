@@ -110,6 +110,9 @@ const INITIAL_UI: EditorUi = {
 /** An undo toast pressed after a newer edit (a race: a newer edit takes the toast away). */
 const STALE_UNDO = 'הפעולה הזו כבר לא האחרונה, ולכן לא בוטלה מכאן.';
 
+/** An in-app link away from the editor while saving is stopped (review I3). */
+const LEAVE_UNSAVED = 'השינויים האחרונים עוד לא נשמרו, ומעבר לדף אחר יאבד אותם. לעבור בכל זאת?';
+
 /** Until the scene reports: no scale bar (`pxPerM` 0), no selection box, nothing moving. */
 const INITIAL_VIEW: ViewInfo = {
   yaw: 0, zoomPct: 100, pxPerM: 0, groundCorners: [], selectionBox: null, moving: false,
@@ -200,6 +203,32 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
   });
   // Taken once: a later refresh must not replay the same edits again.
   useEffect(() => { forgetUnsaved(planId); }, [planId]);
+
+  /* Review I3: while saving is stopped with edits unsent, an in-app link to
+     another page would unmount the editor and drop them without a word — the
+     browser asks before a full page leave (the store's beforeunload), but a
+     client-side navigation never reaches it. So a link that leaves this
+     editor asks first. One that keeps it mounted (the same page and season,
+     a drawer opening) does not; nor a new tab, a download or another site. */
+  const halted = store.save.pending > 0 && (store.save.status === 'error' || store.save.status === 'conflict');
+  useEffect(() => {
+    if (!halted) return;
+    const onClick = (event: MouseEvent) => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const link = event.target instanceof Element ? event.target.closest('a[href]') : null;
+      if (!(link instanceof HTMLAnchorElement) || link.hasAttribute('download')) return;
+      if (link.target !== '' && link.target !== '_self') return;
+      const here = new URL(window.location.href);
+      const to = new URL(link.href, here);
+      if (to.origin !== here.origin) return;
+      if (to.pathname === here.pathname && to.searchParams.get('season') === here.searchParams.get('season')) return;
+      if (window.confirm(LEAVE_UNSAVED)) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    document.addEventListener('click', onClick, true);
+    return () => { document.removeEventListener('click', onClick, true); };
+  }, [halted]);
   // While the build is stale, what is unsaved is kept for the page after the refresh.
   useEffect(() => { if (staleBuild) keepUnsaved(planId, store.pendingOps()); });
   const theme = useSyncExternalStore(subscribeTheme, readTheme, serverTheme);

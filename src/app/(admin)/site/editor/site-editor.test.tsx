@@ -416,6 +416,69 @@ describe('saving', () => {
     expect(fake.resolveConflict).toHaveBeenCalledTimes(1);
   });
 
+  /*
+   * Review I3: with saving halted (a refusal, a dropped connection, a
+   * conflict), a click on a link to another page unmounted the editor and
+   * its unsent edits with it — silently. The browser asks before a full
+   * page leave (beforeunload); an in-app link now asks too.
+   */
+  describe('leaving while saving is stopped', () => {
+    const LEAVE = 'השינויים האחרונים עוד לא נשמרו, ומעבר לדף אחר יאבד אותם. לעבור בכל זאת?';
+
+    /** Whether the editor stopped the link; jsdom's own navigation is always stopped after that is read. */
+    function clickLink(href: string, init: MouseEventInit = {}): { prevented: boolean } {
+      const link = document.createElement('a');
+      link.href = href;
+      link.textContent = 'קישור';
+      let seenAtLink: boolean | null = null;
+      link.addEventListener('click', (event) => { seenAtLink = event.defaultPrevented; event.preventDefault(); });
+      document.body.appendChild(link);
+      const click = createEvent.click(link, { button: 0, ...init });
+      fireEvent(link, click);
+      link.remove();
+      // A stopped click never reaches the link: then the editor's own preventDefault is what shows.
+      return { prevented: seenAtLink ?? click.defaultPrevented };
+    }
+
+    it('asks before a link to another page, and stays when the lead says no', async () => {
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      renderEditor();
+      await screen.findByTestId('scene');
+      saving({ status: 'error', errorKind: 'network', error: NETWORK_FAILURE, pending: 2 });
+      expect(clickLink('/members')).toEqual({ prevented: true });
+      expect(confirm).toHaveBeenCalledWith(LEAVE);
+      confirm.mockReturnValue(true);
+      expect(clickLink('/members')).toEqual({ prevented: false });
+      confirm.mockRestore();
+    });
+
+    it('asks while a conflict waits too', async () => {
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      renderEditor();
+      await screen.findByTestId('scene');
+      saving({ status: 'conflict', version: 4, pending: 1 });
+      expect(clickLink('/fees')).toEqual({ prevented: true });
+      confirm.mockRestore();
+    });
+
+    it('asks nothing when nothing is stuck, or when the link keeps this editor', async () => {
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      renderEditor();
+      await screen.findByTestId('scene');
+      // Saving normally: leaving flushes the queue on the way out.
+      saving({ status: 'pending', pending: 1 });
+      expect(clickLink('/members')).toEqual({ prevented: false });
+      saving({ status: 'error', errorKind: 'refused', error: 'הפריט נעול.', pending: 1 });
+      // The same page with a drawer open keeps the editor mounted.
+      expect(clickLink(`${window.location.pathname}?act=plot`)).toEqual({ prevented: false });
+      // A new tab, or another site (the browser's own leave warning covers that).
+      expect(clickLink('/members', { metaKey: true })).toEqual({ prevented: false });
+      expect(clickLink('https://example.org/')).toEqual({ prevented: false });
+      expect(confirm).not.toHaveBeenCalled();
+      confirm.mockRestore();
+    });
+  });
+
   it('says what the store could not do, until the lead has read it', async () => {
     renderEditor();
     await screen.findByTestId('scene');
