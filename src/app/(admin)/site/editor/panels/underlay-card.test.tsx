@@ -108,6 +108,17 @@ describe('the picture’s card', () => {
     expect(screen.queryByText(/שקיפות/)).toBeNull();
   });
 
+  it('says what a replacement starts over: the calibration, the turn, or both (spec §18.7, review U1)', () => {
+    const { rerenderWith } = renderCard({ underlay: { ...CALIBRATED, rotationTenths: 900 } });
+    expect(screen.getByText('הכיול והסיבוב יתחילו מחדש')).toBeTruthy();
+    rerenderWith({ underlay: { ...IMAGE, rotationTenths: 37 } });
+    expect(screen.getByText('הסיבוב יתחיל מחדש')).toBeTruthy();
+    rerenderWith({ underlay: CALIBRATED });
+    expect(screen.getByText('הכיול יתחיל מחדש')).toBeTruthy();
+    rerenderWith({ underlay: IMAGE });
+    expect(screen.queryByText(/יתחיל(ו)? מחדש/)).toBeNull();
+  });
+
   it('moves, replaces and removes the picture', () => {
     const picked = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {});
     const { props } = renderCard();

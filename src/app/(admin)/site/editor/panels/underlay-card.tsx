@@ -145,6 +145,7 @@ function Picture(props: UnderlayCardProps & { underlay: EditorUnderlay; onChoose
   const ready = status.state === 'ready';
   const percent = Math.round(view.opacity * 100);
   const { calibration } = underlay;
+  const hint = replaceHint(underlay);
   const cover = status.state === 'ready' ? coverSize(underlay, status.aspect) : null;
 
   return (
@@ -202,10 +203,24 @@ function Picture(props: UnderlayCardProps & { underlay: EditorUnderlay; onChoose
         <Button size="sm" onClick={props.onChoose}>החלפת תמונה</Button>
         <Button size="sm" tone="danger" onClick={props.onRemove}>הסרת התמונה</Button>
       </div>
-      {calibration === null ? null : <p className={chrome.meta}>הכיול יתחיל מחדש</p>}
+      {hint === null ? null : <p className={chrome.meta}>{hint}</p>}
       <p className={chrome.meta}>כשהתמונה מוצגת, היא נכללת גם בייצוא התמונה של המפה.</p>
     </>
   );
+}
+
+/**
+ * What replacing the picture starts over (spec §18.7): its calibration and its
+ * turn both belonged to the old picture — the turn most likely set by the
+ * parallel box. Null when it has neither (review U1).
+ */
+function replaceHint(underlay: EditorUnderlay): string | null {
+  const calibrated = underlay.calibration !== null;
+  const turned = underlay.rotationTenths !== 0;
+  if (calibrated && turned) return 'הכיול והסיבוב יתחילו מחדש';
+  if (calibrated) return 'הכיול יתחיל מחדש';
+  if (turned) return 'הסיבוב יתחיל מחדש';
+  return null;
 }
 
 function Calibration({ draft, onApply, onCancel }: {

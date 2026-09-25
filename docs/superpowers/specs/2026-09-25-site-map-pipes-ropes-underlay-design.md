@@ -698,9 +698,11 @@ site_underlays
    are today.
 6. **Opacity** is a slider from 10% to 100% in steps of 10. The tool-row toggle
    shows and hides the image.
-7. **Replacing the image** keeps its centre and width and clears the calibration,
-   because the scale belonged to the old image. The card then asks for a new
-   calibration.
+7. **Replacing the image** keeps its centre and width, and clears the
+   calibration and resets the turn to 0, because both belonged to the old
+   image: the scale, and the turn the parallel box set to straighten it. The
+   card says so beside "החלפת תמונה" before the replace, and asks for a new
+   calibration after it (review U1).
 8. **Removing the image** is `setUnderlay(null)`, with a ביטול toast.
 
 **What the card reports:** the file name; "מכסה על המפה 31.2 × 27.6 מ׳"; and
@@ -855,7 +857,9 @@ adjective agrees with a noun that varies: the toasts put a fixed noun first
 - Alignment: "הזזה"; hint "גרירה מזיזה את התמונה · החצים — 10 ס״מ, עם Shift —
   מטר · Esc — סיום"; "סיבוב רבע ימינה", "סיבוב רבע שמאלה", "סיום".
 - Export note: "כשהתמונה מוצגת, היא נכללת גם בייצוא התמונה של המפה."
-- Replace and remove: "החלפת תמונה" (with "הכיול יתחיל מחדש"), "הסרת התמונה".
+- Replace and remove: "החלפת תמונה" (with "הכיול יתחיל מחדש", "הסיבוב יתחיל
+  מחדש" or "הכיול והסיבוב יתחילו מחדש", whichever the picture has; review U1),
+  "הסרת התמונה".
   Toasts: "תמונת הרקע הוסרה מהמפה. הקובץ עצמו נשמר, כדי שאפשר יהיה לבטל." and
   "תמונת הרקע הוחלפה".
 - Upload codes: `unauthorized` "אין הרשאה להעלות קבצים." · `unknown plan` "לא
