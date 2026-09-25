@@ -521,3 +521,19 @@ describe('a shade net’s rope angle', () => {
     expect(ops[0]).toMatchObject({ type: 'add', item: { ropeAngleDeg: 45 } });
   });
 });
+
+describe('copies clear of a net’s ropes', () => {
+  it('lands a copy outside a net’s rope band, trying the next side when the first is in it', () => {
+    // Cloth 10–18 m, own angle 45° on the kind's 3 m: stakes 3 m out, footprint 7–21 m both ways.
+    const net = make({
+      id: 'n', kind: 'shade', label: 'רשת צל 1', xCm: 1000, yCm: 1000, widthCm: 800, depthCm: 800, insetCm: 50, ropeAngleDeg: 45,
+    });
+    const tent = make({ id: 'a', label: 'אוהל 1', xCm: 300, yCm: 800 });
+    const roped: EditorDoc = { ...DOC, items: [tent, net] };
+    // East of the tent is (700, 800): in the band. South, (300, 1200), is clear.
+    expect(duplicateOps(roped, ['a'], ids('c1')).ops[0]).toMatchObject({ item: { xCm: 300, yCm: 1200 } });
+    // With no angle anywhere the net has no band, and east is clear.
+    const bare: EditorDoc = { ...DOC, items: [tent, { ...net, ropeAngleDeg: null }] };
+    expect(duplicateOps(bare, ['a'], ids('c1')).ops[0]).toMatchObject({ item: { xCm: 700, yCm: 800 } });
+  });
+});

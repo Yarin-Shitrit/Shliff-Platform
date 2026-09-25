@@ -1,10 +1,10 @@
 import type { SiteItemKind, SiteLineKind, SiteLinePoint } from '@/db/schema/site';
 import { effectiveSize, itemHeight, type KindSize } from '../defaults';
-import { contains, overlap, turnAboutCentre, unionRect, wholeCm, type Rect } from '../geometry';
+import { turnAboutCentre, unionRect, wholeCm, type Rect } from '../geometry';
 import { DEFAULT_SHADE_INSET_CM } from '../kinds';
 import { centreOfItem, eligibleEnds, geometricMedian, splits } from '../lines';
 import { findItem, findLine, linesAt, nextLabel, nextLineLabel, rectOf, type EditorDoc, type EditorItem, type EditorLine } from './model';
-import { nearestFreeSpot } from './placement';
+import { landingRule, nearestFreeSpot } from './placement';
 import {
   lineEndsRefusal, lockRefusal, rekindRefusal, samePoints, storedLinePatch, storedPatch,
   type ItemPatch, type LinePatch, type SiteOp,
@@ -145,18 +145,14 @@ export function removeOps(doc: EditorDoc, ids: readonly string[]): SiteOp[] {
   return ops;
 }
 
-/** Whether a copy could land here: inside the fence, and on nothing solid unless it is a net. */
-function landsClear(doc: EditorDoc, kind: SiteItemKind, rect: Rect): boolean {
-  if (!contains(doc.plot, rect)) return false;
-  if (kind === 'shade') return true;
-  return !doc.items.some((other) => other.kind !== 'shade' && overlap(rectOf(other), rect));
-}
-
 /**
  * Copies of the items, placed together beside the originals: east of them by
  * the group's width and a metre, else south, west, north, and when none of
  * those is clear, a metre east and south — on top of something, which the
- * overlap flag then says, rather than nowhere. A locked item may be copied;
+ * overlap flag then says, rather than nowhere. Clear is `landingRule`'s 'ok'
+ * (`placement.ts`): the copy's footprint inside the fence — a copied net
+ * keeps its own angle — on nothing solid, and out of every net's rope band.
+ * A locked item may be copied;
  * its copy is unlocked, because the lock was about where the original goes.
  * Each copy gets the kind's next label, so no two items share a name.
  */
@@ -169,9 +165,10 @@ export function duplicateOps(
   const shifts: Array<[number, number]> = [
     [group.width + 100, 0], [0, group.depth + 100], [-(group.width + 100), 0], [0, -(group.depth + 100)],
   ];
-  const clear = ([dx, dy]: [number, number]) => sources.every((source) => landsClear(
-    doc, source.kind, { ...rectOf(source), x: source.xCm + dx, y: source.yCm + dy },
-  ));
+  const lands = landingRule(doc);
+  const clear = ([dx, dy]: [number, number]) => sources.every((source) => lands(
+    source, { ...rectOf(source), x: source.xCm + dx, y: source.yCm + dy },
+  ) === 'ok');
   const [dx, dy] = shifts.find(clear) ?? [100, 100];
   const made: EditorItem[] = [];
   let sort = nextSort(doc.items);

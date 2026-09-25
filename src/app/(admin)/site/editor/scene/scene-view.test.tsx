@@ -1004,3 +1004,43 @@ describe('the picture of the view', () => {
     await expect(handle.current?.exportPng()).resolves.toBeNull();
   });
 });
+
+describe('a shade net’s ropes in the scene', () => {
+  const PLAN_VIEW: EditorUi = { ...UI, mode: 'plan' };
+  /* A 4 × 4 m net 1 m high, 21–25 m east and 11–15 m south, with the camp's
+     ropes at 45°: its stakes stand 1 m out, so its footprint runs 20–26 m
+     east (flush with the east fence) and 10–16 m south. The plan view frames
+     the plot, so the tent stays where "moving an item" found it. */
+  const NET = item({
+    id: 'net', kind: 'shade', label: 'רשת צל 1', xCm: 2100, yCm: 1100, widthCm: 400, depthCm: 400, heightCm: 100, insetCm: 50,
+  });
+  const ROPED: EditorDoc = {
+    ...docOf([item({ id: 'tent' }), NET]),
+    defaults: { shade: { widthCm: 800, depthCm: 800, heightCm: 300, insetCm: 50, ropeAngleDeg: 45 } },
+  };
+
+  it('warns a new tent dragged over the band between the cloth and the stakes', async () => {
+    const { onView, handle } = renderScene(fakeStore({ doc: ROPED }), PLAN_VIEW);
+    await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+    // 17.5–20.5 m east: clear of the cloth (from 21 m), inside the band (from 20 m).
+    handle.current?.setGhost({ kind: 'tent', xCm: 1750, yCm: 1150 });
+    await frames();
+    expect(screen.getByText('בשטח החבלים של רשת צל')).toBeTruthy();
+    handle.current?.setGhost({ kind: 'tent', xCm: 1500, yCm: 1150 });
+    await frames();
+    expect(screen.queryByText('בשטח החבלים של רשת צל')).toBeNull();
+  });
+
+  it('measures the gap to the net’s stakes while a tent is dragged beside it', async () => {
+    const { container, onView } = renderScene(fakeStore({ doc: ROPED }), PLAN_VIEW);
+    await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+    const canvas = canvasOf(container);
+    // The drag of "moving an item": the tent to 15–18 m east, 2 m short of the stake line at 20 m.
+    // Without the ropes, nothing stands east of it nearer than the fence, 8 m away, and no gap is shown.
+    press(canvas, [500, 320]);
+    slide(canvas, [600, 350]);
+    await frames();
+    expect(screen.getByText('2 מ׳')).toBeTruthy();
+    lift(canvas, [600, 350]);
+  });
+});
