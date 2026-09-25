@@ -54,4 +54,15 @@ describe('site failure messages', () => {
       expect(hebrew).not.toMatch(/[A-Za-z]/);
     }
   });
+
+  it('says the image’s three refusals in Hebrew, in the spec’s words', () => {
+    expect(siteFailureMessage(new Error('an underlay file must be one uploaded to this map')))
+      .toBe('קובץ תמונת הרקע לא שייך למפה הזו. טעינה מחדש של המפה תסדר את זה');
+    expect(siteFailureMessage(new Error('an underlay file must be a png, jpeg or webp image uploaded to a map')))
+      .toBe('קובץ תמונת הרקע לא שייך למפה הזו. טעינה מחדש של המפה תסדר את זה');
+    expect(siteFailureMessage(new Error('an underlay placement must be whole centimetres and tenths of a degree')))
+      .toBe('מיקום תמונת הרקע נמדד במספר שלם של סנטימטרים');
+    expect(siteFailureMessage(new Error('an underlay calibration must be two points on the image and a distance of 10 cm to 500 m')))
+      .toBe('הכיול של תמונת הרקע לא נשמר כמו שצריך. אפשר לכייל שוב');
+  });
 });

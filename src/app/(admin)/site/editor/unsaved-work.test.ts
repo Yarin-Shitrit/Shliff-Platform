@@ -28,6 +28,15 @@ const EVERY_OP: SiteOp[] = [
   { type: 'setKindDefault', kind: 'tent', size: { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: null, ropeAngleDeg: null } },
   { type: 'removeLine', id: PIPE_ID },
   { type: 'remove', id: TANK_ID },
+  {
+    type: 'setUnderlay',
+    underlay: {
+      storageKey: `site-underlays/3e2c1b0a-4f5e-4d6c-9b8a-7f6e5d4c3b2a/${'a'.repeat(64)}.png`,
+      contentType: 'image/png', sizeBytes: 812_345, filename: 'שרטוט.png',
+      centreXCm: 1300, centreYCm: 1200, widthCm: 2600, rotationTenths: 37,
+      calibration: { from: [0.1, 0.5], to: [0.9, 0.5], distanceCm: 2600 },
+    },
+  },
 ];
 
 afterEach(() => {
@@ -88,6 +97,9 @@ describe('work an older build left unsaved', () => {
     window.sessionStorage.setItem('site-editor:pending:p1', JSON.stringify([MOVE, { type: 'update', id: 'b', patch: { widthCm: 5 } }]));
     expect(readUnsaved('p1')).toEqual([]);
     window.sessionStorage.setItem('site-editor:pending:p1', JSON.stringify([MOVE, { type: 'teleport', id: 'c' }]));
+    expect(readUnsaved('p1')).toEqual([]);
+    // A picture op with no picture in it is not "take the picture off" (that is `underlay: null`).
+    window.sessionStorage.setItem('site-editor:pending:p1', JSON.stringify([MOVE, { type: 'setUnderlay' }]));
     expect(readUnsaved('p1')).toEqual([]);
   });
 

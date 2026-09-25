@@ -52,6 +52,10 @@ export const SITE_ERRORS: HebrewErrors = [
   ['an item with a line attached keeps', 'לפריט מחובר צינור או כבל, ולכן אי אפשר להפוך אותו לסוג שהקו לא מגיע אליו. קודם מסירים את הקו'],
   // A shade net's rope angle (`editor/degrees.ts` shows the same sentence to a lead who types one).
   ['a rope angle must be', 'זווית החבלים היא מספר שלם של מעלות, מ־⁦20⁩ עד ⁦80⁩'],
+  // The picture under the map (`editor/ops.ts` `underlayRefusal`, `plan.ts`).
+  ['an underlay file must be', 'קובץ תמונת הרקע לא שייך למפה הזו. טעינה מחדש של המפה תסדר את זה'],
+  ['an underlay placement must be', 'מיקום תמונת הרקע נמדד במספר שלם של סנטימטרים'],
+  ['an underlay calibration must be', 'הכיול של תמונת הרקע לא נשמר כמו שצריך. אפשר לכייל שוב'],
 ];
 
 export function siteFailureMessage(error: unknown): string {

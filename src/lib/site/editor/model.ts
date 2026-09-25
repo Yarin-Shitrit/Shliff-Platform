@@ -3,6 +3,8 @@ import type { KindDefaults } from '../defaults';
 import type { Rect } from '../geometry';
 import { SITE_KINDS } from '../kinds';
 import { LINE_KINDS } from '../lines';
+import type { UnderlayCalibration, UnderlayPlacement } from '../underlay';
+import type { UnderlayContentType } from '../underlay-limits';
 
 /**
  * What the editor holds once the page has loaded (spec §6.1): the server's
@@ -59,11 +61,32 @@ export interface EditorLine {
   notes: string | null;
 }
 
+/**
+ * The picture under the map (`site_underlays`, spec §17): its file and where
+ * it lies, as the row holds them without their timestamps. How each viewer
+ * sees it — shown or not, how see-through — is theirs alone
+ * (`EditorUi.underlay`), never part of the doc (D19).
+ */
+export interface EditorUnderlay extends UnderlayPlacement {
+  storageKey: string;
+  contentType: UnderlayContentType;
+  sizeBytes: number;
+  filename: string;
+  /** Null until the picture has been calibrated; the card then says its scale is temporary. */
+  calibration: UnderlayCalibration | null;
+}
+
 export interface EditorDoc {
   plot: EditorPlot;
   items: EditorItem[];
   lines: EditorLine[];
   defaults: KindDefaults;
+  /**
+   * The picture under the map. Absent and null both mean none — read it only
+   * through `underlayOf`. Optional so a doc built before the picture existed
+   * (every test fixture) is still a doc; `loadDoc` always sets it.
+   */
+  underlay?: EditorUnderlay | null;
 }
 
 export function rectOf(item: Pick<EditorItem, 'xCm' | 'yCm' | 'widthCm' | 'depthCm'>): Rect {
@@ -72,6 +95,42 @@ export function rectOf(item: Pick<EditorItem, 'xCm' | 'yCm' | 'widthCm' | 'depth
 
 export function findItem(doc: EditorDoc, id: string): EditorItem | undefined {
   return doc.items.find((entry) => entry.id === id);
+}
+
+/** The picture under the map, or null: the one way to read `EditorDoc.underlay`. */
+export function underlayOf(doc: Pick<EditorDoc, 'underlay'>): EditorUnderlay | null {
+  return doc.underlay ?? null;
+}
+
+/** The same file lying the same way, calibrated from the same two points: field by field. */
+export function sameUnderlay(a: EditorUnderlay | null, b: EditorUnderlay | null): boolean {
+  if (a === null || b === null) return a === b;
+  const ca = a.calibration;
+  const cb = b.calibration;
+  const sameCalibration = ca === null || cb === null
+    ? ca === cb
+    : ca.distanceCm === cb.distanceCm
+      && ca.from[0] === cb.from[0] && ca.from[1] === cb.from[1]
+      && ca.to[0] === cb.to[0] && ca.to[1] === cb.to[1];
+  return sameCalibration
+    && a.storageKey === b.storageKey && a.contentType === b.contentType
+    && a.sizeBytes === b.sizeBytes && a.filename === b.filename
+    && a.centreXCm === b.centreXCm && a.centreYCm === b.centreYCm
+    && a.widthCm === b.widthCm && a.rotationTenths === b.rotationTenths;
+}
+
+/** A copy that shares no array with the one it came from: history and the save queue both keep ops. */
+export function copyUnderlay(underlay: EditorUnderlay | null): EditorUnderlay | null {
+  if (underlay === null) return null;
+  const { calibration } = underlay;
+  return {
+    ...underlay,
+    calibration: calibration === null ? null : {
+      from: [calibration.from[0], calibration.from[1]],
+      to: [calibration.to[0], calibration.to[1]],
+      distanceCm: calibration.distanceCm,
+    },
+  };
 }
 
 export function findLine(doc: EditorDoc, id: string): EditorLine | undefined {

@@ -4,17 +4,18 @@ import type { AnyDb } from '@/lib/db-types';
 import { isBlank } from '@/lib/text/normalize';
 import { seasons, tasks } from '@/db/schema/camp';
 import {
-  siteItems, siteKindDefaults, siteLines, sitePlans, type SiteItemKind, type SiteLineKind, type SiteLinePoint,
+  siteItems, siteKindDefaults, siteLines, sitePlans, siteUnderlays, type SiteItemKind, type SiteLineKind, type SiteLinePoint,
 } from '@/db/schema/site';
 import { DEFAULT_SHADE_INSET_CM, isSiteItemKind } from './kinds';
 import { derive, type ItemFlags, type SiteCounts } from './derive';
 import type { KindDefaults } from './defaults';
-import type { EditorDoc, EditorItem, EditorLine } from './editor/model';
+import type { EditorDoc, EditorItem, EditorLine, EditorUnderlay } from './editor/model';
 import {
   isLineOp, lineEndsRefusal, lockRefusal, opRefusal, rekindRefusal, storedLinePatch, storedPatch,
   type ItemPatch, type LinePatch, type SiteOp,
 } from './editor/ops';
 import { lineLengthCm } from './lines';
+import { underlayKeyPlan } from './underlay-limits';
 
 /**
  * The camp map's reads and writes. One plan per season, any number of items
@@ -450,6 +451,23 @@ export async function kindDefaults(db: AnyDb): Promise<KindDefaults> {
   return out;
 }
 
+/** The picture under a map, or null (spec §17). Only its file and where it lies — never how a viewer sees it. */
+export async function readUnderlay(db: AnyDb, planId: string): Promise<EditorUnderlay | null> {
+  const [row] = await db.select().from(siteUnderlays).where(eq(siteUnderlays.planId, planId)).limit(1);
+  if (row === undefined) return null;
+  return {
+    storageKey: row.storageKey,
+    contentType: row.contentType,
+    sizeBytes: row.sizeBytes,
+    filename: row.filename,
+    centreXCm: row.centreXCm,
+    centreYCm: row.centreYCm,
+    widthCm: row.widthCm,
+    rotationTenths: row.rotationTenths,
+    calibration: row.calibration ?? null,
+  };
+}
+
 export function toEditorItem(row: SiteItem): EditorItem {
   return {
     id: row.id, kind: row.kind, label: row.label,
@@ -468,6 +486,7 @@ export async function loadDoc(
   const items = await listItems(db, planId);
   const lines = await listLines(db, planId);
   const defaults = await kindDefaults(db);
+  const underlay = await readUnderlay(db, planId);
   return {
     version: plan.version,
     doc: {
@@ -475,6 +494,7 @@ export async function loadDoc(
       items: items.map(toEditorItem),
       lines: lines.map(toEditorLine),
       defaults,
+      underlay,
     },
   };
 }
@@ -485,6 +505,44 @@ export async function loadDoc(
  */
 async function inTransaction<T>(db: AnyDb, fn: (tx: AnyDb) => Promise<T>): Promise<T> {
   return (db as Db).transaction((tx) => fn(tx as unknown as AnyDb));
+}
+
+/**
+ * The picture's row, written inside `applySiteOps`' transaction (spec §17).
+ * Only a file uploaded to this map may lie under it: a key is a path in
+ * storage, and another map's path would be served under this map's name. An
+ * upload is a new file; anything else is a move, and keeps who uploaded it
+ * and when.
+ */
+async function writeUnderlay(tx: AnyDb, planId: string, underlay: EditorUnderlay | null, actor: string): Promise<void> {
+  if (underlay === null) {
+    await tx.delete(siteUnderlays).where(eq(siteUnderlays.planId, planId));
+    return;
+  }
+  if (underlayKeyPlan(underlay.storageKey) !== planId.toLowerCase()) {
+    throw new Error('an underlay file must be one uploaded to this map');
+  }
+  const values = {
+    storageKey: underlay.storageKey,
+    contentType: underlay.contentType,
+    sizeBytes: underlay.sizeBytes,
+    filename: underlay.filename.trim(),
+    centreXCm: underlay.centreXCm,
+    centreYCm: underlay.centreYCm,
+    widthCm: underlay.widthCm,
+    rotationTenths: underlay.rotationTenths,
+    calibration: underlay.calibration,
+    updatedAt: new Date(),
+    updatedBy: actor,
+  };
+  const [existing] = await tx.select({ storageKey: siteUnderlays.storageKey })
+    .from(siteUnderlays).where(eq(siteUnderlays.planId, planId)).limit(1);
+  if (existing === undefined) {
+    await tx.insert(siteUnderlays).values({ planId, ...values, uploadedBy: actor });
+    return;
+  }
+  const uploaded = existing.storageKey === underlay.storageKey ? {} : { uploadedAt: new Date(), uploadedBy: actor };
+  await tx.update(siteUnderlays).set({ ...values, ...uploaded }).where(eq(siteUnderlays.planId, planId));
 }
 
 export type ApplyResult =
@@ -500,7 +558,8 @@ export type ApplyResult =
  * nothing written — the editor turns that into a decision on screen. Every
  * op is checked with the same refusals the client ran, plus what only the
  * database can know: the id is free, the task is a build task of this
- * season, the item is not locked.
+ * season, the item is not locked. A picture under the map must be a file
+ * uploaded to this map (`writeUnderlay`).
  *
  * An update or a removal naming an item this plan does not have — another
  * lead removed it, or it was never here — is skipped and reported in
@@ -615,21 +674,25 @@ export async function applySiteOps(
         byId.delete(op.id);
         // The database cascades the item's lines away (`site.ts`); the map of rows follows it.
         for (const line of linesAt(op.id)) linesById.delete(line.id);
-      } else if (op.size === null) {
-        await tx.delete(siteKindDefaults).where(eq(siteKindDefaults.kind, op.kind));
+      } else if (op.type === 'setKindDefault') {
+        if (op.size === null) {
+          await tx.delete(siteKindDefaults).where(eq(siteKindDefaults.kind, op.kind));
+        } else {
+          /* Inset and rope angle are facts about nets only, same as an item's
+             (`patchSet` above). A size from a page older than rope angles has
+             no `ropeAngleDeg` key at all: it leaves the camp's angle as it was
+             rather than wiping it (Review Focus #3). */
+          const angle: number | null | undefined = op.kind === 'shade' ? op.size.ropeAngleDeg : null;
+          const size = {
+            widthCm: op.size.widthCm, depthCm: op.size.depthCm, heightCm: op.size.heightCm,
+            insetCm: op.kind === 'shade' ? op.size.insetCm : null,
+            ...(angle === undefined ? {} : { ropeAngleDeg: angle }),
+          };
+          await tx.insert(siteKindDefaults).values({ kind: op.kind, ...size, updatedBy: actor })
+            .onConflictDoUpdate({ target: siteKindDefaults.kind, set: { ...size, updatedAt: new Date(), updatedBy: actor } });
+        }
       } else {
-        /* Inset and rope angle are facts about nets only, same as an item's
-           (`patchSet` above). A size from a page older than rope angles has
-           no `ropeAngleDeg` key at all: it leaves the camp's angle as it was
-           rather than wiping it (Review Focus #3). */
-        const angle: number | null | undefined = op.kind === 'shade' ? op.size.ropeAngleDeg : null;
-        const size = {
-          widthCm: op.size.widthCm, depthCm: op.size.depthCm, heightCm: op.size.heightCm,
-          insetCm: op.kind === 'shade' ? op.size.insetCm : null,
-          ...(angle === undefined ? {} : { ropeAngleDeg: angle }),
-        };
-        await tx.insert(siteKindDefaults).values({ kind: op.kind, ...size, updatedBy: actor })
-          .onConflictDoUpdate({ target: siteKindDefaults.kind, set: { ...size, updatedAt: new Date(), updatedBy: actor } });
+        await writeUnderlay(tx, planId, op.underlay, actor);
       }
     }
 

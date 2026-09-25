@@ -74,7 +74,7 @@ import { NO_WEBGL, SCENE_FAILED, SceneView, type EditorUi } from './scene-view';
 
 const UI: EditorUi = {
   tool: 'select', mode: '3d', labels: true, sun: false, netsHidden: false,
-  snap: true, hiddenGroups: [], hour: 14, theme: 'light',
+  snap: true, hiddenGroups: [], hour: 14, theme: 'light', underlay: { shown: true, opacity: 0.5 },
 };
 
 function item(over: Partial<EditorItem> & { id: string }): EditorItem {
