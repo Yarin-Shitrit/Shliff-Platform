@@ -23,6 +23,9 @@ export const LOCKED_ALL_NOTICE = 'הפריטים הנבחרים נעולים. א
  */
 export const EMPTY_MAP = 'המפה ריקה. אפשר להתחיל מכל פריט בלשונית ״הוספה למפה״.';
 
+/** The same invitation on the library tab itself, which is where the items are (#25 fix round, Minor 13). */
+export const EMPTY_MAP_HERE = 'המפה ריקה. אפשר להתחיל מכל פריט שכאן.';
+
 /**
  * A name dropped into a Hebrew sentence, between bidi isolates: an item's
  * label may be Latin, a number or mixed, and must not drag the rest of the
