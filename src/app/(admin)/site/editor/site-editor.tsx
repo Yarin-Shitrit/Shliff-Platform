@@ -649,7 +649,9 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     }
     return (
       <MultiInspector
-        key={items.map((item) => item.id).join(' ')}
+        /* Keyed by the kinds, not the ids: a marquee taking in one more tent
+           keeps the panel — and what is half-typed in it (review minor). */
+        key={[...new Set(items.map((item) => item.kind))].sort().join(' ')}
         doc={store.doc}
         ids={items.map((item) => item.id)}
         onRun={runEdit}

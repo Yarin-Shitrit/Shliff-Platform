@@ -840,6 +840,32 @@ describe('the inspector', () => {
     expect(inspector().getByRole('heading', { name: 'המגרש' })).toBeTruthy();
   });
 
+  /* Review minor: the several-items inspector was keyed by the selected ids,
+     so every item a marquee took in remounted it — a re-render per pointer
+     move, and a value half-typed into it thrown away. Keyed by the kinds. */
+  it('keeps what is typed in the several-items inspector while the selection grows within the same kinds', async () => {
+    renderEditor({
+      initial: {
+        doc: siteDoc([
+          siteItem({ id: 'a' }),
+          siteItem({ id: 'b', label: 'אוהל 2', xCm: 1000 }),
+          siteItem({ id: 'c', label: 'אוהל 3', xCm: 1500 }),
+        ]),
+        version: 0,
+      },
+      initialSelection: null,
+    });
+    await screen.findByTestId('scene');
+    fireEvent.click(screen.getByRole('tab', { name: /במפה/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^אוהל 1/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^אוהל 2/ }), { shiftKey: true });
+    const gap = () => inspector().getByLabelText('מרווח בשורה') as HTMLInputElement;
+    fireEvent.change(gap(), { target: { value: '1.5' } });
+    fireEvent.click(screen.getByRole('button', { name: /^אוהל 3/ }), { shiftKey: true });
+    expect(inspector().getByRole('heading', { name: 'נבחרו 3 פריטים' })).toBeTruthy();
+    expect(gap().value).toBe('1.5');
+  });
+
   it('shows a hidden group before a figure of the plot selects it — the one pickIds', async () => {
     renderEditor({ initialSelection: null });
     await screen.findByTestId('scene');

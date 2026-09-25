@@ -112,6 +112,28 @@ describe('the editor store', () => {
     expect(flags.partly.has(C)).toBe(true);
   });
 
+  /* Review minor: a marquee asks for the same selection on every pointer
+     move; each ask committed a new state and re-rendered the whole editor. */
+  it('does nothing when asked for the selection it already has', () => {
+    let renders = 0;
+    const init: EditorStoreInit = {
+      doc: doc([item({ id: A }), item({ id: B, label: 'אוהל 2', xCm: 600 })]),
+      version: 0,
+      save: vi.fn<EditorStoreInit['save']>(async (base) => ({ ok: true, version: base + 1 })),
+      load: vi.fn<EditorStoreInit['load']>(),
+    };
+    const { result } = renderHook(() => { renders += 1; return useEditorStore(init); });
+    act(() => { result.current.select([A, B]); });
+    const selection = result.current.selection;
+    const before = renders;
+    act(() => { result.current.select([A, B]); });
+    act(() => { result.current.select([A, 'nobody', B]); }); // reads back as the same selection
+    expect(renders).toBe(before);
+    expect(result.current.selection).toBe(selection);
+    act(() => { result.current.select([B, A]); }); // another order is another selection
+    expect(result.current.selection).toEqual([B, A]);
+  });
+
   it('selects only what exists, and forgets an item once it is removed', () => {
     const { result } = setup();
     act(() => { result.current.select([A, 'nobody', A]); });

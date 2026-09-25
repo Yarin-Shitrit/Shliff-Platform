@@ -282,9 +282,13 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
   const undo = useCallback(() => step('undo'), [step]);
   const redo = useCallback(() => step('redo'), [step]);
 
+  /* A marquee asks for the same selection on every pointer move: an
+     unchanged one commits nothing, so nothing re-renders (review minor). */
   const select = useCallback((ids: string[]) => {
     const current = latest.current;
-    commit({ ...current, selection: existing(current.doc, ids) });
+    const next = existing(current.doc, ids);
+    if (next.length === current.selection.length && next.every((id, index) => id === current.selection[index])) return;
+    commit({ ...current, selection: next });
   }, [commit]);
 
   /**
