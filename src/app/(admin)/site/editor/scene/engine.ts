@@ -14,6 +14,7 @@ import {
   contains, formatMetres, formatSize, gapsAround, overlap, unionRect, type Gap, type Handle, type Rect,
 } from '@/lib/site/geometry';
 import { SITE_KINDS, type SiteKindGroup } from '@/lib/site/kinds';
+import { readSunDate } from '@/lib/site/views';
 import { LOCKED_NOTICE } from '../notices';
 import { CameraRig } from './camera-rig';
 import { Gestures, type GestureIntent, type GestureWorld, type PointerInput } from './gestures';
@@ -744,9 +745,10 @@ export class SceneEngine {
     let toward: Vec3 = DEFAULT_LIGHT;
     let sunDown = false;
     this.sunOn = false;
-    // `sunDate` is the season's `startsOn`; anything else is no date, never a guessed one.
-    if (ui.sun && sunDate !== null && /^\d{4}-\d{2}-\d{2}$/.test(sunDate)) {
-      const sun = sunPosition(jerusalemInstant(sunDate, ui.hour), CAMP_SITE.latitude, CAMP_SITE.longitude);
+    // The one check of a day (`readSunDate`, P15): a date the calendar does not have is no date, never a guessed one.
+    const day = readSunDate(sunDate);
+    if (ui.sun && day !== null) {
+      const sun = sunPosition(jerusalemInstant(day, ui.hour), CAMP_SITE.latitude, CAMP_SITE.longitude);
       if (sun.elevationDeg > 0) {
         toward = sunDirection(sun, plot.northDeg);
         this.sunOn = true;
@@ -1243,9 +1245,20 @@ export class SceneEngine {
     this.abandon();
   };
 
-  /** A drag whose window loses focus never sees its release. */
+  /**
+   * A drag whose window loses focus never sees its release. It is abandoned,
+   * and the pointer it captured — by the id it was pressed with — is let go,
+   * so that pointer's later events are not the map's (review minor).
+   */
   private readonly onBlur = (): void => {
+    const held = this.gesturePointer;
     this.abandon();
+    if (held === null) return;
+    try {
+      this.canvas.releasePointerCapture(held);
+    } catch {
+      // Already released, or never captured.
+    }
   };
 
   private readonly onPointerLeave = (event: PointerEvent): void => {

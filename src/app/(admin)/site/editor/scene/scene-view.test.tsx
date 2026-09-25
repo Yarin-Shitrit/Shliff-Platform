@@ -92,14 +92,14 @@ function fakeStore(over: Partial<EditorStore> = {}): EditorStore {
 
 const NO_INSETS = { left: 0, right: 0, top: 0, bottom: 0 };
 
-function renderScene(store = fakeStore(), ui: EditorUi = UI) {
+function renderScene(store = fakeStore(), ui: EditorUi = UI, sunDate: string | null = null) {
   const onView = vi.fn<(info: ViewInfo) => void>();
   const onNotice = vi.fn();
   const onModeSettled = vi.fn();
   const handle = createRef<SceneHandle>();
   const scene = (next: EditorStore, nextUi: EditorUi) => (
     <SceneView ref={handle} store={next} ui={nextUi} insets={{ ...NO_INSETS }}
-      sunDate={null} onView={onView} onNotice={onNotice} onModeSettled={onModeSettled} />
+      sunDate={sunDate} onView={onView} onNotice={onNotice} onModeSettled={onModeSettled} />
   );
   const view = render(scene(store, ui));
   const rerenderWith = (next: EditorStore, nextUi: EditorUi = ui) => { view.rerender(scene(next, nextUi)); };
@@ -370,6 +370,22 @@ describe('the 3D map with WebGL', () => {
     expect(light.target.position.z).toBeCloseTo(24, 5);
   });
 
+  /* Ruling P15 (review minor): one check of the day's shape, `readSunDate`.
+     The engine kept a pattern of its own, which took 31 February for a day
+     and lit a sun for a date the calendar does not have — a guessed day. */
+  it('lights the sun only for a day the calendar has', async () => {
+    const noon = { ...UI, sun: true, hour: 12 };
+    const real = renderScene(fakeStore(), noon, '2026-06-04');
+    await waitFor(() => { expect(real.onView).toHaveBeenCalled(); });
+    expect((lights.at(-1) as DirectionalLight).castShadow).toBe(true);
+    real.unmount();
+
+    const impossible = renderScene(fakeStore(), noon, '2026-02-31');
+    await waitFor(() => { expect(impossible.onView).toHaveBeenCalled(); });
+    expect((lights.at(-1) as DirectionalLight).castShadow).toBe(false);
+    expect(impossible.onNotice).not.toHaveBeenCalled();
+  });
+
   it('lays the labels out again once the web font has loaded, and does nothing if that is after it is gone', async () => {
     let loaded: () => void = () => {};
     const ready = new Promise<void>((resolve) => { loaded = resolve; });
@@ -623,6 +639,26 @@ describe('the 3D map with WebGL', () => {
 
     it('drops the preview, saving nothing, when the window loses focus', async () => {
       await abandonedDrag(() => { fireEvent.blur(window); });
+    });
+
+    /* Review minor: the blur abandoned the drag but kept the canvas holding
+       the pointer, so that pointer's events went on landing on the map. */
+    it('lets go of the pointer it captured when the window loses focus', async () => {
+      const { container, onView } = renderScene(fakeStore(), PLAN);
+      await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+      const canvas = canvasOf(container);
+      const captured = vi.fn();
+      const released = vi.fn();
+      Object.assign(canvas, { setPointerCapture: captured, releasePointerCapture: released });
+      press(canvas, ON_TENT, { pointerId: 7 });
+      slide(canvas, THERE, { pointerId: 7 });
+      expect(captured).toHaveBeenCalledWith(7);
+      fireEvent.blur(window);
+      expect(released).toHaveBeenCalledWith(7);
+      // Nothing held, nothing to let go of: a blur with no drag releases nothing.
+      released.mockClear();
+      fireEvent.blur(window);
+      expect(released).not.toHaveBeenCalled();
     });
 
     it('drops the preview, saving nothing, when the pointer is captured away', async () => {
