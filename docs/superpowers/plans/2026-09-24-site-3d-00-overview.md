@@ -258,6 +258,7 @@ export interface EditorStore {
   retrySave(): void;
   dismissNotice(): void;
   pendingOps(): SiteOp[];                                           // not yet confirmed saved — kept across a refresh (I2)
+  allowUnload(): void;                                              // the next leave is deliberate, its work kept: no beforeunload prompt
 }
 export function useEditorStore(init: EditorStoreInit): EditorStore;
 // unsaved-work.ts (review I2): SITE_UPDATED, isStaleBuild(error) — Next's UnrecognizedActionError, by name or sentence —
@@ -354,7 +355,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement;
 //   'undo'|'redo'|'turn'|'lock'|'magnet'|'ruler'|'pointer'|'cube'|'plan'|'tag'|'eyeOff'|'minus'|'fit'|'rotateLeft'|'rotateRight'
 //   |'help'|'alignWest'|'alignCentreX'|'alignEast'|'alignNorth'|'alignCentreY'|'alignSouth'|'distributeX'|'distributeY'|'row'
 // toolbar.tsx        Toolbar({ ui, onUi, canUndo, canRedo, onUndo, onRedo })
-// save-status.tsx    SaveStatus({ snapshot, onRetry }), ConflictBanner({ busy, onTheirs, onMine })
+// save-status.tsx    SaveStatus({ snapshot, onRetry? }) — no retry offered without onRetry (a stale build),, ConflictBanner({ busy, onTheirs, onMine })
 // library-panel.tsx  LibraryPanel({ defaults, onActivate(kind), onDragMove(kind, clientX, clientY), onDrop(kind, clientX, clientY), onDragCancel() })
 // objects-panel.tsx  ObjectsPanel({ items, selection, flags, hiddenGroups, netsHidden, onPick(id, additive), onPickIds(ids), onToggleGroup(group), onShowLibrary?() })
 //                    — a group's count is a button selecting the rows it counts (G1); netsHidden marks a net's row hidden (G2);

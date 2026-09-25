@@ -172,6 +172,7 @@ vi.mock('./use-editor-store', async () => {
       retrySave: fake.retrySave,
       dismissNotice: fake.dismissNotice,
       pendingOps: () => [],
+      allowUnload: () => {},
     };
   }
 

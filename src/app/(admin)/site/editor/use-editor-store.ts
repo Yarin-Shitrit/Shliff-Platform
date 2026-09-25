@@ -59,6 +59,8 @@ export interface EditorStore {
   dismissNotice(): void;
   /** What is not yet confirmed saved, in order — for keeping it across a page refresh (review I2). */
   pendingOps(): SiteOp[];
+  /** The next page leave is deliberate and its work kept elsewhere: no "leave this page?" (#25 fix round, Minor 6). */
+  allowUnload(): void;
 }
 
 interface StoreState {
@@ -203,6 +205,9 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
    *  awaiting its `load()` — two reloads racing would both build a merge off
    *  a stale `latest.current` and one would clobber the other's result. */
   const resolvingRef = useRef(false);
+  /* A refresh the lead chose after a deploy, with what is unsaved already
+     kept for the next page: the browser's own warning would only confuse. */
+  const unloadAllowed = useRef(false);
   /** An earlier page's edits are being replayed through 'mine' (review I2). */
   const replaying = useRef(false);
   /** The replayed edits are to be announced once the queue reports them saved. */
@@ -251,7 +256,7 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
     /* Warn before the tab closes while anything is unsent — pending, in
        flight, refused or waiting on a conflict. */
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (queue.snapshot.pending > 0) event.preventDefault();
+      if (queue.snapshot.pending > 0 && !unloadAllowed.current) event.preventDefault();
     };
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pagehide', onPageHide);
@@ -486,6 +491,8 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
 
   const pendingOps = useCallback(() => queueRef.current?.pendingOps() ?? [], []);
 
+  const allowUnload = useCallback(() => { unloadAllowed.current = true; }, []);
+
   /* Review I2: edits an earlier page of this map left unsaved (its build was
      replaced by a deploy) are replayed through 'mine' — the latest map, with
      what still applies on top and the rest named — never simply resent
@@ -532,5 +539,6 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
     retrySave,
     dismissNotice,
     pendingOps,
+    allowUnload,
   };
 }

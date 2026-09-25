@@ -309,7 +309,19 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
         return { ok: false, reason: 'refused', error: SITE_UPDATED };
       }
     },
-    load: () => loadSiteDocAction(planId),
+    /* The reload a conflict's or a refusal's answer starts meets the same
+       stale build (#25 fix round, Important 3): said the same way, and the
+       work kept the same way, instead of "the map could not be loaded"
+       again and again with the question still up. */
+    load: async () => {
+      try {
+        return await loadSiteDocAction(planId);
+      } catch (error) {
+        if (!isStaleBuild(error)) throw error; // the store says a failed load in its own words
+        setStaleBuild(true);
+        return { ok: false, error: SITE_UPDATED };
+      }
+    },
     pending: carried,
   });
   // Taken once: a later refresh must not replay the same edits again.
@@ -1006,7 +1018,27 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
      conflict or a refused save must be answerable on a laptop narrowed
      mid-session and in a browser without WebGL, where the editor's own shell
      is hidden or never drawn. */
-  const banners = (
+  const refresh = () => {
+    // The work is kept for the next page first; then the browser's own warning has nothing to protect.
+    keepUnsaved(planId, store.pendingOps());
+    store.allowUnload();
+    window.location.reload();
+  };
+
+  const banners = staleBuild ? (
+    /* A deploy replaced this page's build (review I2; the load too, #25 fix
+       round, Important 3): every answer the other banners offer calls the
+       same missing server actions. One way out, with the work kept for it. */
+    <>
+      <SaveErrorBanner id={reasonId} message={SITE_UPDATED} busy={false} onRefresh={refresh} />
+      {store.notice === null || store.notice === SITE_UPDATED ? null : (
+        <div className={styles.banner} role="status">
+          <p className={styles.bannerText}>{store.notice}</p>
+          <Button size="sm" tone="ghost" onClick={() => { store.dismissNotice(); }}>הבנתי</Button>
+        </div>
+      )}
+    </>
+  ) : (
     <>
       {store.conflict === null && !plotMovedUnderEdits ? null : (
         <ConflictBanner
@@ -1024,9 +1056,8 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
           id={reasonId}
           message={saveError}
           busy={resolving}
-          onReload={refused && !staleBuild ? () => { void resolve('theirs'); } : undefined}
-          onMine={refused && !staleBuild ? () => { void resolve('mine'); } : undefined}
-          onRefresh={staleBuild ? () => { keepUnsaved(planId, store.pendingOps()); window.location.reload(); } : undefined}
+          onReload={refused ? () => { void resolve('theirs'); } : undefined}
+          onMine={refused ? () => { void resolve('mine'); } : undefined}
         />
       )}
       {store.notice === null ? null : (
@@ -1165,7 +1196,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
               snapshot={store.save}
               busy={resolving}
               reasonId={saveError === null ? undefined : reasonId}
-              onRetry={() => { store.retrySave(); }}
+              onRetry={staleBuild ? undefined : () => { store.retrySave(); }}
             />
             {/* No canvas, no picture: not in table mode, and — before the
                 client has asked the width — not under 900 px either. */}

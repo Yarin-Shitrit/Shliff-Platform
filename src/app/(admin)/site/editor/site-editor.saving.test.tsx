@@ -199,6 +199,8 @@ describe('saving, through the store and the queue', () => {
       // Neither reload nor keep-mine: both would call the same missing actions.
       expect(screen.queryByRole('button', { name: 'טעינת הגרסה העדכנית' })).toBeNull();
       expect(screen.queryByRole('button', { name: 'שמירת השינויים שלי מעליה' })).toBeNull();
+      // Nor the retry: it would resend to the same missing action (#25 fix round, Minor 11).
+      expect(screen.queryByRole('button', { name: 'ניסיון חוזר' })).toBeNull();
       const kept = () => JSON.parse(window.sessionStorage.getItem('site-editor:pending:p1') ?? 'null') as unknown;
       const turned = [{ type: 'update', id: 'a', patch: { xCm: 550, yCm: 450, widthCm: 200, depthCm: 300 } }];
       // The unsaved turn waits in this tab for the page after the refresh — kept by an effect
@@ -209,8 +211,51 @@ describe('saving, through the store and the queue', () => {
       fireEvent.click(screen.getByRole('button', { name: 'רענון הדף' }));
       expect(reload).toHaveBeenCalledTimes(1);
       expect(kept()).toEqual(turned);
+      // A deliberate refresh with the work kept: the browser's own "leave this page?" would only confuse (Minor 6).
+      const leaving = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(leaving);
+      expect(leaving.defaultPrevented).toBe(false);
     } finally {
       Object.defineProperty(window, 'location', { configurable: true, value: location });
+      window.sessionStorage.clear();
+    }
+  });
+
+  it('still warns before an ordinary leave while a change is unsent', async () => {
+    saveSiteChangesAction.mockRejectedValue(new Error('offline'));
+    await renderEditor();
+    turn();
+    expect(await screen.findByRole('button', { name: 'ניסיון חוזר' }, WAIT)).toBeTruthy();
+    const leaving = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(leaving);
+    expect(leaving.defaultPrevented).toBe(true);
+  });
+
+  /*
+   * #25 fix round, Important 3: the same stale build meets the reload that a
+   * conflict's or a refusal's answer starts. It fell back to "לא הצלחנו
+   * לטעון את המפה" with the banner still up — failing the same way forever.
+   */
+  it('says the site was updated when a conflict’s answer reaches an older build, and keeps the work for the refresh', async () => {
+    const stale = Object.assign(new Error('Server Action "9c" was not found on the server.'), { name: 'UnrecognizedActionError' });
+    saveSiteChangesAction.mockResolvedValue({ ok: false, reason: 'conflict', version: 4 });
+    loadSiteDocAction.mockRejectedValue(stale);
+    try {
+      await renderEditor();
+      turn();
+      fireEvent.click(await screen.findByRole('button', { name: 'שמירת השינויים שלי מעליה' }, WAIT));
+      expect(await screen.findByText(SITE_UPDATED, undefined, WAIT)).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'רענון הדף' })).toBeTruthy();
+      expect(screen.queryByText(/לא הצלחנו לטעון את המפה/)).toBeNull();
+      // The conflict's own two answers would call the same missing action again.
+      expect(screen.queryByRole('button', { name: 'טעינת הגרסה העדכנית' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'שמירת השינויים שלי מעליה' })).toBeNull();
+      await waitFor(() => {
+        expect(JSON.parse(window.sessionStorage.getItem('site-editor:pending:p1') ?? 'null')).toEqual([
+          { type: 'update', id: 'a', patch: { xCm: 550, yCm: 450, widthCm: 200, depthCm: 300 } },
+        ]);
+      });
+    } finally {
       window.sessionStorage.clear();
     }
   });

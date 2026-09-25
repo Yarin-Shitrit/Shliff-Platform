@@ -23,7 +23,8 @@ const SAID: Record<QueueStatus, string> = {
 
 export function SaveStatus({ snapshot, onRetry, busy = false, reasonId }: {
   snapshot: QueueSnapshot;
-  onRetry: () => void;
+  /** Without it no retry is offered — after a deploy it would resend to an action the site no longer has. */
+  onRetry?: () => void;
   /** A reload is under way: a retry now would resend what it is about to drop. */
   busy?: boolean;
   /** The id of the sentence saying why the save stopped (`SaveErrorBanner`), read with the retry. */
@@ -35,7 +36,7 @@ export function SaveStatus({ snapshot, onRetry, busy = false, reasonId }: {
         <span className={styles.saveDot} aria-hidden="true" />
         {SAID[snapshot.status]}
       </span>
-      {snapshot.status === 'error' ? (
+      {snapshot.status === 'error' && onRetry !== undefined ? (
         <Button size="sm" tone="ghost" onClick={onRetry} disabled={busy} aria-describedby={reasonId}>
           ניסיון חוזר
         </Button>

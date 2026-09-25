@@ -101,7 +101,7 @@ function fakeStore(over: Partial<EditorStore> = {}): EditorStore {
     flags: { outside: new Set(), overlapping: new Set(), partly: new Set(), pairs: [] },
     save: { status: 'saved', version: 0, pending: 0, error: null, errorKind: null }, conflict: null, notice: null,
     run: vi.fn(), undo: vi.fn(() => null), redo: vi.fn(() => null), select: vi.fn(),
-    resolveConflict: vi.fn(async () => {}), retrySave: vi.fn(), dismissNotice: vi.fn(), pendingOps: vi.fn(() => []),
+    resolveConflict: vi.fn(async () => {}), retrySave: vi.fn(), dismissNotice: vi.fn(), pendingOps: vi.fn(() => []), allowUnload: vi.fn(),
     ...over,
   };
 }
