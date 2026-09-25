@@ -199,13 +199,23 @@
   inset: 0;
 }
 
-/* The cards (the shortcuts, the sun) stack above the view controls, bottom centre. */
+/*
+ * The cards (the shortcuts, the sun) stack above the view controls, bottom
+ * centre. Together they can be taller than the stage (1280 × 800 with both
+ * open); the stack then stops below the checks bar and scrolls, rather than
+ * running off the top where the stage would clip the sun card's controls.
+ * 64px and 56px are `INSETS.bottom` (the view controls) and `INSETS.top` (the
+ * checks bar) in `site-editor.tsx`, the room the scene leaves the panels.
+ */
 .cards {
   position: absolute;
   inset-block-end: 64px;
   inset-inline: 0;
   margin-inline: auto;
   inline-size: fit-content;
+  max-block-size: calc(100% - 64px - 56px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   align-items: center;

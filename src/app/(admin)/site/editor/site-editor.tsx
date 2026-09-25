@@ -38,7 +38,8 @@ import {
 } from '@/lib/site/editor/commands';
 import { screenArrowToMap } from '@/lib/site/editor/camera';
 import { CAMP_SITE, jerusalemInstant, shadeAtHour, sunPosition } from '@/lib/site/editor/sun';
-import { readSunDate } from '@/lib/site/views';
+import { shadeRanking, shadeTimeline } from '@/lib/site/editor/shade-timeline';
+import { burnDays, readSunDate } from '@/lib/site/views';
 import { loadSiteDocAction, saveSiteChangesAction } from '../actions';
 import { useEditorStore } from './use-editor-store';
 import { SCENE_PALETTE, type SceneTheme } from './scene/palette';
@@ -78,6 +79,13 @@ export interface SiteEditorProps {
   seasonName: string;
   /** The gate day, `YYYY-MM-DD` in Israel (`sunDateOf`); null when the season has none (§11). */
   sunDate: string | null;
+  /**
+   * The burn's last day, written as `sunDate` is. Seasons have no end date
+   * yet (ruling SIM3), so the page passes none and the burn is the gate day
+   * alone; once `seasons.ends_on` exists, passing it gives every day a chip
+   * and lets shade by hour play through them all.
+   */
+  sunEndDate?: string | null;
   buildTasks: ReadonlyArray<{ id: string; title: string }>;
   /** The plot drawer: size, grid and north. */
   plotHref: string;
@@ -232,7 +240,7 @@ function isTyping(target: EventTarget): boolean {
 }
 
 export function SiteEditor(props: SiteEditorProps): ReactElement {
-  const { initial, initialSelection, seasonName, sunDate, plotHref, seasonDateHref } = props;
+  const { initial, initialSelection, seasonName, sunDate, sunEndDate = null, plotHref, seasonDateHref } = props;
   const planId = initial.doc.plot.id;
   const { show } = useToast();
   const store = useEditorStore({
@@ -252,6 +260,8 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
   const [keysOpen, setKeysOpen] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [tab, setTab] = useState<SideTab>('library');
+  /** The burn day a chip picked for shade by hour; null is the gate day. */
+  const [pickedDay, setPickedDay] = useState<string | null>(null);
   const stageRef = useRef<HTMLElement>(null);
   const reasonId = useId();
   const sceneRef = useRef<SceneHandle>(null);
@@ -283,13 +293,38 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
   const sceneUi = useMemo<EditorUi>(() => ({ ...fullUi, sun: fullUi.sun && gateDay !== null }), [fullUi, gateDay]);
   const vars = useMemo(() => paletteVars(theme), [theme]);
 
-  /* Shade by hour (spec §11): the sun at the chosen quarter hour of the gate
-     day, over the camp's pin, counted with the map's north. Only for the day
+  /* The day shade by hour shows (SIM2): one of the burn's days, from the gate
+     day to its last — the gate day alone while the last day is unknown
+     (SIM3). A chip picks it; a picked day that is no longer one of the burn's
+     (the opening date moved) gives way to the gate day. Derived, never
+     guessed: no gate day, no day. */
+  const lastDay = readSunDate(sunEndDate);
+  const days = useMemo(() => burnDays(gateDay, lastDay), [gateDay, lastDay]);
+  const sunDay = pickedDay !== null && days.includes(pickedDay) ? pickedDay : gateDay;
+
+  /* Shade by hour (spec §11): the sun at the chosen hour of that day, over
+     the camp's pin, counted with the map's north. Only for a day
      `readSunDate` accepted (`gateDay`, P15) — no day is no sun, never a guess. */
-  const sun = ui.sun && gateDay !== null
-    ? sunPosition(jerusalemInstant(gateDay, ui.hour), CAMP_SITE.latitude, CAMP_SITE.longitude)
+  const sun = ui.sun && sunDay !== null
+    ? sunPosition(jerusalemInstant(sunDay, ui.hour), CAMP_SITE.latitude, CAMP_SITE.longitude)
     : null;
   const sunSummary = sun === null ? null : shadeAtHour(store.doc, sun);
+  /* The day's shade, a sample a quarter hour, for the card's strip and its
+     sentence: worked out once for each day and each map, and only while the
+     card is open — never again for a new hour, so playback does not pay for
+     it on every step. */
+  const sunSamples = useMemo(
+    () => (ui.sun && sunDay !== null ? shadeTimeline(store.doc, [sunDay], 15) : []),
+    [ui.sun, sunDay, store.doc],
+  );
+  const hasNets = store.doc.items.some((item) => item.kind === 'shade');
+  /* The tents by their minutes in shade (MST), over the map on screen: one
+     function per map, so the card works the ranking out again only when the
+     map, the days or the end hour change — never for a new hour. */
+  const rankTents = useCallback(
+    (dates: readonly string[], endHour: number) => shadeRanking(store.doc, dates, 15, { endHour }),
+    [store.doc],
+  );
 
   /* A newer map from the server — the plot drawer's save bumps the version
      (`setPlot`) and refreshes the page. The store keeps its first `init`
@@ -796,7 +831,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
       store={sceneStore}
       ui={sceneUi}
       insets={INSETS}
-      sunDate={gateDay}
+      sunDate={sunDay}
       onView={onView}
       onNotice={onNotice}
     />
@@ -902,6 +937,16 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
               plotHref={plotHref}
               dateHref={seasonDateHref}
               sunDate={gateDay}
+              endDay={lastDay}
+              day={sunDay}
+              onDay={setPickedDay}
+              samples={sunSamples}
+              hasNets={hasNets}
+              onPickNets={() => {
+                pickIds(store.doc.items.filter((item) => item.kind === 'shade').map((item) => item.id));
+              }}
+              rankTents={rankTents}
+              onPickIds={pickIds}
             />
           ) : null}
           {keysOpen ? <ShortcutsCard onClose={() => { setKeysOpen(false); }} /> : null}

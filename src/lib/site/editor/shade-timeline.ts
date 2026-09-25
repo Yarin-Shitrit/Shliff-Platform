@@ -1,5 +1,5 @@
-import type { EditorDoc } from './model';
-import { CAMP_SITE, jerusalemInstant, shadeAtHour, sunPosition, type ShadeAtHour } from './sun';
+import { rectOf, type EditorDoc } from './model';
+import { CAMP_SITE, castShades, itemShade, jerusalemInstant, shadeAtHour, sunPosition, type ShadeAtHour } from './sun';
 
 /**
  * Shade across the hours of the burn, fast-forwarded (spec §11): when the
@@ -142,6 +142,23 @@ function daylightOn(clock: (hour: number) => Date, site: { latitude: number; lon
   };
 }
 
+/** Refuses a sampling step that is not a whole number of minutes above 0. */
+function readStep(stepMinutes: number): void {
+  if (!Number.isInteger(stepMinutes) || stepMinutes <= 0) {
+    throw new Error(`a shade step must be a whole number of minutes above 0: ${stepMinutes}`);
+  }
+}
+
+/** Refuses dates that are not real days, or not ascending and distinct — never reorders them. */
+function readDates(dates: readonly string[]): void {
+  dates.forEach((date, index) => {
+    readDate(date);
+    if (index > 0 && dates[index - 1] >= date) {
+      throw new Error(`shade dates must be in order, each once: ${dates[index - 1]} then ${date}`);
+    }
+  });
+}
+
 /**
  * The shade under the nets through each day's daylight, every `stepMinutes`
  * on the clock: at whole multiples of the step counted from midnight (06:00,
@@ -150,15 +167,8 @@ function daylightOn(clock: (hour: number) => Date, site: { latitude: number; lon
  * dates must be ascending and distinct — they are refused, not reordered.
  */
 export function shadeTimeline(doc: EditorDoc, dates: readonly string[], stepMinutes: number): ShadeSample[] {
-  if (!Number.isInteger(stepMinutes) || stepMinutes <= 0) {
-    throw new Error(`a shade step must be a whole number of minutes above 0: ${stepMinutes}`);
-  }
-  dates.forEach((date, index) => {
-    readDate(date);
-    if (index > 0 && dates[index - 1] >= date) {
-      throw new Error(`shade dates must be in order, each once: ${dates[index - 1]} then ${date}`);
-    }
-  });
+  readStep(stepMinutes);
+  readDates(dates);
 
   const samples: ShadeSample[] = [];
   for (const date of dates) {
@@ -208,4 +218,101 @@ export function shadeWindows(samples: readonly ShadeSample[], kind: ShadeWindowK
   }
   if (open !== null) windows.push(open);
   return windows;
+}
+
+/** One day of a tent's shade: minutes of full shade, of part shade, and the two counted together. */
+export interface TentShadeDay {
+  date: string;
+  /** `fullMinutes` whole and `partialMinutes` as half. */
+  shadedMinutes: number;
+  fullMinutes: number;
+  partialMinutes: number;
+  /**
+   * The day's count stopped at sunset, before the end hour asked for — the
+   * same for every tent on that day. The UI says "to sunset" from this,
+   * rather than working the rule out again.
+   */
+  untilSunset: boolean;
+}
+
+/** A tent's shade over the dates asked about, with each day's own count in `days`. */
+export interface TentShade {
+  id: string;
+  label: string;
+  shadedMinutes: number;
+  fullMinutes: number;
+  partialMinutes: number;
+  days: TentShadeDay[];
+}
+
+/** Where the ranking stops counting unless told otherwise: from sunrise to the afternoon (MST). */
+export const RANKING_END_HOUR = 15;
+
+/**
+ * The tents ranked by how long they stand in shade (MST, the camp lead:
+ * "the tent with most shadow during the day hours from sunrise to
+ * afternoon"). Each date is sampled every `stepMinutes` on the clock, as
+ * `shadeTimeline` samples it, from the first step at or after sunrise; each
+ * sample stands for the step that follows it, cut short at `endHour` or at
+ * sunset, whichever comes first. A tent is in full shade, part shade or the
+ * sun at a sample by `itemShade` against `castShades` — the geometry
+ * `shadeAtHour` uses, wherever the tent stands: under a net's footprint or
+ * beside it, where a low sun throws the shade. Full-shade minutes count
+ * whole, part-shade minutes half.
+ *
+ * Every tent is ranked, the most shaded first; tents with the same minutes
+ * keep the map's order. No tents, no ranking; no nets, every tent at 0.
+ */
+export function shadeRanking(
+  doc: EditorDoc,
+  dates: readonly string[],
+  stepMinutes: number,
+  { endHour = RANKING_END_HOUR }: { endHour?: number } = {},
+): TentShade[] {
+  readStep(stepMinutes);
+  readDates(dates);
+  if (!Number.isFinite(endHour) || endHour <= 0 || endHour > 24) {
+    throw new Error(`a shade end hour must be an hour of the day, above 0 and at most 24: ${endHour}`);
+  }
+  const tents = doc.items.filter((item) => item.kind === 'tent');
+  const ranking: TentShade[] = tents.map((tent) => ({
+    id: tent.id, label: tent.label, shadedMinutes: 0, fullMinutes: 0, partialMinutes: 0, days: [],
+  }));
+  if (tents.length === 0) return ranking;
+  const footprints = tents.map((tent) => rectOf(tent));
+
+  for (const date of dates) {
+    const clock = clockOn(date);
+    const day = daylightOn(clock, CAMP_SITE);
+    const full = tents.map(() => 0);
+    const partial = tents.map(() => 0);
+    const untilSunset = day !== null && day.set < endHour;
+    if (day !== null) {
+      const end = Math.min(endHour, day.set) * 60;
+      for (let minute = Math.ceil((day.rise * 60) / stepMinutes) * stepMinutes; minute < end; minute += stepMinutes) {
+        const cast = castShades(doc, sunPosition(clock(minute / 60), CAMP_SITE.latitude, CAMP_SITE.longitude));
+        if (cast === null) continue;
+        const span = Math.min(stepMinutes, end - minute);
+        footprints.forEach((footprint, index) => {
+          const shade = itemShade(footprint, cast);
+          if (shade === 'full') full[index] += span;
+          else if (shade === 'partial') partial[index] += span;
+        });
+      }
+    }
+    ranking.forEach((entry, index) => {
+      entry.days.push({
+        date,
+        shadedMinutes: full[index] + partial[index] / 2,
+        fullMinutes: full[index],
+        partialMinutes: partial[index],
+        untilSunset,
+      });
+      entry.fullMinutes += full[index];
+      entry.partialMinutes += partial[index];
+      entry.shadedMinutes = entry.fullMinutes + entry.partialMinutes / 2;
+    });
+  }
+  // A stable sort: tents with the same minutes keep the map's order.
+  return [...ranking].sort((a, b) => b.shadedMinutes - a.shadedMinutes);
 }
