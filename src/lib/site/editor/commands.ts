@@ -2,7 +2,9 @@ import type { SiteItemKind, SiteLineKind, SiteLinePoint } from '@/db/schema/site
 import { effectiveSize, itemHeight, type KindSize } from '../defaults';
 import { contains, overlap, turnAboutCentre, unionRect, wholeCm, type Rect } from '../geometry';
 import { DEFAULT_SHADE_INSET_CM } from '../kinds';
+import { centreOfItem, eligibleEnds, geometricMedian, splits } from '../lines';
 import { findItem, findLine, linesAt, nextLabel, nextLineLabel, rectOf, type EditorDoc, type EditorItem, type EditorLine } from './model';
+import { nearestFreeSpot } from './placement';
 import {
   lineEndsRefusal, lockRefusal, rekindRefusal, samePoints, storedLinePatch, storedPatch,
   type ItemPatch, type LinePatch, type SiteOp,
@@ -269,6 +271,54 @@ export function addLineOps(doc: EditorDoc, kind: SiteLineKind, fromId: string, t
       sort: nextLineSort(doc.lines), notes: null,
     },
   }];
+}
+
+/**
+ * One run from a source to a new splitter, and a run from the splitter to
+ * each of two or more targets — the way a tank feeds two showers and a
+ * sink. The splitter stands where the runs add up shortest: the geometric
+ * median of the source and the targets (`lines.ts`), on the nearest free
+ * grid spot inside the fence. It is an ordinary item afterwards, to drag.
+ *
+ * Nothing when the source cannot split this utility, fewer than two targets
+ * are named, a target is not one a new run from the source could reach
+ * (`eligibleEnds`), or no free spot exists — each a message for the editor
+ * to give, never a splitter placed on top of something.
+ */
+export function splitOps(
+  doc: EditorDoc, kind: SiteLineKind, sourceId: string, targetIds: readonly string[],
+  ids: { splitter: string; lines: readonly string[] },
+): { ops: SiteOp[]; splitterId: string | null } {
+  const none = { ops: [], splitterId: null };
+  const source = findItem(doc, sourceId);
+  const targets = [...new Set(targetIds)].map((id) => findItem(doc, id)).filter((item): item is EditorItem => item !== undefined);
+  if (source === undefined || !splits(kind, source.kind) || targets.length < 2 || targets.length !== new Set(targetIds).size) return none;
+  const eligible = new Set(eligibleEnds(doc, sourceId, kind).map((item) => item.id));
+  if (!targets.every((target) => eligible.has(target.id))) return none;
+  if (ids.lines.length < targets.length + 1 || findItem(doc, ids.splitter) !== undefined) return none;
+
+  const size = effectiveSize('splitter', doc.defaults);
+  const median = geometricMedian([centreOfItem(source), ...targets.map(centreOfItem)]);
+  const spot = nearestFreeSpot(doc, 'splitter', size, { xCm: median[0], yCm: median[1] });
+  if (spot === null) return none;
+
+  const splitter: EditorItem = {
+    id: ids.splitter, kind: 'splitter', label: nextLabel(doc.items, 'splitter'),
+    xCm: spot.xCm, yCm: spot.yCm, widthCm: size.widthCm, depthCm: size.depthCm,
+    heightCm: null, insetCm: null, sort: nextSort(doc.items), taskId: null, notes: null, locked: false,
+  };
+  const made: EditorLine[] = [];
+  let sort = nextLineSort(doc.lines);
+  const run = (id: string, fromId: string, toId: string) => {
+    made.push({ id, kind, label: nextLineLabel([...doc.lines, ...made], kind), fromId, toId, points: [], sort, notes: null });
+    sort += 1;
+  };
+  run(ids.lines[0], sourceId, splitter.id);
+  targets.forEach((target, index) => { run(ids.lines[index + 1], splitter.id, target.id); });
+  return {
+    ops: [{ type: 'add', item: splitter }, ...made.map((line): SiteOp => ({ type: 'addLine', line }))],
+    splitterId: splitter.id,
+  };
 }
 
 export function removeLineOps(doc: EditorDoc, ids: readonly string[]): SiteOp[] {

@@ -34,7 +34,7 @@ import { LINE_KIND_ORDER, LINE_KINDS, lineLengthCm } from '@/lib/site/lines';
 import { findItem, findLine, type EditorDoc, type EditorItem, type EditorLine } from '@/lib/site/editor/model';
 import type { SiteOp } from '@/lib/site/editor/ops';
 import {
-  addLineOps, addOps, duplicateOps, lockOps, moveOps, removeLineOps, removeOps, turnOps,
+  addLineOps, addOps, duplicateOps, lockOps, moveOps, removeLineOps, removeOps, splitOps, turnOps,
 } from '@/lib/site/editor/commands';
 import { screenArrowToMap } from '@/lib/site/editor/camera';
 import { CAMP_SITE, jerusalemInstant, shadeAtHour, sunPosition } from '@/lib/site/editor/sun';
@@ -491,6 +491,18 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     saidWithUndo(`${added.line.label} נוסף למפה`);
   }
 
+  /** A splitter fed from `fromId`, with a run to each of `toIds` (`splitOps`); the splitter is selected so it can be dragged at once. */
+  function splitTo(kind: SiteLineKind, fromId: string, toIds: string[]): void {
+    const ids = { splitter: crypto.randomUUID(), lines: [...toIds, fromId].map(() => crypto.randomUUID()) };
+    const { ops, splitterId } = splitOps(store.doc, kind, fromId, toIds, ids);
+    if (splitterId === null) {
+      show({ message: 'אי אפשר לפצל כאן: אין במגרש משבצת פנויה למפצל, או שאחד הפריטים השתנה בינתיים.', tone: 'bad' });
+      return;
+    }
+    runEdit('חיבור דרך מפצל', ops, [splitterId]);
+    saidWithUndo(`נוסף מפצל עם ${toIds.length + 1} ${LINE_KINDS[kind].plural}`);
+  }
+
   function duplicateSelection(): void {
     const items = selected();
     const { ops, ids } = duplicateOps(store.doc, store.selection, () => crypto.randomUUID());
@@ -720,6 +732,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
           onRun={runEdit}
           onPickIds={pickIds}
           onAddLine={addLine}
+          onSplit={splitTo}
           footer={actions}
         />
       );
