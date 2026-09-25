@@ -100,7 +100,7 @@ export function ItemInspector({ doc, item, flags, buildTasks, onRun, onPickIds, 
   const partnerNames = partners
     .map((id) => doc.items.find((other) => other.id === id)?.label)
     .filter((label): label is string => label !== undefined);
-  const nets = doc.items.filter((other) => other.kind === 'shade').map(toPlaced);
+  const nets = doc.items.filter((other) => other.kind === 'shade').map((other) => toPlaced(other, doc.defaults));
   const inShade = !isNet && nets.length > 0 && shadeState(rectOf(item), nets) === 'shaded';
 
   /* The utilities this item takes part in (`lines.ts`): every line already

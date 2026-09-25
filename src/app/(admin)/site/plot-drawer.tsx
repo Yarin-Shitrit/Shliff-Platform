@@ -64,7 +64,7 @@ export function PlotDrawer({ seasonId, seasonName, plan, items, closeHref }: {
   const northDeg = Number(north.trim());
   const northValid = north.trim() !== '' && Number.isInteger(northDeg) && northDeg >= 0 && northDeg <= 359;
   const wouldBeOutside = valid
-    ? outsideIds(items.map(toPlaced), { widthCm, depthCm }).length
+    ? outsideIds(items.map((item) => toPlaced(item)), { widthCm, depthCm }).length
     : null;
 
   async function save(event?: FormEvent): Promise<void> {

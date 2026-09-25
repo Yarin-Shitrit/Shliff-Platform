@@ -1,6 +1,7 @@
 import type { SiteItemKind } from '@/db/schema/site';
+import { itemHeight, type KindDefaults } from './defaults';
 import {
-  areaM2, outsideIds, overlapPairs, shadeCounts, shadeState,
+  areaM2, outsideIds, overlapPairs, ropeOffsetCm, shadeCounts, shadeState,
   type PlacedItem, type Plot, type ShadeCounts, type ShadeState,
 } from './geometry';
 
@@ -29,6 +30,10 @@ export interface ItemShape {
   widthCm: number;
   depthCm: number;
   insetCm: number | null;
+  /** Null means the kind's height. A net's height sets how far out its stakes stand (spec D18). */
+  heightCm: number | null;
+  /** Shade nets only; null means the camp's angle for nets (spec D16). */
+  ropeAngleDeg: number | null;
 }
 
 export interface ItemFlags {
@@ -55,9 +60,29 @@ export interface Derived<Item extends ItemShape> {
   pairs: Array<[string, string]>;
 }
 
-export function toPlaced(item: ItemShape): PlacedItem {
+/**
+ * How far a net's stakes stand from its cloth (spec §12): its height — its
+ * own, else its kind's — over the tangent of its angle — its own, else the
+ * camp's for nets. 0 for anything that is not a net, and for a net while
+ * neither angle is set: until the camp sets one, a net is checked by its
+ * cloth, exactly as it always was (D16).
+ */
+export function ropeCmOf(
+  item: Pick<ItemShape, 'kind' | 'heightCm' | 'ropeAngleDeg'>, defaults: KindDefaults,
+): number {
+  if (item.kind !== 'shade') return 0;
+  const angle = item.ropeAngleDeg ?? defaults.shade?.ropeAngleDeg ?? null;
+  return angle === null ? 0 : ropeOffsetCm(itemHeight(item, defaults), angle);
+}
+
+/**
+ * An item as the geometry sees it. `defaults` — the camp's kind defaults —
+ * give a net the camp's rope angle and its kind's height; without them only
+ * a net's own angle places its ropes, which is all a shade question needs.
+ */
+export function toPlaced(item: ItemShape, defaults: KindDefaults = {}): PlacedItem {
   return {
-    id: item.id, kind: item.kind, insetCm: item.insetCm,
+    id: item.id, kind: item.kind, insetCm: item.insetCm, ropeCm: ropeCmOf(item, defaults),
     x: item.xCm, y: item.yCm, width: item.widthCm, depth: item.depthCm,
   };
 }
@@ -65,7 +90,7 @@ export function toPlaced(item: ItemShape): PlacedItem {
 export function derive<Item extends ItemShape>(
   plot: PlotShape, items: readonly Item[],
 ): Derived<Item> {
-  const placed = items.map(toPlaced);
+  const placed = items.map((item) => toPlaced(item));
   const bounds: Plot = { widthCm: plot.widthCm, depthCm: plot.depthCm };
   const outside = new Set(outsideIds(placed, bounds));
   const pairs = overlapPairs(placed);

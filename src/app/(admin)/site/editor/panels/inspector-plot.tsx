@@ -73,7 +73,7 @@ export function PlotInspector({ doc, flags, plotHref, onPickIds }: {
   onPickIds: (ids: string[]) => void;
 }): ReactElement {
   const { plot, items } = doc;
-  const shade = shadeCounts(items.map(toPlaced));
+  const shade = shadeCounts(items.map((entry) => toPlaced(entry, doc.defaults)));
   const netIds = items.filter((entry) => entry.kind === 'shade').map((entry) => entry.id);
   const problems = problemsOf(doc, flags);
   const groups = KIND_GROUP_ORDER
