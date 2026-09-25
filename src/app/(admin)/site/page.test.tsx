@@ -2,7 +2,6 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { ReactNode } from 'react';
 import { render, screen, within } from '@testing-library/react';
 import { ToastProvider } from '@/components/ui/toaster';
 import type { SiteItemView, SitePlan } from '@/lib/site/plan';
@@ -25,9 +24,9 @@ vi.mock('@/lib/site/plan', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/site/plan')>()),
   siteView, seasonsWithPlans, loadDoc,
 }));
-/* The editor has its own tests, with the scene mocked. Here it only has to be
-   handed the right things; the table it is given is rendered, as a phone and
-   a browser without WebGL see it. Each mount takes the next number, so a test
+/* The editor has its own tests, with the scene mocked — the item table it
+   draws for a phone and a browser without WebGL among them. Here it only has
+   to be handed the right things. Each mount takes the next number, so a test
    can tell a remount from a re-render. */
 const mounts = vi.hoisted(() => ({ count: 0 }));
 vi.mock('./editor/site-editor', async () => {
@@ -36,27 +35,27 @@ vi.mock('./editor/site-editor', async () => {
     SiteEditor: function FakeEditor(props: {
       initial: { doc: EditorDoc; version: number };
       initialSelection: string | null;
+      seasonId: string;
       seasonName: string;
       sunDate: string | null;
       buildTasks: ReadonlyArray<{ id: string; title: string }>;
       plotHref: string;
       seasonDateHref: string;
-      fallback?: ReactNode;
     }) {
       const [mount] = useState(() => { mounts.count += 1; return mounts.count; });
       return (
         <div
           data-testid="editor"
           data-mount={mount}
+          data-season-id={props.seasonId}
           data-season={props.seasonName}
           data-selection={props.initialSelection ?? ''}
           data-sun={props.sunDate ?? ''}
-          data-tasks={props.buildTasks.map((task) => task.title).join(',')}
+          data-tasks={props.buildTasks.map((task) => `${task.id}:${task.title}`).join(',')}
           data-plot={props.plotHref}
           data-date={props.seasonDateHref}
         >
           <span data-testid="editor-map">{`editor:${props.initial.doc.items.length}:v${props.initial.version}`}</span>
-          {props.fallback}
         </div>
       );
     },
@@ -168,7 +167,9 @@ describe('the camp map screen', () => {
 
     const editor = screen.getByTestId('editor');
     expect(screen.getByTestId('editor-map').textContent).toBe('editor:2:v3');
-    expect(editor.getAttribute('data-tasks')).toBe('הקמת המטבח');
+    expect(editor.getAttribute('data-tasks')).toBe('t1:הקמת המטבח');
+    // The season a build task's link in the editor's item table goes to.
+    expect(editor.getAttribute('data-season-id')).toBe('s26');
     expect(editor.getAttribute('data-plot')).toBe('/site?season=s26&act=plot');
     // The sun card's gate day links to the shell's drawer for this season's opening date (SD4).
     expect(editor.getAttribute('data-date')).toBe('/site?season=s26&act=season-date');
@@ -189,26 +190,16 @@ describe('the camp map screen', () => {
     expect(editor.getAttribute('data-date')).toBe('/site?season=s26&act=season-date');
     const drawer = within(screen.getByRole('dialog'));
     expect(drawer.getByRole('link', { name: 'סגירה' }).getAttribute('href')).toBe('/site?season=s26');
-    const table = within(editor).getByRole('table', { name: 'הפריטים במפה' });
-    expect(within(table).getByRole('link', { name: 'אוהל 1' }).getAttribute('href')).toBe('/site?season=s26&peek=a');
   });
 
-  it('hands the editor the item table, which says each state in words and offers no delete page', async () => {
-    siteView.mockResolvedValue(view([
-      item({ id: 'in' }),
-      item({ id: 'out', label: 'קראוון 1', kind: 'caravan', xCm: 2500, outside: true }),
-    ]));
-    loadDoc.mockResolvedValue(loaded(['in', 'out']));
+  /* The item table is the editor's own now, drawn from the map being edited
+     (its tests hold it); the page draws none beside it. */
+  it('leaves the item table to the editor', async () => {
+    siteView.mockResolvedValue(view([item({ id: 'a' })]));
+    loadDoc.mockResolvedValue(loaded(['a']));
     await renderPage();
-
-    const table = within(screen.getByTestId('editor')).getByRole('table', { name: 'הפריטים במפה' });
-    expect(within(table).getByRole('link', { name: 'קראוון 1' }).getAttribute('href')).toBe('/site?season=s26&peek=out');
-    expect(within(table).getAllByText('מחוץ למגרש').length).toBeGreaterThan(0);
-    // R11, on every row.
-    expect(within(table).getAllByRole('img', { name: 'מקור: נרשם ידנית' })).toHaveLength(2);
-    // Removal is undoable in the editor now; there is no confirmation page to link to.
-    expect(within(table).queryByRole('link', { name: 'מחיקה' })).toBeNull();
-    expect(within(table).queryByRole('link', { name: 'עריכה' })).toBeNull();
+    expect(screen.getByTestId('editor')).toBeTruthy();
+    expect(screen.queryByRole('table')).toBeNull();
   });
 
   it('draws no stat tiles and no outside banner: the checks bar and the inspector say it now', async () => {
@@ -280,24 +271,29 @@ describe('the camp map screen', () => {
     expect(editor.getAttribute('data-mount')).not.toBe(first);
   });
 
-  /* `loadDoc` answers null only if the plan was there for `siteView` and gone
-     a moment later. The board used to be the fallback; it retired, and a 404
-     would say the page does not exist, which is not true. So the page says
-     what happened, in Hebrew, offers the reload that fixes it, and keeps what
-     it did read readable. */
-  it('says so, and offers a reload, when the map changed while the page loaded — never a crash', async () => {
+  /* `loadDoc` answers null only if the plan was there for `siteView` and not
+     found a moment later. The board used to be the fallback; it retired, and a
+     404 would say the page does not exist, which is not true. So the page says
+     what it found — no more than that: no code path deletes a map, so it does
+     not claim one changed or went — and what a reload will show, and keeps
+     what it did read readable. */
+  it('says the map was not found, and what a reload will show — never a crash', async () => {
     siteView.mockResolvedValue(view([item({ id: 'a' })]));
     loadDoc.mockResolvedValue(null);
     // The old flag too: nothing on this fallback may carry it on (integration I's minor).
     await renderPage({ editor: '3d', act: 'plot' });
 
-    const notice = within(screen.getByRole('region', { name: 'המפה לא נפתחה לעריכה' }));
-    expect(notice.getByText('המפה לא נפתחה לעריכה.')).toBeTruthy();
-    expect(notice.getByText(/השתנתה ממקום אחר בזמן שהדף נטען/)).toBeTruthy();
+    const region = screen.getByRole('region', { name: 'המפה לא נמצאה' });
+    const notice = within(region);
+    expect(notice.getByText('המפה לא נמצאה כשנפתחה לעריכה.')).toBeTruthy();
+    expect(region.textContent).toMatch(/טעינה מחדש תקרא אותה שוב: אם היא שם, היא תיפתח לעריכה; אם לא, יוצע ליצור מפה לשנה הזו\./);
+    expect(region.textContent).not.toMatch(/השתנתה|נמחקה/);
     expect(notice.getByRole('link', { name: 'טעינה מחדש' }).getAttribute('href')).toBe('/site?season=s26');
     // What was read a moment ago stays readable, and says it was typed by hand (R11).
     const table = within(screen.getByRole('table', { name: 'הפריטים במפה' }));
-    expect(table.getByRole('link', { name: 'אוהל 1' }).getAttribute('href')).toBe('/site?season=s26&peek=a');
+    // A name, not a link: there is no map here to select it on.
+    expect(table.getByText('אוהל 1')).toBeTruthy();
+    expect(table.queryByRole('link', { name: 'אוהל 1' })).toBeNull();
     expect(table.getAllByRole('img', { name: 'מקור: נרשם ידנית' })).toHaveLength(1);
     // No editor over a map that is not there, and no drawer that would save into it.
     expect(screen.queryByTestId('editor')).toBeNull();

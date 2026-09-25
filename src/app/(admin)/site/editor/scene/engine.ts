@@ -443,14 +443,25 @@ export class SceneEngine {
     this.setCamera(panBy(this.cam, xCm - centre[0], yCm - centre[1]));
   }
 
-  exportPng(): string | null {
-    if (this.cam === null || this.lost) return null;
-    try {
-      this.renderer.render(this.scene, this.rig.apply(this.cam, this.viewport, this.drawMode));
-      return this.canvas.toDataURL('image/png');
-    } catch {
-      return null;
-    }
+  /**
+   * The current view as a PNG blob, drawn fresh first. A blob, not a data
+   * URL: Chromium refuses to download a data URL much over 2 MB, and a
+   * full-screen PNG at a high pixel ratio is several. Null when there is no
+   * view yet, the context is lost, or the browser cannot make the file. The
+   * labels are DOM (`LabelsLayer`), not WebGL, so they are not in it.
+   */
+  exportPng(): Promise<Blob | null> {
+    const cam = this.cam;
+    if (cam === null || this.lost) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      try {
+        this.renderer.render(this.scene, this.rig.apply(cam, this.viewport, this.drawMode));
+        // `preserveDrawingBuffer` keeps that frame on the canvas until the blob is read.
+        this.canvas.toBlob((blob) => { resolve(blob); }, 'image/png');
+      } catch {
+        resolve(null);
+      }
+    });
   }
 
   /* ── frames ─────────────────────────────────────────────────────────── */

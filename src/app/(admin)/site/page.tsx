@@ -28,10 +28,10 @@ export const metadata: Metadata = { title: 'מפת הקאמפ' };
  *
  * One map per season. The page reads it once and hands it to the editor
  * (spec §6.1); from then on the editor's store is the truth and saves in the
- * background, so nothing here re-reads after an edit. The item table goes
- * with it: the editor shows it on a screen under 900 px and under its
- * no-WebGL notice (§7), so a phone, a screen reader and an old browser all
- * still read the map.
+ * background, so nothing here re-reads after an edit. The editor draws the
+ * item table from that store on a screen under 900 px and under its no-WebGL
+ * notice (§7), so a phone, a screen reader and an old browser all still read
+ * the map as it is being edited.
  *
  * Every number on this screen was typed by somebody (R11): no workbook holds
  * a map, and the chips say so.
@@ -101,23 +101,13 @@ export default async function SitePage(
   }
 
   const { plan, items } = view;
-  const table = (
-    <SiteTable
-      items={items}
-      params={here}
-      season={current.id}
-      empty={(
-        /* An invitation: the editor's library is how a thing gets on the map. */
-        <EmptyState kind="nothing-this-season" noun="פריטים במפה" seasonName={current.name} />
-      )}
-    />
-  );
 
-  /* `loadDoc` answers null only if the plan was there for `siteView` and gone
-     a moment later. Not a 404 — the page exists — and never a guess at the
-     map: the page says what happened, offers the reload that shows the map as
-     it is now, and keeps what it did read readable. No drawer opens over a
-     map that is not there. */
+  /* `loadDoc` answers null only if the plan was there for `siteView` and not
+     found a moment later. Not a 404 — the page exists — and never a guess:
+     nothing in the platform deletes a map, so the page says only what it
+     found, and what a reload will show — the map, opened for editing, if it
+     is there; the invitation to create one if it is not. It keeps what it did
+     read readable. No drawer opens over a map that could not be opened. */
   const loaded = await loadDoc(db, plan.id);
   if (loaded === null) {
     return (
@@ -126,12 +116,16 @@ export default async function SitePage(
         <h1>מפת הקאמפ</h1>
         <Banner
           tone="warn"
-          label="המפה לא נפתחה לעריכה"
-          headline="המפה לא נפתחה לעריכה."
-          detail="היא השתנתה ממקום אחר בזמן שהדף נטען. טעינה מחדש תציג אותה כפי שהיא עכשיו; עד אז, אלה הפריטים כפי שנקראו."
+          label="המפה לא נמצאה"
+          headline="המפה לא נמצאה כשנפתחה לעריכה."
+          detail="טעינה מחדש תקרא אותה שוב: אם היא שם, היא תיפתח לעריכה; אם לא, יוצע ליצור מפה לשנה הזו. עד אז, אלה הפריטים כפי שנקראו רגע לפני כן."
           action={{ label: 'טעינה מחדש', href: closeHref }}
         />
-        {table}
+        <SiteTable
+          items={items}
+          season={current.id}
+          empty={<EmptyState kind="nothing-this-season" noun="פריטים במפה" seasonName={current.name} />}
+        />
       </main>
     );
   }
@@ -156,12 +150,12 @@ export default async function SitePage(
         key={plan.id}
         initial={loaded}
         initialSelection={initialSelection}
+        seasonId={current.id}
         seasonName={current.name}
         sunDate={sunDateOf(current.startsOn)}
         buildTasks={buildTasks}
         plotHref={plotHref(here)}
         seasonDateHref={seasonDateHref(here)}
-        fallback={table}
       />
       {query.plot ? (
         <PlotDrawer

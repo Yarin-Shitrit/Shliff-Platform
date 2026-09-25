@@ -16,16 +16,20 @@
  */
 
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import {
   useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore,
-  type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactElement, type ReactNode, type RefAttributes,
+  type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactElement, type RefAttributes,
 } from 'react';
 import { SeasonChip, TopBar } from '@/components/shell/top-bar';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { cx } from '@/components/ui/cx';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Icon } from '@/components/ui/icon';
 import { useToast } from '@/components/ui/toaster';
 import type { SiteItemKind } from '@/db/schema/site';
+import { formatDateFull } from '@/lib/dates';
+import { derive } from '@/lib/site/derive';
 import { effectiveSize } from '@/lib/site/defaults';
 import { formatSize, snap } from '@/lib/site/geometry';
 import { nearestFreeSpot } from '@/lib/site/editor/placement';
@@ -37,6 +41,7 @@ import { screenArrowToMap } from '@/lib/site/editor/camera';
 import { CAMP_SITE, jerusalemInstant, shadeAtHour, sunPosition } from '@/lib/site/editor/sun';
 import { readSunDate } from '@/lib/site/views';
 import { loadSiteDocAction, saveSiteChangesAction } from '../actions';
+import { SiteTable, type SiteTableRow } from '../site-table';
 import { useEditorStore } from './use-editor-store';
 import { SCENE_PALETTE, type SceneTheme } from './scene/palette';
 import type { EditorUi, Insets, SceneHandle, SceneViewProps, ViewInfo } from './scene/scene-view';
@@ -70,6 +75,8 @@ export interface SiteEditorProps {
   initial: { doc: EditorDoc; version: number };
   /** `?peek=<id>`: selected when the map loads (spec §12). The page has checked it is on this map. */
   initialSelection: string | null;
+  /** The season a build task's link in the item table goes to. */
+  seasonId: string;
   seasonName: string;
   /** The gate day, `YYYY-MM-DD` in Israel (`sunDateOf`); null when the season has none (§11). */
   sunDate: string | null;
@@ -78,11 +85,6 @@ export interface SiteEditorProps {
   plotHref: string;
   /** The shell's drawer for this season's opening date — the gate day the sun is worked out for (SD4). */
   seasonDateHref: string;
-  /**
-   * The item table (`site-table.tsx`, rendered by the page): the map on a
-   * screen under 900 px, and under the scene's no-WebGL notice (spec §7).
-   */
-  fallback?: ReactNode;
 }
 
 /**
@@ -148,8 +150,9 @@ function serverTheme(): SceneTheme {
 /* Under 900 px the table is the view (spec §7) and the scene is not even
    mounted, so a phone holds no WebGL context. The server cannot know the
    width; it renders the wide page, and the stylesheet shows the table in its
-   place below 900 px until the client decides (`editor.module.css`). */
-const WIDE_QUERY = '(min-width: 900px)';
+   place below 900 px until the client decides (`editor.module.css`). A range,
+   so this and the stylesheet's `(width < 900px)` leave no width between them. */
+const WIDE_QUERY = '(width >= 900px)';
 
 function readWide(): boolean {
   return window.matchMedia(WIDE_QUERY).matches;
@@ -162,18 +165,18 @@ function subscribeWide(onChange: () => void): () => void {
 }
 
 /**
- * Whether this browser can give WebGL, asked once per page load. `SceneView`
- * says so in its own words when it cannot, but tells nobody; the editor needs
- * to know, to put the item table under that notice. The context made to ask
- * is let go at once.
+ * Whether this browser can give WebGL 2, asked once per page load. WebGL 2
+ * and nothing less: three's `WebGLRenderer` (r186) needs it, so a browser with
+ * only WebGL 1 cannot draw the map either. `SceneView` says so in its own
+ * words when it cannot, but tells nobody; the editor needs to know, to put the
+ * item table under that notice. The context made to ask is let go at once.
  */
 let webglAnswer: boolean | null = null;
 
 function readWebgl(): boolean {
   if (webglAnswer === null) {
     try {
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('webgl2') ?? canvas.getContext('webgl');
+      const context = document.createElement('canvas').getContext('webgl2');
       webglAnswer = context !== null;
       context?.getExtension('WEBGL_lose_context')?.loseContext();
     } catch {
@@ -191,6 +194,42 @@ function subscribeNever(): () => void {
 /** The server renders the wide page with the map; the client corrects both once it can ask. */
 function serverYes(): boolean {
   return true;
+}
+
+/* Whether this render is the client's own, past hydration: false on the
+   server and while hydrating, true after — and from the start on a page the
+   client renders itself. */
+function clientYes(): boolean {
+  return true;
+}
+
+function serverNo(): boolean {
+  return false;
+}
+
+/* What the item table says it is for, above it (the table is the view only
+   where the map is not). On a wide screen without WebGL the scene's own
+   notice, just above, has already said what the browser lacks. */
+const NARROW_NEEDS = 'את המפה עורכים במסך ברוחב 900 פיקסלים לפחות.';
+const NARROW_NO_WEBGL_NEEDS = 'את המפה עורכים במסך ברוחב 900 פיקסלים לפחות, בדפדפן עם גרפיקה תלת־ממדית פעילה.';
+
+/* "ייצוא תמונה" (spec §10). The picture is the scene's canvas; the labels are
+   DOM, so they are not in it — said once the file is saved, until the engine
+   draws them in (a later task). */
+const EXPORTED = 'התמונה נשמרה, בלי התוויות שעל המפה.';
+const EXPORT_FAILED = 'לא הצלחנו לשמור תמונה של המפה. אפשר לנסות שוב.';
+
+/** How long a picture's blob URL outlives the click — long after any browser has started the download (FileSaver.js waits 40 s). */
+const REVOKE_AFTER_MS = 40_000;
+
+/**
+ * Today as `YYYY-MM-DD`, the day it is in Israel, for a file name. Made by the
+ * platform's one date helper (`formatDateFull`, `DD/MM/YYYY` in the camp's
+ * timezone) and reordered: a file name cannot carry a slash.
+ */
+function todayInIsrael(): string {
+  const [day, month, year] = formatDateFull(new Date()).split('/');
+  return `${year}-${month}-${day}`;
 }
 
 /** The scene's group colours, handed to every panel as custom properties. */
@@ -226,7 +265,7 @@ function isTyping(target: EventTarget): boolean {
 }
 
 export function SiteEditor(props: SiteEditorProps): ReactElement {
-  const { initial, initialSelection, seasonName, sunDate, plotHref, seasonDateHref } = props;
+  const { initial, initialSelection, seasonId, seasonName, sunDate, buildTasks, plotHref, seasonDateHref } = props;
   const planId = initial.doc.plot.id;
   const { show } = useToast();
   const store = useEditorStore({
@@ -241,6 +280,11 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
   const webgl = useSyncExternalStore(subscribeNever, readWebgl, serverYes);
   /** The table is the view: a screen under 900 px, or a browser without WebGL. No map is shown. */
   const tableMode = !wide || !webgl;
+  /* The table beside the editor's shell, for the stylesheet to show under
+     900 px: drawn until the client knows the width, then only while narrow —
+     a wide screen carries no hidden copy of it. */
+  const hydrated = useSyncExternalStore(subscribeNever, clientYes, serverNo);
+  const narrowTable = !hydrated || !wide;
   const [ui, setUi] = useState<EditorUi>(INITIAL_UI);
   const [view, setView] = useState<ViewInfo>(INITIAL_VIEW);
   const [keysOpen, setKeysOpen] = useState(false);
@@ -284,6 +328,19 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     ? sunPosition(jerusalemInstant(gateDay, ui.hour), CAMP_SITE.latitude, CAMP_SITE.longitude)
     : null;
   const sunSummary = sun === null ? null : shadeAtHour(store.doc, sun);
+
+  /* The item table's rows: the map being edited, with its flags worked out by
+     `derive` — the rule the server uses — so the table shows what changed
+     since the page loaded, not the page's own read. */
+  const tableShown = narrowTable || !webgl;
+  const tableRows = useMemo<SiteTableRow[]>(() => {
+    if (!tableShown) return [];
+    const titles = new Map(buildTasks.map((task) => [task.id, task.title]));
+    return derive(store.doc.plot, store.doc.items).items.map((item) => ({
+      ...item,
+      taskTitle: item.taskId === null ? null : titles.get(item.taskId) ?? null,
+    }));
+  }, [tableShown, store.doc, buildTasks]);
 
   /* A newer map from the server — the plot drawer's save bumps the version
      (`setPlot`) and refreshes the page. The store keeps its first `init`
@@ -644,17 +701,23 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     );
   }
 
-  /** "ייצוא תמונה" (spec §10): the current view as a PNG, named for the season. */
-  function exportPicture(): void {
-    const url = sceneRef.current?.exportPng() ?? null;
-    if (url === null) {
-      show({ message: 'לא הצלחנו לשמור תמונה של המפה. אפשר לנסות שוב.', tone: 'bad' });
+  /** "ייצוא תמונה" (spec §10): the current view as a PNG, named for the season and the day. */
+  async function exportPicture(): Promise<void> {
+    const blob = await (sceneRef.current?.exportPng() ?? Promise.resolve(null));
+    if (blob === null) {
+      show({ message: EXPORT_FAILED, tone: 'bad' });
       return;
     }
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `מפת הקאמפ ${seasonName}.png`;
+    link.download = `מפת הקאמפ ${seasonName} ${todayInIsrael()}.png`;
+    // On the page for the click — a detached link's click is ignored by some browsers — and off it after.
+    document.body.appendChild(link);
     link.click();
+    link.remove();
+    setTimeout(() => { URL.revokeObjectURL(url); }, REVOKE_AFTER_MS);
+    show({ message: EXPORTED, tone: 'ok' });
   }
 
   function runShortcut(shortcut: Shortcut): void {
@@ -744,8 +807,12 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     />
   );
 
-  const editor = (
-    <div className={styles.editorArea}>
+  /* What the save asks of the lead. Above the view, whichever it is: a
+     conflict or a refused save must be answerable on a laptop narrowed
+     mid-session and in a browser without WebGL, where the editor's own shell
+     is hidden or never drawn. */
+  const banners = (
+    <>
       {store.conflict === null && !plotMovedUnderEdits ? null : (
         <ConflictBanner
           busy={resolving}
@@ -767,6 +834,26 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
           <Button size="sm" tone="ghost" onClick={() => { store.dismissNotice(); }}>הבנתי</Button>
         </div>
       )}
+    </>
+  );
+
+  /** The item table, where the map is not shown: what it cannot do here first, then the map as it is being edited. */
+  const tableView = (needs: string | null) => (
+    <>
+      <p className={styles.tableNote}>
+        {needs === null ? null : <>{needs}{' '}</>}
+        כאן אפשר לקרוא את הפריטים ולשנות את <Link href={plotHref}>הגדרות המגרש</Link>.
+      </p>
+      <SiteTable
+        items={tableRows}
+        season={seasonId}
+        empty={<EmptyState kind="nothing-this-season" noun="פריטים במפה" seasonName={seasonName} />}
+      />
+    </>
+  );
+
+  const editor = (
+    <div className={styles.editorArea}>
       <Toolbar
         ui={fullUi}
         onUi={patchUi}
@@ -865,10 +952,16 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
               reasonId={saveError === null ? undefined : reasonId}
               onRetry={() => { store.retrySave(); }}
             />
-            <Button size="sm" onClick={exportPicture} disabled={tableMode}>
-              <Icon name="download" size={14} />
-              ייצוא תמונה
-            </Button>
+            {/* No canvas, no picture: not in table mode, and — before the
+                client has asked the width — not under 900 px either. */}
+            {tableMode ? null : (
+              <span className={styles.wideOnly}>
+                <Button size="sm" onClick={() => { void exportPicture(); }}>
+                  <Icon name="download" size={14} />
+                  ייצוא תמונה
+                </Button>
+              </span>
+            )}
             <ButtonLink size="sm" href={plotHref}>
               <Icon name="grid" size={14} />
               הגדרות המגרש
@@ -876,18 +969,19 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
           </>
         )}
       />
+      {banners}
       {webgl ? (
         <>
           {editor}
           {/* Hidden by the stylesheet on a wide screen; the view under 900 px. */}
-          <div className={styles.narrowView}>{props.fallback}</div>
+          {narrowTable ? <div className={styles.narrowView}>{tableView(NARROW_NEEDS)}</div> : null}
         </>
       ) : (
         <div className={styles.fallback}>
           {/* Where the map would be: the scene says, in its own words, that it
               needs WebGL. Not under 900 px, where the table is the view anyway. */}
           {wide ? <div className={styles.noScene}>{scene}</div> : null}
-          {props.fallback}
+          {tableView(wide ? null : NARROW_NO_WEBGL_NEEDS)}
         </div>
       )}
     </div>

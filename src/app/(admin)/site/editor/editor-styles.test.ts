@@ -56,16 +56,26 @@ function outsideMedia(): string {
 describe('the table under 900 px', () => {
   const EDITOR = readFileSync(resolve(process.cwd(), 'src/app/(admin)/site/editor/site-editor.tsx'), 'utf8');
 
-  it('is where the editor draws the line too', () => {
-    expect(EDITOR).toContain("const WIDE_QUERY = '(min-width: 900px)';");
-    expect(mediaBlock('(max-width: 899.98px)')).not.toBe('');
+  /* Ranges, not `min-width: 900px` against `max-width: 899.98px`: at a
+     fractional width between the two (a zoomed page) neither matched, and the
+     screen got both views or neither. */
+  it('is where the editor draws the line too, with no width left between the two sides', () => {
+    expect(EDITOR).toContain("const WIDE_QUERY = '(width >= 900px)';");
+    expect(mediaBlock('(width < 900px)')).not.toBe('');
+    expect(SHEET).not.toMatch(/899\.98|min-width:\s*900px|max-width:\s*900px/);
   });
 
   it('is hidden on a wide screen, and shown in place of the editor on a narrow one', () => {
     expect(declarations('.narrowView', outsideMedia())).toMatch(/display:\s*none/);
-    const narrow = mediaBlock('(max-width: 899.98px)');
-    expect(declarations('.narrowView', narrow)).toMatch(/display:\s*block/);
+    const narrow = mediaBlock('(width < 900px)');
+    expect(declarations('.narrowView', narrow)).toMatch(/display:\s*flex/);
     expect(declarations('.editorArea', narrow)).toMatch(/display:\s*none/);
+  });
+
+  /* The server renders the wide page, export button included; on a phone the
+     stylesheet hides it before the client has asked the width. */
+  it('takes the picture button away on a narrow screen before the client has answered', () => {
+    expect(declarations('.wideOnly', mediaBlock('(width < 900px)'))).toMatch(/display:\s*none/);
   });
 });
 

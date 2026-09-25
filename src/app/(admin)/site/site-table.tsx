@@ -3,45 +3,53 @@ import Link from 'next/link';
 import { Table, type TableColumn } from '@/components/ui/table';
 import { Pill } from '@/components/ui/pill';
 import { SourceChip } from '@/components/ui/source-chip';
-import type { SiteItemView } from '@/lib/site/plan';
 import { formatSize, metres, shadedRect } from '@/lib/site/geometry';
-import { toPlaced } from '@/lib/site/derive';
+import { toPlaced, type ItemFlags, type ItemShape } from '@/lib/site/derive';
 import { SITE_KINDS } from '@/lib/site/kinds';
 import {
   SHADE_STATE_LABELS, SHADE_STATE_TONES, SITE_STATE_LABELS, SITE_STATE_TONES,
 } from '@/lib/site/labels';
-import { itemHref, type RawParams } from '@/lib/site/views';
 import { BUILD_PATH } from '@/lib/logistics/build-views';
 import styles from './site.module.css';
 
 /**
- * No `'use client'`: the item table, rendered on the server and handed to the
- * editor, which shows it as the view on a screen under 900 px and under the
- * scene's notice in a browser without WebGL (spec §7). It is the reading of
- * the map that needs no pointer — a phone in a dust storm, a screen reader,
- * a printout. A row's name links to the map with that item selected
- * (`?peek=`); there are no row actions, since every edit, removal included,
- * is made and undone in the editor.
+ * No `'use client'`, and nothing in it that needs one side or the other: the
+ * item table, the reading of the map that needs no pointer — a phone in a
+ * dust storm, a screen reader, a printout. The editor draws it from the map
+ * being edited, as the view on a screen under 900 px and under the scene's
+ * notice in a browser without WebGL (spec §7); the page draws it from its own
+ * read when the map could not be opened for editing.
+ *
+ * It is shown only where the map is not, so a name is a name: a link that
+ * selected the item on a map nobody can see would do nothing. No row actions
+ * either — every edit, removal included, is made and undone in the editor.
  */
 
+/** What a row needs: where the item is, what it is called, its flags, and the build task it is tied to. */
+export type SiteTableRow = ItemShape & ItemFlags & {
+  label: string;
+  taskId: string | null;
+  taskTitle: string | null;
+};
+
 export type SiteTableProps = {
-  items: readonly SiteItemView[];
-  params: RawParams;
+  items: readonly SiteTableRow[];
+  /** The season a build task's link goes to. */
   season: string;
   empty: ReactNode;
 };
 
 const DASH = '—';
 
-export function SiteTable({ items, params, season, empty }: SiteTableProps): ReactElement {
-  const columns: ReadonlyArray<TableColumn<SiteItemView>> = [
+export function SiteTable({ items, season, empty }: SiteTableProps): ReactElement {
+  const columns: ReadonlyArray<TableColumn<SiteTableRow>> = [
     {
       key: 'label',
       header: 'פריט',
       card: 'title',
       cell: (row) => (
         <span className={styles.title}>
-          <Link href={itemHref(params, row.id)} className="nm">{row.label}</Link>
+          <span className="nm">{row.label}</span>
           <span className="muted">{SITE_KINDS[row.kind].label}</span>
         </span>
       ),

@@ -45,7 +45,8 @@ export interface SceneHandle {
   groundAtClient(clientX: number, clientY: number): [number, number] | null;
   setGhost(ghost: { kind: SiteItemKind; xCm: number; yCm: number } | null): void;
   jumpTo(xCm: number, yCm: number): void;
-  exportPng(): string | null;
+  /** The current view as a PNG, without the labels (they are DOM); null when none can be made. */
+  exportPng(): Promise<Blob | null>;
 }
 
 export interface SceneViewProps {
@@ -138,7 +139,7 @@ export const SceneView = forwardRef<SceneHandle, SceneViewProps>(function SceneV
     groundAtClient: (clientX, clientY) => engineRef.current?.groundAtClient(clientX, clientY) ?? null,
     setGhost: (ghost) => engineRef.current?.setGhost(ghost),
     jumpTo: (xCm, yCm) => engineRef.current?.jumpTo(xCm, yCm),
-    exportPng: () => engineRef.current?.exportPng() ?? null,
+    exportPng: () => engineRef.current?.exportPng() ?? Promise.resolve(null),
   }), []);
 
   if (failed !== null) {
