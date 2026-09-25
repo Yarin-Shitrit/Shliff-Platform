@@ -1291,14 +1291,19 @@ export class SceneEngine {
   /**
    * A click while calibrating (spec §18.3): a point on the picture, or the
    * reason it is not one — off the picture, or too near the first point to
-   * measure by — which the card says in Hebrew. Nothing while the picture is
-   * still loading: there is nothing yet to mark.
+   * measure by — which the card says in Hebrew. Before the picture can be
+   * shown — still loading, or failed — there is nothing yet to mark, and the
+   * card says that instead (review U1).
    */
   private pickOnImage(x: number, y: number, ground: MapPoint): void {
     const props = this.options.props();
     const underlay = underlayOf(props.store.doc);
     const aspect = this.underlay.aspect;
-    if (underlay === null || aspect === null) return;
+    if (underlay === null) return;
+    if (aspect === null) {
+      props.onUnderlay?.({ type: 'notReady' });
+      return;
+    }
     const point = mapToImage(underlay, aspect, ground);
     const marks = props.underlayMarks ?? [];
     const first = marks.length === 1 ? this.screenOfImagePoint(marks[0]) : null;

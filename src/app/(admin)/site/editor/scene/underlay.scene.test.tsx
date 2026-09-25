@@ -138,6 +138,17 @@ describe('the picture under the map, in the engine', () => {
     expect((plane()!.material as MeshBasicMaterial).opacity).toBeCloseTo(0.3, 9);
   });
 
+  it('says a calibration click came before the picture could be shown, and marks nothing (review U1)', async () => {
+    decode.mockImplementationOnce(() => new Promise(() => {}));
+    const { onUnderlay, canvas, store } = renderScene({ ...UI, tool: 'calibrate' });
+    await waitFor(() => { expect(onUnderlay).toHaveBeenCalledWith({ type: 'status', status: { state: 'loading' } }); });
+    await frames();
+    click(canvas, [500, 350]);
+    expect(onUnderlay).toHaveBeenLastCalledWith({ type: 'notReady' });
+    expect(onUnderlay.mock.calls.some(([event]) => event.type === 'point')).toBe(false);
+    expect(store.run).not.toHaveBeenCalled();
+  });
+
   it('marks a calibration point where the picture is clicked, and refuses a click beside it or too near the first', async () => {
     const calibrating: EditorUi = { ...UI, tool: 'calibrate' };
     const { onUnderlay, canvas, store, rerenderWith } = renderScene(calibrating);

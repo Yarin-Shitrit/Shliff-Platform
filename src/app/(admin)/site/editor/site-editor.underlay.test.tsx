@@ -167,6 +167,21 @@ describe('the picture under the map, in the editor', () => {
     expect(picture()).toEqual(IMAGE);
   });
 
+  it('says in Hebrew that a click came before the picture was shown — still loading, or not shown at all (review U1)', async () => {
+    await renderEditor(null);
+    await uploaded();
+    sceneSays({ type: 'status', status: { state: 'loading' } });
+    sceneSays({ type: 'notReady' });
+    expect(card().getByRole('alert').textContent).toBe('התמונה עוד נטענת. אפשר לסמן נקודות כשהיא מופיעה.');
+    sceneSays({ type: 'status', status: { state: 'failed' } });
+    sceneSays({ type: 'notReady' });
+    expect(card().getByRole('alert').textContent).toBe('לא הצלחנו להציג את התמונה, ולכן אי אפשר לסמן עליה נקודות.');
+    shown();
+    sceneSays({ type: 'point', uv: [0.1, 0.5] });
+    expect(card().queryByRole('alert')).toBeNull();
+    expect(card().getByRole('status').textContent).toBe('סימון הנקודה השנייה');
+  });
+
   it('ends the calibration on Esc typed in the distance box, back to the view it came from (review U1)', async () => {
     await renderEditor(IMAGE);
     await calibrating();

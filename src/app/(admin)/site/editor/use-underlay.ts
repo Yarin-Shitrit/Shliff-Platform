@@ -39,6 +39,9 @@ export const TOO_CLOSE = 'שתי הנקודות קרובות מדי זו לזו.
 export const SCALE_OUT_OF_RANGE = 'בקנה המידה הזה התמונה הייתה מכסה פחות מ־10 ס״מ או יותר מ־500 מטר. כדאי לבדוק את המרחק שהוקלד.';
 export const REMOVED = 'תמונת הרקע הוסרה מהמפה. הקובץ עצמו נשמר, כדי שאפשר יהיה לבטל.';
 export const REPLACED = 'תמונת הרקע הוחלפה';
+/** A calibration click before the picture is shown (review U1): still on its way, or it failed. */
+export const STILL_LOADING = 'התמונה עוד נטענת. אפשר לסמן נקודות כשהיא מופיעה.';
+export const NOT_SHOWN = 'לא הצלחנו להציג את התמונה, ולכן אי אפשר לסמן עליה נקודות.';
 
 const NO_DRAFT: CalibrationDraft = { points: [], refusal: null };
 /** An arrow moves the picture 10 cm, or a metre with Shift (spec §18.4). */
@@ -224,6 +227,11 @@ export function useUnderlay(deps: UnderlayDeps): UnderlayController {
       case 'tooClose':
         setDraft((current) => ({ ...current, refusal: TOO_CLOSE }));
         break;
+      case 'notReady': {
+        const refusal = status.state === 'loading' ? STILL_LOADING : NOT_SHOWN;
+        setDraft((current) => ({ ...current, refusal }));
+        break;
+      }
     }
   }
 

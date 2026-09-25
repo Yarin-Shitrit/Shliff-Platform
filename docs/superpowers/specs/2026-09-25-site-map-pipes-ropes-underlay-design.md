@@ -846,7 +846,9 @@ adjective agrees with a noun that varies: the toasts put a fixed noun first
   בין שתי הנקודות, במטרים", with the box "הקו הזה מקביל לגדר" and the buttons
   "כיול" / "ביטול". Note: "הכיול נעשה בתצוגת תוכנית." Refusals: "שתי הנקודות
   קרובות מדי זו לזו. מרחק ארוך, כמו צלע של הגדר, נותן כיול מדויק יותר." and
-  "הנקודה מחוץ לתמונה."
+  "הנקודה מחוץ לתמונה." A click before the picture is shown: "התמונה עוד נטענת.
+  אפשר לסמן נקודות כשהיא מופיעה.", or, if it failed, "לא הצלחנו להציג את
+  התמונה, ולכן אי אפשר לסמן עליה נקודות." (review U1).
 - After calibration: "כויל לפי 26 מ׳ שסומנו על התמונה", with "כיול מחדש";
   "מכסה על המפה 31.2 × 27.6 מ׳"; "אטימות 50%" (the slider sets opacity, so it is
   named for it: at 10% the picture is barely there).
