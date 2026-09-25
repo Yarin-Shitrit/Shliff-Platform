@@ -18,6 +18,12 @@
 export const MAX_UNDERLAY_BYTES = 4 * 1024 * 1024;
 /** Whole megabytes, because the Hebrew below quotes it. */
 export const MAX_UNDERLAY_MB = MAX_UNDERLAY_BYTES / (1024 * 1024);
+/**
+ * The most an upload may declare in its `Content-Length` before its body is
+ * read (review U1): a 4 MB picture plus its form's boundaries, headers and
+ * file name, for which 16 KiB is ample, and still under Vercel's 4.5 MB.
+ */
+export const MAX_UNDERLAY_REQUEST_BYTES = MAX_UNDERLAY_BYTES + 16 * 1024;
 
 /** Each side of the picture, in pixels, as its header states it. */
 export const MIN_UNDERLAY_PX = 100;

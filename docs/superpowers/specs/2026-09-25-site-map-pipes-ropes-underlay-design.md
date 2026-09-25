@@ -592,7 +592,10 @@ Hebrew (§20). The checks run in this order:
 3. A file was sent, else 400 `missing file`.
 4. It is at most 4 MB, else 413 `file too large`. Vercel refuses request bodies
    over 4.5 MB before the route runs, and answers in English. This is the same
-   reasoning as `upload-limits.ts`.
+   reasoning as `upload-limits.ts`. A request whose `Content-Length` already
+   says more than the picture and its form can take is refused before its body
+   is read, and the card says any 413 in Hebrew, the platform's included
+   (review U1).
 5. Its type, read from both the bytes and the name, is PNG, JPEG or WebP. PDF,
    HEIC and anything else get 415 with the code `pdf`, `heic` or `unsupported
    file type`, so each refusal can say what to do instead.

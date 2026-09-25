@@ -67,6 +67,14 @@ describe('sending a picture from the card', () => {
     expect(route.fetch).not.toHaveBeenCalled();
   });
 
+  it('says a 413 is the size, in Hebrew, whoever answered it — the route, or the platform before it (review U1)', async () => {
+    const size = 'התמונה גדולה מדי — עד 4 מגה־בייט.';
+    const fromRoute = deps(async () => json({ error: 'file too large' }, 413));
+    expect(await uploadUnderlay(file(png(1600, 1200), 'a.png'), PLAN, fromRoute)).toEqual({ ok: false, error: size });
+    const fromPlatform = deps(async () => new Response('Request Entity Too Large', { status: 413, headers: { 'Content-Type': 'text/plain' } }));
+    expect(await uploadUnderlay(file(png(1600, 1200), 'a.png'), PLAN, fromPlatform)).toEqual({ ok: false, error: size });
+  });
+
   it('turns every refusal the route answers into its Hebrew, and an unknown one into the fallback', async () => {
     for (const [code, status, said] of [
       ['unauthorized', 401, 'אין הרשאה להעלות קבצים.'],

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  MAX_UNDERLAY_BYTES, MAX_UNDERLAY_MB, MAX_UNDERLAY_PX, MAX_UNDERLAY_TEXTURE_PX, MIN_UNDERLAY_PX,
+  MAX_UNDERLAY_BYTES, MAX_UNDERLAY_MB, MAX_UNDERLAY_PX, MAX_UNDERLAY_REQUEST_BYTES, MAX_UNDERLAY_TEXTURE_PX, MIN_UNDERLAY_PX,
   UNDERLAY_FILE, UNDERLAY_RULES_HE, UPLOAD_FAILED_HE,
   contentTypeOf, isPlanId, underlayKey, underlayKeyPlan, underlayUrl, uploadRefusalHe, uploadUrl,
 } from './underlay-limits';
@@ -16,6 +16,12 @@ describe('the image limits', () => {
     expect(MAX_UNDERLAY_BYTES).toBeLessThan(4.5 * 1024 * 1024);
     expect(MAX_UNDERLAY_MB).toBe(4);
     expect(Number.isInteger(MAX_UNDERLAY_MB)).toBe(true);
+  });
+
+  it('lets a request carry a 4 MB picture and its form, and still refuses before Vercel does (review U1)', () => {
+    // The form's boundaries and headers, and the file's name, ride on top of the picture.
+    expect(MAX_UNDERLAY_REQUEST_BYTES).toBeGreaterThanOrEqual(MAX_UNDERLAY_BYTES + 4 * 1024);
+    expect(MAX_UNDERLAY_REQUEST_BYTES).toBeLessThan(4.5 * 1024 * 1024);
   });
 
   it('takes 100 to 8192 pixels a side, and keeps at most 4096 once decoded', () => {
