@@ -2,8 +2,8 @@
  * Lands the hand-drawn camp layout on a season's map, as data.
  *
  * The source is the 26 × 24 m sketch from 2026-09-25 (graph paper, one cell
- * = 0.5 m): one shade sail over the whole 22 × 20 m built area with a 2 m
- * margin for its guy lines, a sofa lounge in the north-west corner, sixteen
+ * = 0.5 m), landed on the 32 × 24 m plot the camp was given: one shade sail
+ * over the whole 28 × 20 m built area with a 2 m margin for its guy lines, a sofa lounge in the north-west corner, sixteen
  * 2.3 m tents in facing rows on the east, showers and a sink on the east
  * edge, the kitchen, dressing area, stalls and water tanks down the west
  * side, and four caravans along the south. Every number below is that sketch read off the
@@ -64,13 +64,20 @@ import { applySiteOps, createPlan, listItems, planForSeason } from '@/lib/site/p
 
 export const SKETCH_DATE = '2026-09-25';
 
+/**
+ * The sketch is drawn at 26 × 24 m. The plot the camp was given is 32 × 24
+ * (the lead, 2026-09-25), so the sketch's west column stays where it is and
+ * the east block — tents, showers, caravans — takes the extra six metres.
+ * The 2 m guy-line margin holds on every side, so the built area is 28 × 20.
+ */
 export const SKETCH_PLOT = {
-  widthCm: 2600,
+  widthCm: 3200,
   depthCm: 2400,
   gridCm: 50,
   northDeg: 0,
-  notes: `מהסקיצה ${SKETCH_DATE}: מגרש 26×24 מ'. שוליים של 2 מ' מכל צד למיתרי הציליה; `
-    + 'השטח הבנוי בפנים 22×20 מ׳.',
+  notes: `מהסקיצה ${SKETCH_DATE} (צוירה 26×24 מ׳), על מגרש של 32×24 מ׳ לפי ראש הקאמפ. `
+    + 'שוליים של 2 מ׳ מכל צד למיתרי הציליה; השטח הבנוי בפנים 28×20 מ׳. '
+    + 'העמודה המערבית כמו בסקיצה; האוהלים, המקלחות והקראוונים נפרשו מזרחה.',
 };
 
 interface SketchItem {
@@ -109,7 +116,7 @@ export function sketchItems(): SketchItem[] {
     // (sort 0) and stands at 4 m, above the tallest thing under it (a caravan
     // at 2.7 m).
     {
-      kind: 'shade', label: 'ציליה ראשית', xCm: 200, yCm: 200, widthCm: 2200, depthCm: 2000, heightCm: 400,
+      kind: 'shade', label: 'ציליה ראשית', xCm: 200, yCm: 200, widthCm: 2800, depthCm: 2000, heightCm: 400,
     },
     // -- The lounge: the 8 × 10 m blue box in the north-west corner ---------
     // Drawn as a lower net of its own under the main sail; the sketch's word
@@ -134,19 +141,20 @@ export function sketchItems(): SketchItem[] {
     // The sketch draws each tent in a 2.5 m cell; the camp's tents are 2.3 m,
     // so each stands centred in its cell with 10 cm to spare on every side.
     // Rows one and two face each other across a 2 m path; rows three and
-    // four across a 1.5 m one. Rows two and three stand back to back.
+    // four across a 1.5 m one. Rows two and three stand back to back. The
+    // block sits 3 m further east than the sketch draws it, in the wider plot.
     ...repeat('tent', 'אוהל', [230, 230], [
-      [1160, 210], [1410, 210], [1660, 210], [1910, 210], [2160, 210],
-      [1160, 660], [1410, 660], [1660, 660], [1910, 660], [2160, 660],
-      [1160, 910], [1410, 910], [1660, 910],
-      [1160, 1310], [1410, 1310], [1660, 1310],
+      [1460, 210], [1710, 210], [1960, 210], [2210, 210], [2460, 210],
+      [1460, 660], [1710, 660], [1960, 660], [2210, 660], [2460, 660],
+      [1460, 910], [1710, 910], [1960, 910],
+      [1460, 1310], [1710, 1310], [1960, 1310],
     ]),
 
     // -- Showers and a sink on the east edge ---------------------------------
-    { kind: 'shower', label: 'מקלחת 1', xCm: 2200, yCm: 1050, widthCm: 200, depthCm: 200 },
-    { kind: 'shower', label: 'מקלחת 2', xCm: 2200, yCm: 1250, widthCm: 200, depthCm: 250 },
+    { kind: 'shower', label: 'מקלחת 1', xCm: 2800, yCm: 1050, widthCm: 200, depthCm: 200 },
+    { kind: 'shower', label: 'מקלחת 2', xCm: 2800, yCm: 1250, widthCm: 200, depthCm: 250 },
     {
-      kind: 'other', label: 'כיור', xCm: 2100, yCm: 1250, widthCm: 100, depthCm: 250,
+      kind: 'other', label: 'כיור', xCm: 2700, yCm: 1250, widthCm: 100, depthCm: 250,
       unclear: 'הכיתוב המסובב בסקיצה ליד המקלחות לא קריא בוודאות; נקרא "כיור"',
     },
 
@@ -177,8 +185,8 @@ export function sketchItems(): SketchItem[] {
     { kind: 'greywater', label: 'מים אפורים', xCm: 320, yCm: 2200, widthCm: 150, depthCm: 150 },
     ...repeat('water', 'מי שתייה', [150, 150], [[480, 2200], [630, 2200]]),
 
-    // -- Four caravans along the south, 2.5 wide × 6.5 deep --------------------
-    ...repeat('caravan', 'קראוון', [250, 650], [[950, 1650], [1350, 1650], [1750, 1650], [2150, 1650]]),
+    // -- Four caravans along the south, 2.5 wide × 6.5 deep, 5 m apart -------
+    ...repeat('caravan', 'קראוון', [250, 650], [[1150, 1650], [1650, 1650], [2150, 1650], [2650, 1650]]),
   ];
 }
 
