@@ -12,6 +12,7 @@ import type { EditorDoc, EditorItem, EditorPlot } from '@/lib/site/editor/model'
 import type { SiteOp } from '@/lib/site/editor/ops';
 import { NETWORK_FAILURE, type QueueSnapshot } from './save-queue';
 import { LOCKED_ALL_NOTICE, LOCKED_NOTICE } from './notices';
+import { notePlotSaved } from './own-plot-saves';
 import type { EditorStore, EditorStoreInit } from './use-editor-store';
 import type { SceneHandle, SceneViewProps, ViewInfo } from './scene/scene-view';
 
@@ -172,6 +173,7 @@ vi.mock('./use-editor-store', async () => {
       retrySave: fake.retrySave,
       dismissNotice: fake.dismissNotice,
       pendingOps: () => [],
+      allowUnload: () => {},
     };
   }
 
@@ -290,8 +292,8 @@ function held(): { promise: Promise<void>; settle: () => void } {
 const stage = () => screen.getByRole('region', { name: 'מפת הקאמפ' });
 const firstItem = () => lastScene().store.doc.items[0];
 const button = (name: string | RegExp) => screen.getByRole('button', { name }) as HTMLButtonElement;
-/** An item's name inside a Hebrew toast, bidi-isolated as the store's notices isolate names (A17). */
-const named = (label: string) => `⁦${label}⁩`;
+/** An item's name inside a Hebrew toast, isolated first-strong (FSI … PDI) as the store's notices isolate names (A17). */
+const named = (label: string) => `\u2068${label}\u2069`;
 /** Inside the properties panel. */
 const inspectorRegion = () => within(screen.getByRole('region', { name: 'מאפיינים' }));
 
@@ -515,6 +517,32 @@ describe('saving', () => {
       expect(clickLink('https://example.org/')).toEqual({ prevented: false });
       expect(confirm).not.toHaveBeenCalled();
       confirm.mockRestore();
+    });
+
+    /* #25 fix round, Important 5: the sidebar's link to this page carries no
+       `season`, and the page's own drawer links carry `season=<id>` — one
+       compared as null against an id, and opening a drawer asked "leave?".
+       No season in a link means the editor's own. */
+    it('asks nothing for a drawer link that names this editor’s season, whether or not the page’s address does', async () => {
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      const address = window.location.href;
+      try {
+        renderEditor();
+        await screen.findByTestId('scene');
+        saving({ status: 'error', errorKind: 'network', error: NETWORK_FAILURE, pending: 1 });
+        // Reached through the sidebar: no season in the address.
+        expect(clickLink(`${window.location.pathname}?season=s26&act=plot`)).toEqual({ prevented: false });
+        // Reached through a season-carrying link: a link with none is this editor too.
+        window.history.replaceState(null, '', `${window.location.pathname}?season=s26`);
+        expect(clickLink(`${window.location.pathname}?act=season-date`)).toEqual({ prevented: false });
+        expect(confirm).not.toHaveBeenCalled();
+        // Another season's map is another editor: that still asks.
+        expect(clickLink(`${window.location.pathname}?season=s25`)).toEqual({ prevented: true });
+        expect(confirm).toHaveBeenCalledTimes(1);
+      } finally {
+        window.history.replaceState(null, '', address);
+        confirm.mockRestore();
+      }
     });
   });
 
@@ -1340,6 +1368,7 @@ describe('a plot saved in the drawer', () => {
   });
 
   it('asks, rather than dropping edits, when something is waiting to be saved', async () => {
+    notePlotSaved('p1', 1); // this tab's plot drawer saved version 1
     const { rerenderWith } = renderEditor();
     await screen.findByTestId('scene');
     saving({ status: 'pending', pending: 1 });
@@ -1349,6 +1378,18 @@ describe('a plot saved in the drawer', () => {
     expect(screen.queryByText(CONFLICT)).toBeNull();
     expect(button('שמירת השינויים שלי מעליה')).toBeTruthy();
     expect(fake.resolveConflict).not.toHaveBeenCalled();
+  });
+
+  /* #25 fix round, Minor 10: a newer version the page hands down is not
+     always this lead's plot save — only the one this tab's drawer saved. */
+  it('says the map changed elsewhere when the newer version is not the one this tab saved', async () => {
+    notePlotSaved('p1', 7); // an older save of this tab's, not the version now arriving
+    const { rerenderWith } = renderEditor();
+    await screen.findByTestId('scene');
+    saving({ status: 'pending', pending: 1 });
+    rerenderWith({ initial: widened() });
+    expect(screen.getByText(CONFLICT)).toBeTruthy();
+    expect(screen.queryByText(PLOT_SAVED)).toBeNull();
   });
 
   it('waits for a batch in flight — its answer decides', async () => {

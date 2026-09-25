@@ -9,7 +9,7 @@ import { overlapPairs } from '@/lib/site/geometry';
 import type { SiteKindGroup } from '@/lib/site/kinds';
 import type { EditorDoc, EditorItem } from '@/lib/site/editor/model';
 import type { EditorFlags } from '../use-editor-store';
-import { EMPTY_MAP } from '../notices';
+import { EMPTY_MAP, EMPTY_MAP_HERE } from '../notices';
 import { ObjectsPanel } from './objects-panel';
 import { SidePanel, type SideTab } from './side-panel';
 
@@ -214,7 +214,10 @@ describe('the side panel', () => {
 
   it('invites the first item when the map is empty, and leaves how to place it to the library', () => {
     renderSide(0);
-    expect(screen.getByText(EMPTY_MAP)).toBeTruthy();
+    // On the library tab itself: pointing to "the ״הוספה למפה״ tab" would send the lead where they already are
+    // (#25 fix round, Minor 13). The shared sentence stays for the list and the plot.
+    expect(screen.getByText(EMPTY_MAP_HERE)).toBeTruthy();
+    expect(screen.queryByText(EMPTY_MAP)).toBeNull();
     // The library says how a tile is placed; the panel does not say it a second time.
     expect(screen.queryByText(/גרירה|לחיצה/)).toBeNull();
   });

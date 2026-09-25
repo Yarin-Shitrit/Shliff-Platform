@@ -12,6 +12,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push, refresh, replace: 
 
 import { NORTH_INVALID } from './failure-messages';
 import { PlotDrawer } from './plot-drawer';
+import { isOwnPlotSave } from './editor/own-plot-saves';
 
 const PLAN = { id: 'p1', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 30, notes: null };
 
@@ -27,7 +28,7 @@ const north = () => screen.getByLabelText('כיוון הצפון') as HTMLInputE
 
 beforeEach(() => {
   vi.clearAllMocks();
-  setPlotAction.mockResolvedValue({ ok: true });
+  setPlotAction.mockResolvedValue({ ok: true, value: 8 });
   createPlanAction.mockResolvedValue({ ok: true, value: 'p1' });
 });
 
@@ -59,6 +60,9 @@ describe('the plot settings', () => {
       expect(setPlotAction).toHaveBeenCalledWith('p1', { widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 15, notes: null });
     });
     expect(refresh).toHaveBeenCalled();
+    // This tab saved version 8 of the plot: the editor, handed version 8, knows it was the lead's own save.
+    expect(isOwnPlotSave('p1', 8)).toBe(true);
+    expect(isOwnPlotSave('p1', 9)).toBe(false);
   });
 
   it('start a new map with north up', async () => {

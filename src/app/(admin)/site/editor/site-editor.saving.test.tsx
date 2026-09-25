@@ -50,6 +50,7 @@ vi.mock('./scene/scene-view', () => ({
 }));
 
 import { SiteEditor, type SiteEditorProps } from './site-editor';
+import { notePlotSaved } from './own-plot-saves';
 
 const CONFLICT = 'המפה שונתה ממקום אחר מאז שנפתחה. השינויים האחרונים שלך עוד לא נשמרו.';
 const PLOT_SAVED = 'הגדרות המגרש נשמרו, ויש כאן שינויים שעוד לא נשמרו. אפשר לשמור אותם מעל המפה המעודכנת, או לטעון אותה בלעדיהם.';
@@ -199,6 +200,8 @@ describe('saving, through the store and the queue', () => {
       // Neither reload nor keep-mine: both would call the same missing actions.
       expect(screen.queryByRole('button', { name: 'טעינת הגרסה העדכנית' })).toBeNull();
       expect(screen.queryByRole('button', { name: 'שמירת השינויים שלי מעליה' })).toBeNull();
+      // Nor the retry: it would resend to the same missing action (#25 fix round, Minor 11).
+      expect(screen.queryByRole('button', { name: 'ניסיון חוזר' })).toBeNull();
       const kept = () => JSON.parse(window.sessionStorage.getItem('site-editor:pending:p1') ?? 'null') as unknown;
       const turned = [{ type: 'update', id: 'a', patch: { xCm: 550, yCm: 450, widthCm: 200, depthCm: 300 } }];
       // The unsaved turn waits in this tab for the page after the refresh — kept by an effect
@@ -209,8 +212,51 @@ describe('saving, through the store and the queue', () => {
       fireEvent.click(screen.getByRole('button', { name: 'רענון הדף' }));
       expect(reload).toHaveBeenCalledTimes(1);
       expect(kept()).toEqual(turned);
+      // A deliberate refresh with the work kept: the browser's own "leave this page?" would only confuse (Minor 6).
+      const leaving = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(leaving);
+      expect(leaving.defaultPrevented).toBe(false);
     } finally {
       Object.defineProperty(window, 'location', { configurable: true, value: location });
+      window.sessionStorage.clear();
+    }
+  });
+
+  it('still warns before an ordinary leave while a change is unsent', async () => {
+    saveSiteChangesAction.mockRejectedValue(new Error('offline'));
+    await renderEditor();
+    turn();
+    expect(await screen.findByRole('button', { name: 'ניסיון חוזר' }, WAIT)).toBeTruthy();
+    const leaving = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(leaving);
+    expect(leaving.defaultPrevented).toBe(true);
+  });
+
+  /*
+   * #25 fix round, Important 3: the same stale build meets the reload that a
+   * conflict's or a refusal's answer starts. It fell back to "לא הצלחנו
+   * לטעון את המפה" with the banner still up — failing the same way forever.
+   */
+  it('says the site was updated when a conflict’s answer reaches an older build, and keeps the work for the refresh', async () => {
+    const stale = Object.assign(new Error('Server Action "9c" was not found on the server.'), { name: 'UnrecognizedActionError' });
+    saveSiteChangesAction.mockResolvedValue({ ok: false, reason: 'conflict', version: 4 });
+    loadSiteDocAction.mockRejectedValue(stale);
+    try {
+      await renderEditor();
+      turn();
+      fireEvent.click(await screen.findByRole('button', { name: 'שמירת השינויים שלי מעליה' }, WAIT));
+      expect(await screen.findByText(SITE_UPDATED, undefined, WAIT)).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'רענון הדף' })).toBeTruthy();
+      expect(screen.queryByText(/לא הצלחנו לטעון את המפה/)).toBeNull();
+      // The conflict's own two answers would call the same missing action again.
+      expect(screen.queryByRole('button', { name: 'טעינת הגרסה העדכנית' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'שמירת השינויים שלי מעליה' })).toBeNull();
+      await waitFor(() => {
+        expect(JSON.parse(window.sessionStorage.getItem('site-editor:pending:p1') ?? 'null')).toEqual([
+          { type: 'update', id: 'a', patch: { xCm: 550, yCm: 450, widthCm: 200, depthCm: 300 } },
+        ]);
+      });
+    } finally {
       window.sessionStorage.clear();
     }
   });
@@ -231,6 +277,8 @@ describe('saving, through the store and the queue', () => {
         ]);
       }, WAIT);
       expect(await saved()).toBeTruthy();
+      // Not silently: the lead is told the earlier edits came back and are saved (#25 fix round, Minor 7).
+      expect(await screen.findByText('השינויים שלא נשמרו לפני רענון הדף שוחזרו ונשמרו.')).toBeTruthy();
       // Taken once: a later refresh does not replay it again.
       expect(window.sessionStorage.getItem('site-editor:pending:p1')).toBeNull();
     } finally {
@@ -321,6 +369,7 @@ describe('a plot saved in the drawer', () => {
 
   it('raises the choice, rather than dropping edits, when something is waiting to be saved', async () => {
     loadSiteDocAction.mockResolvedValue({ ok: true, value: widened() });
+    notePlotSaved('p1', 1); // the drawer in this tab saved version 1
     const { rerenderWith } = await renderEditor();
     turn(); // waiting: the queue sends after 500 ms
     rerenderWith({ initial: widened() });

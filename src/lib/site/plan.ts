@@ -155,13 +155,14 @@ export async function createPlan(
  * tent moves or the fence does. Sliding it inside would be a guess about
  * which of its neighbours it should crowd.
  */
+/** Saves the plot and bumps the plan's version; answers the new version, so an editor can tell its own plot save from another lead's. */
 export async function setPlot(
   db: AnyDb, planId: string, input: PlotInput, actor: string,
-): Promise<void> {
+): Promise<number> {
   validatePlot(input);
   if (!(await planById(db, planId))) throw new Error(`unknown site plan ${planId}`);
 
-  await db.update(sitePlans)
+  const [row] = await db.update(sitePlans)
     .set({
       widthCm: input.widthCm,
       depthCm: input.depthCm,
@@ -172,7 +173,9 @@ export async function setPlot(
       updatedBy: actor,
       updatedAt: new Date(),
     })
-    .where(eq(sitePlans.id, planId));
+    .where(eq(sitePlans.id, planId))
+    .returning();
+  return row.version;
 }
 
 /**

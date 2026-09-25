@@ -100,6 +100,12 @@ export class SaveQueue {
   private flight: Promise<void> | null = null;
   private timer: unknown = null;
   private halted: 'error' | 'conflict' | null = null;
+  /**
+   * `carry` has put a batch from an earlier page in the kept-apart slot, and
+   * nothing is sent until `rebase` (or `reset`) has checked it against the
+   * map as the server has it now — or `release` gives up waiting.
+   */
+  private holding = false;
   private error: string | null = null;
   private errorKind: 'network' | 'refused' | null = null;
   /** Bumped by `reset` and `rebase`, so a reply to a batch they replaced is ignored. */
@@ -151,6 +157,29 @@ export class SaveQueue {
   enqueue(ops: readonly SiteOp[]): void {
     if (this.disposed || ops.length === 0) return;
     this.queued = coalesceOps([...this.queued, ...ops]);
+    if (this.halted === null && !this.holding) this.schedule();
+    this.emit();
+  }
+
+  /**
+   * Edits an earlier page of this map left unsaved (review I2): kept apart —
+   * in order, never coalesced, so an add and its removal cannot cancel out
+   * when the add may have landed — and held, sending nothing, not even when
+   * later edits arrive, until the caller's `rebase` (through 'mine') has
+   * checked them against the server's map. A no-op once disposed.
+   */
+  carry(ops: readonly SiteOp[]): void {
+    if (this.disposed || ops.length === 0) return;
+    this.cancelTimer();
+    this.networkFailedBatch = [...(this.networkFailedBatch ?? []), ...ops];
+    this.holding = true;
+    this.emit();
+  }
+
+  /** Stops holding what `carry` put back and sends it as it is — when the map it waited for cannot be loaded. */
+  release(): void {
+    if (this.disposed || !this.holding) return;
+    this.holding = false;
     if (this.halted === null) this.schedule();
     this.emit();
   }
@@ -181,7 +210,7 @@ export class SaveQueue {
           await (this.flight ?? Promise.resolve());
           continue;
         }
-        if (this.halted !== null) return;
+        if (this.halted !== null || this.holding) return;
         if (this.networkFailedBatch === null && this.queued.length === 0) return;
         if (this.disposed && !this.drainAfterDispose) return;
         this.flight = this.sendQueued();
@@ -212,6 +241,7 @@ export class SaveQueue {
     if (this.disposed) return;
     this.epoch += 1;
     this.cancelTimer();
+    this.holding = false;
     this.queued = [];
     this.networkFailedBatch = null;
     this.inFlight = null;
@@ -235,6 +265,7 @@ export class SaveQueue {
     if (this.disposed) return;
     this.epoch += 1;
     this.cancelTimer();
+    this.holding = false;
     this.queued = coalesceOps(keep);
     this.networkFailedBatch = null;
     this.inFlight = null;

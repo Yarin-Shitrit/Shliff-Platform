@@ -23,11 +23,17 @@ export const LOCKED_ALL_NOTICE = 'הפריטים הנבחרים נעולים. א
  */
 export const EMPTY_MAP = 'המפה ריקה. אפשר להתחיל מכל פריט בלשונית ״הוספה למפה״.';
 
+/** The same invitation on the library tab itself, which is where the items are (#25 fix round, Minor 13). */
+export const EMPTY_MAP_HERE = 'המפה ריקה. אפשר להתחיל מכל פריט שכאן.';
+
 /**
- * A name dropped into a Hebrew sentence, between bidi isolates (LRI…PDI): an
- * item's label may be Latin, a number or mixed, and must not drag the rest
- * of the sentence out of order (the A17 convention).
+ * A name dropped into a Hebrew sentence, between bidi isolates: an item's
+ * label may be Latin, a number or mixed, and must not drag the rest of the
+ * sentence out of order (the A17 convention). First-strong (FSI…PDI), as
+ * `<bdi>` is: the name takes its direction from its own first letter, so
+ * "אוהל VIP" stays right to left. LRI forced every name left to right and
+ * read it "VIP אוהל" (#25 fix round, Important 4).
  */
 export function isolate(name: string): string {
-  return `⁦${name}⁩`;
+  return `⁨${name}⁩`;
 }

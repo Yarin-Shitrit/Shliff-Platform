@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
-import type { EditorDoc, EditorItem } from '@/lib/site/editor/model';
+import type { EditorDoc, EditorItem, EditorLine } from '@/lib/site/editor/model';
 import type { SaveResult, SiteOp } from '@/lib/site/editor/ops';
 import { useEditorStore, type EditorStoreInit } from './use-editor-store';
 
@@ -13,9 +13,9 @@ const C = '2d1b8c0a-3e4f-4061-8c1d-2e3f4a5b6c7d';
 const F = '3e2c9d1b-4f50-4172-9d2e-3f4a5b6c7d8e';
 
 /** Matches the store's own bidi isolate around a name dropped into a notice (A17). */
-const LRI = '⁦';
+const FSI = '\u2068'; // first-strong: a name keeps its own direction (#25 fix round)
 const PDI = '⁩';
-const isolate = (name: string) => `${LRI}${name}${PDI}`;
+const isolate = (name: string) => `${FSI}${name}${PDI}`;
 const goneNotice = (...names: string[]) => `לא נשמרו שינויים בפריטים שכבר לא במפה: ${names.map(isolate).join(', ')}.`;
 const lockedNotice = (...names: string[]) => `לא נשמרו שינויים בפריטים נעולים: ${names.map(isolate).join(', ')}.`;
 const LOAD_FAILED = 'לא הצלחנו לטעון את המפה העדכנית. אפשר לנסות שוב.';
@@ -218,6 +218,33 @@ describe('the editor store', () => {
     expect(result.current.save).toMatchObject({ status: 'saved', version: 1, pending: 0 });
   });
 
+  /* #25 fix round, Minor 9: on the server an item's lines go with it (the
+     schema cascades). The store dropped the skipped item but kept its cable,
+     drawn to nothing. */
+  it('drops the lines of an item the server skipped because another lead removed it', async () => {
+    const save = vi.fn<EditorStoreInit['save']>(async (base) => ({ ok: true, version: base + 1, skipped: [B] }));
+    const cable: EditorLine = { id: 'cable', kind: 'power', label: 'כבל חשמל 1', fromId: A, toId: B, points: [], sort: 0, notes: null };
+    const other: EditorLine = { id: 'pipe', kind: 'water', label: 'צינור מים 1', fromId: A, toId: C, points: [], sort: 1, notes: null };
+    const { result } = setup({
+      save,
+      doc: {
+        ...doc([
+          item({ id: A, label: 'מקרר 1', kind: 'fridge' }),
+          item({ id: B, label: 'גנרטור 1', kind: 'generator', xCm: 600 }),
+          item({ id: C, label: 'כיור 1', kind: 'sink', xCm: 1200 }),
+        ]),
+        lines: [cable, other],
+      },
+    });
+    act(() => { result.current.select([A, 'cable']); });
+    act(() => { result.current.run('הזזה', [moveTo(B, 900)]); });
+    await waitForSave();
+    expect(result.current.doc.items.map((entry) => entry.id)).toEqual([A, C]);
+    expect(result.current.doc.lines.map((line) => line.id)).toEqual(['pipe']);
+    expect(result.current.selection).not.toContain('cable');
+    expect(result.current.notice).toBe(goneNotice('גנרטור 1'));
+  });
+
   it('says nothing about a skipped removal of an item already gone here too', async () => {
     const save = vi.fn<EditorStoreInit['save']>(async (base) => ({ ok: true, version: base + 1, skipped: [B] }));
     const { result } = setup({ save });
@@ -225,6 +252,93 @@ describe('the editor store', () => {
     await waitForSave();
     expect(result.current.doc.items.map((entry) => entry.id)).toEqual([A]);
     expect(result.current.notice).toBeNull();
+  });
+
+  /*
+   * #25 fix round, Important 2 and Minor 7: the edits an older build left
+   * unsaved are replayed through 'mine'. They used to be enqueued first,
+   * which started the half-second clock — a load slower than that sent them
+   * raw, before 'mine' could check them, and a lock the other lead had set
+   * came back as a false conflict. They now wait apart, sending nothing,
+   * until 'mine' has the map; and once saved, the lead is told.
+   */
+  describe('replaying what an older build left unsaved', () => {
+    const REPLAYED = 'השינויים שלא נשמרו לפני רענון הדף שוחזרו ונשמרו.';
+
+    it('sends nothing until the map has loaded, however long that takes, then only what still applies', async () => {
+      const save = vi.fn<EditorStoreInit['save']>(async (base) => ({ ok: true, version: base + 1 }));
+      let answer: (value: Awaited<ReturnType<EditorStoreInit['load']>>) => void = () => {};
+      const load = vi.fn<EditorStoreInit['load']>(() => new Promise((resolve) => { answer = resolve; }));
+      const { result } = setup({ save, load, version: 3, pending: [moveTo(A, 550), moveTo(B, 900)] });
+      expect(load).toHaveBeenCalledTimes(1);
+      // An edit made while it loads must not carry the old batch out with it either.
+      act(() => { result.current.run('הזזה', [moveTo(B, 950)]); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+      expect(save).not.toHaveBeenCalled();
+      expect(result.current.save.status).toBe('pending');
+
+      // Meanwhile the other lead locked the first tent: that move is dropped and named, the rest goes.
+      await act(async () => {
+        answer({ ok: true, value: { doc: doc([item({ id: A, label: 'אוהל 1', locked: true }), item({ id: B, label: 'אוהל 2', xCm: 600 })]), version: 4 } });
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      await waitForSave();
+      expect(save).toHaveBeenCalledTimes(1);
+      expect(save).toHaveBeenCalledWith(4, [moveTo(B, 950)]);
+      expect(result.current.conflict).toBeNull();
+      expect(result.current.notice).toBe(`${REPLAYED} ${lockedNotice('אוהל 1')}`);
+    });
+
+    it('says, once they are saved, that the earlier edits were restored', async () => {
+      let saved: (value: SaveResult) => void = () => {};
+      const save = vi.fn<EditorStoreInit['save']>(() => new Promise((resolve) => { saved = resolve; }));
+      const load = vi.fn<EditorStoreInit['load']>(async () => ({
+        ok: true, value: { doc: doc([item({ id: A, label: 'אוהל 1' }), item({ id: B, label: 'אוהל 2', xCm: 600 })]), version: 3 },
+      }));
+      const { result } = setup({ save, load, version: 3, pending: [moveTo(A, 550)] });
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      expect(save).toHaveBeenCalledWith(3, [moveTo(A, 550)]);
+      expect(result.current.notice).toBeNull(); // not while it is still being sent
+      await act(async () => { saved({ ok: true, version: 4 }); await vi.advanceTimersByTimeAsync(0); });
+      expect(result.current.notice).toBe(REPLAYED);
+    });
+
+    it('announces nothing when every earlier edit was dropped — what was dropped is named instead', async () => {
+      const save = vi.fn<EditorStoreInit['save']>(async (base) => ({ ok: true, version: base + 1 }));
+      const load = vi.fn<EditorStoreInit['load']>(async () => ({
+        ok: true, value: { doc: doc([item({ id: A, label: 'אוהל 1', locked: true }), item({ id: B, label: 'אוהל 2', xCm: 600 })]), version: 3 },
+      }));
+      const { result } = setup({ save, load, version: 3, pending: [moveTo(A, 550)] });
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      await waitForSave();
+      expect(save).not.toHaveBeenCalled();
+      expect(result.current.notice).toBe(lockedNotice('אוהל 1'));
+    });
+
+    it('keeps the old batch as it was, so an add and its removal do not cancel out when the add had landed', async () => {
+      const save = vi.fn<EditorStoreInit['save']>(async (base) => ({ ok: true, version: base + 1 }));
+      const added = item({ id: F, label: 'אוהל 3', xCm: 2000 });
+      // The add went out in a batch that got no answer — it did land — then the lead removed the tent.
+      const load = vi.fn<EditorStoreInit['load']>(async () => ({
+        ok: true, value: { doc: doc([item({ id: A }), item({ id: B, label: 'אוהל 2', xCm: 600 }), added]), version: 4 },
+      }));
+      const { result } = setup({ save, load, version: 3, pending: [{ type: 'add', item: added }, { type: 'remove', id: F }] });
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      await waitForSave();
+      // Coalesced, the two would have come to nothing and the tent would stay on the server.
+      expect(save).toHaveBeenCalledWith(4, [{ type: 'remove', id: F }]);
+      expect(result.current.doc.items.map((entry) => entry.id)).not.toContain(F);
+    });
+
+    it('sends the old batch anyway if the map cannot be loaded, rather than holding it forever', async () => {
+      const save = vi.fn<EditorStoreInit['save']>(async (base) => ({ ok: true, version: base + 1 }));
+      const load = vi.fn<EditorStoreInit['load']>(async () => ({ ok: false, error: 'המפה לא נטענה' }));
+      const { result } = setup({ save, load, version: 3, pending: [moveTo(A, 550)] });
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      await waitForSave();
+      expect(save).toHaveBeenCalledWith(3, [moveTo(A, 550)]);
+      expect(result.current.save.status).toBe('saved');
+    });
   });
 
   describe('when another lead saved first', () => {

@@ -49,6 +49,26 @@ export type SiteOp =
   | { type: 'updateLine'; id: string; patch: LinePatch }
   | { type: 'removeLine'; id: string };
 
+/**
+ * Every op type there is: the one list anything reading ops back from
+ * outside the editor (the unsaved-work stash) checks against. A type added
+ * to `SiteOp` and not here fails to compile (`EveryOpTypeListed`) — the
+ * stash once knew only the item ops, and dropped a whole stash holding a
+ * pipe's removal (#25 review, Critical).
+ */
+export const SITE_OP_TYPES = [
+  'add', 'update', 'remove', 'setKindDefault', 'addLine', 'updateLine', 'removeLine',
+] as const satisfies ReadonlyArray<SiteOp['type']>;
+
+type ListedOpType = (typeof SITE_OP_TYPES)[number];
+type IsTrue<T extends true> = T;
+/** Compile-time only: true when `SITE_OP_TYPES` names every `SiteOp` type. */
+export type EveryOpTypeListed = IsTrue<[Exclude<SiteOp['type'], ListedOpType>] extends [never] ? true : false>;
+
+export function isSiteOpType(type: unknown): type is SiteOp['type'] {
+  return (SITE_OP_TYPES as readonly unknown[]).includes(type);
+}
+
 /** The three ops about lines, told apart from the four about items. */
 export function isLineOp(op: SiteOp): op is Extract<SiteOp, { type: 'addLine' | 'updateLine' | 'removeLine' }> {
   return op.type === 'addLine' || op.type === 'updateLine' || op.type === 'removeLine';
