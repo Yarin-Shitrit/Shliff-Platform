@@ -19,6 +19,15 @@
   inset-block-end: 20px; inset-inline-start: 20px;
   display: flex; flex-direction: column;
   max-inline-size: 360px;
+  /*
+    The container itself never takes a tap. It is always mounted (the regions
+    below must exist before their first message), it sits at the top of the
+    z-index ladder, and on a phone it spans the width of the screen exactly
+    where the bottom tab bar and a sheet's confirm button are. An invisible
+    box that swallows taps there is every bottom control on the phone reading
+    as dead. Each toast opts back in, so its own buttons still work.
+  */
+  pointer-events: none;
 }
 
 /*
@@ -26,8 +35,13 @@
   failure before the results. Neither region is ever `display: none`, not even
   when empty — a hidden live region is not in the accessibility tree, which
   would put us back where a region announces nothing the first time it is used.
+
+  The list's own default margin and padding are zeroed: two empty `<ol>`s
+  otherwise stand 1em above and below each other and 40px in, which is a
+  58px-tall phantom over the tab bar with nothing in it. `pointer-events`
+  above is the guarantee; this is what keeps the box the size of its toasts.
 */
-.region { display: flex; flex-direction: column; }
+.region { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
 
 /*
   The gap is a margin on every toast rather than a `gap` on the two regions,
@@ -36,6 +50,7 @@
   anchored at its bottom edge and grows upward.
 */
 .toast {
+  pointer-events: auto;
   margin-block-start: 8px;
   display: flex; align-items: flex-start; gap: 10px;
   padding-block: 10px; padding-inline: 14px 8px;

@@ -132,9 +132,49 @@
   color: var(--ink-3);
 }
 .seasonEmpty { padding: 8px 10px; font-size: 13px; color: var(--ink-3); }
-/* The groups are `.side`'s own flex items; from 1024px up they scroll in a
-   box of their own (the desktop block at the end of this file). */
-.navstack { display: contents; }
+/*
+ * The groups scroll in a box of their own, at every width. Fifteen links and
+ * their labels are taller than an 800px desktop window and taller still than
+ * a phone: the drawer below 1024px is exactly one viewport tall
+ * (`inset-block: 0`) and used to let `.side` overflow it with nothing to
+ * scroll, so on a 664px phone the last group and the whole footer — the
+ * sign-out, the theme toggle — sat below the screen's edge, unreachable.
+ * Only the groups scroll: the brand, the season switcher (whose menu is wider
+ * than the rail and must not be clipped) and the footer stay put.
+ *
+ * - The padding, cancelled by an equal negative margin, is room for the
+ *   focus ring (A9: 2px wide, 2px out — 4px): a scroll box clips outlines at
+ *   its padding edge. The gap is `.side`'s own 4px, which the groups had
+ *   while this box was `contents`.
+ * - Scroll shadows say there is more below: a shadow fixed to the box's
+ *   bottom edge (`scroll`), and a cover in the rail's own colour that travels
+ *   with the links (`local`) and sits over the shadow once the last link is
+ *   in view — or all along, when nothing is hidden. Both are backgrounds, so
+ *   they paint behind the links and never take a click from one.
+ *
+ * What makes the box scroll rather than grow is a definite height on `.side`:
+ * `contain: size` from 1024px up, `block-size: 100%` of the fixed drawer
+ * below it (both at the end of this file).
+ */
+.navstack {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  overflow-y: auto;
+  padding-inline: var(--space-1);
+  padding-block-end: var(--space-1);
+  margin-inline: calc(var(--space-1) * -1);
+  margin-block-end: calc(var(--space-1) * -1);
+  background-image:
+    linear-gradient(to bottom, transparent, var(--canvas) 50%),
+    linear-gradient(to bottom, transparent, color-mix(in srgb, var(--ink) 18%, transparent));
+  background-position: bottom, bottom;
+  background-size: 100% var(--space-6), 100% var(--space-4);
+  background-repeat: no-repeat;
+  background-attachment: local, scroll;
+}
 .navgroup { display: flex; flex-direction: column; gap: 1px; margin-block-start: 8px; }
 .grouplabel {
   font-size: 11.5px;
@@ -277,46 +317,22 @@
  * menus the rail renders still position against the window.
  *
  * So the rail never lengthens a page that fits the screen — the camp map's
- * editor must fill the window with no page scroll (Ruling X1) — and fifteen
- * links and the footer are already taller than an 800px window. Only the
- * groups scroll: the brand, the season switcher (whose menu is wider than
- * the rail and must not be clipped) and the footer stay put.
- *
- * `.navstack`:
- * - The padding, cancelled by an equal negative margin, is room for the
- *   focus ring (A9: 2px wide, 2px out — 4px): a scroll box clips outlines at
- *   its padding edge. The gap is `.side`'s own 4px, which the groups had
- *   while this box was `contents`.
- * - Scroll shadows say there is more below: a shadow fixed to the box's
- *   bottom edge (`scroll`), and a cover in the rail's own colour that travels
- *   with the links (`local`) and sits over the shadow once the last link is
- *   in view — or all along, when nothing is hidden. Both are backgrounds, so
- *   they paint behind the links and never take a click from one.
+ * editor must fill the window with no page scroll (Ruling X1).
  */
 @media (min-width: 1024px) {
   .side { contain: size; }
-  .navstack {
-    flex: 1 1 auto;
-    min-block-size: 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
-    overflow-y: auto;
-    padding-inline: var(--space-1);
-    padding-block-end: var(--space-1);
-    margin-inline: calc(var(--space-1) * -1);
-    margin-block-end: calc(var(--space-1) * -1);
-    background-image:
-      linear-gradient(to bottom, transparent, var(--canvas) 50%),
-      linear-gradient(to bottom, transparent, color-mix(in srgb, var(--ink) 18%, transparent));
-    background-position: bottom, bottom;
-    background-size: 100% var(--space-6), 100% var(--space-4);
-    background-repeat: no-repeat;
-    background-attachment: local, scroll;
-  }
 }
 
 @media (max-width: 1023.98px) {
+  /*
+   * The drawer is one viewport tall (`.rail`'s `inset-block: 0`), and `.side`
+   * takes all of it, so `.navstack` has a height to scroll inside and the
+   * footer keeps its place at the bottom edge. Not `contain: size` here: the
+   * drawer is fixed, not a flex item, so there is no row height to protect —
+   * a plain percentage of a definite height is enough.
+   */
+  .side { block-size: 100%; }
+
   .rail {
     display: block;
     position: fixed;
