@@ -231,6 +231,8 @@ describe('saving, through the store and the queue', () => {
         ]);
       }, WAIT);
       expect(await saved()).toBeTruthy();
+      // Not silently: the lead is told the earlier edits came back and are saved (#25 fix round, Minor 7).
+      expect(await screen.findByText('השינויים שלא נשמרו לפני רענון הדף שוחזרו ונשמרו.')).toBeTruthy();
       // Taken once: a later refresh does not replay it again.
       expect(window.sessionStorage.getItem('site-editor:pending:p1')).toBeNull();
     } finally {

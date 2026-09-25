@@ -79,6 +79,9 @@ const LOAD_FAILED = 'לא הצלחנו לטעון את המפה העדכנית. 
  */
 const PARTLY_APPLIED = 'חלק מהפעולה לא בוצע, כי פריטים שהיא נוגעת בהם כבר לא במפה.';
 
+/** Said once the edits an earlier page left unsaved (a deploy replaced its build) are saved (#25 fix round, Minor 7). */
+const REPLAYED = 'השינויים שלא נשמרו לפני רענון הדף שוחזרו ונשמרו.';
+
 /** Changes to items another lead removed: not saved, named by what this lead called them. */
 const goneSentence = (names: readonly string[]) =>
   `לא נשמרו שינויים בפריטים שכבר לא במפה: ${names.map(isolate).join(', ')}.`;
@@ -200,6 +203,10 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
    *  awaiting its `load()` — two reloads racing would both build a merge off
    *  a stale `latest.current` and one would clobber the other's result. */
   const resolvingRef = useRef(false);
+  /** An earlier page's edits are being replayed through 'mine' (review I2). */
+  const replaying = useRef(false);
+  /** The replayed edits are to be announced once the queue reports them saved. */
+  const announceReplay = useRef(false);
 
   const commit = useCallback((next: StoreState) => {
     latest.current = next;
@@ -213,6 +220,12 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
       onChange: (snapshot) => {
         versionRef.current = snapshot.version;
         setSave(snapshot);
+        // The earlier page's edits, replayed, are now on the server: say so, before anything 'mine' named.
+        if (announceReplay.current && snapshot.status === 'saved' && snapshot.pending === 0) {
+          announceReplay.current = false;
+          const current = latest.current;
+          commit({ ...current, notice: current.notice === null ? REPLAYED : `${REPLAYED} ${current.notice}` });
+        }
       },
       /* The server skipped changes to items another lead removed (review
          C2). They leave this map too — the server has no such item — named
@@ -442,6 +455,11 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
         kept.push(op);
       }
 
+      // A replay of an earlier page's edits is announced once what it kept is saved — here, before the rebase sends it.
+      if (replaying.current) {
+        replaying.current = false;
+        announceReplay.current = kept.length > 0;
+      }
       queue?.rebase(version, kept);
       const sentences: string[] = [];
       const gone = [...new Set(goneNames)];
@@ -469,18 +487,30 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
   const pendingOps = useCallback(() => queueRef.current?.pendingOps() ?? [], []);
 
   /* Review I2: edits an earlier page of this map left unsaved (its build was
-     replaced by a deploy) are put back in the queue and replayed through
-     'mine' — the latest map, with what still applies on top and the rest
-     named — never simply resent against whatever the page loaded. Keyed on
-     the queue rather than a flag, so a remount's new queue gets them too. */
+     replaced by a deploy) are replayed through 'mine' — the latest map, with
+     what still applies on top and the rest named — never simply resent
+     against whatever the page loaded. They are carried, not enqueued (#25
+     fix round, Important 2): kept apart as they were and held, so the
+     half-second clock cannot send them raw before 'mine' has the map, even
+     when it loads slowly or the lead edits meanwhile. If the map cannot be
+     loaded they go as they are rather than wait forever. Once they are
+     saved the lead is told (Minor 7). Keyed on the queue rather than a flag,
+     so a remount's new queue gets them too. */
   const replayedInto = useRef<SaveQueue | null>(null);
   useEffect(() => {
     const queue = queueRef.current;
     const carried = initial.pending ?? [];
     if (queue === null || carried.length === 0 || replayedInto.current === queue) return;
     replayedInto.current = queue;
-    queue.enqueue(carried);
-    void resolveConflict('mine');
+    replaying.current = true;
+    queue.carry(carried);
+    void resolveConflict('mine').then(() => {
+      // Still replaying: the map could not be loaded. The edits go as they are.
+      if (queueRef.current !== queue || !replaying.current) return;
+      replaying.current = false;
+      announceReplay.current = queue.pendingOps().length > 0;
+      queue.release();
+    });
   }, [initial, resolveConflict]);
 
   const flags = useMemo(() => computeFlags(state.doc), [state.doc]);

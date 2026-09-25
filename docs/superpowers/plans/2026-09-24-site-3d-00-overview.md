@@ -228,6 +228,8 @@ export class SaveQueue {
   retry(): Promise<void>;                        // after 'error'
   reset(version: number): void;                  // 'theirs': drop pending, adopt version, status 'saved'
   rebase(version: number, keep: readonly SiteOp[]): void;  // 'mine': pending := keep, version := version, flush
+  carry(ops: readonly SiteOp[]): void;           // an earlier page's unsaved batch (I2): kept apart, held unsent until rebase/reset
+  release(): void;                               // stop holding what carry put back, and send it as it is
   pendingOps(): SiteOp[];
   readonly snapshot: QueueSnapshot;
   dispose(): void;

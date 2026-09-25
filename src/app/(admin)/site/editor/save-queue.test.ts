@@ -121,6 +121,32 @@ describe('the save queue', () => {
     expect(sendClock.waitingMs()).toBeNull();
   });
 
+  /* #25 fix round, Important 2: an earlier page's batch waits, apart and
+     unsent — even as later edits arrive — until a rebase has checked it. */
+  it('holds a carried batch, apart and unsent, until a rebase or a release', async () => {
+    const { queue, send, clock } = setup(3);
+    queue.carry([{ type: 'add', item: tent('n1') }, { type: 'remove', id: 'n1' }]);
+    expect(queue.snapshot).toMatchObject({ status: 'pending', pending: 2 });
+    queue.enqueue([move('a', 100)]);
+    expect(clock.waitingMs()).toBeNull();
+    await queue.flush();
+    expect(send).not.toHaveBeenCalled();
+    // Never coalesced with each other or with later edits: the add and its removal both stay.
+    expect(queue.pendingOps()).toEqual([{ type: 'add', item: tent('n1') }, { type: 'remove', id: 'n1' }, move('a', 100)]);
+
+    queue.release();
+    expect(clock.waitingMs()).toBe(500);
+    clock.fire();
+    expect(send).toHaveBeenLastCalledWith(3, [{ type: 'add', item: tent('n1') }, { type: 'remove', id: 'n1' }]);
+  });
+
+  it('lets a rebase end the hold and send what it kept', () => {
+    const { queue, send } = setup(3);
+    queue.carry([move('a', 100)]);
+    queue.rebase(4, [move('a', 100)]);
+    expect(send).toHaveBeenLastCalledWith(4, [move('a', 100)]);
+  });
+
   it('sends nothing for an item added and removed before the save', () => {
     const { queue, send, clock } = setup();
     queue.enqueue([{ type: 'add', item: tent('n1') }]);

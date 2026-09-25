@@ -227,6 +227,93 @@ describe('the editor store', () => {
     expect(result.current.notice).toBeNull();
   });
 
+  /*
+   * #25 fix round, Important 2 and Minor 7: the edits an older build left
+   * unsaved are replayed through 'mine'. They used to be enqueued first,
+   * which started the half-second clock — a load slower than that sent them
+   * raw, before 'mine' could check them, and a lock the other lead had set
+   * came back as a false conflict. They now wait apart, sending nothing,
+   * until 'mine' has the map; and once saved, the lead is told.
+   */
+  describe('replaying what an older build left unsaved', () => {
+    const REPLAYED = 'השינויים שלא נשמרו לפני רענון הדף שוחזרו ונשמרו.';
+
+    it('sends nothing until the map has loaded, however long that takes, then only what still applies', async () => {
+      const save = vi.fn<EditorStoreInit['save']>(async (base) => ({ ok: true, version: base + 1 }));
+      let answer: (value: Awaited<ReturnType<EditorStoreInit['load']>>) => void = () => {};
+      const load = vi.fn<EditorStoreInit['load']>(() => new Promise((resolve) => { answer = resolve; }));
+      const { result } = setup({ save, load, version: 3, pending: [moveTo(A, 550), moveTo(B, 900)] });
+      expect(load).toHaveBeenCalledTimes(1);
+      // An edit made while it loads must not carry the old batch out with it either.
+      act(() => { result.current.run('הזזה', [moveTo(B, 950)]); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+      expect(save).not.toHaveBeenCalled();
+      expect(result.current.save.status).toBe('pending');
+
+      // Meanwhile the other lead locked the first tent: that move is dropped and named, the rest goes.
+      await act(async () => {
+        answer({ ok: true, value: { doc: doc([item({ id: A, label: 'אוהל 1', locked: true }), item({ id: B, label: 'אוהל 2', xCm: 600 })]), version: 4 } });
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      await waitForSave();
+      expect(save).toHaveBeenCalledTimes(1);
+      expect(save).toHaveBeenCalledWith(4, [moveTo(B, 950)]);
+      expect(result.current.conflict).toBeNull();
+      expect(result.current.notice).toBe(`${REPLAYED} ${lockedNotice('אוהל 1')}`);
+    });
+
+    it('says, once they are saved, that the earlier edits were restored', async () => {
+      let saved: (value: SaveResult) => void = () => {};
+      const save = vi.fn<EditorStoreInit['save']>(() => new Promise((resolve) => { saved = resolve; }));
+      const load = vi.fn<EditorStoreInit['load']>(async () => ({
+        ok: true, value: { doc: doc([item({ id: A, label: 'אוהל 1' }), item({ id: B, label: 'אוהל 2', xCm: 600 })]), version: 3 },
+      }));
+      const { result } = setup({ save, load, version: 3, pending: [moveTo(A, 550)] });
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      expect(save).toHaveBeenCalledWith(3, [moveTo(A, 550)]);
+      expect(result.current.notice).toBeNull(); // not while it is still being sent
+      await act(async () => { saved({ ok: true, version: 4 }); await vi.advanceTimersByTimeAsync(0); });
+      expect(result.current.notice).toBe(REPLAYED);
+    });
+
+    it('announces nothing when every earlier edit was dropped — what was dropped is named instead', async () => {
+      const save = vi.fn<EditorStoreInit['save']>(async (base) => ({ ok: true, version: base + 1 }));
+      const load = vi.fn<EditorStoreInit['load']>(async () => ({
+        ok: true, value: { doc: doc([item({ id: A, label: 'אוהל 1', locked: true }), item({ id: B, label: 'אוהל 2', xCm: 600 })]), version: 3 },
+      }));
+      const { result } = setup({ save, load, version: 3, pending: [moveTo(A, 550)] });
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      await waitForSave();
+      expect(save).not.toHaveBeenCalled();
+      expect(result.current.notice).toBe(lockedNotice('אוהל 1'));
+    });
+
+    it('keeps the old batch as it was, so an add and its removal do not cancel out when the add had landed', async () => {
+      const save = vi.fn<EditorStoreInit['save']>(async (base) => ({ ok: true, version: base + 1 }));
+      const added = item({ id: F, label: 'אוהל 3', xCm: 2000 });
+      // The add went out in a batch that got no answer — it did land — then the lead removed the tent.
+      const load = vi.fn<EditorStoreInit['load']>(async () => ({
+        ok: true, value: { doc: doc([item({ id: A }), item({ id: B, label: 'אוהל 2', xCm: 600 }), added]), version: 4 },
+      }));
+      const { result } = setup({ save, load, version: 3, pending: [{ type: 'add', item: added }, { type: 'remove', id: F }] });
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      await waitForSave();
+      // Coalesced, the two would have come to nothing and the tent would stay on the server.
+      expect(save).toHaveBeenCalledWith(4, [{ type: 'remove', id: F }]);
+      expect(result.current.doc.items.map((entry) => entry.id)).not.toContain(F);
+    });
+
+    it('sends the old batch anyway if the map cannot be loaded, rather than holding it forever', async () => {
+      const save = vi.fn<EditorStoreInit['save']>(async (base) => ({ ok: true, version: base + 1 }));
+      const load = vi.fn<EditorStoreInit['load']>(async () => ({ ok: false, error: 'המפה לא נטענה' }));
+      const { result } = setup({ save, load, version: 3, pending: [moveTo(A, 550)] });
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      await waitForSave();
+      expect(save).toHaveBeenCalledWith(3, [moveTo(A, 550)]);
+      expect(result.current.save.status).toBe('saved');
+    });
+  });
+
   describe('when another lead saved first', () => {
     const conflicting = () => vi.fn<EditorStoreInit['save']>(async (base): Promise<SaveResult> => (
       base === 0 ? { ok: false, reason: 'conflict', version: 5 } : { ok: true, version: base + 1 }
