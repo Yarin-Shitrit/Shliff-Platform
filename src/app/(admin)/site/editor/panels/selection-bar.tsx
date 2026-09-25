@@ -49,7 +49,8 @@ export function placeBar(box: ScreenBox, stage: { width: number; height: number 
   const left = stage.width < BAR.width + 2 * EDGE
     ? stage.width / 2
     : Math.min(Math.max(middle, EDGE + half), stage.width - EDGE - half);
-  if (above) return { left, top: box.t - GAP, place: 'above' };
+  // The bar's bottom edge, above: never past the stage's bottom either (#25 fix round, Minor 12).
+  if (above) return { left, top: Math.min(box.t - GAP, stage.height - EDGE), place: 'above' };
   const top = Math.max(EDGE, Math.min(box.b + GAP, stage.height - EDGE - BAR.height));
   return { left, top, place: 'below' };
 }

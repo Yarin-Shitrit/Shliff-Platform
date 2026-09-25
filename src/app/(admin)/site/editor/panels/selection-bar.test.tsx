@@ -61,6 +61,13 @@ describe('where the selection bar goes', () => {
     expect(placeBar({ l: 0, t: 300, r: 40, b: 340 }, { width: 150, height: 600 }).left).toBe(75);
   });
 
+  /* #25 fix round, Minor 12: the bottom edge is kept in both placements —
+     a selection scrolled past the stage's bottom put the bar under it too. */
+  it('keeps above the stage’s bottom edge when the selection is below it', () => {
+    expect(placeBar({ l: 100, t: 900, r: 300, b: 960 }, stage)).toEqual({ left: 200, top: 600 - 8, place: 'above' });
+    expect(placeBar({ l: 100, t: 610, r: 300, b: 700 }, stage)).toEqual({ left: 200, top: 600 - 8, place: 'above' });
+  });
+
   it('stays on the stage when the selection fills it top to bottom', () => {
     expect(placeBar({ l: 100, t: 20, r: 300, b: 590 }, stage)).toEqual({ left: 200, top: 600 - 8 - BAR.height, place: 'below' });
   });
