@@ -74,7 +74,8 @@ function send(planId: string, file: File | null) {
     { params: Promise.resolve({ planId }) },
   );
 }
-const upload = (planId: string, name: string, data: Uint8Array) => send(planId, new File([data], name));
+// A copy over a plain ArrayBuffer: `File` takes no view that could sit on a SharedArrayBuffer (TS 5.9's BlobPart).
+const upload = (planId: string, name: string, data: Uint8Array) => send(planId, new File([new Uint8Array(data)], name));
 
 describe('POST /site/underlay/<planId>', () => {
   let storageDir: string;
