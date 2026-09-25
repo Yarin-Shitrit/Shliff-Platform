@@ -226,6 +226,16 @@
 
 .narrowView { display: none; }
 
+/* What the table is for, where the map is not. */
+.tableNote {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+/* A top-bar action that needs the map: laid out as if the wrapper were not there. */
+.wideOnly { display: contents; }
+
 .fallback {
   flex: 1;
   min-block-size: 0;
@@ -246,13 +256,17 @@
   border-radius: var(--radius-card);
 }
 
-/* Spec §7: under 900 px the table is the view. The same line as the editor's
-   `WIDE_QUERY` (`editor-styles.test.ts` holds the two together): this draws
-   it before the client has asked, as the server renders the wide page. */
-@media (max-width: 899.98px) {
+/* Spec §7: under 900 px the table is the view. The other side of the editor's
+   `WIDE_QUERY`, `(width >= 900px)` — ranges, so no fractional width falls
+   between the two (`editor-styles.test.ts` holds them together). This draws
+   the line before the client has asked, as the server renders the wide page. */
+@media (width < 900px) {
   .editorArea { display: none; }
+  .wideOnly { display: none; }
   .narrowView {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
     flex: 1;
     min-block-size: 0;
     overflow-y: auto;

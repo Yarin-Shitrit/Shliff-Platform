@@ -928,3 +928,43 @@ describe('the 3D map with WebGL', () => {
     });
   });
 });
+
+/* "ייצוא תמונה" (spec §10). A blob, not a data URL: Chromium refuses to
+   download a data URL much over 2 MB, and a full-screen PNG is several. */
+describe('the picture of the view', () => {
+  const realToBlob = HTMLCanvasElement.prototype.toBlob;
+
+  afterEach(() => {
+    HTMLCanvasElement.prototype.toBlob = realToBlob;
+  });
+
+  it('draws a fresh frame and hands back a PNG of it', async () => {
+    const png = new Blob(['png'], { type: 'image/png' });
+    const asked: Array<string | undefined> = [];
+    HTMLCanvasElement.prototype.toBlob = function toBlob(callback: BlobCallback, type?: string) {
+      asked.push(type);
+      callback(png);
+    };
+    const { handle, onView } = renderScene();
+    await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+    const before = renderer.frames;
+    await expect(handle.current?.exportPng()).resolves.toBe(png);
+    expect(renderer.frames).toBe(before + 1);
+    expect(asked).toEqual(['image/png']);
+  });
+
+  it('hands back nothing when the browser cannot make the file', async () => {
+    const { handle, onView } = renderScene();
+    await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+    HTMLCanvasElement.prototype.toBlob = function toBlob(callback: BlobCallback) { callback(null); };
+    await expect(handle.current?.exportPng()).resolves.toBeNull();
+    HTMLCanvasElement.prototype.toBlob = function toBlob() { throw new Error('SecurityError'); };
+    await expect(handle.current?.exportPng()).resolves.toBeNull();
+  });
+
+  it('hands back nothing when there is no map to picture', async () => {
+    renderer.fails = true;
+    const { handle } = renderScene();
+    await expect(handle.current?.exportPng()).resolves.toBeNull();
+  });
+});

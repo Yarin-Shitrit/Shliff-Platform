@@ -6,7 +6,7 @@
  * module registry is a new page.
  */
 import { describe, it, expect, vi, beforeAll } from 'vitest';
-import { createEvent, fireEvent, render, screen } from '@testing-library/react';
+import { createEvent, fireEvent, render, screen, within } from '@testing-library/react';
 import { ToastProvider } from '@/components/ui/toaster';
 import type { EditorDoc } from '@/lib/site/editor/model';
 import type { SceneHandle, SceneViewProps } from './scene/scene-view';
@@ -39,12 +39,13 @@ const DOC: EditorDoc = {
   defaults: {},
 };
 
-// This browser gives no WebGL: every context comes back null.
-const getContext = vi.fn(() => null);
+// This browser gives no WebGL: every context comes back null (a test can change that).
+const getContext = vi.fn<(kind: string) => unknown>(() => null);
 
 beforeAll(() => {
+  // A wide screen: the map would be the view, if the browser could draw it.
   window.matchMedia = ((query: string) => ({
-    matches: query.includes('min-width'),
+    matches: query === '(width >= 900px)',
     media: query,
     onchange: null,
     addEventListener: () => {},
@@ -65,12 +66,12 @@ function renderEditor({ Editor, Toasts }: Loaded = { Editor: SiteEditor, Toasts:
       <Editor
         initial={{ doc: DOC, version: 0 }}
         initialSelection="a"
+        seasonId="s26"
         seasonName="ברן 26"
         sunDate={null}
         buildTasks={[]}
         plotHref="/site?season=s26&act=plot"
         seasonDateHref="/site?season=s26&act=season-date"
-        fallback={<table aria-label="הפריטים במפה"><tbody><tr><td>אוהל 1</td></tr></tbody></table>}
       />
     </Toasts>,
   );
@@ -80,13 +81,18 @@ describe('the editor without WebGL', () => {
   it('puts the item table under the scene’s own notice, and draws no tool row', async () => {
     renderEditor();
     expect(await screen.findByTestId('scene')).toBeTruthy();
-    expect(screen.getByRole('table', { name: 'הפריטים במפה' })).toBeTruthy();
+    expect(within(screen.getByRole('table', { name: 'הפריטים במפה' })).getByText('אוהל 1')).toBeTruthy();
     expect(screen.queryByRole('group', { name: 'כלי העריכה' })).toBeNull();
     // The top bar still says where saving stands, and still leads to the plot settings.
     expect(screen.getByText('כל השינויים נשמרו')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'הגדרות המגרש' }).getAttribute('href')).toBe('/site?season=s26&act=plot');
+    // What the table cannot do is the scene's notice; what still works here is said under it.
+    const note = screen.getByText(/כאן אפשר לקרוא את הפריטים ולשנות את/).closest('p');
+    if (note === null) throw new Error('the note is not a paragraph');
+    expect(within(note).getByRole('link', { name: 'הגדרות המגרש' }).getAttribute('href')).toBe('/site?season=s26&act=plot');
+    // A wide screen here: the note does not send the lead to find a wider one.
+    expect(note.textContent).not.toMatch(/900/);
     // No picture of a map the browser cannot draw.
-    expect((screen.getByRole('button', { name: 'ייצוא תמונה' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: 'ייצוא תמונה' })).toBeNull();
   });
 
   /* Ruling P7: no shortcut acts on a map that is not shown. */
@@ -101,22 +107,44 @@ describe('the editor without WebGL', () => {
     }
   });
 
-  it('asks the browser once per page load, however often the editor mounts', async () => {
-    // A new module registry is a new page load: nothing has asked yet in it.
+  /** A new module registry is a new page load: nothing has asked yet in it. */
+  async function freshPage(): Promise<Loaded> {
     vi.resetModules();
-    const fresh: Loaded = {
+    return {
       Editor: (await import('./site-editor')).SiteEditor,
       Toasts: (await import('@/components/ui/toaster')).ToastProvider,
     };
+  }
+
+  it('asks the browser once per page load, and only for WebGL 2, however often the editor mounts', async () => {
+    const fresh = await freshPage();
     getContext.mockClear();
     const first = renderEditor(fresh);
     await screen.findByTestId('scene');
-    // It asked — for webgl2, then, given none, for webgl.
-    expect(getContext.mock.calls.map((call) => (call as unknown[])[0])).toEqual(['webgl2', 'webgl']);
+    expect(getContext.mock.calls.map((call) => call[0])).toEqual(['webgl2']);
     first.unmount();
     renderEditor(fresh);
     await screen.findByTestId('scene');
     // The same page load: the second editor takes the first answer.
-    expect(getContext).toHaveBeenCalledTimes(2);
+    expect(getContext).toHaveBeenCalledTimes(1);
+  });
+
+  /* three's WebGLRenderer (r186) needs WebGL 2: a browser that offers only
+     WebGL 1 cannot draw the map, so it gets the table — not the editor's
+     chrome over a scene that will never start, with its keys live. */
+  it('treats a browser with only WebGL 1 as one without WebGL', async () => {
+    const fresh = await freshPage();
+    getContext.mockImplementation((kind) => (kind === 'webgl' ? { getExtension: () => null } : null));
+    try {
+      renderEditor(fresh);
+      expect(await screen.findByTestId('scene')).toBeTruthy();
+      expect(screen.getByRole('table', { name: 'הפריטים במפה' })).toBeTruthy();
+      expect(screen.queryByRole('group', { name: 'כלי העריכה' })).toBeNull();
+      const press = createEvent.keyDown(screen.getByRole('table', { name: 'הפריטים במפה' }), { code: 'Delete' });
+      fireEvent(screen.getByRole('table', { name: 'הפריטים במפה' }), press);
+      expect(press.defaultPrevented).toBe(false);
+    } finally {
+      getContext.mockImplementation(() => null);
+    }
   });
 });
