@@ -22,6 +22,9 @@ import { uploadUnderlay, type UploadOutcome } from './underlay-upload';
  * - How this viewer sees it — shown or hidden, how see-through — only ever
  *   changes `EditorUi.underlay`, which is never saved (D19).
  * - Calibrating switches the view to plan, and back afterwards (spec §18.3).
+ * - The two tools end with the picture: however it goes — an undo of its
+ *   upload, a redo of its removal, another lead's removal reloaded — no tool
+ *   stays on over nothing (review U1).
  */
 
 /** What the editor says about the picture (spec §20). */
@@ -83,6 +86,12 @@ export interface UnderlayController {
   retry: () => void;
   /** Esc: ends calibrating or aligning. True when it did. */
   escape: () => boolean;
+  /**
+   * Ends calibrating or aligning for another tool — the tool row's select or
+   * measure, or their keys — with the view calibrating switched away from,
+   * and no marks left behind (review U1).
+   */
+  leaveTool: (next?: 'select' | 'measure') => void;
 }
 
 export function useUnderlay(deps: UnderlayDeps): UnderlayController {
@@ -91,8 +100,8 @@ export function useUnderlay(deps: UnderlayDeps): UnderlayController {
   const [sending, setSending] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [draft, setDraft] = useState<CalibrationDraft>(NO_DRAFT);
-  /** The view before calibration switched to plan. Read and written in handlers only. */
-  const modeBefore = useRef<EditorUi['mode'] | null>(null);
+  /** The view before calibration switched to plan. State, not a ref: the picture's going reads it while rendering. */
+  const [modeBefore, setModeBefore] = useState<EditorUi['mode'] | null>(null);
   /** The latest deps, for an upload that finishes after the lead has done other things meanwhile. */
   const latest = useRef(deps);
   useEffect(() => { latest.current = deps; });
@@ -107,19 +116,23 @@ export function useUnderlay(deps: UnderlayDeps): UnderlayController {
       : [];
 
   function beginCalibration(from: UnderlayDeps): void {
-    if (from.ui.tool !== 'calibrate') modeBefore.current = from.ui.mode;
+    if (from.ui.tool !== 'calibrate') setModeBefore(from.ui.mode);
     from.select([]);
     from.patchUi({ tool: 'calibrate', mode: 'plan', underlay: { ...from.ui.underlay, shown: true } });
     setDraft(NO_DRAFT);
     setOpen(true);
   }
 
-  function leaveTool(): void {
-    const mode = modeBefore.current;
-    modeBefore.current = null;
-    deps.patchUi(mode === null ? { tool: 'select' } : { tool: 'select', mode });
+  function leaveTool(next: 'select' | 'measure' = 'select'): void {
+    setModeBefore(null);
+    deps.patchUi(modeBefore === null ? { tool: next } : { tool: next, mode: modeBefore });
     setDraft(NO_DRAFT);
   }
+
+  /* The picture went while one of its tools was on (review U1). Adjusted
+     while rendering, as React has state follow a change of props: whatever
+     took the picture away, the next render is already out of the tool. */
+  if (underlay === null && (tool === 'calibrate' || tool === 'align')) leaveTool();
 
   function edit(label: string, ops: SiteOp[]): void {
     if (ops.length > 0) deps.runEdit(label, ops);
@@ -180,19 +193,13 @@ export function useUnderlay(deps: UnderlayDeps): UnderlayController {
   }
 
   function finishAlign(): void {
-    deps.patchUi({ tool: 'select' });
+    leaveTool();
   }
 
   function escape(): boolean {
-    if (tool === 'calibrate') {
-      leaveTool();
-      return true;
-    }
-    if (tool === 'align') {
-      finishAlign();
-      return true;
-    }
-    return false;
+    if (tool !== 'calibrate' && tool !== 'align') return false;
+    leaveTool();
+    return true;
   }
 
   function remove(): void {
@@ -255,5 +262,6 @@ export function useUnderlay(deps: UnderlayDeps): UnderlayController {
     remove,
     retry: () => { deps.retry(); },
     escape,
+    leaveTool,
   };
 }
