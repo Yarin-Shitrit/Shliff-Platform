@@ -27,7 +27,8 @@ export interface Toast {
   undo?: { label: string; run: () => Promise<ActionResult> };
 }
 
-type ShownToast = Toast & { id: number };
+/** `closing`: its caller took it away while the reader was inside it; it goes once the focus leaves. */
+type ShownToast = Toast & { id: number; closing?: boolean };
 
 /** Plan 12 Task 6's binding numbers: read it, or read it and reach it. */
 const DWELL_MS = 6_000;
@@ -37,7 +38,9 @@ const DWELL_WITH_UNDO_MS = 10_000;
  * `show` hands back a way to take that one toast away, for a caller whose
  * sentence stops being true before the reader closes it — an undo toast
  * once a newer edit has made its ביטול about something else. Callers that
- * have no such moment ignore it.
+ * have no such moment ignore it. Like the toast's own timer, it never takes
+ * the toast out from under a reader inside it: it waits until the focus
+ * leaves, so the focus is never dropped onto the page.
  */
 type ToastApi = { show: (toast: Toast) => () => void };
 
@@ -61,12 +64,18 @@ export function ToastProvider({ children }: { children: ReactNode }): ReactEleme
     setToasts((current) => current.filter((toast) => toast.id !== id));
   }, []);
 
+  /* The caller's way out: marks the toast, and the toast itself goes now, or
+     once the reader's focus has left it (`ToastItem`). */
+  const close = useCallback((id: number) => {
+    setToasts((current) => current.map((toast) => (toast.id === id ? { ...toast, closing: true } : toast)));
+  }, []);
+
   const show = useCallback((toast: Toast) => {
     lastId.current += 1;
     const id = lastId.current;
     setToasts((current) => [...current, { ...toast, id }]);
-    return () => { dismiss(id); };
-  }, [dismiss]);
+    return () => { close(id); };
+  }, [close]);
 
   const api = useMemo<ToastApi>(() => ({ show }), [show]);
 
@@ -126,6 +135,24 @@ function ToastItem(
     arm();
     return () => { clearTimeout(timer); };
   }, [dwell, onDismiss, toast.id]);
+
+  /* Taken away by its caller: at once, unless the reader is inside it — then
+     when the focus leaves it, the same care the timer takes. */
+  const closing = toast.closing === true;
+  useEffect(() => {
+    if (!closing) return;
+    const item = itemRef.current;
+    if (item === null || !item.contains(document.activeElement)) {
+      onDismiss(toast.id);
+      return;
+    }
+    const onFocusOut = (event: FocusEvent) => {
+      if (event.relatedTarget instanceof Node && item.contains(event.relatedTarget)) return;
+      onDismiss(toast.id);
+    };
+    item.addEventListener('focusout', onFocusOut);
+    return () => { item.removeEventListener('focusout', onFocusOut); };
+  }, [closing, onDismiss, toast.id]);
 
   async function takeUndo(taken: NonNullable<Toast['undo']>) {
     // The sentence has stopped being true, so it goes before the inverse runs.

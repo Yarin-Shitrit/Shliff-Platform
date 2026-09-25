@@ -996,6 +996,25 @@ describe('what an edit says', () => {
     await waitFor(() => { expect(lastScene().store.doc.items.every((entry) => !entry.locked)).toBe(true); });
     expect(lastScene().store.doc.items).toHaveLength(2);
   });
+
+  /* A toast the lead is inside stays (the kit waits while it holds the
+     focus), so a newer edit can land under a ביטול about to be pressed. That
+     ביטול then says why it did nothing, instead of undoing the newer edit. */
+  it('refuses, in words, a ביטול pressed after a newer edit landed under it', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.keyDown(stage(), { code: 'KeyD', metaKey: true });
+    const undoCopy = (await toastOf(`נוצר עותק של ${named('אוהל 1')}`)).getByRole('button', { name: 'ביטול' });
+    act(() => { undoCopy.focus(); });
+    act(() => { lastScene().store.run('הזזה', [{ type: 'update', id: 'a', patch: { xCm: 600 } }]); });
+    // Still there: taken away only once the focus leaves it.
+    expect(screen.getByText(`נוצר עותק של ${named('אוהל 1')}`)).toBeTruthy();
+    fireEvent.click(undoCopy);
+    expect(await screen.findByText('לא בוטל: אחרי הפעולה הזו נעשו במפה שינויים נוספים.')).toBeTruthy();
+    // Neither the drag nor the copy was undone.
+    expect(firstItem().xCm).toBe(600);
+    expect(lastScene().store.doc.items).toHaveLength(2);
+  });
 });
 
 describe('shade by hour', () => {

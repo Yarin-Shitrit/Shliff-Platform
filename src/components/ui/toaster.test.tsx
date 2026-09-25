@@ -144,6 +144,29 @@ describe('the toaster', () => {
     expect(screen.queryByText(PAID_TOO)).toBeTruthy();
   });
 
+  it('waits, when told to take a toast away, while the reader is inside it — as its own timer does', () => {
+    const shown: { dismiss: () => void } = { dismiss: () => {} };
+    function Caller() {
+      const { show } = useToast();
+      return (
+        <>
+          <button type="button" onClick={() => { shown.dismiss = show({ message: PAID, undo: { label: 'ביטול', run: async () => ({ ok: true }) } }); }}>
+            שלח
+          </button>
+          <button type="button">במקום אחר</button>
+        </>
+      );
+    }
+    render(<ToastProvider><Caller /></ToastProvider>);
+    fireEvent.click(screen.getByRole('button', { name: 'שלח' }));
+    act(() => { screen.getByRole('button', { name: 'ביטול' }).focus(); });
+    act(() => { shown.dismiss(); });
+    // Never out from under a hand reaching for ביטול: focus would fall to the page.
+    expect(screen.queryByText(PAID)).toBeTruthy();
+    act(() => { screen.getByRole('button', { name: 'במקום אחר' }).focus(); });
+    expect(screen.queryByText(PAID)).toBeNull();
+  });
+
   it('reports a refused undo instead of swallowing it', async () => {
     const run = vi.fn().mockResolvedValue({ ok: false, error: 'לא ניתן למחוק תשלום שסוכם' });
     const t = mount({ message: PAID, undo: { label: 'ביטול', run } });

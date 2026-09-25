@@ -107,8 +107,8 @@ const INITIAL_UI: EditorUi = {
   hiddenGroups: [], hour: 14, theme: 'light',
 };
 
-/** An undo toast pressed after a newer edit (a race: a newer edit takes the toast away). */
-const STALE_UNDO = 'הפעולה הזו כבר לא האחרונה, ולכן לא בוטלה מכאן.';
+/** An undo toast pressed after a newer edit landed under it (the toast waits while the lead is inside it). */
+const STALE_UNDO = 'לא בוטל: אחרי הפעולה הזו נעשו במפה שינויים נוספים.';
 
 /** The plot settings were saved while edits here still waited to be saved (review minor). */
 const PLOT_SAVED_UNDER_EDITS = 'הגדרות המגרש נשמרו, ויש כאן שינויים שעוד לא נשמרו. אפשר לשמור אותם מעל המפה המעודכנת, או לטעון אותה בלעדיהם.';
