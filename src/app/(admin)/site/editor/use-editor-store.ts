@@ -292,13 +292,13 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
 
   /**
    * The conflict banner's two answers (spec §6.4). Both start from the map
-   * as the server has it now. 'theirs' takes it as it is and clears undo/redo
-   * — every entry's inverse was computed against a document that no longer
-   * exists, so an undo replayed against theirs could silently overwrite the
-   * other lead's own change (a ruling that overrides the plan's original
-   * test: 'theirs' used to leave history standing). 'mine' replays what is
-   * unsent on top of theirs and keeps history, since every op it keeps (or
-   * drops) is checked against the doc it is about to touch, same as `run`.
+   * as the server has it now. 'theirs' takes it as it is; 'mine' replays what
+   * is unsent on top of theirs, every op checked against the doc it is about
+   * to touch, same as `run`. Both clear undo/redo: every entry's inverse was
+   * computed against a document that no longer exists, so an undo replayed
+   * on the server's map could silently overwrite the other lead's newer
+   * values (a ruling that overrides the plan's original test for 'theirs';
+   * review I5 extends it to 'mine', which used to keep history).
    * Either way, a dropped op says which items those were, by the names the
    * lead knew them by, never by id (controller ruling S2) — a lock refusal
    * and a missing item get their own sentence (Review Focus #4), so "locked"
@@ -406,6 +406,7 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
         ...current,
         doc: merging,
         selection: existing(merging, current.selection),
+        history: EMPTY_HISTORY, // review I5: the map under every entry was replaced
         notice: sentences.length === 0 ? null : sentences.join(' '),
       });
     } finally {

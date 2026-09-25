@@ -286,6 +286,35 @@ describe('the editor store', () => {
       expect(result.current.doc).toEqual(theirs);
     });
 
+    /*
+     * Review I5: 'mine' kept history, but every entry's inverse was worked
+     * out against a map that no longer exists. Here this lead moved A (saved),
+     * then B; meanwhile the other lead moved A to 700. After 'mine', undoing
+     * down to A's move would write 100 over the other lead's 700. The history
+     * now clears whenever the map is replaced from the server, 'mine' too.
+     */
+    it('clears undo/redo when mine rebuilds the map on theirs, so an undo cannot write over their newer values', async () => {
+      const save = vi.fn<EditorStoreInit['save']>(async (base): Promise<SaveResult> => (
+        base === 1 ? { ok: false, reason: 'conflict', version: 5 } : { ok: true, version: base + 1 }
+      ));
+      const theirs = doc([item({ id: A, label: 'אוהל 1', xCm: 700 }), item({ id: B, label: 'אוהל 2', xCm: 600 })]);
+      const load = vi.fn<EditorStoreInit['load']>(async () => ({ ok: true, value: { doc: theirs, version: 5 } }));
+      const { result } = setup({ save, load });
+      act(() => { result.current.run('הזזה', [moveTo(A, 400)]); });
+      await waitForSave();
+      act(() => { result.current.run('הזזה', [moveTo(B, 900)]); });
+      await waitForSave();
+      expect(result.current.conflict).toEqual({ version: 5 });
+
+      await act(async () => { await result.current.resolveConflict('mine'); });
+
+      expect(result.current.doc.items.map((entry) => entry.xCm)).toEqual([700, 900]);
+      expect(result.current.canUndo).toBe(false);
+      expect(result.current.canRedo).toBe(false);
+      act(() => { expect(result.current.undo()).toBeNull(); });
+      expect(result.current.doc.items.find((entry) => entry.id === A)?.xCm).toBe(700);
+    });
+
     // Controller ruling S1 + fix round 1 finding 4: resolveConflict('mine')
     // drops an op a lock would refuse, and names it in its own sentence —
     // never the "no longer on the map" one.
@@ -429,10 +458,11 @@ describe('the editor store', () => {
       expect(result.current.notice).toBe(goneNotice('פריט'));
     });
 
-    // Fix round 1, finding 2 (ruling 6): step()'s ops go through the same
-    // reduction as run()'s — a redo that is already reflected in the doc
-    // (another lead's server state happened to match) sends nothing.
-    it('redoes nothing when the step is already reflected in the doc', async () => {
+    // Fix round 1, finding 2 (ruling 6), restated by review I5: this used to
+    // redo after 'mine' and check the redo was reduced to nothing. 'mine' now
+    // clears the history (see the I5 test above), so there is no redo left to
+    // reduce; what stands is the lock refusal named, and nothing resent.
+    it('names a genuine lock refusal after mine, and leaves nothing to redo', async () => {
       const save = conflicting();
       const theirs = doc([item({ id: A, label: 'אוהל 1', xCm: 400, locked: true }), item({ id: B, label: 'אוהל 2', xCm: 600 })]);
       const load = vi.fn<EditorStoreInit['load']>(async () => ({ ok: true, value: { doc: theirs, version: 5 } }));
@@ -446,17 +476,11 @@ describe('the editor store', () => {
 
       await act(async () => { await result.current.resolveConflict('mine'); });
       expect(result.current.doc.items.find((entry) => entry.id === A)?.xCm).toBe(400);
-      expect(result.current.canRedo).toBe(true);
       // The pending update (back to 100) really did differ from the server's
       // 400 — a genuine lock refusal, not a no-op — so it is named here.
       expect(result.current.notice).toBe(lockedNotice('אוהל 1'));
-
-      act(() => { expect(result.current.redo()).toBe('הזזה'); });
-      expect(result.current.canRedo).toBe(false); // history still advances
-      expect(result.current.doc.items.find((entry) => entry.id === A)?.xCm).toBe(400);
-      // The redo itself found nothing left to do (already 400) and is not a
-      // skip, so it does not touch the notice left by 'mine'.
-      expect(result.current.notice).toBe(lockedNotice('אוהל 1'));
+      expect(result.current.canRedo).toBe(false);
+      act(() => { expect(result.current.redo()).toBeNull(); });
 
       await waitForSave();
       expect(saveFn).toHaveBeenCalledTimes(1); // only the original conflicting send
@@ -504,11 +528,11 @@ describe('the editor store', () => {
       expect(saveFn).toHaveBeenCalledTimes(1);
     });
 
-    // Fix round 1, findings 1 and 2 together, plus the minor finding: a
-    // locked item's *real* (non-reduced-away) change is skipped by redo like
-    // any other lock refusal, named generically (PARTLY_APPLIED, since an
-    // undo/redo step can touch several items at once), and sends nothing.
-    it('redo skips an item the other lead locked in the meantime, and sends nothing', async () => {
+    // Fix round 1, findings 1 and 2, restated by review I5: this used to redo
+    // after 'mine' onto an item the other lead had locked, and check the step
+    // was skipped. 'mine' now clears the history, so the redo cannot reach
+    // the other lead's item at all — the lock and its 700 stand, nothing sent.
+    it('leaves no redo after mine to reach an item the other lead locked meanwhile', async () => {
       const save = conflicting();
       const theirs = doc([item({ id: A, label: 'אוהל 1', xCm: 700, locked: true }), item({ id: B, label: 'אוהל 2', xCm: 600 })]);
       const load = vi.fn<EditorStoreInit['load']>(async () => ({ ok: true, value: { doc: theirs, version: 5 } }));
@@ -521,14 +545,30 @@ describe('the editor store', () => {
       expect(result.current.conflict).toEqual({ version: 5 });
 
       await act(async () => { await result.current.resolveConflict('mine'); });
-      expect(result.current.canRedo).toBe(true);
+      expect(result.current.canRedo).toBe(false);
 
-      act(() => { expect(result.current.redo()).toBe('הזזה'); });
+      act(() => { expect(result.current.redo()).toBeNull(); });
       expect(result.current.doc.items.find((entry) => entry.id === A)?.xCm).toBe(700);
-      expect(result.current.notice).toBe(PARTLY_APPLIED);
 
       await waitForSave();
-      expect(saveFn).toHaveBeenCalledTimes(1); // only the original conflicting send — nothing sent by the redo
+      expect(saveFn).toHaveBeenCalledTimes(1); // only the original conflicting send — nothing sent by a redo
+    });
+
+    /* The skip a redo still meets without 'mine': an item the server dropped
+       (review C2's `skipped`) leaves the map under a standing history. */
+    it('says a redo was only partly applied when an item it touches has since left the map', async () => {
+      const save = vi.fn<EditorStoreInit['save']>(async (base) => ({ ok: true, version: base + 1, skipped: [B] }));
+      const { result } = setup({ save });
+      act(() => {
+        result.current.run('הזזה', [moveTo(A, 400), moveTo(B, 900)]);
+        result.current.undo();
+        result.current.redo();
+      });
+      await waitForSave();
+      expect(result.current.doc.items.map((entry) => entry.id)).toEqual([A]);
+      act(() => { result.current.undo(); });
+      expect(result.current.doc.items[0].xCm).toBe(100);
+      expect(result.current.notice).toBe(PARTLY_APPLIED);
     });
 
     it('reports a failed reload in Hebrew and stays in the conflict', async () => {
