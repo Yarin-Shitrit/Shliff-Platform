@@ -109,3 +109,59 @@ export function readSunDate(text: string | null): string | null {
   const real = date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
   return real ? text : null;
 }
+
+/**
+ * `day` moved on by `days` whole calendar days (back, for a negative count),
+ * written as `sunDateOf` writes a day. Calendar arithmetic only — no clock and
+ * no time zone, so the night the clocks change is a day like any other. What
+ * `readSunDate` refuses has no day to move: null, as is a part of a day, and a
+ * day past the four-digit years it reads.
+ */
+export function addDays(day: string, days: number): string | null {
+  if (readSunDate(day) === null || !Number.isInteger(days)) return null;
+  // `readSunDate` has checked the shape, so the three numbers are there.
+  const [year, month, date] = day.split('-').map(Number);
+  const moved = new Date(Date.UTC(year, month - 1, date + days));
+  return readSunDate(moved.toISOString().slice(0, 10));
+}
+
+/**
+ * The longest burn the map plays through, in days. Midburn runs about a week;
+ * a last day further off than this is a mistyped date, not a burn — said as
+ * one, never played day by day through hundreds of chips (SIM2 fix round 1).
+ */
+export const MAX_BURN_DAYS = 14;
+
+/**
+ * What the burn's last day says of its length: `known` — a real day, on or
+ * after the gate day and within `MAX_BURN_DAYS` of it; `missing` — none
+ * recorded (today always: `seasons` has no end column yet, SIM3), or none
+ * that is a real day; `early` — before the gate day; `long` — too far after
+ * it. Only `known` is a length to play.
+ */
+export type BurnEnd = 'known' | 'missing' | 'early' | 'long';
+
+export function burnEnd(gateDay: string | null, lastDay: string | null): BurnEnd {
+  const first = readSunDate(gateDay);
+  const last = readSunDate(lastDay);
+  if (first === null || last === null) return 'missing';
+  if (last < first) return 'early';
+  const furthest = addDays(first, MAX_BURN_DAYS - 1);
+  return furthest !== null && last > furthest ? 'long' : 'known';
+}
+
+/**
+ * The days of the burn, from the gate day to its last day, each once and in
+ * order — what shade by hour can play through (ruling SIM3). Only a last day
+ * `burnEnd` calls `known` gives a length; without one the burn is the gate
+ * day alone: its length is never guessed. No gate day, no days.
+ */
+export function burnDays(gateDay: string | null, lastDay: string | null): string[] {
+  const first = readSunDate(gateDay);
+  if (first === null) return [];
+  const days = [first];
+  const last = readSunDate(lastDay);
+  if (last === null || burnEnd(first, last) !== 'known') return days;
+  for (let next = addDays(first, 1); next !== null && next <= last; next = addDays(next, 1)) days.push(next);
+  return days;
+}

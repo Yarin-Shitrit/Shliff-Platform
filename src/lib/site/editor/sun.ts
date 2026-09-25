@@ -152,32 +152,56 @@ function within(outer: Rect, inner: Rect): boolean {
 }
 
 /**
- * "בשעה 14:00, מתוך 13 פריטים מתחת לרשתות: 4 בצל מלא, 4 בצל חלקי, 5 בשמש"
- * (spec §11). `under` counts what stands under some net's footprint. Each
- * net's shaded ground, cast from the height of its cloth (the net's own
- * height, else its kind's), decides: an item wholly inside some cast shade is
- * in full shade, one touching any is in part shade, the rest are in the sun.
- * Null while the sun is down.
+ * Where each net's shade falls at `sun`: its shaded ground, cast away from
+ * the sun from the height of its cloth (the net's own height, else its
+ * kind's). Null while the sun is down — there is no shade to cast. The one
+ * place this geometry is written: `shadeAtHour` and the tent ranking
+ * (`shade-timeline.ts`) both read it.
  */
-export function shadeAtHour(doc: EditorDoc, sun: SunPosition): ShadeAtHour | null {
+export function castShades(doc: EditorDoc, sun: SunPosition): Rect[] | null {
   if (sun.elevationDeg <= 0) return null;
-  const nets = doc.items.filter((entry) => entry.kind === 'shade');
   const cast: Rect[] = [];
-  for (const net of nets) {
+  for (const net of doc.items) {
+    if (net.kind !== 'shade') continue;
     const shaded = shadedRect(toPlaced(net));
     const offset = shadowOffset(sun, doc.plot.northDeg, itemHeight(net, doc.defaults));
     if (shaded === null || offset === null) continue;
     cast.push({ ...shaded, x: shaded.x + offset.dxCm, y: shaded.y + offset.dyCm });
   }
+  return cast;
+}
+
+export type ItemShade = 'full' | 'partial' | 'sun';
+
+/**
+ * How a footprint stands against the cast shades: wholly inside some one of
+ * them is full shade, touching any is part shade, the rest is sun. Wherever
+ * the footprint is — under a net's own footprint or beside it, where a low
+ * sun throws the shade.
+ */
+export function itemShade(footprint: Rect, cast: readonly Rect[]): ItemShade {
+  if (cast.some((shade) => within(shade, footprint))) return 'full';
+  if (cast.some((shade) => overlap(shade, footprint))) return 'partial';
+  return 'sun';
+}
+
+/**
+ * "בשעה 14:00, מתוך 13 פריטים מתחת לרשתות: 4 בצל מלא, 4 בצל חלקי, 5 בשמש"
+ * (spec §11). `under` counts what stands under some net's footprint, and
+ * each of those is in full shade, part shade or the sun by `itemShade`
+ * against `castShades`. Null while the sun is down.
+ */
+export function shadeAtHour(doc: EditorDoc, sun: SunPosition): ShadeAtHour | null {
+  const cast = castShades(doc, sun);
+  if (cast === null) return null;
+  const nets = doc.items.filter((entry) => entry.kind === 'shade');
   const counts: ShadeAtHour = { under: 0, full: 0, partial: 0, sun: 0 };
   for (const entry of doc.items) {
     if (entry.kind === 'shade') continue;
     const footprint = rectOf(entry);
     if (!nets.some((net) => overlap(rectOf(net), footprint))) continue;
     counts.under += 1;
-    if (cast.some((shade) => within(shade, footprint))) counts.full += 1;
-    else if (cast.some((shade) => overlap(shade, footprint))) counts.partial += 1;
-    else counts.sun += 1;
+    counts[itemShade(footprint, cast)] += 1;
   }
   return counts;
 }

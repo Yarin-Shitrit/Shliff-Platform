@@ -54,7 +54,22 @@ vi.mock('three', async (importOriginal) => {
   return { ...actual, WebGLRenderer, DirectionalLight: RememberedLight };
 });
 
+/* The label layout is the real one, counted: a test can tell whether a
+   change made the engine lay the labels out again. */
+const layouts = vi.hoisted(() => ({ count: 0 }));
+vi.mock('@/lib/site/editor/label-layout', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/site/editor/label-layout')>();
+  return {
+    ...actual,
+    layoutLabels: (...args: Parameters<typeof actual.layoutLabels>) => {
+      layouts.count += 1;
+      return actual.layoutLabels(...args);
+    },
+  };
+});
+
 import { LOCKED_NOTICE } from '../notices';
+import { SceneSync } from './scene-sync';
 import { NO_WEBGL, SCENE_FAILED, SceneView, type EditorUi } from './scene-view';
 
 const UI: EditorUi = {
@@ -98,12 +113,14 @@ function renderScene(store = fakeStore(), ui: EditorUi = UI, sunDate: string | n
   const onNotice = vi.fn();
   const onModeSettled = vi.fn();
   const handle = createRef<SceneHandle>();
-  const scene = (next: EditorStore, nextUi: EditorUi) => (
+  const scene = (next: EditorStore, nextUi: EditorUi, nextSunDate: string | null) => (
     <SceneView ref={handle} store={next} ui={nextUi} insets={{ ...NO_INSETS }}
-      sunDate={sunDate} onView={onView} onNotice={onNotice} onModeSettled={onModeSettled} />
+      sunDate={nextSunDate} onView={onView} onNotice={onNotice} onModeSettled={onModeSettled} />
   );
-  const view = render(scene(store, ui));
-  const rerenderWith = (next: EditorStore, nextUi: EditorUi = ui) => { view.rerender(scene(next, nextUi)); };
+  const view = render(scene(store, ui, sunDate));
+  const rerenderWith = (next: EditorStore, nextUi: EditorUi = ui, nextSunDate: string | null = sunDate) => {
+    view.rerender(scene(next, nextUi, nextSunDate));
+  };
   return { ...view, onView, onNotice, onModeSettled, handle, store, rerenderWith };
 }
 
@@ -385,6 +402,85 @@ describe('the 3D map with WebGL', () => {
     await waitFor(() => { expect(impossible.onView).toHaveBeenCalled(); });
     expect((lights.at(-1) as DirectionalLight).castShadow).toBe(false);
     expect(impossible.onNotice).not.toHaveBeenCalled();
+  });
+
+  /*
+   * Shade by hour plays (SIM2): the hour changes up to ten times a second.
+   * A new hour or a new day moves only the light — the meshes and the labels
+   * stay as they are. Only the sun coming on or going off (switched, or set
+   * below the horizon by the hour) changes what the scene draws: real shadows
+   * instead of the drawn patches.
+   */
+  describe('the sun', () => {
+    const SUN: EditorUi = { ...UI, sun: true };
+    let syncs: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => { syncs = vi.spyOn(SceneSync.prototype, 'sync'); });
+    afterEach(() => { syncs.mockRestore(); });
+
+    it('re-aims for a new hour or a new day without rebuilding the scene or laying the labels out again', async () => {
+      const store = fakeStore();
+      const { onView, rerenderWith } = renderScene(store, { ...SUN, hour: 10 }, '2026-06-04');
+      await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+      await frames();
+      const light = lights.at(-1) as DirectionalLight;
+      expect(light.castShadow).toBe(true);
+      const aimed = light.position.clone();
+      const [laid, synced, drawn] = [layouts.count, syncs.mock.calls.length, renderer.frames];
+
+      rerenderWith(store, { ...SUN, hour: 15 });
+      await frames();
+      expect(light.position.distanceTo(aimed)).toBeGreaterThan(1);
+      expect(renderer.frames).toBeGreaterThan(drawn);
+      expect(layouts.count).toBe(laid);
+      expect(syncs.mock.calls.length).toBe(synced);
+
+      const afternoon = light.position.clone();
+      rerenderWith(store, { ...SUN, hour: 15 }, '2026-11-02');
+      await frames();
+      expect(light.position.distanceTo(afternoon)).toBeGreaterThan(1);
+      expect(layouts.count).toBe(laid);
+      expect(syncs.mock.calls.length).toBe(synced);
+    });
+
+    it('rebuilds the scene and lays the labels out again when the sun is switched on or off', async () => {
+      const store = fakeStore();
+      const { onView, rerenderWith } = renderScene(store, { ...UI, hour: 10 }, '2026-06-04');
+      await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+      await frames();
+      const light = lights.at(-1) as DirectionalLight;
+      expect(light.castShadow).toBe(false);
+      let [laid, synced] = [layouts.count, syncs.mock.calls.length];
+
+      rerenderWith(store, { ...SUN, hour: 10 });
+      await frames();
+      expect(light.castShadow).toBe(true);
+      expect(syncs.mock.lastCall?.[0]).toMatchObject({ sun: true });
+      expect(syncs.mock.calls.length).toBeGreaterThan(synced);
+      expect(layouts.count).toBeGreaterThan(laid);
+      [laid, synced] = [layouts.count, syncs.mock.calls.length];
+
+      rerenderWith(store, { ...UI, hour: 10 });
+      await frames();
+      expect(light.castShadow).toBe(false);
+      expect(syncs.mock.lastCall?.[0]).toMatchObject({ sun: false });
+      expect(syncs.mock.calls.length).toBeGreaterThan(synced);
+      expect(layouts.count).toBeGreaterThan(laid);
+    });
+
+    it('brings the drawn patches back when the hour sets the sun, without laying the labels out again', async () => {
+      const store = fakeStore();
+      const { onView, rerenderWith } = renderScene(store, { ...SUN, hour: 12 }, '2026-11-02');
+      await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+      await frames();
+      const [laid, synced] = [layouts.count, syncs.mock.calls.length];
+      // 2 November's sunset is 16:50:56 (the almanac): at 17:30 the sun is down.
+      rerenderWith(store, { ...SUN, hour: 17.5 });
+      await frames();
+      expect((lights.at(-1) as DirectionalLight).castShadow).toBe(false);
+      expect(syncs.mock.calls.length).toBeGreaterThan(synced);
+      expect(syncs.mock.lastCall?.[0]).toMatchObject({ sun: false });
+      expect(layouts.count).toBe(laid);
+    });
   });
 
   it('lays the labels out again once the web font has loaded, and does nothing if that is after it is gone', async () => {
@@ -866,5 +962,45 @@ describe('the 3D map with WebGL', () => {
       expect(Number(y)).toBe(237);
       expect(Number(x) + 37).toBeCloseTo(500, -1);
     });
+  });
+});
+
+/* "ייצוא תמונה" (spec §10). A blob, not a data URL: Chromium refuses to
+   download a data URL much over 2 MB, and a full-screen PNG is several. */
+describe('the picture of the view', () => {
+  const realToBlob = HTMLCanvasElement.prototype.toBlob;
+
+  afterEach(() => {
+    HTMLCanvasElement.prototype.toBlob = realToBlob;
+  });
+
+  it('draws a fresh frame and hands back a PNG of it', async () => {
+    const png = new Blob(['png'], { type: 'image/png' });
+    const asked: Array<string | undefined> = [];
+    HTMLCanvasElement.prototype.toBlob = function toBlob(callback: BlobCallback, type?: string) {
+      asked.push(type);
+      callback(png);
+    };
+    const { handle, onView } = renderScene();
+    await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+    const before = renderer.frames;
+    await expect(handle.current?.exportPng()).resolves.toBe(png);
+    expect(renderer.frames).toBe(before + 1);
+    expect(asked).toEqual(['image/png']);
+  });
+
+  it('hands back nothing when the browser cannot make the file', async () => {
+    const { handle, onView } = renderScene();
+    await waitFor(() => { expect(onView).toHaveBeenCalled(); });
+    HTMLCanvasElement.prototype.toBlob = function toBlob(callback: BlobCallback) { callback(null); };
+    await expect(handle.current?.exportPng()).resolves.toBeNull();
+    HTMLCanvasElement.prototype.toBlob = function toBlob() { throw new Error('SecurityError'); };
+    await expect(handle.current?.exportPng()).resolves.toBeNull();
+  });
+
+  it('hands back nothing when there is no map to picture', async () => {
+    renderer.fails = true;
+    const { handle } = renderScene();
+    await expect(handle.current?.exportPng()).resolves.toBeNull();
   });
 });

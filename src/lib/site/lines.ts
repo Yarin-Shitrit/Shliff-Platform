@@ -9,13 +9,14 @@ import type { Rect } from './geometry';
  * so the metres a lead reads on screen are the metres the totals add up.
  *
  * A line joins items, never points, and only items that carry that utility:
- * water runs between a drinking-water tank, a shower and a sink — a toilet
- * takes none — and power between the generator, a fridge and a light. Two
- * consumers may be joined to each other (a pipe that branches at the first
- * shower, a cable daisy-chained from one light to the next); what is refused
- * is an end that has nothing to do with the utility at all. Whether a fridge
- * is actually reached from the generator is `unconnected` below — a fact
- * the screen states, never a reason to refuse a line.
+ * water runs from a drinking-water tank to a shower or a sink — a toilet
+ * takes none — and power from the generator to a fridge or a light. One end
+ * always gives: a source, or a splitter that passes it on. Two takers are
+ * never joined to each other (the lead, 2026-09-25: everything takes its
+ * water from a tank); a tank that feeds several things does so through a
+ * splitter (`splitOps`). Whether a fridge is actually reached from the
+ * generator is `unconnected` below — a fact the screen states, never a
+ * reason to refuse a line.
  *
  * Length is measured from wall to wall, not centre to centre: a cable to a
  * caravan starts at the caravan's side. It is the length on the map, with
@@ -33,16 +34,18 @@ export interface LineKindPreset {
   sources: readonly SiteItemKind[];
   /** Kinds that take. */
   consumers: readonly SiteItemKind[];
+  /** Kinds that pass it on: a splitter, where one run from the source becomes a run to each consumer. */
+  junctions: readonly SiteItemKind[];
 }
 
 export const LINE_KINDS: Record<SiteLineKind, LineKindPreset> = {
   water: {
     label: 'צינור מים', plural: 'צינורות מים', noun: 'מים',
-    sources: ['water'], consumers: ['shower', 'sink'],
+    sources: ['water'], consumers: ['shower', 'sink'], junctions: ['splitter'],
   },
   power: {
     label: 'כבל חשמל', plural: 'כבלי חשמל', noun: 'חשמל',
-    sources: ['generator'], consumers: ['fridge', 'light'],
+    sources: ['generator'], consumers: ['fridge', 'light'], junctions: ['splitter'],
   },
 };
 
@@ -55,7 +58,13 @@ export function isSiteLineKind(value: string): value is SiteLineKind {
 /** Whether an item of this kind may be an end of this kind of line, giving or taking. */
 export function joins(kind: SiteLineKind, itemKind: SiteItemKind): boolean {
   const preset = LINE_KINDS[kind];
-  return preset.sources.includes(itemKind) || preset.consumers.includes(itemKind);
+  return preset.sources.includes(itemKind) || preset.consumers.includes(itemKind) || preset.junctions.includes(itemKind);
+}
+
+/** Whether an item of this kind is where a split can start: it gives the utility, or passes it on. */
+export function splits(kind: SiteLineKind, itemKind: SiteItemKind): boolean {
+  const preset = LINE_KINDS[kind];
+  return preset.sources.includes(itemKind) || preset.junctions.includes(itemKind);
 }
 
 /** The utilities an item of this kind takes part in — what the inspector offers to connect. */
@@ -72,10 +81,66 @@ export function endpointRefusal(kind: SiteLineKind, fromKind: SiteItemKind, toKi
   if (sameItem) return 'a line must join two different items';
   if (!joins(kind, fromKind) || !joins(kind, toKind)) {
     return kind === 'water'
-      ? 'a water pipe joins only a drinking-water tank, a shower or a sink'
-      : 'a power cable joins only the generator, a fridge or a light';
+      ? 'a water pipe joins only a drinking-water tank, a shower, a sink or a splitter'
+      : 'a power cable joins only the generator, a fridge, a light or a splitter';
+  }
+  // Everything takes its water from a tank (the lead, 2026-09-25): a run has a giver at one end —
+  // a source or a splitter — never two takers joined to each other.
+  if (!splits(kind, fromKind) && !splits(kind, toKind)) {
+    return kind === 'water'
+      ? 'a water pipe runs from a drinking-water tank or a splitter'
+      : 'a power cable runs from the generator or a splitter';
   }
   return null;
+}
+
+/**
+ * The items a run of this kind could join `itemId` to: every other item that
+ * carries the utility — and, when `itemId` only takes it, only those that
+ * give or pass it on. The one rule `eligibleEnds` and the line panel share.
+ */
+export function eligiblePartners(doc: EditorDoc, itemId: string, kind: SiteLineKind): EditorItem[] {
+  const origin = doc.items.find((item) => item.id === itemId);
+  if (origin === undefined || !joins(kind, origin.kind)) return [];
+  const givesOnly = !splits(kind, origin.kind);
+  return doc.items.filter((item) => item.id !== itemId && joins(kind, item.kind) && (!givesOnly || splits(kind, item.kind)));
+}
+
+/**
+ * The point whose summed straight-line distance to every given point is
+ * least — Weiszfeld's iteration from the centroid, in whole centimetres.
+ * For two points that is the middle; for three or more, the place a
+ * splitter should stand so the runs from it add up shortest. Exact enough
+ * for a hose: it stops when a step moves under half a centimetre.
+ */
+export function geometricMedian(points: ReadonlyArray<readonly [number, number]>): SiteLinePoint {
+  if (points.length === 0) return [0, 0];
+  let x = points.reduce((sum, p) => sum + p[0], 0) / points.length;
+  let y = points.reduce((sum, p) => sum + p[1], 0) / points.length;
+  for (let step = 0; step < 200; step += 1) {
+    let wx = 0;
+    let wy = 0;
+    let w = 0;
+    for (const p of points) {
+      const d = Math.hypot(p[0] - x, p[1] - y);
+      if (d < 0.5) return [Math.round(p[0]), Math.round(p[1])]; // standing on a point: it is the answer
+      wx += p[0] / d;
+      wy += p[1] / d;
+      w += 1 / d;
+    }
+    const nx = wx / w;
+    const ny = wy / w;
+    const moved = Math.hypot(nx - x, ny - y);
+    x = nx;
+    y = ny;
+    if (moved < 0.5) break;
+  }
+  return [Math.round(x), Math.round(y)];
+}
+
+/** The middle of an item, for the runs that end on it. */
+export function centreOfItem(item: EditorItem): SiteLinePoint {
+  return [Math.round(item.xCm + item.widthCm / 2), Math.round(item.yCm + item.depthCm / 2)];
 }
 
 function centreOf(rect: Rect): [number, number] {
@@ -193,13 +258,11 @@ export function unconnected(doc: EditorDoc, kind: SiteLineKind): string[] {
  * the same run twice.
  */
 export function eligibleEnds(doc: EditorDoc, itemId: string, kind: SiteLineKind): EditorItem[] {
-  const origin = doc.items.find((item) => item.id === itemId);
-  if (origin === undefined || !joins(kind, origin.kind)) return [];
   const joined = new Set<string>();
   for (const line of doc.lines) {
     if (line.kind !== kind) continue;
     if (line.fromId === itemId) joined.add(line.toId);
     if (line.toId === itemId) joined.add(line.fromId);
   }
-  return doc.items.filter((item) => item.id !== itemId && joins(kind, item.kind) && !joined.has(item.id));
+  return eligiblePartners(doc, itemId, kind).filter((item) => !joined.has(item.id));
 }
