@@ -1,8 +1,9 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from 'vitest';
 import { act, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { Profiler } from 'react';
 import { ToastProvider } from '@/components/ui/toaster';
 import { unnamedControls } from '@/test/a11y';
 import { contains, overlap } from '@/lib/site/geometry';
@@ -185,18 +186,40 @@ const VIEW: ViewInfo = { yaw: 0, zoomPct: 100, pxPerM: 20, groundCorners: [], se
 const CONFLICT = 'המפה שונתה ממקום אחר מאז שנפתחה. השינויים האחרונים שלך עוד לא נשמרו.';
 const PLOT_SAVED = 'הגדרות המגרש נשמרו, ויש כאן שינויים שעוד לא נשמרו. אפשר לשמור אותם מעל המפה המעודכנת, או לטעון אותה בלעדיהם.';
 
-/** jsdom has no `matchMedia`; this answers the editor's two questions. */
+const EXPORTED = 'התמונה נשמרה, בלי התוויות שעל המפה.';
+const EXPORT_FAILED = 'לא הצלחנו לשמור תמונה של המפה. אפשר לנסות שוב.';
+const NARROW_NOTE = /את המפה עורכים במסך ברוחב 900 פיקסלים לפחות/;
+
+/**
+ * jsdom has no `matchMedia`; this answers the editor's two questions — the
+ * width, asked exactly as the editor asks it, and the theme — and can tell
+ * the editor the window crossed 900 px while it is open (`resizeTo`).
+ */
+const media = { wide: true, dark: false, listeners: new Set<() => void>() };
+
 function stubMedia({ wide = true, dark = false }: { wide?: boolean; dark?: boolean } = {}): void {
+  media.wide = wide;
+  media.dark = dark;
   window.matchMedia = ((query: string) => ({
-    matches: query.includes('min-width') ? wide : query.includes('dark') ? dark : false,
+    get matches() {
+      return query === '(width >= 900px)' ? media.wide : query.includes('dark') ? media.dark : false;
+    },
     media: query,
     onchange: null,
-    addEventListener: () => {},
-    removeEventListener: () => {},
+    addEventListener: (_type: string, listener: () => void) => { media.listeners.add(listener); },
+    removeEventListener: (_type: string, listener: () => void) => { media.listeners.delete(listener); },
     addListener: () => {},
     removeListener: () => {},
     dispatchEvent: () => false,
   })) as unknown as typeof window.matchMedia;
+}
+
+/** A laptop window made narrower, or wider, while the editor is open. */
+function resizeTo(wide: boolean): void {
+  act(() => {
+    media.wide = wide;
+    for (const listener of [...media.listeners]) listener();
+  });
 }
 
 beforeAll(() => {
@@ -210,6 +233,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  media.listeners.clear();
   stubMedia();
   fake.set({ save: SAVED, notice: null });
   fake.resolveConflict.mockResolvedValue(undefined);
@@ -218,10 +242,17 @@ beforeEach(() => {
   delete document.documentElement.dataset.theme;
 });
 
-function renderEditor(over: Partial<SiteEditorProps> = {}) {
+/** The modules a render uses — this file's own, or a fresh page load's (`vi.resetModules`). */
+type Loaded = { Editor: typeof SiteEditor; Toasts: typeof ToastProvider };
+
+function renderEditor(
+  over: Partial<SiteEditorProps> = {},
+  { Editor, Toasts }: Loaded = { Editor: SiteEditor, Toasts: ToastProvider },
+) {
   const props: SiteEditorProps = {
     initial: { doc: siteDoc([siteItem({ id: 'a' })]), version: 0 },
     initialSelection: 'a',
+    seasonId: 's26',
     seasonName: 'ברן 26',
     sunDate: '2026-06-04',
     buildTasks: [],
@@ -229,12 +260,12 @@ function renderEditor(over: Partial<SiteEditorProps> = {}) {
     seasonDateHref: DATE_HREF,
     ...over,
   };
-  const rendered = render(<ToastProvider><SiteEditor {...props} /></ToastProvider>);
+  const rendered = render(<Toasts><Editor {...props} /></Toasts>);
   return {
     ...rendered,
     /** The page rendering the same editor again with some props changed — as `router.refresh()` does. */
     rerenderWith(next: Partial<SiteEditorProps>): void {
-      rendered.rerender(<ToastProvider><SiteEditor {...props} {...next} /></ToastProvider>);
+      rendered.rerender(<Toasts><Editor {...props} {...next} /></Toasts>);
     },
   };
 }
@@ -1107,6 +1138,187 @@ describe('shade by hour', () => {
     fireEvent.click(button('צל לפי שעה'));
     expect(within(screen.getByRole('group', { name: 'צל לפי שעה' })).getByText(/עוד לא נרשם תאריך פתיחה/)).toBeTruthy();
   });
+
+  it('lights the day a chip picks, once the burn’s last day is known', async () => {
+    renderEditor({ sunEndDate: '2026-06-06' });
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    const days = within(screen.getByRole('group', { name: 'ימי הברן' }));
+    expect(days.getAllByRole('button').map((chip) => chip.textContent)).toEqual(['ה׳ 4.6', 'ו׳ 5.6', 'ש׳ 6.6']);
+    fireEvent.click(days.getByRole('button', { name: 'ו׳ 5.6' }));
+    expect(lastScene().sunDate).toBe('2026-06-05');
+    expect(days.getByRole('button', { name: 'ו׳ 5.6' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByText((_, element) => element?.tagName === 'P' && element.textContent?.startsWith('ביום 5.6.2026 של הברן') === true))
+      .toBeTruthy();
+  });
+
+  it('has the gate day alone, and lights it, while the burn’s last day is unknown', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    const chips = within(screen.getByRole('group', { name: 'ימי הברן' })).getAllByRole('button');
+    expect(chips.map((chip) => chip.textContent)).toEqual(['ה׳ 4.6']);
+    fireEvent.click(chips[0]);
+    expect(lastScene().sunDate).toBe('2026-06-04');
+  });
+
+  it('goes back to the gate day when a picked day is no longer one of the burn’s', async () => {
+    const { rerenderWith } = renderEditor({ sunEndDate: '2026-06-06' });
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    fireEvent.click(button('ש׳ 6.6'));
+    expect(lastScene().sunDate).toBe('2026-06-06');
+    // The season's opening date moved in its drawer, and the page refreshed.
+    rerenderWith({ sunDate: '2026-07-01', sunEndDate: '2026-07-02' });
+    expect(lastScene().sunDate).toBe('2026-07-01');
+  });
+
+  it('pictures the day’s shade from the map on screen, a column a quarter hour', async () => {
+    const net = siteItem({ id: 'n', kind: 'shade', label: 'רשת 1', xCm: 400, yCm: 400, widthCm: 800, depthCm: 800, insetCm: 50 });
+    const { container } = renderEditor({ initial: { doc: siteDoc([siteItem({ id: 'a' }), net]), version: 0 } });
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    // 4 June at the camp: sunrise 05:39:37, sunset 19:38:51 (the almanac) — 05:45 to 19:30, 56 quarter hours.
+    expect(container.querySelectorAll('[data-strip] [data-hour]')).toHaveLength(56);
+    const slider = screen.getByRole('slider', { name: 'שעה ביום' }) as HTMLInputElement;
+    expect([slider.min, slider.max]).toEqual(['5.75', '19.5']);
+    // Clicking the strip moves the hour the scene lights.
+    fireEvent.click(container.querySelector('[data-strip] [data-hour="10.25"]')!);
+    expect(lastScene().ui.hour).toBe(10.25);
+  });
+
+  it('invites a net when the map has none, instead of an empty picture', async () => {
+    const { container } = renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    expect(screen.getByText(/^אין עדיין רשתות צל במפה\./)).toBeTruthy();
+    expect(container.querySelector('[data-strip]')).toBeNull();
+  });
+
+  it('ranks the map’s tents by their shade, and a row selects its tent (MST)', async () => {
+    // 4 June: the sun stands high, so the net's shade stays near it; a tent under it outranks one across the plot.
+    const net = siteItem({ id: 'n', kind: 'shade', label: 'רשת 1', xCm: 400, yCm: 400, widthCm: 800, depthCm: 800, insetCm: 50 });
+    const far = siteItem({ id: 'far', label: 'אוהל רחוק', xCm: 2000, yCm: 2000 });
+    renderEditor({ initial: { doc: siteDoc([far, siteItem({ id: 'a' }), net]), version: 0 }, initialSelection: null });
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    fireEvent.click(button('האוהלים המוצלים ביותר'));
+    const list = within(screen.getByRole('list', { name: 'האוהלים המוצלים ביותר' }));
+    const rows = list.getAllByRole('button');
+    expect(rows.map((row) => row.textContent?.startsWith('אוהל 1') ? 'a' : row.textContent?.startsWith('אוהל רחוק') ? 'far' : '?'))
+      .toEqual(['a', 'far']);
+    expect(rows[0].textContent).toMatch(/בצל$/);
+    expect(rows[1].textContent).toBe('אוהל רחוק אין צל');
+    fireEvent.click(rows[0]);
+    expect(lastScene().store.selection).toEqual(['a']);
+    expect(scene.handle.fitIds).toHaveBeenLastCalledWith(['a']);
+  });
+
+  it('selects the nets from the invitation when full shade never reaches what is under them', async () => {
+    /* A 10 × 10 m tent half under an 8 × 8 m net: the net's shaded ground is
+       7 × 7 m, so the tent is never wholly in its shade. */
+    const tent = siteItem({ id: 'big', label: 'אוהל גדול', xCm: 0, yCm: 0, widthCm: 1000, depthCm: 1000 });
+    const net = siteItem({ id: 'n', kind: 'shade', label: 'רשת 1', xCm: 400, yCm: 400, widthCm: 800, depthCm: 800, insetCm: 50 });
+    renderEditor({ initial: { doc: siteDoc([tent, net]), version: 0 }, initialSelection: null });
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    expect(screen.getByText(/^באף שעה ביום הזה אין צל/)).toBeTruthy();
+    fireEvent.click(button('בחירת רשתות הצל'));
+    expect(lastScene().store.selection).toEqual(['n']);
+    expect(scene.handle.fitIds).toHaveBeenLastCalledWith(['n']);
+  });
+});
+
+/*
+ * Playback (SIM2) in the whole editor, on frames the test hands out: 16 ms
+ * apart, one `act` each, so every commit renders as it would in a browser.
+ * What is measured is how often the whole editor re-renders — the cost a
+ * playing sun must not multiply by the frame rate.
+ */
+describe('shade by hour, played', () => {
+  let queue = new Map<number, FrameRequestCallback>();
+  let nextFrame = 1;
+  let clock = 0;
+
+  beforeEach(() => {
+    queue = new Map();
+    nextFrame = 1;
+    clock = 0;
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      const id = nextFrame;
+      nextFrame += 1;
+      queue.set(id, callback);
+      return id;
+    });
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => { queue.delete(id); });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function runFrames(ms: number): number {
+    let frames = 0;
+    for (let spent = 0; spent < ms; spent += 16) {
+      act(() => {
+        clock += 16;
+        const due = [...queue.values()];
+        queue.clear();
+        for (const callback of due) callback(clock);
+      });
+      frames += 1;
+    }
+    return frames;
+  }
+
+  it('re-renders the editor about ten times a second while the sun plays, not on every frame', async () => {
+    const commits: number[] = [];
+    const props: SiteEditorProps = {
+      initial: { doc: siteDoc([siteItem({ id: 'a' })]), version: 0 },
+      initialSelection: null,
+      seasonId: 's26',
+      seasonName: 'ברן 26',
+      sunDate: '2026-06-04',
+      buildTasks: [],
+      plotHref: PLOT_HREF,
+      seasonDateHref: DATE_HREF,
+    };
+    render(
+      <Profiler id="editor" onRender={(_id, _phase, actual) => { commits.push(actual); }}>
+        <ToastProvider><SiteEditor {...props} /></ToastProvider>
+      </Profiler>,
+    );
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    fireEvent.click(button('הרצת הצל לאורך השעות'));
+    commits.length = 0;
+    const scenesBefore = scene.props.mock.calls.length;
+
+    const frames = runFrames(2000);
+    const sceneRenders = scene.props.mock.calls.length - scenesBefore;
+
+    // Measured at c2b1e38: 17 commits for 125 frames; 124 with the throttle taken out (sim-2-report.md).
+    expect(frames).toBe(125);
+    expect(commits.length).toBeLessThanOrEqual(20);
+    expect(sceneRenders).toBeLessThanOrEqual(20);
+    // 14:00 on, at 30 simulated minutes a second: nearly an hour later, on the scene.
+    expect(lastScene().ui.hour).toBeGreaterThan(14.9);
+    expect(lastScene().ui.hour).toBeLessThanOrEqual(15);
+  });
+
+  it('stops asking for frames when the sun card is closed mid-play', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.click(button('צל לפי שעה'));
+    fireEvent.click(button('הרצת הצל לאורך השעות'));
+    runFrames(300);
+    expect(queue.size).toBe(1);
+    fireEvent.click(button('צל לפי שעה'));
+    expect(queue.size).toBe(0);
+    const hour = lastScene().ui.hour;
+    runFrames(1000);
+    expect(lastScene().ui.hour).toBe(hour);
+  });
 });
 
 /* The plot drawer's save bumps the plan's version and refreshes the page; the
@@ -1226,7 +1438,13 @@ describe('the checks, the view controls and the minimap', () => {
 });
 
 describe('what a narrow screen gets, and the picture of the view', () => {
-  const TABLE = <table aria-label="הפריטים במפה"><tbody><tr><td>אוהל 1</td></tr></tbody></table>;
+  const table = () => screen.getByRole('table', { name: 'הפריטים במפה' });
+  /** The shell the map is edited in: the stage's own parent. Hidden by the stylesheet under 900 px. */
+  const editorArea = () => {
+    const area = stage().parentElement;
+    if (area === null) throw new Error('the stage has no parent');
+    return area;
+  };
 
   /**
    * The scene is lazy. Loaded once here, a scene the editor does mount is on
@@ -1243,24 +1461,107 @@ describe('what a narrow screen gets, and the picture of the view', () => {
   it('gives a screen under 900 px the table, and mounts no scene', async () => {
     await sceneLoaded();
     stubMedia({ wide: false });
-    renderEditor({ fallback: TABLE });
+    renderEditor();
     await act(async () => {});
-    expect(screen.getByRole('table', { name: 'הפריטים במפה' })).toBeTruthy();
+    expect(table()).toBeTruthy();
     expect(screen.queryByTestId('scene')).toBeNull();
     expect(scene.props).not.toHaveBeenCalled();
+  });
+
+  it('says what the table cannot do, and that the plot settings still work here', () => {
+    stubMedia({ wide: false });
+    renderEditor();
+    const note = screen.getByText(NARROW_NOTE).closest('p');
+    if (note === null) throw new Error('the note is not a paragraph');
+    expect(note.textContent).toMatch(/כאן אפשר לקרוא את הפריטים ולשנות את הגדרות המגרש/);
+    expect(within(note).getByRole('link', { name: 'הגדרות המגרש' }).getAttribute('href')).toBe(PLOT_HREF);
+  });
+
+  it('draws the table from the map being edited, so it shows what changed since the page loaded', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    // A wide screen carries no hidden copy of the table.
+    expect(screen.queryByRole('table', { name: 'הפריטים במפה' })).toBeNull();
+    fireEvent.keyDown(stage(), { code: 'KeyR' }); // 3 × 2 m turns to 2 × 3 m
+    resizeTo(false);
+    expect(screen.queryByTestId('scene')).toBeNull();
+    expect(within(table()).getByText('2 × 3 מ׳')).toBeTruthy();
+    expect(within(table()).queryByText('3 × 2 מ׳')).toBeNull();
+  });
+
+  it('says each state in words, says where each number came from, and links a build task to its page', () => {
+    stubMedia({ wide: false });
+    renderEditor({
+      initial: {
+        doc: siteDoc([
+          siteItem({ id: 'a', taskId: 't1' }),
+          siteItem({ id: 'c', kind: 'caravan', label: 'קראוון 1', xCm: 2500, widthCm: 700, depthCm: 250 }),
+        ]),
+        version: 0,
+      },
+      buildTasks: [{ id: 't1', title: 'הקמת המטבח' }],
+    });
+    const rows = within(table());
+    expect(rows.getAllByText('מחוץ למגרש').length).toBeGreaterThan(0);
+    // R11, on every row.
+    expect(rows.getAllByRole('img', { name: 'מקור: נרשם ידנית' })).toHaveLength(2);
+    expect(rows.getByRole('link', { name: 'הקמת המטבח' }).getAttribute('href')).toBe('/logistics/build?season=s26');
+    // A name is a name: selecting on a map that is not shown would do nothing.
+    expect(rows.getByText('קראוון 1')).toBeTruthy();
+    expect(rows.queryByRole('link', { name: 'קראוון 1' })).toBeNull();
+    expect(rows.queryByRole('link', { name: 'מחיקה' })).toBeNull();
+  });
+
+  it('keeps a conflict, a refused save and a notice answerable on a window narrowed mid-session', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    resizeTo(false);
+    saving({ status: 'conflict', version: 4, pending: 1 });
+    const reload = button('טעינת הגרסה העדכנית');
+    // Not inside the editor's shell, which the stylesheet hides under 900 px.
+    expect(editorArea().contains(reload)).toBe(false);
+    fireEvent.click(reload);
+    expect(fake.resolveConflict).toHaveBeenCalledWith('theirs');
+
+    saving({ status: 'error', errorKind: 'refused', error: 'הפריט כבר לא במפה.', pending: 1 });
+    expect(editorArea().contains(screen.getByText('הפריט כבר לא במפה.'))).toBe(false);
+    act(() => { fake.set({ save: SAVED, notice: 'לא נשמרו שינויים בפריטים שכבר לא במפה: אוהל 1.' }); });
+    expect(editorArea().contains(screen.getByText('לא נשמרו שינויים בפריטים שכבר לא במפה: אוהל 1.'))).toBe(false);
+  });
+
+  it('keeps a conflict and a refused save answerable in a browser without WebGL', async () => {
+    const realGetContext = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = (() => null) as unknown as HTMLCanvasElement['getContext'];
+    try {
+      // A new module registry is a new page load: this one asks, and gets no WebGL.
+      vi.resetModules();
+      renderEditor({}, {
+        Editor: (await import('./site-editor')).SiteEditor,
+        Toasts: (await import('@/components/ui/toaster')).ToastProvider,
+      });
+      expect(await screen.findByRole('table', { name: 'הפריטים במפה' })).toBeTruthy();
+      expect(screen.queryByRole('group', { name: 'כלי העריכה' })).toBeNull();
+      saving({ status: 'conflict', version: 4, pending: 1 });
+      fireEvent.click(button('שמירת השינויים שלי מעליה'));
+      await waitFor(() => { expect(fake.resolveConflict).toHaveBeenCalledWith('mine'); });
+      saving({ status: 'error', errorKind: 'refused', error: 'הפריט כבר לא במפה.', pending: 1 });
+      expect(screen.getByText('הפריט כבר לא במפה.')).toBeTruthy();
+      expect(button('ניסיון חוזר')).toBeTruthy();
+    } finally {
+      HTMLCanvasElement.prototype.getContext = realGetContext;
+    }
   });
 
   /* Ruling P7: no shortcut acts on a map that is not shown. */
   it('leaves every key to the page while the table is the view', () => {
     stubMedia({ wide: false });
-    renderEditor({ fallback: TABLE });
-    const table = screen.getByRole('table', { name: 'הפריטים במפה' });
+    renderEditor();
     for (const keys of [
       { code: 'Delete' }, { code: 'KeyR' }, { code: 'KeyL' }, { code: 'KeyD', metaKey: true },
       { code: 'KeyZ', metaKey: true }, { code: 'Slash', shiftKey: true },
     ]) {
-      const press = createEvent.keyDown(table, keys);
-      fireEvent(table, press);
+      const press = createEvent.keyDown(table(), keys);
+      fireEvent(table(), press);
       expect(press.defaultPrevented).toBe(false);
     }
     // Nothing was removed, turned, locked or copied: the item is still the one inspected, and there is nothing to undo.
@@ -1273,31 +1574,69 @@ describe('what a narrow screen gets, and the picture of the view', () => {
 
   it('offers no picture of a map that is not shown', () => {
     stubMedia({ wide: false });
-    renderEditor({ fallback: TABLE });
-    expect(button('ייצוא תמונה').disabled).toBe(true);
+    renderEditor();
+    expect(screen.queryByRole('button', { name: 'ייצוא תמונה' })).toBeNull();
   });
 
-  it('saves a picture of the view as a PNG named for the season', async () => {
-    scene.handle.exportPng.mockReturnValue('data:image/png;base64,AAAA');
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
-    renderEditor();
-    await screen.findByTestId('scene');
-    fireEvent.click(button('ייצוא תמונה'));
-    expect(click).toHaveBeenCalledTimes(1);
-    const link = click.mock.contexts[0] as HTMLAnchorElement;
-    expect(link.href).toBe('data:image/png;base64,AAAA');
-    expect(link.download).toBe('מפת הקאמפ ברן 26.png');
-    click.mockRestore();
-  });
+  describe('the picture of the view', () => {
+    const realCreate = URL.createObjectURL;
+    const realRevoke = URL.revokeObjectURL;
+    const create = vi.fn<(blob: Blob) => string>(() => 'blob:map');
+    const revoke = vi.fn<(url: string) => void>();
 
-  it('says so, in Hebrew, when the picture cannot be made', async () => {
-    scene.handle.exportPng.mockReturnValue(null);
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
-    renderEditor();
-    await screen.findByTestId('scene');
-    fireEvent.click(button('ייצוא תמונה'));
-    expect(await screen.findByText('לא הצלחנו לשמור תמונה של המפה. אפשר לנסות שוב.')).toBeTruthy();
-    expect(click).not.toHaveBeenCalled();
-    click.mockRestore();
+    /** Where the link was when it was clicked, and the link itself. */
+    const clicked: Array<{ link: HTMLAnchorElement; attached: boolean }> = [];
+    let click: { mockRestore: () => void } | null = null;
+
+    beforeEach(() => {
+      clicked.length = 0;
+      create.mockClear();
+      revoke.mockClear();
+      Object.assign(URL, { createObjectURL: create, revokeObjectURL: revoke });
+      click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function record(this: HTMLAnchorElement) {
+        clicked.push({ link: this, attached: document.body.contains(this) });
+      });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      click?.mockRestore();
+      Object.assign(URL, { createObjectURL: realCreate, revokeObjectURL: realRevoke });
+    });
+
+    it('saves it as a PNG named for the season and the day in Israel, through a link it lets go of', async () => {
+      // 22:30 UTC on 24 September is 01:30 on 25 September in Israel.
+      vi.useFakeTimers({ now: new Date('2026-09-24T22:30:00Z'), shouldAdvanceTime: true });
+      const png = new Blob(['png'], { type: 'image/png' });
+      scene.handle.exportPng.mockResolvedValue(png);
+      renderEditor();
+      await screen.findByTestId('scene');
+      fireEvent.click(button('ייצוא תמונה'));
+
+      // Said once it is saved: the labels are not in the picture.
+      expect(await screen.findByText(EXPORTED)).toBeTruthy();
+      expect(create).toHaveBeenCalledWith(png);
+      expect(clicked).toHaveLength(1);
+      const [{ link, attached }] = clicked;
+      expect(link.href).toBe('blob:map');
+      expect(link.download).toBe('מפת הקאמפ ברן 26 2026-09-25.png');
+      // On the page when clicked, off it afterwards.
+      expect(attached).toBe(true);
+      expect(link.isConnected).toBe(false);
+      // The URL outlives the click long enough for the download to start, then goes.
+      expect(revoke).not.toHaveBeenCalled();
+      act(() => { vi.advanceTimersByTime(60_000); });
+      expect(revoke).toHaveBeenCalledWith('blob:map');
+    });
+
+    it('says so, in Hebrew, when the picture cannot be made', async () => {
+      scene.handle.exportPng.mockResolvedValue(null);
+      renderEditor();
+      await screen.findByTestId('scene');
+      fireEvent.click(button('ייצוא תמונה'));
+      expect(await screen.findByText(EXPORT_FAILED)).toBeTruthy();
+      expect(create).not.toHaveBeenCalled();
+      expect(clicked).toHaveLength(0);
+    });
   });
 });

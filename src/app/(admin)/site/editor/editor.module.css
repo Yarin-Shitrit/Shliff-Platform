@@ -199,13 +199,23 @@
   inset: 0;
 }
 
-/* The cards (the shortcuts, the sun) stack above the view controls, bottom centre. */
+/*
+ * The cards (the shortcuts, the sun) stack above the view controls, bottom
+ * centre. Together they can be taller than the stage (1280 × 800 with both
+ * open); the stack then stops below the checks bar and scrolls, rather than
+ * running off the top where the stage would clip the sun card's controls.
+ * 64px and 56px are `INSETS.bottom` (the view controls) and `INSETS.top` (the
+ * checks bar) in `site-editor.tsx`, the room the scene leaves the panels.
+ */
 .cards {
   position: absolute;
   inset-block-end: 64px;
   inset-inline: 0;
   margin-inline: auto;
   inline-size: fit-content;
+  max-block-size: calc(100% - 64px - 56px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -215,6 +225,16 @@
 /* ---- the item table: a narrow screen, and a browser without WebGL ------ */
 
 .narrowView { display: none; }
+
+/* What the table is for, where the map is not. */
+.tableNote {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-meta);
+}
+
+/* A top-bar action that needs the map: laid out as if the wrapper were not there. */
+.wideOnly { display: contents; }
 
 .fallback {
   flex: 1;
@@ -236,13 +256,17 @@
   border-radius: var(--radius-card);
 }
 
-/* Spec §7: under 900 px the table is the view. The same line as the editor's
-   `WIDE_QUERY` (`editor-styles.test.ts` holds the two together): this draws
-   it before the client has asked, as the server renders the wide page. */
-@media (max-width: 899.98px) {
+/* Spec §7: under 900 px the table is the view. The other side of the editor's
+   `WIDE_QUERY`, `(width >= 900px)` — ranges, so no fractional width falls
+   between the two (`editor-styles.test.ts` holds them together). This draws
+   the line before the client has asked, as the server renders the wide page. */
+@media (width < 900px) {
   .editorArea { display: none; }
+  .wideOnly { display: none; }
   .narrowView {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
     flex: 1;
     min-block-size: 0;
     overflow-y: auto;

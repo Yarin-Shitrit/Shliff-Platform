@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, relative, sep } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { createTestDb, type TestDb } from '@/test/db';
 import { seasons, tasks } from '@/db/schema/camp';
@@ -34,6 +36,45 @@ describe('the camp map’s one way to write an item', () => {
       .toEqual([]);
     // The instrument reads the module: the readers are there.
     expect(Object.keys(plan)).toEqual(expect.arrayContaining(['applySiteOps', 'itemById', 'listItems']));
+  });
+
+  /** Every source file under `dirs`, as a forward-slash path from the repo root; test files and test helpers are fixtures, not writers. */
+  function sources(dirs: string[]): string[] {
+    const found: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) walk(path);
+        else if (/\.(ts|tsx|mts|mjs)$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) found.push(path);
+      }
+    };
+    for (const dir of dirs) walk(join(process.cwd(), dir));
+    return found
+      .map((path) => relative(process.cwd(), path).split(sep).join('/'))
+      .filter((path) => !path.startsWith('src/test/'));
+  }
+
+  /* A name check misses a write added under a new name. This reads the code:
+     every write to site_items in the app, the libraries and the scripts (which
+     write the production database) sits inside `applySiteOps` — versioned,
+     refusing a locked item — or `copyPlan`, which fills a map created a line
+     before it, one nobody can have open yet. */
+  it('writes site_items only from applySiteOps and copyPlan — nowhere else in the code or the scripts', () => {
+    const writes: string[] = [];
+    for (const file of sources(['src', 'scripts'])) {
+      let current = '(top level)';
+      readFileSync(join(process.cwd(), file), 'utf8').split('\n').forEach((line) => {
+        const declared = /^(?:export\s+)?(?:async\s+)?function\s+(\w+)/.exec(line);
+        if (declared) current = declared[1];
+        if (/\.(insert|update|delete)\(\s*siteItems\s*\)/.test(line)
+          || /\b(insert\s+into|update|delete\s+from)\s+"?site_items\b/i.test(line)) {
+          writes.push(`${file}:${current}`);
+        }
+      });
+    }
+    // The instrument is reading: plan.ts's own writes are found — one in copyPlan, three in applySiteOps.
+    expect(writes.length).toBe(4);
+    expect([...new Set(writes)].sort()).toEqual(['src/lib/site/plan.ts:applySiteOps', 'src/lib/site/plan.ts:copyPlan']);
   });
 });
 

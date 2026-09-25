@@ -65,7 +65,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   // A wide screen (the map is the view) in the light theme.
   window.matchMedia = ((query: string) => ({
-    matches: query.includes('min-width'), media: query, onchange: null,
+    matches: query === '(width >= 900px)', media: query, onchange: null,
     addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {},
     dispatchEvent: () => false,
   })) as unknown as typeof window.matchMedia;
@@ -77,6 +77,7 @@ async function renderEditor() {
   const props: SiteEditorProps = {
     initial: { doc: siteDoc([siteItem({ id: 'a' })]), version: 0 },
     initialSelection: 'a',
+    seasonId: 's26',
     seasonName: 'ברן 26',
     sunDate: '2026-06-04',
     buildTasks: [],

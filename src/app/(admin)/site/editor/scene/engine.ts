@@ -161,8 +161,8 @@ export class SceneEngine {
   private placed: PlacedLabel[] = [];
   private slots = new Map<string, string>();
   private anchors = new Map<string, [number, number]>();
-  private seen: { doc: unknown; selection: unknown; flags: unknown; ui: string; insets: string; tool: string } = {
-    doc: null, selection: null, flags: null, ui: '', insets: '', tool: '',
+  private seen: { doc: unknown; selection: unknown; flags: unknown; ui: string; light: string; insets: string; tool: string } = {
+    doc: null, selection: null, flags: null, ui: '', light: '', insets: '', tool: '',
   };
 
   constructor(private readonly stage: HTMLElement, private readonly options: EngineOptions) {
@@ -244,11 +244,15 @@ export class SceneEngine {
   update(): void {
     const { store, ui, insets, sunDate } = this.options.props();
     const plot = store.doc.plot;
-    // The plot's size is here for the light: its shadows cover the plot, so they follow a resize.
     const uiKey = [
-      ui.tool, ui.labels, ui.sun, ui.netsHidden, ui.snap, ui.hiddenGroups.join(','), ui.hour, ui.theme, sunDate,
-      plot.northDeg, plot.widthCm, plot.depthCm,
+      ui.tool, ui.labels, ui.sun, ui.netsHidden, ui.snap, ui.hiddenGroups.join(','), ui.theme,
     ].join('|');
+    /* What only the light reads (SIM2 fix round 1): shade by hour plays the
+       hour up to ten times a second, and a new hour or day moves the sun and
+       nothing else — no rebuild, no new label layout. `applyLight` marks the
+       scene dirty itself when the sun comes on or goes off. The plot's size is
+       here because the shadows cover the plot, so they follow a resize. */
+    const lightKey = [ui.sun, ui.hour, sunDate, plot.northDeg, plot.widthCm, plot.depthCm].join('|');
     const insetsKey = `${insets.left},${insets.top},${insets.right},${insets.bottom}`;
     let changed = false;
     if (store.doc !== this.seen.doc || store.flags !== this.seen.flags || store.selection !== this.seen.selection) {
@@ -260,6 +264,9 @@ export class SceneEngine {
     if (uiKey !== this.seen.ui) {
       this.sceneDirty = true;
       this.labelsDirty = true;
+      changed = true;
+    }
+    if (uiKey !== this.seen.ui || lightKey !== this.seen.light) {
       this.applyLight();
       changed = true;
     }
@@ -272,7 +279,9 @@ export class SceneEngine {
       // The measure tool's crosshair; back to the plain arrow until the next hover says otherwise.
       this.canvas.style.cursor = ui.tool === 'measure' ? 'crosshair' : 'default';
     }
-    this.seen = { doc: store.doc, selection: store.selection, flags: store.flags, ui: uiKey, insets: insetsKey, tool: ui.tool };
+    this.seen = {
+      doc: store.doc, selection: store.selection, flags: store.flags, ui: uiKey, light: lightKey, insets: insetsKey, tool: ui.tool,
+    };
     if (ui.tool !== 'measure' && this.measuring !== null && !this.gestures.active) {
       this.measuring = null;
       changed = true;
@@ -457,14 +466,25 @@ export class SceneEngine {
     this.setCamera(panBy(this.cam, xCm - centre[0], yCm - centre[1]));
   }
 
-  exportPng(): string | null {
-    if (this.cam === null || this.lost) return null;
-    try {
-      this.renderer.render(this.scene, this.rig.apply(this.cam, this.viewport, this.drawMode));
-      return this.canvas.toDataURL('image/png');
-    } catch {
-      return null;
-    }
+  /**
+   * The current view as a PNG blob, drawn fresh first. A blob, not a data
+   * URL: Chromium refuses to download a data URL much over 2 MB, and a
+   * full-screen PNG at a high pixel ratio is several. Null when there is no
+   * view yet, the context is lost, or the browser cannot make the file. The
+   * labels are DOM (`LabelsLayer`), not WebGL, so they are not in it.
+   */
+  exportPng(): Promise<Blob | null> {
+    const cam = this.cam;
+    if (cam === null || this.lost) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      try {
+        this.renderer.render(this.scene, this.rig.apply(cam, this.viewport, this.drawMode));
+        // `preserveDrawingBuffer` keeps that frame on the canvas until the blob is read.
+        this.canvas.toBlob((blob) => { resolve(blob); }, 'image/png');
+      } catch {
+        resolve(null);
+      }
+    });
   }
 
   /* ── frames ─────────────────────────────────────────────────────────── */
@@ -751,10 +771,16 @@ export class SceneEngine {
     });
   }
 
-  /** The directional light: the sun at the chosen hour when shade by hour is on (spec §11), else a fixed key light. */
+  /**
+   * The directional light: the sun at the chosen hour when shade by hour is
+   * on (spec §11), else a fixed key light. The meshes read only whether the
+   * sun is on — real shadows, or the drawn patches — so the scene is rebuilt
+   * only when that flips, not for every new hour.
+   */
   private applyLight(): void {
     const { store, ui, sunDate } = this.options.props();
     const plot = store.doc.plot;
+    const wasOn = this.sunOn;
     let toward: Vec3 = DEFAULT_LIGHT;
     let sunDown = false;
     this.sunOn = false;
@@ -786,7 +812,7 @@ export class SceneEngine {
     shadow.updateProjectionMatrix();
     this.light.intensity = sunDown ? 0 : this.sunOn ? 2.4 : 1.4;
     this.hemisphere.intensity = this.sunOn ? 1.3 : sunDown ? 0.9 : 2.2;
-    this.sceneDirty = true;
+    if (this.sunOn !== wasOn) this.sceneDirty = true;
   }
 
   /* ── what is where on screen ────────────────────────────────────────── */

@@ -69,7 +69,10 @@ describe('what a line may join', () => {
 
   it('refuses the wrong end in the words failure-messages.ts keys on', () => {
     expect(endpointRefusal('water', 'water', 'shower', false)).toBeNull();
-    expect(endpointRefusal('water', 'shower', 'sink', false)).toBeNull();
+    // Two takers never join each other: water comes from a tank (or a splitter fed by one).
+    expect(endpointRefusal('water', 'shower', 'sink', false)).toMatch(/^a water pipe runs from/);
+    expect(endpointRefusal('power', 'light', 'fridge', false)).toMatch(/^a power cable runs from/);
+    expect(endpointRefusal('water', 'splitter', 'sink', false)).toBeNull();
     expect(endpointRefusal('water', 'water', 'toilet', false)).toMatch(/^a water pipe joins only/);
     expect(endpointRefusal('power', 'generator', 'shower', false)).toMatch(/^a power cable joins only/);
     expect(endpointRefusal('power', 'generator', 'generator', true)).toMatch(/^a line must join two different items/);
@@ -165,7 +168,9 @@ describe('what a new line may run to', () => {
   it('offers every other item that carries the utility, not yet joined to this one', () => {
     const map = doc([line({ id: 'w1', kind: 'water', fromId: 'tank', toId: 'shower' })]);
     expect(eligibleEnds(map, 'tank', 'water').map((entry) => entry.id)).toEqual(['sink']);
-    expect(eligibleEnds(map, 'shower', 'water').map((entry) => entry.id)).toEqual(['sink']);
+    // From a shower only a giver is offered — and the tank is already joined to it.
+    expect(eligibleEnds(map, 'shower', 'water').map((entry) => entry.id)).toEqual([]);
+    expect(eligibleEnds(map, 'sink', 'water').map((entry) => entry.id)).toEqual(['tank']);
     expect(eligibleEnds(map, 'gen', 'power').map((entry) => entry.id)).toEqual(['fridge', 'light1', 'light2']);
     expect(eligibleEnds(map, 'toilet', 'water')).toEqual([]);
   });

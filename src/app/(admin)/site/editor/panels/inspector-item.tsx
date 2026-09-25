@@ -28,7 +28,7 @@ import { effectiveSize, itemHeight } from '@/lib/site/defaults';
 import { toPlaced } from '@/lib/site/derive';
 import { areaM2, formatArea, formatMetres, formatSize, metres, shadedRect, shadeState } from '@/lib/site/geometry';
 import { DEFAULT_SHADE_INSET_CM, SITE_KINDS } from '@/lib/site/kinds';
-import { eligibleEnds, LINE_KINDS, lineKindsOf, lineLengthCm, unconnected } from '@/lib/site/lines';
+import { eligibleEnds, LINE_KINDS, lineKindsOf, lineLengthCm, splits, unconnected } from '@/lib/site/lines';
 import { linesAt, rectOf, type EditorDoc, type EditorItem } from '@/lib/site/editor/model';
 import { LOCKED_FIELDS, type ItemPatch, type SiteOp } from '@/lib/site/editor/ops';
 import { patchOps, resetSizeOps, setKindDefaultOps } from '@/lib/site/editor/commands';
@@ -64,7 +64,7 @@ function heldByLock(item: EditorItem, field: Length): boolean {
   return item.locked && key !== undefined && LOCKED_FIELDS.includes(key);
 }
 
-export function ItemInspector({ doc, item, flags, buildTasks, onRun, onPickIds, onAddLine, footer }: {
+export function ItemInspector({ doc, item, flags, buildTasks, onRun, onPickIds, onAddLine, onSplit, footer }: {
   doc: EditorDoc;
   item: EditorItem;
   flags: EditorFlags;
@@ -73,12 +73,16 @@ export function ItemInspector({ doc, item, flags, buildTasks, onRun, onPickIds, 
   onPickIds: (ids: string[]) => void;
   /** A new pipe or cable from this item to another — SiteEditor's, so its toast is too. Without it the panel offers none. */
   onAddLine?: (kind: SiteLineKind, fromId: string, toId: string) => void;
+  /** Two or more items fed from this one through a new splitter (`splitOps`) — SiteEditor's. Without it the panel offers no split. */
+  onSplit?: (kind: SiteLineKind, fromId: string, toIds: string[]) => void;
   /** Turn, duplicate, lock and remove — SiteEditor's, so their toasts are too. */
   footer?: ReactNode;
 }): ReactElement {
   const errorId = useId();
   const [drafts, setDrafts] = useState<Partial<Record<Field, string>>>({});
   const [refusal, setRefusal] = useState<{ field: Field; message: string } | null>(null);
+  /** The targets ticked for a split, per utility. */
+  const [splitPicks, setSplitPicks] = useState<Partial<Record<SiteLineKind, string[]>>>({});
 
   const preset = SITE_KINDS[item.kind];
   const standard = effectiveSize(item.kind, doc.defaults);
@@ -333,14 +337,51 @@ export function ItemInspector({ doc, item, flags, buildTasks, onRun, onPickIds, 
                   </p>
                 );
               }
+              /* A split: from a source or a splitter, to two or more consumers not yet reached from here, through a new splitter. */
+              const branchable = onSplit !== undefined && splits(kind, item.kind)
+                ? ends.filter((end) => LINE_KINDS[kind].consumers.includes(end.kind))
+                : [];
+              const picked = (splitPicks[kind] ?? []).filter((id) => branchable.some((end) => end.id === id));
+              const toggle = (id: string) => {
+                setSplitPicks((current) => ({
+                  ...current,
+                  [kind]: picked.includes(id) ? picked.filter((other) => other !== id) : [...picked, id],
+                }));
+              };
               return (
-                <label key={kind} className={styles.field}>
-                  {title}
-                  <select className={styles.input} value="" onChange={(event) => { if (event.target.value !== '') onAddLine(kind, item.id, event.target.value); }}>
-                    <option value="">בחירת פריט…</option>
-                    {ends.map((end) => <option key={end.id} value={end.id}>{end.label}</option>)}
-                  </select>
-                </label>
+                <div key={kind} className={styles.section}>
+                  <label className={styles.field}>
+                    {title}
+                    <select className={styles.input} value="" onChange={(event) => { if (event.target.value !== '') onAddLine(kind, item.id, event.target.value); }}>
+                      <option value="">בחירת פריט…</option>
+                      {ends.map((end) => <option key={end.id} value={end.id}>{end.label}</option>)}
+                    </select>
+                  </label>
+                  {branchable.length < 2 || onSplit === undefined ? null : (
+                    <div className={styles.section} role="group" aria-label={`פיצול ${LINE_KINDS[kind].noun} לכמה פריטים`}>
+                      <p className={chrome.meta}>{`פיצול ${LINE_KINDS[kind].noun} לכמה פריטים דרך מפצל`}</p>
+                      {branchable.map((end) => (
+                        <label key={end.id} className={styles.check}>
+                          <input type="checkbox" checked={picked.includes(end.id)} onChange={() => { toggle(end.id); }} />
+                          {end.label}
+                        </label>
+                      ))}
+                      <div className={styles.links}>
+                        <button
+                          type="button"
+                          className={chrome.link}
+                          disabled={picked.length < 2}
+                          onClick={() => { onSplit(kind, item.id, picked); setSplitPicks((current) => ({ ...current, [kind]: [] })); }}
+                        >
+                          {`חיבור דרך מפצל${picked.length >= 2 ? ` (${picked.length})` : ''}`}
+                        </button>
+                      </div>
+                      <p className={chrome.hint}>
+                        המפצל מונח בנקודה שבה סך הצינורות הכי קצר, על משבצת פנויה, ואפשר לגרור אותו.
+                      </p>
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>

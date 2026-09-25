@@ -53,6 +53,8 @@ export const SITE_KINDS: Record<SiteItemKind, SiteKindPreset> = {
   storage: { label: 'מחסן', plural: 'מחסנים', group: 'utility', shape: 'box', widthCm: 200, depthCm: 200, heightCm: 220 },
   // A light on a pole: a small footprint, tall. Where a power cable ends (`lines.ts`).
   light: { label: 'תאורה', plural: 'נקודות תאורה', group: 'utility', shape: 'box', widthCm: 40, depthCm: 40, heightCm: 250 },
+  // A junction on the ground where one run becomes several: a water manifold, a power strip. Carries either utility (`lines.ts`).
+  splitter: { label: 'מפצל', plural: 'מפצלים', group: 'utility', shape: 'box', widthCm: 30, depthCm: 30, heightCm: 30 },
   other: { label: 'אחר', plural: 'פריטים', group: 'other', shape: 'box', widthCm: 100, depthCm: 100, heightCm: 100 },
 };
 
@@ -61,7 +63,7 @@ export const KIND_ORDER: readonly SiteItemKind[] = [
   'shade', 'tent', 'caravan',
   'kitchen', 'bar', 'sofa', 'armchair', 'table', 'fire',
   'shower', 'toilet', 'changing', 'sink',
-  'fridge', 'generator', 'water', 'greywater', 'boiler', 'storage', 'light',
+  'fridge', 'generator', 'water', 'greywater', 'boiler', 'storage', 'light', 'splitter',
   'other',
 ];
 
