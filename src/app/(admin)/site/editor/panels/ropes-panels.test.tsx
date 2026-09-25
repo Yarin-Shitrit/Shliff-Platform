@@ -5,7 +5,7 @@ import { describe, it, expect, vi, type Mock } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { KindDefaults, KindSize } from '@/lib/site/defaults';
 import { derive } from '@/lib/site/derive';
-import { ROPE_ANGLE_OUT_OF_RANGE } from '@/lib/site/editor/degrees';
+import { NOT_WHOLE_DEGREES, ROPE_ANGLE_OUT_OF_RANGE } from '@/lib/site/editor/degrees';
 import type { EditorDoc, EditorItem } from '@/lib/site/editor/model';
 import { applyOps, type SiteOp } from '@/lib/site/editor/ops';
 import { siteFailureMessage } from '../../failure-messages';
@@ -86,5 +86,114 @@ describe('a refused rope angle', () => {
   it('reads the same in Hebrew whether the box or the server refused it', () => {
     expect(siteFailureMessage(new Error('a rope angle must be a whole number of degrees from 20 to 80')))
       .toBe(ROPE_ANGLE_OUT_OF_RANGE);
+  });
+});
+
+/** A 3 × 3 m tent, in this file's fixture. */
+function tent(over: Partial<EditorItem> & { id: string }): EditorItem {
+  return item({ kind: 'tent', label: 'אוהל 1', widthCm: 300, depthCm: 300, insetCm: null, ...over });
+}
+
+/** The first-strong isolate (U+2068…U+2069) a pill puts around a name (spec §20; FSI, as main's `isolate` in `notices.ts` since #31). */
+const iso = (name: string) => `⁨${name}⁩`;
+
+/* The box's label carries a decorative "°" after it, so match its start. */
+const angleBox = () => screen.getByLabelText(/^זווית החבלים מהקרקע/) as HTMLInputElement;
+
+function typeAngle(text: string): void {
+  fireEvent.change(angleBox(), { target: { value: text } });
+  fireEvent.keyDown(angleBox(), { key: 'Enter' });
+}
+
+describe('a net’s ropes, in its inspector', () => {
+  it('shows the shaded ground, the cloth and the rope footprint, and where the footprint came from (spec §15)', () => {
+    renderItem(item({ id: 'n1' }));
+    expect(screen.getByRole('heading', { name: 'צל וחבלים' })).toBeTruthy();
+    expect(screen.getByText('7 × 7 מ׳ · 49 מ״ר')).toBeTruthy();
+    expect(screen.getByText('8 × 8 מ׳ · 64 מ״ר')).toBeTruthy();
+    expect(screen.getByText('14 × 14 מ׳ · 196 מ״ר')).toBeTruthy();
+    expect(screen.getByText('היתדות 3 מ׳ מהבד: גובה 3 מ׳ ÷ tan 45°')).toBeTruthy();
+    expect(angleBox().value).toBe('');
+    expect(angleBox().placeholder).toBe('45');
+    expect(screen.getByText('ברירת המחדל של רשתות צל')).toBeTruthy();
+  });
+
+  it('invites an angle while none is set anywhere, and the net is checked by its cloth (D16)', () => {
+    renderItem(item({ id: 'n1' }), {});
+    expect(screen.getByText(/^עוד לא נקבעה זווית לחבלים, ולכן הרשת נבדקת לפי הבד בלבד/)).toBeTruthy();
+    expect(screen.queryByText('עם החבלים')).toBeNull();
+    expect(angleBox().placeholder).toBe('');
+  });
+
+  it('applies a typed angle, and typing the camp’s leaves the net on the camp’s (as ruling P13 does for a height)', () => {
+    const { onRun, after } = renderItem(item({ id: 'n1' }));
+    typeAngle('30');
+    expect(after().items[0].ropeAngleDeg).toBe(30);
+    onRun.mockClear();
+    typeAngle(' 45° ');
+    expect(onRun).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('refuses an angle outside 20–80, or not whole, in Hebrew, and sends nothing', () => {
+    const { onRun } = renderItem(item({ id: 'n1' }));
+    typeAngle('81');
+    expect(screen.getByRole('alert').textContent).toBe(ROPE_ANGLE_OUT_OF_RANGE);
+    expect(angleBox().getAttribute('aria-invalid')).toBe('true');
+    typeAngle('45.5');
+    expect(screen.getByRole('alert').textContent).toBe(NOT_WHOLE_DEGREES);
+    expect(onRun).not.toHaveBeenCalled();
+  });
+
+  it('stores its own angle as every net’s, and then follows it', () => {
+    const { after } = renderItem(item({ id: 'n1', ropeAngleDeg: 30 }));
+    fireEvent.click(screen.getByRole('button', { name: 'שמירת הזווית כברירת המחדל של רשתות צל' }));
+    expect(after().defaults.shade).toEqual({ ...CAMP_NETS, ropeAngleDeg: 30 });
+    expect(after().items[0].ropeAngleDeg).toBeNull();
+  });
+
+  it('writes the nets’ default at the preset size when the camp has none yet (spec §13)', () => {
+    const { after } = renderItem(item({ id: 'n1', ropeAngleDeg: 30 }), {});
+    fireEvent.click(screen.getByRole('button', { name: 'שמירת הזווית כברירת המחדל של רשתות צל' }));
+    expect(after().defaults.shade).toEqual({ widthCm: 800, depthCm: 800, heightCm: 300, insetCm: 50, ropeAngleDeg: 30 });
+  });
+
+  it('goes back to the camp’s angle', () => {
+    const { after } = renderItem(item({ id: 'n1', ropeAngleDeg: 30 }));
+    fireEvent.click(screen.getByRole('button', { name: 'חזרה לזווית ברירת המחדל' }));
+    expect(after().items[0].ropeAngleDeg).toBeNull();
+  });
+
+  it('offers neither link to a net already on the camp’s angle', () => {
+    renderItem(item({ id: 'n1' }));
+    for (const name of ['שמירת הזווית כברירת המחדל של רשתות צל', 'חזרה לזווית ברירת המחדל']) {
+      expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true);
+    }
+  });
+
+  it('holds a locked net’s angle: the box and the way back', () => {
+    renderItem(item({ id: 'n1', ropeAngleDeg: 30, locked: true }));
+    expect(angleBox().disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'חזרה לזווית ברירת המחדל' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('says when only the ropes cross the fence, and names what stands in the band', () => {
+    // Flush with the east fence by its cloth (1800 + 800 = 2600); its 3 m ropes reach past it.
+    const net = item({ id: 'n1', xCm: 1800, yCm: 800 });
+    const t3 = tent({ id: 't3', label: 'אוהל 3', xCm: 1450, yCm: 1000 });
+    const t4 = tent({ id: 't4', label: 'אוהל 4', xCm: 1450, yCm: 1400 });
+    const { onPickIds } = renderItem(net, { shade: CAMP_NETS }, [t3, t4]);
+    expect(screen.getByText('החבלים יוצאים מהגדר')).toBeTruthy();
+    expect(screen.queryByText('מחוץ לגדר')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: `בשטח החבלים: ${iso('אוהל 3')}, ${iso('אוהל 4')}` }));
+    expect(onPickIds).toHaveBeenLastCalledWith(['t3', 't4']);
+  });
+
+  it('tells a tent in a band whose band it is, and the pill selects both', () => {
+    const net = item({ id: 'n1', xCm: 1800, yCm: 800 });
+    const t3 = tent({ id: 't3', label: 'אוהל 3', xCm: 1450, yCm: 1000 });
+    const { onPickIds } = renderItem(t3, { shade: CAMP_NETS }, [net]);
+    fireEvent.click(screen.getByRole('button', { name: `בשטח החבלים של ${iso('רשת צל 1')}` }));
+    expect(onPickIds).toHaveBeenLastCalledWith(['t3', 'n1']);
   });
 });
