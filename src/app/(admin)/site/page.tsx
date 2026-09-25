@@ -164,6 +164,7 @@ export default async function SitePage(
           seasonName={current.name}
           plan={{ id: plan.id, widthCm: plan.widthCm, depthCm: plan.depthCm, gridCm: plan.gridCm, northDeg: plan.northDeg, notes: plan.notes }}
           items={items}
+          defaults={loaded.doc.defaults}
           closeHref={closeHref}
         />
       ) : null}

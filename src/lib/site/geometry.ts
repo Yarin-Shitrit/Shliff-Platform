@@ -32,6 +32,12 @@ export interface PlacedItem extends Rect {
   kind: SiteItemKind;
   /** Shade nets only: the unshaded strip on each side. */
   insetCm: number | null;
+  /**
+   * How far the net's stakes stand out from its cloth, whole centimetres
+   * (spec §12). 0 for anything but a net, and for a net with no angle
+   * anywhere (D16). `derive.ts`'s `toPlaced` fills it.
+   */
+  ropeCm: number;
 }
 
 export type Handle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
@@ -90,9 +96,13 @@ export function overlapPairs(items: readonly PlacedItem[]): Array<[string, strin
   return pairs;
 }
 
-/** Items not fully inside the plot — after the plot shrank, or after a drag past the fence. */
+/**
+ * Items not fully inside the plot — after the plot shrank, or after a drag
+ * past the fence — by their footprint: a net whose ropes cross the fence is
+ * outside, though its cloth is not (spec D8). Flush counts as inside.
+ */
 export function outsideIds(items: readonly PlacedItem[], plot: Plot): string[] {
-  return items.filter((item) => !contains(plot, item)).map((item) => item.id);
+  return items.filter((item) => !contains(plot, groundRect(item))).map((item) => item.id);
 }
 
 export function move(rect: Rect, dxCm: number, dyCm: number, step: number): Rect {
@@ -286,4 +296,117 @@ export function gapsAround(rect: Rect, others: readonly Rect[], plot: Plot, maxC
 /** Whole centimetres, and never -0. */
 export function wholeCm(value: number): number {
   return Math.round(value) || 0;
+}
+
+/* ── a shade net's ropes (spec Part B, §§12–15) ─────────────────────────── */
+
+/**
+ * Where a rope at `angleDeg` from the ground, tied `heightCm` up, meets the
+ * ground: h ÷ tan θ (spec D9), in whole centimetres. 45° puts the stake as
+ * far out as the cloth is high, 20° 2.7 times as far, 80° 0.18 times. The
+ * angle is one `degrees.ts` accepts — whole, 20 to 80 — which every write
+ * path checks, so the tangent here is never near zero or infinity.
+ */
+export function ropeOffsetCm(heightCm: number, angleDeg: number): number {
+  return Math.round(heightCm / Math.tan((angleDeg * Math.PI) / 180));
+}
+
+/** The ground an item takes (spec D8): its rectangle, grown on every side by its ropes. A tent's is itself. */
+export function groundRect(item: PlacedItem): Rect {
+  const rope = item.ropeCm;
+  return { x: item.x - rope, y: item.y - rope, width: item.width + rope * 2, depth: item.depth + rope * 2 };
+}
+
+/** `inner` wholly inside `outer`, edges included. */
+function within(outer: Rect, inner: Rect): boolean {
+  return inner.x >= outer.x && inner.y >= outer.y
+    && inner.x + inner.width <= outer.x + outer.width
+    && inner.y + inner.depth <= outer.y + outer.depth;
+}
+
+/**
+ * Whether a rectangle stands in a net's rope band (spec §3, §15): it
+ * overlaps the net's footprint and is not wholly under its cloth. Under the
+ * cloth is what a net is for; between the cloth's edge and the stakes is
+ * where somebody trips over a rope. A net without ropes has no band (D16).
+ */
+export function inRopeBand(rect: Rect, net: PlacedItem): boolean {
+  return net.ropeCm > 0 && overlap(rect, groundRect(net)) && !within(net, rect);
+}
+
+/**
+ * Every item standing in a net's rope band, as `[net id, item id]`, net by
+ * net and then item by item in input order. Only something that is not a
+ * net is ever in a band: two nets whose bands cross are two roofs' ropes,
+ * which `overlapPairs` does not pair either. Every side of every net has
+ * ropes (spec §27 Q2), so a tent under one net that reaches into its
+ * neighbour's band is flagged — in the neighbour's band only.
+ */
+export function ropeBandPairs(items: readonly PlacedItem[]): Array<[string, string]> {
+  const pairs: Array<[string, string]> = [];
+  for (const net of items) {
+    if (!isShade(net) || net.ropeCm === 0) continue;
+    for (const other of items) {
+      if (!isShade(other) && inRopeBand(other, net)) pairs.push([net.id, other.id]);
+    }
+  }
+  return pairs;
+}
+
+/**
+ * The area the rectangles cover together inside the plot, in square metres
+ * to one decimal, like `areaM2` (spec §3, "שטח תפוס"): ground two of them
+ * share is counted once, and whatever lies past the fence not at all. A
+ * sweep across the rectangles' west and east edges: in each strip between two
+ * neighbouring edges, the rectangles spanning it cover north–south runs,
+ * merged and added. Integer centimetres until the one rounding at the end.
+ */
+export function unionAreaM2(rects: readonly Rect[], plot: Plot): number {
+  const clipped: Rect[] = [];
+  for (const rect of rects) {
+    const west = Math.max(0, rect.x);
+    const north = Math.max(0, rect.y);
+    const east = Math.min(plot.widthCm, rect.x + rect.width);
+    const south = Math.min(plot.depthCm, rect.y + rect.depth);
+    if (east > west && south > north) clipped.push({ x: west, y: north, width: east - west, depth: south - north });
+  }
+  const edges = [...new Set(clipped.flatMap((rect) => [rect.x, rect.x + rect.width]))].sort((a, b) => a - b);
+  let squareCm = 0;
+  for (let i = 0; i + 1 < edges.length; i += 1) {
+    const west = edges[i];
+    const east = edges[i + 1];
+    const runs = clipped
+      .filter((rect) => rect.x <= west && rect.x + rect.width >= east)
+      .map((rect): [number, number] => [rect.y, rect.y + rect.depth])
+      .sort((a, b) => a[0] - b[0]);
+    let covered = 0;
+    let run: [number, number] | null = null;
+    for (const [north, south] of runs) {
+      if (run === null || north > run[1]) {
+        if (run !== null) covered += run[1] - run[0];
+        run = [north, south];
+      } else if (south > run[1]) {
+        run[1] = south;
+      }
+    }
+    if (run !== null) covered += run[1] - run[0];
+    squareCm += covered * (east - west);
+  }
+  return Math.round(squareCm / 1000) / 10;
+}
+
+/**
+ * What the gap readouts measure to while `moving` is dragged — the
+ * "walkway" (spec §3, §14): every solid item as it stands, and every net
+ * with ropes whose cloth `moving` does not touch, by its rope footprint. A
+ * net over the moving item is the roof it stands under, not a wall. A net
+ * without ropes is left out, as nets always were (D16).
+ */
+export function gapObstacles(others: readonly PlacedItem[], moving: Rect): Rect[] {
+  const obstacles: Rect[] = [];
+  for (const other of others) {
+    if (!isShade(other)) obstacles.push({ x: other.x, y: other.y, width: other.width, depth: other.depth });
+    else if (other.ropeCm > 0 && !overlap(other, moving)) obstacles.push(groundRect(other));
+  }
+  return obstacles;
 }

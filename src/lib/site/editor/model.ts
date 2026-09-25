@@ -21,6 +21,12 @@ export interface EditorItem {
   heightCm: number | null;
   /** Shade nets only: the unshaded strip on every side. */
   insetCm: number | null;
+  /**
+   * Shade nets only: the angle of the net's ropes from the ground, whole
+   * degrees 20–80. Null means the camp's angle for nets (`defaults.shade`);
+   * a net with neither has no rope footprint (spec D16).
+   */
+  ropeAngleDeg: number | null;
   sort: number;
   taskId: string | null;
   notes: string | null;

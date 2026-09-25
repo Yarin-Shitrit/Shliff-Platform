@@ -2,7 +2,7 @@
 
 /**
  * The checks, top centre (spec §10): how many items are past the fence, how
- * many pairs overlap, how many sit in a net's unshaded strip — or "הכול
+ * many pairs overlap, how many sit in a net's unshaded strip, how many stand in a net's rope band — or "הכול
  * תקין". Each press selects the next case and flies to it. They replace the
  * four stat tiles and the outside-the-fence banner of the old page.
  */
@@ -12,7 +12,7 @@ import type { EditorDoc } from '@/lib/site/editor/model';
 import type { EditorFlags } from '../use-editor-store';
 import styles from './checks-bar.module.css';
 
-type Check = 'outside' | 'pairs' | 'partly';
+type Check = 'outside' | 'pairs' | 'partly' | 'ropes';
 
 /** The case a chip last went to, and where it stood in the list then. */
 interface Visit {
@@ -71,6 +71,7 @@ export function ChecksBar({ doc, flags, onGo }: {
     outside: doc.items.filter((item) => flags.outside.has(item.id)).map((item) => [item.id]),
     pairs: flags.pairs.map(([a, b]) => [a, b]),
     partly: doc.items.filter((item) => flags.partly.has(item.id)).map((item) => [item.id]),
+    ropes: flags.ropePairs.map(([net, id]) => [net, id]),
   };
 
   const chips: Array<{ check: Check; tone: 'bad' | 'warn'; text: string; title: string }> = [];
@@ -88,6 +89,12 @@ export function ChecksBar({ doc, flags, onGo }: {
     chips.push({
       check: 'partly', tone: 'warn', text: `${cases.partly.length} בשולי רשת צל`,
       title: 'פריטים שנראים מכוסים אבל יושבים ברצועה שאין בה צל',
+    });
+  }
+  if (cases.ropes.length > 0) {
+    chips.push({
+      check: 'ropes', tone: 'warn', text: `${cases.ropes.length} בשטח החבלים`,
+      title: 'פריטים שעומדים בין שולי הבד של רשת צל לבין היתדות שלה',
     });
   }
 

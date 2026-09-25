@@ -26,7 +26,7 @@ import { Pill } from '@/components/ui/pill';
 import { SourceChip } from '@/components/ui/source-chip';
 import { effectiveSize, itemHeight } from '@/lib/site/defaults';
 import { toPlaced } from '@/lib/site/derive';
-import { areaM2, formatArea, formatMetres, formatSize, metres, shadedRect, shadeState } from '@/lib/site/geometry';
+import { formatMetres, metres, shadeState } from '@/lib/site/geometry';
 import { DEFAULT_SHADE_INSET_CM, SITE_KINDS } from '@/lib/site/kinds';
 import { eligibleEnds, LINE_KINDS, lineKindsOf, lineLengthCm, splits, unconnected } from '@/lib/site/lines';
 import { linesAt, rectOf, type EditorDoc, type EditorItem } from '@/lib/site/editor/model';
@@ -41,6 +41,7 @@ import { LOCKED_NOTICE } from '../notices';
 import { size3 } from './size-text';
 import chrome from './panel.module.css';
 import styles from './inspector.module.css';
+import { outsideText, RopePills, RopeSection } from './ropes';
 
 type Length = 'width' | 'depth' | 'height' | 'x' | 'y' | 'inset';
 type Field = Length | 'label' | 'notes';
@@ -89,7 +90,6 @@ export function ItemInspector({ doc, item, flags, buildTasks, onRun, onPickIds, 
   const height = itemHeight(item, doc.defaults);
   const isNet = item.kind === 'shade';
   const onStandardSize = item.widthCm === standard.widthCm && item.depthCm === standard.depthCm;
-  const shaded = isNet ? shadedRect(toPlaced(item)) : null;
   /* A task link the build list does not hold: still a link, so the box says
      so rather than falling back to "ללא משימת הקמה" (§13, nothing is guessed). */
   const unlistedTask = item.taskId !== null && !buildTasks.some((task) => task.id === item.taskId)
@@ -100,7 +100,7 @@ export function ItemInspector({ doc, item, flags, buildTasks, onRun, onPickIds, 
   const partnerNames = partners
     .map((id) => doc.items.find((other) => other.id === id)?.label)
     .filter((label): label is string => label !== undefined);
-  const nets = doc.items.filter((other) => other.kind === 'shade').map(toPlaced);
+  const nets = doc.items.filter((other) => other.kind === 'shade').map((other) => toPlaced(other, doc.defaults));
   const inShade = !isNet && nets.length > 0 && shadeState(rectOf(item), nets) === 'shaded';
 
   /* The utilities this item takes part in (`lines.ts`): every line already
@@ -194,6 +194,8 @@ export function ItemInspector({ doc, item, flags, buildTasks, onRun, onPickIds, 
       depthCm: item.depthCm,
       heightCm: height,
       insetCm: isNet ? (item.insetCm ?? DEFAULT_SHADE_INSET_CM) : null,
+      // The camp's rope angle is not a size: saving sizes keeps it (Review Focus #2).
+      ropeAngleDeg: standard.ropeAngleDeg,
     });
     if (ops.length > 0) onRun(`ברירת המחדל של ${preset.label}`, ops);
   }
@@ -241,7 +243,7 @@ export function ItemInspector({ doc, item, flags, buildTasks, onRun, onPickIds, 
         </label>
 
         <div className={styles.pills}>
-          {flags.outside.has(item.id) ? <Pill tone="bad" dot>מחוץ לגדר</Pill> : null}
+          {flags.outside.has(item.id) ? <Pill tone="bad" dot>{outsideText(doc, item)}</Pill> : null}
           {partnerNames.length > 0 ? (
             <button type="button" className={styles.chipButton} onClick={() => { onPickIds([item.id, ...partners]); }}>
               <Pill tone="warn" dot>{`חפיפה עם ${partnerNames.join(', ')}`}</Pill>
@@ -250,6 +252,7 @@ export function ItemInspector({ doc, item, flags, buildTasks, onRun, onPickIds, 
           {flags.partly.has(item.id) ? <Pill tone="warn" dot>בשולי רשת הצל, בלי צל</Pill> : null}
           {inShade ? <Pill tone="ok" dot>בצל</Pill> : null}
           {missing.map((kind) => <Pill key={kind} tone="warn" dot>{`בלי חיבור ל${LINE_KINDS[kind].noun}`}</Pill>)}
+          <RopePills doc={doc} item={item} flags={flags} onPickIds={onPickIds} />
         </div>
 
         {refusal === null ? null : <p className={styles.error} id={errorId} role="alert">{refusal.message}</p>}
@@ -294,15 +297,12 @@ export function ItemInspector({ doc, item, flags, buildTasks, onRun, onPickIds, 
 
         {isNet ? (
           <div className={styles.section}>
-            <h3 className={styles.sectionTitle}>צל</h3>
+            <h3 className={styles.sectionTitle}>צל וחבלים</h3>
             <div className={cx(styles.fields, styles.fieldsTwo)}>
               {lengthBox('inset', 'שוליים בלי צל', metres(item.insetCm ?? DEFAULT_SHADE_INSET_CM))}
-              <p className={chrome.meta}>
-                מצל בפועל
-                <br />
-                <bdi>{shaded === null ? 'הרשת קטנה מכדי להצל' : `${formatSize(shaded.width, shaded.depth)} · ${formatArea(areaM2(shaded))}`}</bdi>
-              </p>
             </div>
+            {/* The angle, then shaded ground ⊂ cloth ⊂ rope footprint, and where the footprint came from (spec §15). */}
+            <RopeSection doc={doc} item={item} onRun={onRun} />
           </div>
         ) : null}
 

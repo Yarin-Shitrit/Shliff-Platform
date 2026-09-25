@@ -10,7 +10,7 @@ const VIEWPORT = { width: 1000, height: 700 };
 function item(over: Partial<EditorItem> & { id: string }): EditorItem {
   return {
     kind: 'tent', label: 'אוהל 1', xCm: 0, yCm: 0, widthCm: 300, depthCm: 300,
-    heightCm: null, insetCm: null, sort: 0, taskId: null, notes: null, locked: false, ...over,
+    heightCm: null, insetCm: null, ropeAngleDeg: null, sort: 0, taskId: null, notes: null, locked: false, ...over,
   };
 }
 

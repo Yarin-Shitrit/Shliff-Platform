@@ -32,7 +32,7 @@ const move = (id: string, xCm: number): SiteOp => ({ type: 'update', id, patch: 
 function tent(id: string): EditorItem {
   return {
     id, kind: 'tent', label: 'אוהל 1', xCm: 0, yCm: 0, widthCm: 300, depthCm: 300,
-    heightCm: null, insetCm: null, sort: 0, taskId: null, notes: null, locked: false,
+    heightCm: null, insetCm: null, ropeAngleDeg: null, sort: 0, taskId: null, notes: null, locked: false,
   };
 }
 

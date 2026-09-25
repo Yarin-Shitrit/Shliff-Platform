@@ -537,9 +537,10 @@ block:
     - "מצל בפועל" 7 × 7 מ׳ · 49 מ״ר
     - "הבד" 8 × 8 מ׳ · 64 מ״ר
     - "עם החבלים" 14 × 14 מ׳ · 196 מ״ר, with the source line "היתדות 3 מ׳ מהבד:
-      גובה 3 מ׳ ÷ tan 45°".
+      גובה 3 מ׳ חלקי טנגנס של 45°".
   - Two links: "שמירת הזווית כברירת המחדל של רשתות צל" and "חזרה לזווית ברירת
-    המחדל".
+    המחדל" — which reads "הסרת הזווית של הרשת" while the camp has no angle,
+    because there is then no default to go back to.
   - With no angle anywhere, the section is an invitation (§20).
   - Pills: "החבלים יוצאים מהגדר" (bad) when only the footprint crosses the fence.
     "בשטח החבלים: אוהל 3, אוהל 4" (warn) is a button that selects those items.
@@ -811,8 +812,9 @@ adjective agrees with a noun that varies: the toasts put a fixed noun first
 
 - Field: "זווית החבלים מהקרקע" (suffix °). Meta line: "ברירת המחדל של רשתות צל".
 - Rows: "מצל בפועל", "הבד", "עם החבלים". Source line: "היתדות 3 מ׳ מהבד: גובה
-  3 מ׳ ÷ tan 45°".
-- Links: "שמירת הזווית כברירת המחדל של רשתות צל", "חזרה לזווית ברירת המחדל".
+  3 מ׳ חלקי טנגנס של 45°".
+- Links: "שמירת הזווית כברירת המחדל של רשתות צל", "חזרה לזווית ברירת המחדל"
+  ("הסרת הזווית של הרשת" while the camp has no angle).
 - Invitation on a net: "עוד לא נקבעה זווית לחבלים, ולכן הרשת נבדקת לפי הבד
   בלבד. זווית שתוקלד כאן תחול על הרשת הזו; שמירה שלה כברירת מחדל תחול על כל
   רשתות הצל."
@@ -888,7 +890,7 @@ adjective agrees with a noun that varies: the toasts put a fixed noun first
   - The image's scale opens the calibration.
 - **Every number says where it came from.**
   - Purchase: "מחושב מהקווים שצוירו במפה", plus the rounding note.
-  - Ropes: "גובה ÷ tan זווית", with the values.
+  - Ropes: "גובה חלקי טנגנס של הזווית", with the values.
   - Area taken: "כולל החבלים".
   - The image: "כויל לפי 26 מ׳ שסומנו על התמונה".
   - Everything else was drawn or typed by a lead and carries "נרשם ידנית".

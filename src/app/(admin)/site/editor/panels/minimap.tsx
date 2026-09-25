@@ -10,10 +10,11 @@
 
 import { useRef, type PointerEvent, type ReactElement } from 'react';
 import { cx } from '@/components/ui/cx';
-import { unionRect } from '@/lib/site/geometry';
+import { toPlaced } from '@/lib/site/derive';
+import { groundRect, unionRect } from '@/lib/site/geometry';
 import { SITE_KINDS } from '@/lib/site/kinds';
 import { pathOf } from '@/lib/site/lines';
-import { rectOf, type EditorDoc } from '@/lib/site/editor/model';
+import type { EditorDoc } from '@/lib/site/editor/model';
 import type { EditorFlags } from '../use-editor-store';
 import type { ViewInfo } from '../scene/scene-view';
 import chrome from './panel.module.css';
@@ -33,7 +34,8 @@ export interface MinimapBox {
  */
 export function minimapBounds(doc: EditorDoc): MinimapBox {
   const plot = { x: 0, y: 0, width: doc.plot.widthCm, depth: doc.plot.depthCm };
-  const all = unionRect([plot, ...doc.items.map(rectOf)]) ?? plot;
+  // Footprints, not rectangles: a net's stakes past the fence are drawn, so they are framed too.
+  const all = unionRect([plot, ...doc.items.map((item) => groundRect(toPlaced(item, doc.defaults)))]) ?? plot;
   const margin = Math.round(Math.max(all.width, all.depth) * 0.06);
   return { x: all.x - margin, y: all.y - margin, width: all.width + margin * 2, height: all.depth + margin * 2 };
 }
@@ -115,6 +117,24 @@ export function Minimap({ doc, flags, selection, info, onJump }: {
             height={item.depthCm}
           />
         ))}
+        {/* A net's rope footprint, dashed (spec §15): where its stakes stand; red when they cross the fence. */}
+        {doc.items.map((item) => {
+          const placed = toPlaced(item, doc.defaults);
+          if (placed.ropeCm === 0) return null;
+          const ground = groundRect(placed);
+          return (
+            <rect
+              key={`ropes-${item.id}`}
+              data-ropes={item.id}
+              data-outside={flags.outside.has(item.id) || undefined}
+              className={cx(styles.mmRopes, chrome[`g_${SITE_KINDS[item.kind].group}`])}
+              x={ground.x}
+              y={ground.y}
+              width={ground.width}
+              height={ground.depth}
+            />
+          );
+        })}
         {/* The pipes and cables, over the items they run between, in their kind's colour. */}
         {doc.lines.map((line) => {
           const path = pathOf(doc, line);

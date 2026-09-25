@@ -21,7 +21,7 @@ import type { SceneHandle, SceneViewProps, ViewInfo } from './scene/scene-view';
 function siteItem(over: Partial<EditorItem> & { id: string }): EditorItem {
   return {
     kind: 'tent', label: 'אוהל 1', xCm: 500, yCm: 500, widthCm: 300, depthCm: 200,
-    heightCm: null, insetCm: null, sort: 0, taskId: null, notes: null, locked: false,
+    heightCm: null, insetCm: null, ropeAngleDeg: null, sort: 0, taskId: null, notes: null, locked: false,
     ...over,
   };
 }
@@ -114,7 +114,7 @@ vi.mock('./use-editor-store', async () => {
      own rule — so the checks bar and the list see a real problem. */
   function flagsOf(doc: EditorDoc): EditorStore['flags'] {
     const derived = derive(doc.plot, doc.items);
-    const flags: EditorStore['flags'] = { outside: new Set(), overlapping: new Set(), partly: new Set(), pairs: derived.pairs };
+    const flags: EditorStore['flags'] = { outside: new Set(), overlapping: new Set(), partly: new Set(), pairs: derived.pairs, onRopes: new Set(), ropePairs: derived.ropePairs };
     for (const item of derived.items) {
       if (item.outside) flags.outside.add(item.id);
       if (item.overlapping) flags.overlapping.add(item.id);

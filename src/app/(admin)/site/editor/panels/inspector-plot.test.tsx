@@ -15,7 +15,7 @@ import { northText } from './north';
 function item(over: Partial<EditorItem> & { id: string }): EditorItem {
   return {
     kind: 'tent', label: 'אוהל 1', xCm: 500, yCm: 500, widthCm: 300, depthCm: 200,
-    heightCm: null, insetCm: null, sort: 0, taskId: null, notes: null, locked: false, ...over,
+    heightCm: null, insetCm: null, ropeAngleDeg: null, sort: 0, taskId: null, notes: null, locked: false, ...over,
   };
 }
 
@@ -25,12 +25,14 @@ function doc(items: EditorItem[], northDeg = 0): EditorDoc {
 
 /** The flags, worked out with `derive.ts` — the server's rule — not with the store. */
 function flagsOf(map: EditorDoc): EditorFlags {
-  const { items } = derive(map.plot, map.items);
+  const { items, ropePairs } = derive(map.plot, map.items, map.defaults);
   return {
     outside: new Set(items.filter((entry) => entry.outside).map((entry) => entry.id)),
     overlapping: new Set(items.filter((entry) => entry.overlapping).map((entry) => entry.id)),
     partly: new Set(items.filter((entry) => entry.shade === 'partly').map((entry) => entry.id)),
-    pairs: overlapPairs(map.items.map(toPlaced)),
+    pairs: overlapPairs(map.items.map((entry) => toPlaced(entry))),
+    onRopes: new Set(ropePairs.map(([, id]) => id)),
+    ropePairs,
   };
 }
 

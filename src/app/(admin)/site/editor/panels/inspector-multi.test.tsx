@@ -13,7 +13,7 @@ import { MultiInspector } from './inspector-multi';
 function item(over: Partial<EditorItem> & { id: string }): EditorItem {
   return {
     kind: 'tent', label: 'אוהל 1', xCm: 500, yCm: 500, widthCm: 300, depthCm: 200,
-    heightCm: null, insetCm: null, sort: 0, taskId: null, notes: null, locked: false, ...over,
+    heightCm: null, insetCm: null, ropeAngleDeg: null, sort: 0, taskId: null, notes: null, locked: false, ...over,
   };
 }
 
@@ -190,7 +190,7 @@ describe('several items', () => {
   it('stores the default the tents agree on', () => {
     const { after } = renderMulti([T1, item({ id: 't2', label: 'אוהל 2', xCm: 1000 })]);
     fireEvent.click(screen.getByRole('checkbox', { name: 'לשמור גם כברירת המחדל של אוהל' }));
-    expect(after().defaults.tent).toEqual({ widthCm: 300, depthCm: 200, heightCm: 200, insetCm: null });
+    expect(after().defaults.tent).toEqual({ widthCm: 300, depthCm: 200, heightCm: 200, insetCm: null, ropeAngleDeg: null });
   });
 
   it('aligns two or more, and distributes only three or more', () => {

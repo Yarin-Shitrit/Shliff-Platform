@@ -50,6 +50,8 @@ export const SITE_ERRORS: HebrewErrors = [
   ['a line id is already in use', 'הקו הזה כבר נמצא במפה. טעינה מחדש של המפה תסדר את זה'],
   ['a line sort must be', 'סדר הקווים הוא מספר שלם, אפס או יותר. טעינה מחדש של המפה תסדר את זה'],
   ['an item with a line attached keeps', 'לפריט מחובר צינור או כבל, ולכן אי אפשר להפוך אותו לסוג שהקו לא מגיע אליו. קודם מסירים את הקו'],
+  // A shade net's rope angle (`editor/degrees.ts` shows the same sentence to a lead who types one).
+  ['a rope angle must be', 'זווית החבלים היא מספר שלם של מעלות, מ־⁦20⁩ עד ⁦80⁩'],
 ];
 
 export function siteFailureMessage(error: unknown): string {

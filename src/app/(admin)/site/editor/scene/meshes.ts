@@ -42,13 +42,17 @@ export interface ItemLook {
 }
 
 type Part = 'body' | 'edge' | 'ember' | 'pole' | 'cloth' | 'clothEdge' | 'inset' | 'caster' | 'patch' | 'contact'
-  | 'lineBody' | 'lineJoint';
+  | 'lineBody' | 'lineJoint' | 'rope' | 'stake' | 'ropeEdge';
 type Point = [number, number, number];
 
-/** What decides the geometry. Position is not in it: a move never rebuilds. */
-export function geometryKey(item: EditorItem, heightCm: number): string {
+/**
+ * What decides the geometry. Position is not in it: a move never rebuilds.
+ * A net's ropes are (spec §14): a new angle, or a new height under an angle,
+ * rebuilds the net.
+ */
+export function geometryKey(item: EditorItem, heightCm: number, ropeCm = 0): string {
   const inset = SITE_KINDS[item.kind].shape === 'net' ? item.insetCm ?? 0 : 0;
-  return `${item.kind}:${item.widthCm}x${item.depthCm}x${heightCm}:${inset}`;
+  return `${item.kind}:${item.widthCm}x${item.depthCm}x${heightCm}:${inset}:${ropeCm}`;
 }
 
 function tag<T extends THREE.Object3D>(object: T, part: Part, pick = true): T {
@@ -191,7 +195,45 @@ function net(group: THREE.Group, w: number, h: number, d: number, insetM: number
   group.add(patch);
 }
 
-export function buildItemObject(item: EditorItem, heightCm: number, look: ItemLook): THREE.Group {
+/**
+ * A net's ropes (spec §15): from the top of each corner pole, two ropes to
+ * stakes `r` metres out, each at right angles to one of the corner's sides —
+ * the layout that keeps the footprint a rectangle — a 3 cm peg standing
+ * 15 cm out of the ground at each stake, and the footprint dashed on the
+ * ground. Seen from above in plan, the eight ropes are short strokes out
+ * from the corners. All of it is click-through and casts no shadow: ropes
+ * take ground, they do not shade it (D8).
+ */
+function ropes(group: THREE.Group, w: number, h: number, d: number, r: number): void {
+  // Each corner, and the outward direction of its west/east side (x) and of its north/south side (z).
+  const corners: Array<[number, number, number, number]> = [[0, 0, -1, -1], [w, 0, 1, -1], [w, d, 1, 1], [0, d, -1, 1]];
+  const points: number[] = [];
+  const stakes: Array<[number, number]> = [];
+  for (const [x, z, outX, outZ] of corners) {
+    stakes.push([x + outX * r, z], [x, z + outZ * r]);
+    points.push(x, h, z, x + outX * r, 0, z, x, h, z, x, 0, z + outZ * r);
+  }
+  const lines = new THREE.BufferGeometry();
+  lines.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
+  group.add(tag(new THREE.LineSegments(lines, new THREE.LineBasicMaterial()), 'rope', false));
+
+  const peg = new THREE.CylinderGeometry(0.015, 0.015, 0.15, 6);
+  const pegMaterial = new THREE.MeshLambertMaterial();
+  for (const [x, z] of stakes) {
+    const stake = tag(new THREE.Mesh(peg, pegMaterial), 'stake', false);
+    stake.position.set(x, 0.075, z);
+    group.add(stake);
+  }
+
+  const edge = tag(new THREE.LineSegments(
+    outline(-r, -r, w + r, d + r, 0.004),
+    new THREE.LineDashedMaterial({ dashSize: 0.3, gapSize: 0.2 }),
+  ), 'ropeEdge', false);
+  edge.computeLineDistances();
+  group.add(edge);
+}
+
+export function buildItemObject(item: EditorItem, heightCm: number, look: ItemLook, ropeCm = 0): THREE.Group {
   const preset = SITE_KINDS[item.kind];
   const w = item.widthCm * CM;
   const d = item.depthCm * CM;
@@ -199,7 +241,7 @@ export function buildItemObject(item: EditorItem, heightCm: number, look: ItemLo
   const group = new THREE.Group();
   group.name = item.id;
   group.userData = {
-    id: item.id, isNet: preset.shape === 'net', key: geometryKey(item, heightCm),
+    id: item.id, isNet: preset.shape === 'net', key: geometryKey(item, heightCm, ropeCm),
     kind: item.kind, group: preset.group,
   };
 
@@ -226,6 +268,7 @@ export function buildItemObject(item: EditorItem, heightCm: number, look: ItemLo
     }
     case 'net':
       net(group, w, h, d, (item.insetCm ?? 0) * CM);
+      if (ropeCm > 0) ropes(group, w, h, d, ropeCm * CM);
       break;
     default:
       group.add(box(w, h, d, 0, 0));
@@ -283,6 +326,14 @@ export function restyleItemObject(object: THREE.Group, look: ItemLook): void {
         material.color.set(look.state === 'hover' ? palette.edge : look.state === 'normal' && look.issue === 'none' ? palette.clothEdge : lineColour(look));
         break;
       case 'inset': material.color.set(palette.clothEdge); break;
+      case 'rope':
+      case 'stake':
+        material.color.set(palette.fence);
+        break;
+      case 'ropeEdge':
+        // Red when the footprint crosses the fence: a net is outside by its ropes (D8).
+        material.color.set(look.issue === 'outside' ? palette.bad : palette.clothEdge);
+        break;
       case 'patch':
         material.color.set(palette.shadeGround);
         child.visible = look.sun !== true;
