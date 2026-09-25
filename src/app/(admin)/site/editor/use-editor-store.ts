@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActionResult } from '@/lib/action-result';
 import { derive } from '@/lib/site/derive';
-import { changedUpdate } from '@/lib/site/editor/commands';
+import { changedLineUpdate, changedUpdate } from '@/lib/site/editor/commands';
 import { EMPTY_HISTORY, record, redo as redoStep, undo as undoStep, type History } from '@/lib/site/editor/history';
-import { findItem, type EditorDoc, type EditorItem } from '@/lib/site/editor/model';
-import { applyOps, invertOps, lockRefusal, type ItemPatch, type SiteOp } from '@/lib/site/editor/ops';
+import { findItem, findLine, type EditorDoc, type EditorItem, type EditorLine } from '@/lib/site/editor/model';
+import {
+  applyOps, invertOps, lineEndsRefusal, lockRefusal, type ItemPatch, type LinePatch, type SiteOp,
+} from '@/lib/site/editor/ops';
 import { SaveQueue, type QueueSnapshot, type SaveFn } from './save-queue';
 
 /**
@@ -77,9 +79,9 @@ const LRI = '⁦';
 const PDI = '⁩';
 const isolate = (name: string) => `${LRI}${name}${PDI}`;
 
-/** Only ids the map still has, each once, in the order given. */
+/** Only ids the map still has — items and lines — each once, in the order given. */
 function existing(doc: EditorDoc, ids: readonly string[]): string[] {
-  const present = new Set(doc.items.map((item) => item.id));
+  const present = new Set([...doc.items.map((item) => item.id), ...doc.lines.map((line) => line.id)]);
   return [...new Set(ids)].filter((id) => present.has(id));
 }
 
@@ -116,6 +118,14 @@ function applyEach(doc: EditorDoc, ops: readonly SiteOp[]): { doc: EditorDoc; ap
     } else if (raw.type === 'remove' && findItem(next, raw.id)?.locked === true) {
       skipped += 1;
       continue;
+    } else if (raw.type === 'updateLine') {
+      // The same reduction for a line; a line has no lock.
+      const entry = findLine(next, raw.id);
+      if (entry !== undefined) {
+        const reduced = changedLineUpdate(entry, raw.patch);
+        if (reduced === null) continue;
+        op = reduced;
+      }
     }
     const result = applyOps(next, [op]);
     if (result.skipped.length > 0) {
@@ -144,6 +154,11 @@ function itemPatch(item: EditorItem): ItemPatch {
     widthCm: item.widthCm, depthCm: item.depthCm, heightCm: item.heightCm,
     insetCm: item.insetCm, taskId: item.taskId, notes: item.notes,
   };
+}
+
+/** A full line's fields as a patch, for the same replay of an add the server already has. Its kind is not patchable. */
+function linePatch(line: EditorLine): LinePatch {
+  return { label: line.label, fromId: line.fromId, toId: line.toId, points: line.points, notes: line.notes };
 }
 
 function computeFlags(doc: EditorDoc): EditorFlags {
@@ -334,6 +349,36 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
         if (raw.type === 'add') {
           const existingEntry = findItem(merging, raw.item.id);
           if (existingEntry !== undefined) op = { type: 'update', id: raw.item.id, patch: itemPatch(raw.item) };
+        }
+
+        // The lines, by the same rules. An add the server already has becomes
+        // an update; a line whose end the other lead removed is dropped and
+        // named, since the server would refuse the whole batch for it.
+        if (raw.type === 'addLine' && findLine(merging, raw.line.id) !== undefined) {
+          op = { type: 'updateLine', id: raw.line.id, patch: linePatch(raw.line) };
+        }
+        if (op.type === 'addLine') {
+          if (lineEndsRefusal(op.line.kind, findItem(merging, op.line.fromId), findItem(merging, op.line.toId)) !== null) {
+            goneNames.push(op.line.label);
+            continue;
+          }
+        }
+        if (op.type === 'removeLine' && findLine(merging, op.id) === undefined) continue;
+        if (op.type === 'updateLine') {
+          const entry = findLine(merging, op.id);
+          if (entry === undefined) {
+            goneNames.push(findLine(current.doc, op.id)?.label ?? 'קו');
+            continue;
+          }
+          const reduced = changedLineUpdate(entry, op.patch);
+          if (reduced === null) continue;
+          const fromId = reduced.patch.fromId ?? entry.fromId;
+          const toId = reduced.patch.toId ?? entry.toId;
+          if (lineEndsRefusal(entry.kind, findItem(merging, fromId), findItem(merging, toId)) !== null) {
+            goneNames.push(entry.label);
+            continue;
+          }
+          op = reduced;
         }
 
         // S2: a remove of an item already gone does the same thing either

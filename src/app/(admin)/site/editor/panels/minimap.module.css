@@ -44,3 +44,7 @@
   stroke-width: 1.5px;
   vector-effect: non-scaling-stroke;
 }
+
+/* A pipe or a cable: its kind's colour (the shared `.l_*`), drawn over the items it runs between. */
+.mmLine { fill: none; stroke: var(--swatch); stroke-width: 2px; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.mmLine[data-selected='true'] { stroke: var(--focus); stroke-width: 3px; }

@@ -7,7 +7,8 @@ import {
 } from '@/lib/site/editor/camera';
 import { moveOps, setRectOps } from '@/lib/site/editor/commands';
 import { layoutLabels, type LabelInput, type PlacedLabel } from '@/lib/site/editor/label-layout';
-import { findItem, rectOf, type EditorItem } from '@/lib/site/editor/model';
+import { findItem, findLine, rectOf, type EditorItem } from '@/lib/site/editor/model';
+import { pathOf } from '@/lib/site/lines';
 import { snapMove, snapResize, type GuideLine } from '@/lib/site/editor/snapping';
 import { CAMP_SITE, jerusalemInstant, sunDirection, sunPosition } from '@/lib/site/editor/sun';
 import {
@@ -347,7 +348,19 @@ export class SceneEngine {
     this.stopAnimation();
     this.autoFit = false;
     const { doc } = this.options.props().store;
-    const rect = unionRect(doc.items.filter((entry) => ids.includes(entry.id)).map(rectOf));
+    const rects = doc.items.filter((entry) => ids.includes(entry.id)).map(rectOf);
+    // A line frames as the box around its whole run, walls and bends included.
+    for (const line of doc.lines) {
+      if (!ids.includes(line.id)) continue;
+      const path = pathOf(doc, line);
+      if (path === null) continue;
+      const xs = path.map((p) => p[0]);
+      const ys = path.map((p) => p[1]);
+      const x = Math.min(...xs);
+      const y = Math.min(...ys);
+      rects.push({ x, y, width: Math.max(...xs) - x, depth: Math.max(...ys) - y });
+    }
+    const rect = unionRect(rects);
     if (rect === null) return;
     const pad = 250;
     const padded = { x: rect.x - pad, y: rect.y - pad, width: rect.width + pad * 2, depth: rect.depth + pad * 2 };
@@ -816,14 +829,16 @@ export class SceneEngine {
     return box;
   }
 
-  private itemAt(x: number, y: number): { id: string; isNet: boolean; locked: boolean } | null {
+  private itemAt(x: number, y: number): { id: string; isNet: boolean; locked: boolean; line?: boolean } | null {
     if (this.cam === null) return null;
     const { store } = this.options.props();
     const camera = this.rig.apply(this.cam, this.viewport, this.drawMode);
     const id = pickItemId(camera, this.sync, x, y, this.viewport);
-    const item = id === null ? undefined : findItem(store.doc, id);
-    if (item === undefined) return null;
-    return { id: item.id, isNet: SITE_KINDS[item.kind].shape === 'net', locked: item.locked };
+    if (id === null) return null;
+    const item = findItem(store.doc, id);
+    if (item !== undefined) return { id: item.id, isNet: SITE_KINDS[item.kind].shape === 'net', locked: item.locked };
+    // A pipe or a cable: selectable, never dragged (its ends are).
+    return findLine(store.doc, id) === undefined ? null : { id, isNet: false, locked: false, line: true };
   }
 
   private labelAt(x: number, y: number): { ids: string[]; group: boolean } | null {

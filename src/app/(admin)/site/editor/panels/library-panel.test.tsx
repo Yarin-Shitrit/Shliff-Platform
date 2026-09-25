@@ -26,7 +26,10 @@ describe('the library', () => {
     expect(screen.getByText('לינה וצל')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'הוספת אוהל, 3 × 3 מ׳' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'הוספת קראוון, 7 × 2.5 מ׳' })).toBeTruthy();
-    expect(screen.getAllByRole('button', { name: /^הוספת / })).toHaveLength(19);
+    // The two ends the utility lines run to (site_lines): a sink and a light.
+    expect(screen.getByRole('button', { name: 'הוספת כיור, 1.5 × 0.6 מ׳' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'הוספת תאורה, 0.4 × 0.4 מ׳' })).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: /^הוספת / })).toHaveLength(21);
     expect(unnamedControls(container)).toEqual([]);
   });
 

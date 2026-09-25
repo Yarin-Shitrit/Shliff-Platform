@@ -107,6 +107,9 @@
 .g_sanitation { --swatch: var(--group-sanitation, var(--line-strong)); }
 .g_utility { --swatch: var(--group-utility, var(--line-strong)); }
 .g_other { --swatch: var(--group-other, var(--line-strong)); }
+/* A pipe's or a cable's colour: the scene's too (`palette.ts` `lines`), handed down the same way. */
+.l_water { --swatch: var(--line-water, var(--line-strong)); }
+.l_power { --swatch: var(--line-power, var(--line-strong)); }
 
 .swatch {
   inline-size: 8px;

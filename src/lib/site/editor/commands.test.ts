@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  addOps, alignOps, distributeOps, duplicateOps, lockOps, moveOps, patchOps, removeOps, resetSizeOps,
-  resizeKindOps, rowOps, setKindDefaultOps, setRectOps, turnOps, uniformSize,
+  addLineOps, addOps, alignOps, distributeOps, duplicateOps, lockOps, moveOps, patchLineOps, patchOps, removeLineOps,
+  removeOps, resetSizeOps, resizeKindOps, rowOps, setKindDefaultOps, setRectOps, turnOps, uniformSize,
 } from './commands';
 import type { EditorDoc, EditorItem } from './model';
 import { applyOps, invertOps, type SiteOp } from './ops';
@@ -36,6 +36,7 @@ const F1 = make({ id: 'f1', kind: 'fridge', label: 'מקרר 1', xCm: 2000, yCm:
 const DOC: EditorDoc = {
   plot: { id: 'p1', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0 },
   items: [T1, T2, C1, S1, LK, F1],
+  lines: [],
   defaults: {},
 };
 
@@ -392,5 +393,84 @@ describe('every fractional input becomes a whole centimetre, never -0', () => {
     assertWholeOps(alignOps(doc, ['eg', 'rt'], 'centreX'));
     assertWholeOps(distributeOps(doc, ['t1', 't2', 'f1'], 'x'));
     assertWholeOps(rowOps(doc, ['t2', 't1', 'c1'], 12.6));
+  });
+});
+
+/* ── the pipes and cables (site_lines) ────────────────────────────────── */
+
+const GEN = make({ id: 'g1', kind: 'generator', label: 'גנרטור 1', xCm: 100, yCm: 1500, widthCm: 100, depthCm: 80, sort: 6 });
+const LIGHT = make({ id: 'l1', kind: 'light', label: 'תאורה 1', xCm: 2000, yCm: 1500, widthCm: 40, depthCm: 40, sort: 7 });
+const WIRED: EditorDoc = {
+  ...DOC,
+  items: [...DOC.items, GEN, LIGHT],
+  lines: [
+    { id: 'p1', kind: 'power', label: 'כבל חשמל 1', fromId: 'g1', toId: 'f1', points: [], sort: 0, notes: null },
+    { id: 'p2', kind: 'power', label: 'כבל חשמל 2', fromId: 'f1', toId: 'l1', points: [[2035, 800]], sort: 1, notes: null },
+  ],
+};
+
+describe('lines', () => {
+  it('draws a straight cable from the generator to a fridge, named next in its kind', () => {
+    const ops = addLineOps(WIRED, 'power', 'g1', 'l1', 'new');
+    expect(ops).toEqual([{
+      type: 'addLine',
+      line: { id: 'new', kind: 'power', label: 'כבל חשמל 3', fromId: 'g1', toId: 'l1', points: [], sort: 2, notes: null },
+    }]);
+  });
+
+  it('draws nothing to a tent, to itself, to a missing item, or under an id already in use', () => {
+    expect(addLineOps(WIRED, 'power', 'g1', 't1', 'new')).toEqual([]);
+    expect(addLineOps(WIRED, 'water', 'g1', 'f1', 'new')).toEqual([]);
+    expect(addLineOps(WIRED, 'power', 'g1', 'g1', 'new')).toEqual([]);
+    expect(addLineOps(WIRED, 'power', 'g1', 'nope', 'new')).toEqual([]);
+    expect(addLineOps(WIRED, 'power', 'g1', 'l1', 'p1')).toEqual([]);
+  });
+
+  it('removes a line, once, and only one that is there', () => {
+    expect(removeLineOps(WIRED, ['p1', 'p1', 'zz'])).toEqual([{ type: 'removeLine', id: 'p1' }]);
+  });
+
+  it('takes an item’s lines away before the item, so an undo brings both back', () => {
+    const ops = removeOps(WIRED, ['f1']);
+    expect(ops).toEqual([
+      { type: 'removeLine', id: 'p1' },
+      { type: 'removeLine', id: 'p2' },
+      { type: 'remove', id: 'f1' },
+    ]);
+    const after = applyOps(WIRED, ops).doc;
+    expect(after.lines).toEqual([]);
+    const back = applyOps(after, invertOps(WIRED, ops)).doc;
+    expect(back.items.map((entry) => entry.id)).toEqual(WIRED.items.map((entry) => entry.id));
+    expect(back.lines).toEqual(WIRED.lines);
+  });
+
+  it('names each line once when both its ends go together', () => {
+    expect(removeOps(WIRED, ['g1', 'f1']).filter((op) => op.type === 'removeLine')).toHaveLength(2);
+  });
+
+  it('patches only what changed on a line, bends rounded to whole centimetres', () => {
+    expect(patchLineOps(WIRED, 'p2', { points: [[2035, 800]], label: 'כבל חשמל 2' })).toEqual([]);
+    expect(patchLineOps(WIRED, 'p2', { points: [[2035.4, 800.6]], notes: '  ' })).toEqual([
+      { type: 'updateLine', id: 'p2', patch: { points: [[2035, 801]] } }, // blank notes are none, which the line already has
+    ]);
+    expect(patchLineOps(WIRED, 'p2', { label: '  לפינה  ' })).toEqual([
+      { type: 'updateLine', id: 'p2', patch: { label: 'לפינה' } },
+    ]);
+  });
+
+  it('moves an end only to an item the utility reaches', () => {
+    expect(patchLineOps(WIRED, 'p2', { toId: 'g1' })).toEqual([{ type: 'updateLine', id: 'p2', patch: { toId: 'g1' } }]);
+    expect(patchLineOps(WIRED, 'p2', { toId: 't1' })).toEqual([]);
+    expect(patchLineOps(WIRED, 'p2', { toId: 'f1' })).toEqual([]); // both ends the fridge
+  });
+
+  it('keeps a fridge with a cable from becoming a tent', () => {
+    expect(patchOps(WIRED, 'f1', { kind: 'tent' })).toEqual([]);
+    expect(patchOps(WIRED, 'f1', { kind: 'light' })).toEqual([{ type: 'update', id: 'f1', patch: { kind: 'light' } }]);
+  });
+
+  it('copies items without their lines', () => {
+    const { ops } = duplicateOps(WIRED, ['f1'], () => 'copy');
+    expect(ops.every((op) => op.type === 'add')).toBe(true);
   });
 });

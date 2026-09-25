@@ -282,6 +282,25 @@ docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine s
 Measured before: the four columns and the table absent, 1 plan and 29 items.
 After: all present, still 1 plan and 29 items.
 
+### Migration `0013` — generated 2026-09-25, **not yet applied**
+
+`0013_site_lines` is the camp map's pipes and cables: one new, empty table,
+`site_lines`, with three foreign keys (to `site_plans` and twice to
+`site_items`, all `ON DELETE cascade`). Additive: no existing table or row
+changes. It must be on Railway **before** the code that reads it deploys,
+because every `/site` load selects from it. Applying it is the camp lead's
+step, by the same procedure as `0012`:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine sh -euc '
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0013_site_lines.sql
+'
+```
+
+Read-only check before and after: `select count(*) from site_lines` fails
+before (no such table) and answers `0` after; the plan and item counts do not
+move. Record the measured numbers here when it is done.
+
 ### Copying the laptop's database up
 
 The local container is Postgres **16**; Railway is **18**. Dump with the

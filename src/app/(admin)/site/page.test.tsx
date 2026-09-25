@@ -87,6 +87,7 @@ function view(items: SiteItemView[]) {
   return {
     plan: PLAN,
     items,
+    lines: [],
     counts: {
       items: items.length, outside: items.filter((row) => row.outside).length, overlapping: 0, overlapPairs: 0,
       plotAreaM2: 624, shade: { nets: 0, shaded: 0, partly: 0, unshaded: items.length, shadedAreaM2: 0 },
@@ -104,6 +105,7 @@ function loaded(ids: string[], planId = 'p1', version = 3): { doc: EditorDoc; ve
         id, kind: 'tent', label: `אוהל ${index + 1}`, xCm: 0, yCm: 0, widthCm: 300, depthCm: 300,
         heightCm: null, insetCm: null, sort: index, taskId: null, notes: null, locked: false,
       })),
+      lines: [],
       defaults: {},
     },
   };

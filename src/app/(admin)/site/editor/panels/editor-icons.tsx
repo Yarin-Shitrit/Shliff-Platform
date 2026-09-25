@@ -39,6 +39,9 @@ const PATHS = {
   distributeX: '<rect width="6" height="14" x="4" y="5" rx="2"/><rect width="6" height="10" x="14" y="7" rx="2"/><path d="M17 22v-5"/><path d="M17 7V2"/><path d="M7 22v-3"/><path d="M7 5V2"/>',
   distributeY: '<rect width="14" height="6" x="5" y="14" rx="2"/><rect width="10" height="6" x="7" y="4" rx="2"/><path d="M22 7h-5"/><path d="M7 7H2"/><path d="M22 17h-3"/><path d="M5 17H2"/>',
   row: '<path d="M3 7h4v10H3z"/><path d="M10 7h4v10h-4z"/><path d="M17 7h4v10h-4z"/>',
+  /* The two utilities a line carries (`lines.ts`): a drop for water, a bolt for power. */
+  drop: '<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>',
+  bolt: '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>',
 } as const;
 
 export type EditorIconName = keyof typeof PATHS;

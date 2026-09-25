@@ -35,6 +35,7 @@ const DOC: EditorDoc = {
     id: 'a', kind: 'tent', label: 'אוהל 1', xCm: 500, yCm: 500, widthCm: 300, depthCm: 200,
     heightCm: null, insetCm: null, sort: 0, taskId: null, notes: null, locked: false,
   }],
+  lines: [],
   defaults: {},
 };
 
