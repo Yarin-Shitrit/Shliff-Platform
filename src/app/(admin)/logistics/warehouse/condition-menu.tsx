@@ -64,7 +64,10 @@ export function ConditionMenu({ item }: { item: WarehouseRow }) {
       label={`עדכון מצב · ${item.name}`}
       triggerTone="chip"
       align="end"
-      triggerContent={<>עדכון מצב</>}
+      /* One line, whatever the column's width: on a phone the card's action
+         column is as narrow as its content, and the kit's trigger lets its
+         text wrap, which turned the chip into a two-line circle. */
+      triggerContent={<span className={styles.rowAction}>עדכון מצב</span>}
     >
       <span className={styles.menu}>
         {CONDITIONS.map((condition) => (
