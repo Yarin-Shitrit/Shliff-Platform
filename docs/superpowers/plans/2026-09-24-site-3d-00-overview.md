@@ -424,3 +424,21 @@ export function SiteEditor(props: SiteEditorProps): ReactElement;
 ### Amendment recorded during plan 03 execution (Task 15 review)
 
 - `QueueSnapshot` gains `errorKind: 'network' | 'refused' | null`. The top bar offers retry for `network` and the reload for `refused` (plan 04 ruling P8 reads it). `pending === pendingOps().length`, and a batch that failed on the network stays pending (and is resent unchanged against its own base version) until it is answered. A `flush()` begun before `dispose()` finishes sending what waited behind an in-flight batch.
+
+### Amendments for Part C — the image to trace (spec `2026-09-25-site-map-pipes-ropes-underlay-design.md` §16–19; plan `2026-09-25-site-underlay.md`)
+
+Recorded before any of Part C's code, by this section's own rule. Additive except where marked.
+
+- `src/lib/site/underlay-limits.ts` (new; no imports): every limit, the storage key and URL helpers, and the upload codes' Hebrew (`uploadRefusalHe`).
+- `src/lib/site/image-facts.ts` (new): `imageFacts(bytes)` — kind, stored size and EXIF orientation from the header; `displaySize(facts)`.
+- `src/lib/site/underlay-file.ts` (new): `checkUnderlayFile(filename, bytes)` — the one check the route and the card both run.
+- `src/lib/site/underlay.ts` (new): `ImagePoint`, `MapPoint`, `UnderlayPlacement`, `UnderlayCalibration`, `imageToMap`, `mapToImage`, `isOnImage`, `normaliseTenths`, `initialPlacement`, `coverSize`, `moveBy`, `quarterTurn`, `calibrate`.
+- `model.ts`: `EditorUnderlay` (extends `UnderlayPlacement`; `storageKey`, `contentType`, `sizeBytes`, `filename`, `calibration`). **`EditorDoc.underlay?: EditorUnderlay | null` is optional** where spec §17 writes `EditorUnderlay | null`: absent and null both mean no image, and every reader goes through `underlayOf(doc)`. Also `sameUnderlay`, `copyUnderlay`.
+- `ops.ts`: `SiteOp` gains `{ type: 'setUnderlay'; underlay: EditorUnderlay | null }`; `underlayRefusal(underlay)`, prefixes `an underlay file must be`, `an underlay placement must be`, `an underlay calibration must be`.
+- `src/lib/site/editor/underlay-commands.ts` (new): `UploadedUnderlay`, `uploadOps`, `placeOps`, `calibrateOps`, `removeUnderlayOps`.
+- `plan.ts`: `readUnderlay(db, planId)`; `loadDoc`'s doc carries `underlay`; `applySiteOps` applies `setUnderlay`, refusing a key under another plan's prefix.
+- `scene-view.tsx`: `EditorUi.tool: 'select' | 'measure' | 'calibrate' | 'align'`; `EditorUi.underlay: { shown: boolean; opacity: number }`; `SceneViewProps.underlayMarks?: ReadonlyArray<ImagePoint>`; `SceneViewProps.onUnderlay?: (event: UnderlayEvent) => void`; `SceneHandle.retryUnderlay(): void`.
+- `scene/underlay-mesh.ts` (new): `UnderlayStatus`, `UnderlayEvent`, `DecodedUnderlay`, `UnderlayLoader`, `loadUnderlayImage`, `buildUnderlayPlane`, `placeUnderlayPlane`, `UnderlayLayer`, `UNDERLAY_RENDER_ORDER = -3.5`, `UNDERLAY_LIFT_CM = 0.1`.
+- `scene/underlay-tool.ts` (new): `UnderlayGestures`, `UnderlayWorld`, `UnderlayIntent`, `classifyPick`, `CALIBRATION_MIN_PX = 20`. **`GestureWorld.tool()` stays `'select' | 'measure'`**: the engine gives the calibration and alignment tools' pointer events to `UnderlayGestures` and tells `Gestures` the tool is `'select'` meanwhile.
+- Panels: `Toolbar` gains `hasUnderlay?: boolean`; `PlotInspector` gains `onUnderlay?: () => void`; new `UnderlayCard` and `CalibrationDraft` (`panels/underlay-card.tsx`). Editor: new `uploadUnderlay` (`underlay-upload.ts`) and `useUnderlay` (`use-underlay.ts`).
+- Routes (new): `POST /site/underlay/[planId]` (201 `{ storageKey, contentType, sizeBytes, filename }`, or a machine code), `GET /site/underlay/[planId]/[file]` (admins only).
