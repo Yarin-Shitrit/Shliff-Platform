@@ -80,3 +80,35 @@ describe('site schema, migration 0013 — the lines', () => {
     })).rejects.toThrow();
   });
 });
+
+describe('site schema, migration 0014 — rope angles', () => {
+  let db: TestDb;
+  let planId: string;
+
+  beforeEach(async () => {
+    db = await createTestDb();
+    const [season] = await db.insert(seasons).values({ name: 'ברן 26', year: 2026, flatRate: '1200.00' }).returning();
+    const [plan] = await db.insert(sitePlans).values({ seasonId: season.id, widthCm: 2600, depthCm: 2400 }).returning();
+    planId = plan.id;
+  });
+
+  it('gives an item no rope angle of its own by default, and keeps one when given', async () => {
+    const [tent] = await db.insert(siteItems).values({
+      planId, kind: 'tent', label: 'אוהל 1', xCm: 0, yCm: 0, widthCm: 300, depthCm: 300,
+    }).returning();
+    expect(tent.ropeAngleDeg).toBeNull();
+    const [net] = await db.insert(siteItems).values({
+      planId, kind: 'shade', label: 'רשת צל 1', xCm: 0, yCm: 0, widthCm: 800, depthCm: 800, insetCm: 50, ropeAngleDeg: 45,
+    }).returning();
+    expect(net.ropeAngleDeg).toBe(45);
+  });
+
+  it('gives the nets’ default no rope angle until one is set', async () => {
+    await db.insert(siteKindDefaults).values({ kind: 'shade', widthCm: 800, depthCm: 800, heightCm: 300, insetCm: 50 });
+    const [unset] = await db.select().from(siteKindDefaults).where(eq(siteKindDefaults.kind, 'shade'));
+    expect(unset.ropeAngleDeg).toBeNull();
+    await db.update(siteKindDefaults).set({ ropeAngleDeg: 45 }).where(eq(siteKindDefaults.kind, 'shade'));
+    const [set] = await db.select().from(siteKindDefaults).where(eq(siteKindDefaults.kind, 'shade'));
+    expect(set.ropeAngleDeg).toBe(45);
+  });
+});
