@@ -755,7 +755,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
           busy={resolving}
           onReload={refused && !staleBuild ? () => { void resolve('theirs'); } : undefined}
           onMine={refused && !staleBuild ? () => { void resolve('mine'); } : undefined}
-          onRefresh={staleBuild ? () => { window.location.reload(); } : undefined}
+          onRefresh={staleBuild ? () => { keepUnsaved(planId, store.pendingOps()); window.location.reload(); } : undefined}
         />
       )}
       {store.notice === null ? null : (

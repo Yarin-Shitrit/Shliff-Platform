@@ -192,12 +192,16 @@ describe('saving, through the store and the queue', () => {
       // Neither reload nor keep-mine: both would call the same missing actions.
       expect(screen.queryByRole('button', { name: 'טעינת הגרסה העדכנית' })).toBeNull();
       expect(screen.queryByRole('button', { name: 'שמירת השינויים שלי מעליה' })).toBeNull();
-      // The unsaved turn waits in this tab for the page that comes after the refresh.
-      expect(JSON.parse(window.sessionStorage.getItem('site-editor:pending:p1') ?? 'null')).toEqual([
-        { type: 'update', id: 'a', patch: { xCm: 550, yCm: 450, widthCm: 200, depthCm: 300 } },
-      ]);
+      const kept = () => JSON.parse(window.sessionStorage.getItem('site-editor:pending:p1') ?? 'null') as unknown;
+      const turned = [{ type: 'update', id: 'a', patch: { xCm: 550, yCm: 450, widthCm: 200, depthCm: 300 } }];
+      // The unsaved turn waits in this tab for the page after the refresh — kept by an effect
+      // once the banner is up, which under load can land a moment after it.
+      await waitFor(() => { expect(kept()).toEqual(turned); });
+      // The refresh keeps it too, so a press quicker than that effect loses nothing.
+      window.sessionStorage.clear();
       fireEvent.click(screen.getByRole('button', { name: 'רענון הדף' }));
       expect(reload).toHaveBeenCalledTimes(1);
+      expect(kept()).toEqual(turned);
     } finally {
       Object.defineProperty(window, 'location', { configurable: true, value: location });
       window.sessionStorage.clear();

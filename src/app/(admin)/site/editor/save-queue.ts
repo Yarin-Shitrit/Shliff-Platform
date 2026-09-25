@@ -58,12 +58,22 @@ export interface SaveQueueOptions {
   onSkipped?: (ids: string[]) => void;
   /** Injectable for tests; defaults to `setTimeout` / `clearTimeout`. */
   timers?: { set: (fn: () => void, ms: number) => unknown; clear: (handle: unknown) => void };
+  /**
+   * How long a send may go unanswered before it counts as a dropped
+   * connection (review minor). Default 20 s. The batch is then kept apart and
+   * resent unchanged, so a request that did land after all comes back a
+   * conflict — a visible decision — rather than applied twice.
+   */
+  sendTimeoutMs?: number;
+  /** The send timeout's own clock, injectable for tests; defaults to `setTimeout` / `clearTimeout`. */
+  sendTimers?: { set: (fn: () => void, ms: number) => unknown; clear: (handle: unknown) => void };
 }
 
 /** What the top bar says when the request itself failed — no answer at all. */
 export const NETWORK_FAILURE = 'השמירה נכשלה, אולי אין חיבור. אפשר לנסות שוב.';
 
 const DEFAULT_DELAY_MS = 500;
+const DEFAULT_SEND_TIMEOUT_MS = 20_000;
 
 export class SaveQueue {
   private readonly send: SaveFn;
@@ -72,6 +82,9 @@ export class SaveQueue {
   private readonly onSkipped: ((ids: string[]) => void) | undefined;
   private readonly setTimer: (fn: () => void, ms: number) => unknown;
   private readonly clearTimer: (handle: unknown) => void;
+  private readonly sendTimeoutMs: number;
+  private readonly setSendTimer: (fn: () => void, ms: number) => unknown;
+  private readonly clearSendTimer: (handle: unknown) => void;
 
   private version: number;
   private queued: SiteOp[] = [];
@@ -111,6 +124,9 @@ export class SaveQueue {
     this.onSkipped = options.onSkipped;
     this.setTimer = options.timers?.set ?? ((fn, ms) => setTimeout(fn, ms));
     this.clearTimer = options.timers?.clear ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>));
+    this.sendTimeoutMs = options.sendTimeoutMs ?? DEFAULT_SEND_TIMEOUT_MS;
+    this.setSendTimer = options.sendTimers?.set ?? ((fn, ms) => setTimeout(fn, ms));
+    this.clearSendTimer = options.sendTimers?.clear ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>));
   }
 
   get snapshot(): QueueSnapshot {
@@ -279,7 +295,7 @@ export class SaveQueue {
     this.timer = null;
   }
 
-  private async sendQueued(): Promise<void> {
+  private sendQueued(): Promise<void> {
     const epoch = this.epoch;
     const stranded = this.networkFailedBatch;
     const wasStranded = stranded !== null;
@@ -294,12 +310,34 @@ export class SaveQueue {
     this.inFlightIsStranded = stranded !== null;
     this.emit();
 
-    let result: SaveResult | null = null;
-    try {
-      result = await this.send(this.version, batch);
-    } catch {
-      result = null;
-    }
+    /* Whichever comes first, the answer or the send timeout (review minor);
+       the other is then ignored. The answer is taken in a callback on the
+       send's own promise — no wrapper in between — so it lands at exactly the
+       moment an `await` of that promise would. */
+    return new Promise<void>((done) => {
+      let answered = false;
+      let timeout: unknown = null;
+      const answer = (result: SaveResult | null) => {
+        if (answered) return;
+        answered = true;
+        this.clearSendTimer(timeout);
+        this.takeAnswer(epoch, batch, wasStranded, result);
+        done();
+      };
+      // No answer within the limit is no answer at all: the same path as a send that threw.
+      timeout = this.setSendTimer(() => { answer(null); }, this.sendTimeoutMs);
+      let sent: Promise<SaveResult>;
+      try {
+        sent = this.send(this.version, batch);
+      } catch {
+        answer(null);
+        return;
+      }
+      sent.then((result) => { answer(result); }, () => { answer(null); });
+    });
+  }
+
+  private takeAnswer(epoch: number, batch: SiteOp[], wasStranded: boolean, result: SaveResult | null): void {
     if (epoch !== this.epoch) return;
 
     this.inFlight = null;

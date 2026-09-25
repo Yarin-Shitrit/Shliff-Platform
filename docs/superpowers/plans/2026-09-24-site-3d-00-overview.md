@@ -218,6 +218,8 @@ export interface QueueSnapshot { status: SaveStatus; version: number; pending: n
 export interface SaveQueueOptions { send: SaveFn; version: number; delayMs?: number;           // default 500
   onChange: (snapshot: QueueSnapshot) => void;
   onSkipped?: (ids: string[]) => void;          // a saved batch's ids the server no longer has (review C2)
+  sendTimeoutMs?: number;                       // default 20 000: an unanswered send is a dropped connection (review minor)
+  sendTimers?: { set: (fn: () => void, ms: number) => unknown; clear: (handle: unknown) => void };
   timers?: { set: (fn: () => void, ms: number) => unknown; clear: (handle: unknown) => void } }
 export class SaveQueue {
   constructor(options: SaveQueueOptions);
