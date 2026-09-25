@@ -1,15 +1,17 @@
-import type { SiteItemKind } from '@/db/schema/site';
+import type { SiteItemKind, SiteLineKind, SiteLinePoint } from '@/db/schema/site';
 import { isBlank } from '@/lib/text/normalize';
 import type { KindDefaults, KindSize } from '../defaults';
 import { MIN_SIDE_CM } from '../geometry';
 import { DEFAULT_SHADE_INSET_CM, isSiteItemKind } from '../kinds';
-import { findItem, type EditorDoc, type EditorItem } from './model';
+import { endpointRefusal, isSiteLineKind, joins } from '../lines';
+import { findItem, findLine, type EditorDoc, type EditorItem, type EditorLine } from './model';
 
 /**
- * Every change the editor persists is one of four ops (spec §6.2). The client
- * checks each op with these refusals before it is queued; the server checks
- * them again before it writes (`plan.ts` `applySiteOps`). One set of rules,
- * in one file, so the two can never disagree.
+ * Every change the editor persists is one of seven ops (spec §6.2; the three
+ * line ops came with `site_lines`). The client checks each op with these
+ * refusals before it is queued; the server checks them again before it
+ * writes (`plan.ts` `applySiteOps`). One set of rules, in one file, so the
+ * two can never disagree.
  *
  * Refusals are English with a stable prefix, like every refusal in
  * `src/lib/site/`; `failure-messages.ts` turns each into Hebrew.
@@ -29,11 +31,28 @@ export interface ItemPatch {
   locked?: boolean;
 }
 
+/** What may change on a line once it is drawn. Its kind may not: a pipe does not become a cable. */
+export interface LinePatch {
+  label?: string;
+  fromId?: string;
+  toId?: string;
+  points?: SiteLinePoint[];
+  notes?: string | null;
+}
+
 export type SiteOp =
   | { type: 'add'; item: EditorItem }
   | { type: 'update'; id: string; patch: ItemPatch }
   | { type: 'remove'; id: string }
-  | { type: 'setKindDefault'; kind: SiteItemKind; size: KindSize | null };
+  | { type: 'setKindDefault'; kind: SiteItemKind; size: KindSize | null }
+  | { type: 'addLine'; line: EditorLine }
+  | { type: 'updateLine'; id: string; patch: LinePatch }
+  | { type: 'removeLine'; id: string };
+
+/** The three ops about lines, told apart from the four about items. */
+export function isLineOp(op: SiteOp): op is Extract<SiteOp, { type: 'addLine' | 'updateLine' | 'removeLine' }> {
+  return op.type === 'addLine' || op.type === 'updateLine' || op.type === 'removeLine';
+}
 
 /** What `saveSiteChangesAction` answers (spec §6.4). */
 export type SaveResult =
@@ -99,6 +118,55 @@ export function kindSizeRefusal(size: KindSize): string | null {
     : 'a kind default must be whole centimetres: sides 10 to 50000, height 10 to 2000';
 }
 
+/** No more bends than a lead could ever place by hand; past this the op is a bug, not a route. */
+export const MAX_LINE_POINTS = 200;
+
+function isPoint(value: unknown): value is SiteLinePoint {
+  return Array.isArray(value) && value.length === 2 && value.every((n) => Number.isInteger(n) && Math.abs(n) <= MAX_SIDE_CM);
+}
+
+export function linePatchRefusal(patch: LinePatch): string | null {
+  if (patch.label !== undefined && isBlank(patch.label)) return 'a line must have a label';
+  if (patch.points !== undefined) {
+    if (!Array.isArray(patch.points) || patch.points.length > MAX_LINE_POINTS || !patch.points.every(isPoint)) {
+      return 'a line bend must be a whole number of centimetres on the map';
+    }
+  }
+  for (const end of [patch.fromId, patch.toId]) {
+    if (end !== undefined && !UUID.test(end)) return 'a line end must be an item id';
+  }
+  return null;
+}
+
+export function newLineRefusal(line: EditorLine): string | null {
+  if (!UUID.test(line.id)) return 'a line id must be a uuid';
+  if (!isSiteLineKind(line.kind)) return `unknown line kind: ${String(line.kind)}`;
+  if (!Number.isInteger(line.sort) || line.sort < 0) return 'a line sort must be a whole number, zero or more';
+  return linePatchRefusal({ label: line.label, fromId: line.fromId, toId: line.toId, points: line.points });
+}
+
+/**
+ * The one check of a line's ends that needs the map: both are items on it,
+ * they differ, and each carries the utility (`lines.ts`). The client runs it
+ * against the store; the server against the plan's rows.
+ */
+export function lineEndsRefusal(
+  kind: SiteLineKind,
+  from: Pick<EditorItem, 'id' | 'kind'> | undefined,
+  to: Pick<EditorItem, 'id' | 'kind'> | undefined,
+): string | null {
+  // Not the `unknown site item` prefix: `failure-messages.ts` matches by prefix, and this one has its own sentence.
+  if (from === undefined || to === undefined) return 'a line end is not an item on this map';
+  return endpointRefusal(kind, from.kind, to.kind, from.id === to.id);
+}
+
+/** Re-kinding an item that a line hangs from, to a kind that utility does not reach: the line would run to nothing. */
+export function rekindRefusal(nextKind: SiteItemKind, attached: readonly Pick<EditorLine, 'kind'>[]): string | null {
+  return attached.some((line) => !joins(line.kind, nextKind))
+    ? 'an item with a line attached keeps a kind that line can reach'
+    : null;
+}
+
 export function opRefusal(op: SiteOp): string | null {
   switch (op.type) {
     case 'add': return newItemRefusal(op.item);
@@ -107,8 +175,20 @@ export function opRefusal(op: SiteOp): string | null {
     case 'setKindDefault':
       if (!isSiteItemKind(op.kind)) return `unknown item kind: ${String(op.kind)}`;
       return op.size === null ? null : kindSizeRefusal(op.size);
+    case 'addLine': return newLineRefusal(op.line);
+    case 'updateLine': return linePatchRefusal(op.patch);
+    case 'removeLine': return null;
     default: return 'unknown operation';
   }
+}
+
+/** A line patch as the server stores it: label trimmed, blank notes as none, bends as fresh pairs. */
+export function storedLinePatch(patch: LinePatch): LinePatch {
+  const out: LinePatch = { ...patch };
+  if (patch.label !== undefined) out.label = patch.label.trim();
+  if (patch.notes !== undefined) out.notes = patch.notes === null || isBlank(patch.notes) ? null : patch.notes.trim();
+  if (patch.points !== undefined) out.points = patch.points.map((p): SiteLinePoint => [p[0], p[1]]);
+  return out;
 }
 
 /** Moving, resizing (height included), turning or re-kinding — what a lock forbids. Renaming, notes and task links are not. */
@@ -158,12 +238,32 @@ export function storedPatch(
  */
 
 /** Only the fields a patch actually sets: `{ xCm: undefined }` sets nothing. */
-function definedFields(patch: ItemPatch): ItemPatch {
-  const out: ItemPatch = {};
-  for (const key of Object.keys(patch) as Array<keyof ItemPatch>) {
-    if (patch[key] !== undefined) (out as Record<string, unknown>)[key] = patch[key];
+function definedFields<P extends ItemPatch | LinePatch>(patch: P): P {
+  const out = {} as P;
+  for (const key of Object.keys(patch) as Array<keyof P>) {
+    if (patch[key] !== undefined) out[key] = patch[key];
   }
   return out;
+}
+
+/** Two bend lists that draw the same line. */
+export function samePoints(a: readonly SiteLinePoint[], b: readonly SiteLinePoint[]): boolean {
+  return a.length === b.length && a.every((p, i) => p[0] === b[i][0] && p[1] === b[i][1]);
+}
+
+function sameLineField(key: keyof LinePatch, a: LinePatch[keyof LinePatch], b: EditorLine[keyof LinePatch]): boolean {
+  if (key === 'points') return samePoints(a as SiteLinePoint[], b as SiteLinePoint[]);
+  return a === b;
+}
+
+function insertLineInOrder(lines: readonly EditorLine[], entry: EditorLine): EditorLine[] {
+  const after = (a: EditorLine, b: EditorLine) => (a.sort !== b.sort ? a.sort - b.sort : a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  const at = lines.findIndex((other) => after(entry, other) < 0);
+  return at === -1 ? [...lines, entry] : [...lines.slice(0, at), entry, ...lines.slice(at)];
+}
+
+function copyLine(line: EditorLine): EditorLine {
+  return { ...line, points: line.points.map((p): SiteLinePoint => [p[0], p[1]]) };
 }
 
 /** The server's reading order (`listItems`: sort, then id), so an undone removal lands where it was. */
@@ -199,11 +299,32 @@ function withDefault(defaults: KindDefaults, kind: SiteItemKind, size: KindSize 
  */
 export function applyOps(doc: EditorDoc, ops: readonly SiteOp[]): { doc: EditorDoc; skipped: SiteOp[] } {
   let items = doc.items;
+  let lines = doc.lines;
   let defaults = doc.defaults;
   const skipped: SiteOp[] = [];
   for (const op of ops) {
     if (op.type === 'setKindDefault') {
       defaults = withDefault(defaults, op.kind, op.size);
+      continue;
+    }
+    if (isLineOp(op)) {
+      // A line's ends are not checked here, for the same reason locks are not: the
+      // commands refuse a bad end before any op exists, and the server refuses what
+      // slips past them. A line whose end has gone is drawn nowhere and measures nothing.
+      const id = op.type === 'addLine' ? op.line.id : op.id;
+      const index = lines.findIndex((entry) => entry.id === id);
+      if (op.type === 'addLine') {
+        if (index !== -1) { skipped.push(op); continue; }
+        lines = insertLineInOrder(lines, copyLine(op.line));
+      } else if (index === -1) {
+        skipped.push(op);
+      } else if (op.type === 'updateLine') {
+        const next = lines.slice();
+        next[index] = copyLine({ ...lines[index], ...definedFields(op.patch) });
+        lines = next;
+      } else {
+        lines = [...lines.slice(0, index), ...lines.slice(index + 1)];
+      }
       continue;
     }
     const id = op.type === 'add' ? op.item.id : op.id;
@@ -221,8 +342,8 @@ export function applyOps(doc: EditorDoc, ops: readonly SiteOp[]): { doc: EditorD
       items = [...items.slice(0, index), ...items.slice(index + 1)];
     }
   }
-  const unchanged = items === doc.items && defaults === doc.defaults;
-  return { doc: unchanged ? doc : { ...doc, items, defaults }, skipped };
+  const unchanged = items === doc.items && lines === doc.lines && defaults === doc.defaults;
+  return { doc: unchanged ? doc : { ...doc, items, lines, defaults }, skipped };
 }
 
 /** What undoes one op against the doc it is about to be applied to; null when there is nothing to undo. */
@@ -248,6 +369,24 @@ function inverseOf(doc: EditorDoc, op: SiteOp): SiteOp | null {
       const before = doc.defaults[op.kind];
       if (before === undefined && op.size === null) return null;
       return { type: 'setKindDefault', kind: op.kind, size: before === undefined ? null : { ...before } };
+    }
+    case 'addLine':
+      return findLine(doc, op.line.id) ? null : { type: 'removeLine', id: op.line.id };
+    case 'updateLine': {
+      const before = findLine(doc, op.id);
+      if (!before) return null;
+      const patch: LinePatch = {};
+      for (const key of Object.keys(op.patch) as Array<keyof LinePatch>) {
+        const value = op.patch[key];
+        if (value !== undefined && !sameLineField(key, value, before[key])) {
+          (patch as Record<string, unknown>)[key] = key === 'points' ? before.points.map((p) => [p[0], p[1]]) : before[key];
+        }
+      }
+      return Object.keys(patch).length === 0 ? null : { type: 'updateLine', id: op.id, patch };
+    }
+    case 'removeLine': {
+      const before = findLine(doc, op.id);
+      return before ? { type: 'addLine', line: copyLine(before) } : null;
     }
   }
 }
@@ -276,6 +415,9 @@ function copyOf(op: SiteOp): SiteOp {
     case 'update': return { type: 'update', id: op.id, patch: definedFields(op.patch) };
     case 'remove': return { type: 'remove', id: op.id };
     case 'setKindDefault': return { type: 'setKindDefault', kind: op.kind, size: op.size === null ? null : { ...op.size } };
+    case 'addLine': return { type: 'addLine', line: copyLine(op.line) };
+    case 'updateLine': return { type: 'updateLine', id: op.id, patch: storedLinePatch(definedFields(op.patch)) };
+    case 'removeLine': return { type: 'removeLine', id: op.id };
   }
 }
 
@@ -298,6 +440,7 @@ function copyOf(op: SiteOp): SiteOp {
 export function coalesceOps(ops: readonly SiteOp[]): SiteOp[] {
   const out: Array<SiteOp | null> = [];
   const lastForItem = new Map<string, number>();
+  const lastForLine = new Map<string, number>();
   const lastForKind = new Map<SiteItemKind, number>();
   for (const op of ops) {
     if (op.type === 'setKindDefault') {
@@ -308,6 +451,30 @@ export function coalesceOps(ops: readonly SiteOp[]): SiteOp[] {
       } else {
         out[at] = copyOf(op);
       }
+      continue;
+    }
+    if (isLineOp(op)) {
+      // The same three merges as an item's, and nothing about locks: a line has none.
+      const id = op.type === 'addLine' ? op.line.id : op.id;
+      const at = lastForLine.get(id);
+      const held = at === undefined ? null : out[at];
+      if (at !== undefined && held !== null) {
+        if (op.type === 'updateLine' && held.type === 'addLine') {
+          out[at] = { type: 'addLine', line: copyLine({ ...held.line, ...definedFields(op.patch) }) };
+          continue;
+        }
+        if (op.type === 'updateLine' && held.type === 'updateLine') {
+          out[at] = { type: 'updateLine', id, patch: storedLinePatch({ ...held.patch, ...definedFields(op.patch) }) };
+          continue;
+        }
+        if (op.type === 'removeLine' && held.type === 'addLine') {
+          out[at] = null;
+          lastForLine.delete(id);
+          continue;
+        }
+      }
+      lastForLine.set(id, out.length);
+      out.push(copyOf(op));
       continue;
     }
     const id = op.type === 'add' ? op.item.id : op.id;

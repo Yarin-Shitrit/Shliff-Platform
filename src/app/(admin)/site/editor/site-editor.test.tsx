@@ -25,7 +25,7 @@ function siteItem(over: Partial<EditorItem> & { id: string }): EditorItem {
 }
 
 function siteDoc(items: EditorItem[], plot: Partial<EditorPlot> = {}): EditorDoc {
-  return { plot: { id: 'p1', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0, ...plot }, items, defaults: {} };
+  return { plot: { id: 'p1', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0, ...plot }, items, lines: [], defaults: {} };
 }
 
 const { saveSiteChangesAction, loadSiteDocAction } = vi.hoisted(() => ({

@@ -22,7 +22,7 @@ const ITEMS = [
 ];
 
 function scene(over: Partial<SyncInput> = {}): SceneSync {
-  const doc: EditorDoc = { plot: { id: 'p', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0 }, items: ITEMS, defaults: {} };
+  const doc: EditorDoc = { plot: { id: 'p', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0 }, items: ITEMS, lines: [], defaults: {} };
   const sync = new SceneSync();
   sync.sync({
     doc, preview: new Map(), selection: new Set(), hover: null,

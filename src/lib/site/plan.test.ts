@@ -4,11 +4,11 @@ import { createTestDb, type TestDb } from '@/test/db';
 import { seasons, tasks } from '@/db/schema/camp';
 import { siteItems, siteKindDefaults } from '@/db/schema/site';
 import {
-  applySiteOps, copyPlan, createPlan, deriveView, itemById, kindDefaults, listItems, loadDoc,
+  applySiteOps, copyPlan, createPlan, deriveView, itemById, kindDefaults, listItems, listLines, loadDoc,
   planById, planForSeason, seasonsWithPlans, setPlot, siteView,
 } from './plan';
-import type { EditorItem } from './editor/model';
-import type { ItemPatch } from './editor/ops';
+import type { EditorItem, EditorLine } from './editor/model';
+import type { ItemPatch, SiteOp } from './editor/ops';
 
 const LEAD = 'lead@shliff.camp';
 const PLOT = { widthCm: 2600, depthCm: 2400, gridCm: 50 };
@@ -490,5 +490,112 @@ describe('the camp map', () => {
       await expect(applySiteOps(db, mine, 0, [{ type: 'add', item: clash }], LEAD))
         .rejects.toThrow('an item id is already in use');
     });
+  });
+});
+
+/* ── the pipes and cables (site_lines, migration 0013) ─────────────────── */
+
+describe('the camp map’s lines', () => {
+  let db: TestDb;
+  let s25: string;
+  let s26: string;
+  let planId: string;
+  const tank = tentOf({ kind: 'water', label: 'מי שתייה 1', xCm: 0, yCm: 0, widthCm: 100, depthCm: 100, sort: 0 });
+  const shower = tentOf({ kind: 'shower', label: 'מקלחת 1', xCm: 500, yCm: 0, widthCm: 100, depthCm: 100, sort: 1 });
+  const toilet = tentOf({ kind: 'toilet', label: 'תא שירותים 1', xCm: 500, yCm: 500, widthCm: 100, depthCm: 100, sort: 2 });
+  const pipe = (over: Partial<EditorLine> = {}): EditorLine => ({
+    id: crypto.randomUUID(), kind: 'water', label: 'צינור מים 1', fromId: tank.id, toId: shower.id,
+    points: [], sort: 0, notes: null, ...over,
+  });
+  const batch = (version: number, ops: SiteOp[]) => applySiteOps(db, planId, version, ops, LEAD);
+
+  beforeEach(async () => {
+    db = await createTestDb();
+    const rows = await db.insert(seasons).values([
+      { name: 'ברן 25', year: 2025, flatRate: '1500.00' },
+      { name: 'ברן 26', year: 2026, flatRate: '1200.00' },
+    ]).returning();
+    s25 = rows[0].id;
+    s26 = rows[1].id;
+    planId = await createPlan(db, s26, PLOT, LEAD);
+    await batch(0, [{ type: 'add', item: tank }, { type: 'add', item: shower }, { type: 'add', item: toilet }]);
+  });
+
+  it('adds a pipe between a tank and a shower, lists it, and loads it for the editor with its length', async () => {
+    const line = pipe({ points: [[50, 300], [550, 300]], notes: ' לאורך הגדר ' });
+    expect(await batch(1, [{ type: 'addLine', line }])).toEqual({ status: 'saved', version: 2 });
+    const rows = await listLines(db, planId);
+    expect(rows).toEqual([expect.objectContaining({
+      id: line.id, planId, kind: 'water', label: 'צינור מים 1', fromItemId: tank.id, toItemId: shower.id,
+      pointsCm: [[50, 300], [550, 300]], sort: 0, notes: 'לאורך הגדר', updatedBy: LEAD,
+    })]);
+    const loaded = await loadDoc(db, planId);
+    expect(loaded?.doc.lines).toEqual([{ ...line, notes: 'לאורך הגדר' }]);
+    const view = await siteView(db, s26);
+    expect(view?.lines).toEqual([expect.objectContaining({ fromLabel: 'מי שתייה 1', toLabel: 'מקלחת 1', lengthCm: 200 + 500 + 200 })]);
+  });
+
+  it('refuses a pipe to a toilet, a cable to a shower, a line to itself, and a line whose end is off this map', async () => {
+    await expect(batch(1, [{ type: 'addLine', line: pipe({ toId: toilet.id }) }])).rejects.toThrow('a water pipe joins only');
+    await expect(batch(1, [{ type: 'addLine', line: pipe({ kind: 'power', label: 'כבל חשמל 1' }) }])).rejects.toThrow('a power cable joins only');
+    await expect(batch(1, [{ type: 'addLine', line: pipe({ toId: tank.id }) }])).rejects.toThrow('a line must join two different items');
+    const other = await createPlan(db, s25, PLOT, LEAD);
+    const elsewhere = tentOf({ kind: 'shower', label: 'מקלחת 9' });
+    await applySiteOps(db, other, 0, [{ type: 'add', item: elsewhere }], LEAD);
+    await expect(batch(1, [{ type: 'addLine', line: pipe({ toId: elsewhere.id }) }])).rejects.toThrow('a line end is not an item on this map');
+    expect(await listLines(db, planId)).toEqual([]);
+    expect((await planForSeason(db, s26))?.version).toBe(1);
+  });
+
+  it('refuses an id already taken and a bend that is not whole centimetres', async () => {
+    const line = pipe();
+    await batch(1, [{ type: 'addLine', line }]);
+    await expect(batch(2, [{ type: 'addLine', line }])).rejects.toThrow('a line id is already in use');
+    await expect(batch(2, [{ type: 'updateLine', id: line.id, patch: { points: [[1.5, 2]] } }])).rejects.toThrow('a line bend must be');
+  });
+
+  it('updates a line’s bends, name and end, checking a new end like a new line’s', async () => {
+    const line = pipe();
+    await batch(1, [{ type: 'addLine', line }]);
+    const sink = tentOf({ kind: 'sink', label: 'כיור 1', xCm: 500, yCm: 300, widthCm: 100, depthCm: 50, sort: 3 });
+    await batch(2, [{ type: 'add', item: sink }, { type: 'updateLine', id: line.id, patch: { toId: sink.id, points: [[50, 325]], label: ' לכיור ' } }]);
+    expect((await listLines(db, planId))[0]).toMatchObject({ toItemId: sink.id, pointsCm: [[50, 325]], label: 'לכיור' });
+    await expect(batch(3, [{ type: 'updateLine', id: line.id, patch: { toId: toilet.id } }])).rejects.toThrow('a water pipe joins only');
+    await expect(batch(3, [{ type: 'updateLine', id: crypto.randomUUID(), patch: { label: 'x' } }])).rejects.toThrow('unknown site line');
+  });
+
+  it('removes a line, and removes an item’s lines with the item', async () => {
+    const line = pipe();
+    await batch(1, [{ type: 'addLine', line }]);
+    await batch(2, [{ type: 'removeLine', id: line.id }]);
+    expect(await listLines(db, planId)).toEqual([]);
+    await expect(batch(3, [{ type: 'removeLine', id: line.id }])).rejects.toThrow('unknown site line');
+
+    const again = pipe();
+    await batch(3, [{ type: 'addLine', line: again }]);
+    // The editor sends the line's removal first (`removeOps`); a batch that sends only the item's still leaves no line behind.
+    await batch(4, [{ type: 'remove', id: shower.id }]);
+    expect(await listLines(db, planId)).toEqual([]);
+  });
+
+  it('keeps a shower with a pipe from becoming a tent', async () => {
+    await batch(1, [{ type: 'addLine', line: pipe() }]);
+    await expect(batch(2, [{ type: 'update', id: shower.id, patch: { kind: 'tent' } }]))
+      .rejects.toThrow('an item with a line attached keeps');
+    await batch(2, [{ type: 'update', id: shower.id, patch: { kind: 'sink' } }]);
+    expect((await itemById(db, shower.id))?.kind).toBe('sink');
+  });
+
+  it('copies the lines with the map, between the copies', async () => {
+    const line = pipe({ points: [[50, 300]] });
+    await batch(1, [{ type: 'addLine', line }]);
+    const copied = await copyPlan(db, s26, s25, LEAD);
+    const items = await listItems(db, copied);
+    const lines = await listLines(db, copied);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].id).not.toBe(line.id);
+    expect(lines[0]).toMatchObject({ planId: copied, kind: 'water', pointsCm: [[50, 300]] });
+    expect(items.find((row) => row.id === lines[0].fromItemId)?.label).toBe('מי שתייה 1');
+    expect(items.find((row) => row.id === lines[0].toItemId)?.label).toBe('מקלחת 1');
   });
 });

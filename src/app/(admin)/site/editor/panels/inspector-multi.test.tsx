@@ -22,7 +22,7 @@ const C = item({ id: 'c', kind: 'caravan', label: 'קראוון 1', xCm: 500, yC
 
 function renderMulti(items: EditorItem[]) {
   const map: EditorDoc = {
-    plot: { id: 'p1', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0 }, items, defaults: {},
+    plot: { id: 'p1', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0 }, items, lines: [], defaults: {},
   };
   const onRun = vi.fn<(label: string, ops: SiteOp[]) => void>();
   const onPickIds = vi.fn();

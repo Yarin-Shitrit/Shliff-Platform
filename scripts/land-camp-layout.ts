@@ -153,8 +153,9 @@ export function sketchItems(): SketchItem[] {
     // -- Showers and a sink on the east edge ---------------------------------
     { kind: 'shower', label: 'מקלחת 1', xCm: 2800, yCm: 1050, widthCm: 200, depthCm: 200 },
     { kind: 'shower', label: 'מקלחת 2', xCm: 2800, yCm: 1250, widthCm: 200, depthCm: 250 },
+    // A sink of its own kind since `site_lines`: where a water pipe may end. Still the sketch's reading, still unclear.
     {
-      kind: 'other', label: 'כיור', xCm: 2700, yCm: 1250, widthCm: 100, depthCm: 250,
+      kind: 'sink', label: 'כיור', xCm: 2700, yCm: 1250, widthCm: 100, depthCm: 250,
       unclear: 'הכיתוב המסובב בסקיצה ליד המקלחות לא קריא בוודאות; נקרא "כיור"',
     },
 

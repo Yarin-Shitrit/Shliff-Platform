@@ -19,7 +19,8 @@ export interface GestureWorld {
   mode(): ViewMode;
   handleAt(x: number, y: number): Handle | null;
   labelAt(x: number, y: number): { ids: string[]; group: boolean } | null;
-  itemAt(x: number, y: number): { id: string; isNet: boolean; locked: boolean } | null;
+  /** `line`: a pipe or a cable rather than an item — it selects on click and is never dragged, its ends are. */
+  itemAt(x: number, y: number): { id: string; isNet: boolean; locked: boolean; line?: boolean } | null;
   groundAt(x: number, y: number): [number, number] | null;
   selection(): readonly string[];
 }
@@ -124,7 +125,8 @@ export class Gestures {
       const already = selected.includes(item.id);
       if (p.shift || p.meta) return [{ type: 'toggleSelect', id: item.id }];
       // A net nobody chose is ground to pan across; a click still selects it (spec §8).
-      if (item.isNet && !already) {
+      // A line is always that: it is moved by moving its ends, never by dragging the run.
+      if ((item.isNet && !already) || item.line === true) {
         this.drag = { type: 'pan', start: at, grab: world.groundAt(p.x, p.y), moved: false, click: { type: 'select', id: item.id } };
         return [];
       }
@@ -267,6 +269,7 @@ export class Gestures {
       else if (label !== null && label.group) next = { id: null, cursor: 'zoom-in' };
       else if (label !== null) next = { id: label.ids[0], cursor: 'pointer' };
       else if (item === null) next = { id: null, cursor: 'default' };
+      else if (item.line === true) next = { id: item.id, cursor: 'pointer' };
       else if (item.locked) next = { id: item.id, cursor: 'not-allowed' };
       else if (item.isNet && !world.selection().includes(item.id)) next = { id: item.id, cursor: 'pointer' };
       else next = { id: item.id, cursor: 'grab' };

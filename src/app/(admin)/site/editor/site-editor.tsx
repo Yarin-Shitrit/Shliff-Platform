@@ -25,14 +25,17 @@ import { Button, ButtonLink } from '@/components/ui/button';
 import { cx } from '@/components/ui/cx';
 import { Icon } from '@/components/ui/icon';
 import { useToast } from '@/components/ui/toaster';
-import type { SiteItemKind } from '@/db/schema/site';
+import type { SiteItemKind, SiteLineKind } from '@/db/schema/site';
 import { effectiveSize } from '@/lib/site/defaults';
 import { formatSize, snap } from '@/lib/site/geometry';
 import { nearestFreeSpot } from '@/lib/site/editor/placement';
 import { KIND_GROUP_ORDER, SITE_KINDS, type SiteKindGroup } from '@/lib/site/kinds';
-import { findItem, type EditorDoc, type EditorItem } from '@/lib/site/editor/model';
+import { LINE_KIND_ORDER, LINE_KINDS, lineLengthCm } from '@/lib/site/lines';
+import { findItem, findLine, type EditorDoc, type EditorItem, type EditorLine } from '@/lib/site/editor/model';
 import type { SiteOp } from '@/lib/site/editor/ops';
-import { addOps, duplicateOps, lockOps, moveOps, removeOps, turnOps } from '@/lib/site/editor/commands';
+import {
+  addLineOps, addOps, duplicateOps, lockOps, moveOps, removeLineOps, removeOps, turnOps,
+} from '@/lib/site/editor/commands';
 import { screenArrowToMap } from '@/lib/site/editor/camera';
 import { CAMP_SITE, jerusalemInstant, shadeAtHour, sunPosition } from '@/lib/site/editor/sun';
 import { readSunDate } from '@/lib/site/views';
@@ -49,6 +52,7 @@ import { ObjectsPanel } from './panels/objects-panel';
 import { SidePanel, type SideTab } from './panels/side-panel';
 import { PlotInspector } from './panels/inspector-plot';
 import { ItemInspector } from './panels/inspector-item';
+import { LineInspector, LinesInspector } from './panels/inspector-line';
 import { MultiInspector } from './panels/inspector-multi';
 import { SelectionActions } from './panels/selection-actions';
 import { ChecksBar } from './panels/checks-bar';
@@ -59,6 +63,7 @@ import { ShortcutsCard } from './panels/shortcuts-card';
 import { SunCard } from './panels/sun-card';
 import chrome from './panels/panel.module.css';
 import inspectorStyles from './panels/inspector.module.css';
+import actionStyles from './panels/selection-actions.module.css';
 import styles from './editor.module.css';
 
 const SceneView = dynamic<SceneViewProps & RefAttributes<SceneHandle>>(
@@ -202,6 +207,7 @@ function paletteVars(theme: SceneTheme): CSSProperties {
     '--scene-fence': palette.fence,
   };
   for (const group of KIND_GROUP_ORDER) vars[`--group-${group}`] = palette.groups[group];
+  for (const kind of LINE_KIND_ORDER) vars[`--line-${kind}`] = palette.lines[kind];
   return vars as CSSProperties;
 }
 
@@ -333,6 +339,13 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
       .filter((item): item is EditorItem => item !== undefined);
   }
 
+  /** The selected pipes and cables that still exist. */
+  function selectedLines(): EditorLine[] {
+    return store.selection
+      .map((id) => findLine(store.doc, id))
+      .filter((line): line is EditorLine => line !== undefined);
+  }
+
   function historyMoved(): void {
     historyMark.current += 1;
     for (const dismiss of undoToasts.current) dismiss();
@@ -393,18 +406,31 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     show({ message: count === 1 ? LOCKED_NOTICE : LOCKED_ALL_NOTICE, tone: 'bad' });
   }
 
-  /** No confirmation (§8): it goes, and the toast offers it back. Locked items stay, and are counted. */
+  /**
+   * No confirmation (§8): it goes, and the toast offers it back. Locked items
+   * stay, and are counted. A selected pipe or cable goes too, and an item
+   * takes its own lines with it (`removeOps`), each once.
+   */
   function removeSelection(): void {
     const items = selected();
-    if (items.length === 0) return;
-    const ops = removeOps(store.doc, store.selection);
+    const lines = selectedLines();
+    if (items.length === 0 && lines.length === 0) return;
+    const itemOps = removeOps(store.doc, store.selection);
+    const withItems = new Set(itemOps.flatMap((op) => (op.type === 'removeLine' ? [op.id] : [])));
+    const lineOps = removeLineOps(store.doc, lines.map((line) => line.id)).filter((op) => op.type !== 'removeLine' || !withItems.has(op.id));
+    const ops = [...lineOps, ...itemOps];
     if (ops.length === 0) {
       lockedNotice(items.length);
       return;
     }
     const gone = new Set(ops.flatMap((op) => (op.type === 'remove' ? [op.id] : [])));
+    const goneLines = ops.filter((op) => op.type === 'removeLine').length;
     const kept = items.filter((item) => !gone.has(item.id));
     runEdit('הסרה', ops, kept.map((item) => item.id));
+    if (gone.size === 0) {
+      saidWithUndo(goneLines === 1 ? `הקו ${lines[0].label} הוסר מהמפה` : `${goneLines} קווים הוסרו מהמפה`);
+      return;
+    }
     const first = items.find((item) => gone.has(item.id));
     const said = gone.size === 1 && first !== undefined
       ? `הפריט ${first.label} הוסר מהמפה`
@@ -412,7 +438,22 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     const stayed = kept.length === 0 ? ''
       : kept.length === 1 ? '. פריט נעול אחד נשאר במקומו'
         : `. ${kept.length} פריטים נעולים נשארו במקומם`;
-    saidWithUndo(`${said}${stayed}`);
+    const wires = goneLines === 0 ? '' : goneLines === 1 ? ', עם הקו שהיה מחובר אליו' : `, עם ${goneLines} הקווים שהיו מחוברים`;
+    saidWithUndo(`${said}${wires}${stayed}`);
+  }
+
+  /** A new pipe or cable between two items (`lines.ts`), selected once it lands so its panel opens. */
+  function addLine(kind: SiteLineKind, fromId: string, toId: string): void {
+    const id = crypto.randomUUID();
+    const ops = addLineOps(store.doc, kind, fromId, toId, id);
+    const added = ops.find((op): op is Extract<SiteOp, { type: 'addLine' }> => op.type === 'addLine');
+    if (added === undefined) {
+      // The panel offers only ends the rules allow, so this is a race with another lead's edit, not a mistake.
+      show({ message: `אי אפשר לחבר את שני הפריטים האלה ב${LINE_KINDS[kind].label}. אולי אחד מהם השתנה בינתיים.`, tone: 'bad' });
+      return;
+    }
+    runEdit(`הוספת ${LINE_KINDS[kind].label}`, ops, [id]);
+    saidWithUndo(`${added.line.label} נוסף למפה`);
   }
 
   function duplicateSelection(): void {
@@ -604,6 +645,22 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
    */
   function renderInspector(): ReactElement {
     const items = selected();
+    const lines = selectedLines();
+    if (items.length === 0 && lines.length > 0) {
+      // Only remove applies to a line: it is turned, copied and locked through its ends.
+      const removal = (
+        <span className={actionStyles.pushEnd}>
+          <Button size="sm" tone="danger" onClick={removeSelection}>
+            <Icon name="trash" size={14} />
+            הסרה
+          </Button>
+        </span>
+      );
+      if (lines.length === 1) {
+        return <LineInspector key={lines[0].id} doc={store.doc} line={lines[0]} onRun={runEdit} onPickIds={pickIds} footer={removal} />;
+      }
+      return <LinesInspector doc={store.doc} lines={lines} onPickIds={pickIds} footer={removal} />;
+    }
     if (items.length === 0) {
       return <PlotInspector doc={store.doc} flags={store.flags} plotHref={plotHref} onPickIds={pickIds} />;
     }
@@ -627,6 +684,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
           buildTasks={props.buildTasks}
           onRun={runEdit}
           onPickIds={pickIds}
+          onAddLine={addLine}
           footer={actions}
         />
       );
@@ -793,6 +851,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
           objects={(
             <ObjectsPanel
               items={store.doc.items}
+              lines={store.doc.lines.map((line) => ({ id: line.id, kind: line.kind, label: line.label, lengthCm: lineLengthCm(store.doc, line) }))}
               selection={store.selection}
               flags={store.flags}
               hiddenGroups={ui.hiddenGroups}

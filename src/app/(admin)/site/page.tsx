@@ -14,7 +14,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { ButtonLink } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { SiteEditor } from './editor/site-editor';
-import { SiteTable } from './site-table';
+import { SiteLinesTable, SiteTable } from './site-table';
 import { PlotDrawer } from './plot-drawer';
 import { CopyDrawer } from './copy-drawer';
 import styles from './site.module.css';
@@ -100,17 +100,21 @@ export default async function SitePage(
     );
   }
 
-  const { plan, items } = view;
+  const { plan, items, lines } = view;
   const table = (
-    <SiteTable
-      items={items}
-      params={here}
-      season={current.id}
-      empty={(
-        /* An invitation: the editor's library is how a thing gets on the map. */
-        <EmptyState kind="nothing-this-season" noun="פריטים במפה" seasonName={current.name} />
-      )}
-    />
+    <>
+      <SiteTable
+        items={items}
+        params={here}
+        season={current.id}
+        empty={(
+          /* An invitation: the editor's library is how a thing gets on the map. */
+          <EmptyState kind="nothing-this-season" noun="פריטים במפה" seasonName={current.name} />
+        )}
+      />
+      {/* The pipes and cables under the items, with their metres — nothing when there are none yet. */}
+      <SiteLinesTable lines={lines} params={here} />
+    </>
   );
 
   /* `loadDoc` answers null only if the plan was there for `siteView` and gone
@@ -139,9 +143,8 @@ export default async function SitePage(
   /* `?peek=` selects an item when the map loads (spec §12) — only one that is
      on this season's map. Nothing opens over the editor for it, not even the
      retired board's `?act=remove`: a removal is undone in the editor. */
-  const initialSelection = query.peek !== null && loaded.doc.items.some((entry) => entry.id === query.peek)
-    ? query.peek
-    : null;
+  const onThisMap = (id: string) => loaded.doc.items.some((entry) => entry.id === id) || loaded.doc.lines.some((entry) => entry.id === id);
+  const initialSelection = query.peek !== null && onThisMap(query.peek) ? query.peek : null;
   const buildTasks = (await listTasks(db, current.id, { kind: 'build' }))
     .map((task) => ({ id: task.taskId, title: task.title }));
 
