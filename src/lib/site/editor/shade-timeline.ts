@@ -142,19 +142,14 @@ function daylightOn(clock: (hour: number) => Date, site: { latitude: number; lon
   };
 }
 
-/**
- * The shade under the nets through each day's daylight, every `stepMinutes`
- * on the clock: at whole multiples of the step counted from midnight (06:00,
- * 06:15, … for 15), from the first at or after sunrise to the last at or
- * before sunset. Chronological; a day without daylight adds nothing. The
- * dates must be ascending and distinct — they are refused, not reordered.
- */
+/** Refuses a sampling step that is not a whole number of minutes above 0. */
 function readStep(stepMinutes: number): void {
   if (!Number.isInteger(stepMinutes) || stepMinutes <= 0) {
     throw new Error(`a shade step must be a whole number of minutes above 0: ${stepMinutes}`);
   }
 }
 
+/** Refuses dates that are not real days, or not ascending and distinct — never reorders them. */
 function readDates(dates: readonly string[]): void {
   dates.forEach((date, index) => {
     readDate(date);
@@ -164,6 +159,13 @@ function readDates(dates: readonly string[]): void {
   });
 }
 
+/**
+ * The shade under the nets through each day's daylight, every `stepMinutes`
+ * on the clock: at whole multiples of the step counted from midnight (06:00,
+ * 06:15, … for 15), from the first at or after sunrise to the last at or
+ * before sunset. Chronological; a day without daylight adds nothing. The
+ * dates must be ascending and distinct — they are refused, not reordered.
+ */
 export function shadeTimeline(doc: EditorDoc, dates: readonly string[], stepMinutes: number): ShadeSample[] {
   readStep(stepMinutes);
   readDates(dates);
@@ -225,6 +227,12 @@ export interface TentShadeDay {
   shadedMinutes: number;
   fullMinutes: number;
   partialMinutes: number;
+  /**
+   * The day's count stopped at sunset, before the end hour asked for — the
+   * same for every tent on that day. The UI says "to sunset" from this,
+   * rather than working the rule out again.
+   */
+  untilSunset: boolean;
 }
 
 /** A tent's shade over the dates asked about, with each day's own count in `days`. */
@@ -278,6 +286,7 @@ export function shadeRanking(
     const day = daylightOn(clock, CAMP_SITE);
     const full = tents.map(() => 0);
     const partial = tents.map(() => 0);
+    const untilSunset = day !== null && day.set < endHour;
     if (day !== null) {
       const end = Math.min(endHour, day.set) * 60;
       for (let minute = Math.ceil((day.rise * 60) / stepMinutes) * stepMinutes; minute < end; minute += stepMinutes) {
@@ -293,7 +302,11 @@ export function shadeRanking(
     }
     ranking.forEach((entry, index) => {
       entry.days.push({
-        date, shadedMinutes: full[index] + partial[index] / 2, fullMinutes: full[index], partialMinutes: partial[index],
+        date,
+        shadedMinutes: full[index] + partial[index] / 2,
+        fullMinutes: full[index],
+        partialMinutes: partial[index],
+        untilSunset,
       });
       entry.fullMinutes += full[index];
       entry.partialMinutes += partial[index];

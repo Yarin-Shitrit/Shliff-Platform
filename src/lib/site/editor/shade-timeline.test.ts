@@ -342,18 +342,22 @@ const EAST = tent('east', 1900, 1000);
 const FAR = tent('far', 2200, 2000);
 
 describe('shadeRanking', () => {
-  const minutesOf = (ranking: ReturnType<typeof shadeRanking>, id: string) => {
+  /** A tent's three counts, to pin a known answer whole. */
+  const countsOf = (ranking: ReturnType<typeof shadeRanking>, id: string) => {
     const found = ranking.find((entry) => entry.id === id);
     if (found === undefined) throw new Error(`no ${id} in the ranking`);
-    return found.shadedMinutes;
+    return { shaded: found.shadedMinutes, full: found.fullMinutes, partial: found.partialMinutes };
   };
 
   it('ranks the tents by their minutes in shade, the most shaded first', () => {
     const ranking = shadeRanking(docOf([NET, SOUTH, FAR, NORTH]), [D1], 15);
     expect(ranking.map(({ id }) => id)).toEqual(['north', 'south', 'far']);
-    expect(minutesOf(ranking, 'north')).toBeGreaterThan(0);
-    expect(minutesOf(ranking, 'south')).toBe(0);
-    expect(minutesOf(ranking, 'far')).toBe(0);
+    // Pinned (sim-2-report, MST): four hours of full shade and two of part shade, to 15:00.
+    expect(countsOf(ranking, 'north')).toEqual({ shaded: 300, full: 240, partial: 120 });
+    // …and the day's own entry says the same, with part shade counted half there too.
+    expect(ranking[0].days).toEqual([{ date: D1, shadedMinutes: 300, fullMinutes: 240, partialMinutes: 120, untilSunset: false }]);
+    expect(countsOf(ranking, 'south')).toEqual({ shaded: 0, full: 0, partial: 0 });
+    expect(countsOf(ranking, 'far')).toEqual({ shaded: 0, full: 0, partial: 0 });
     expect(ranking[0].label).toBe('אוהל north');
   });
 
@@ -381,18 +385,47 @@ describe('shadeRanking', () => {
   it('counts only from sunrise to the end hour: the morning’s tent, then the afternoon’s', () => {
     const doc = docOf([NET, WEST, EAST]);
     const toNoon = shadeRanking(doc, [D1], 15, { endHour: 12 });
-    expect(minutesOf(toNoon, 'west')).toBeGreaterThan(0);
-    expect(minutesOf(toNoon, 'east')).toBe(0);
-    expect(toNoon.map(({ id }) => id)).toEqual(['west', 'east']);
+    const toAfternoon = shadeRanking(doc, [D1], 15, { endHour: 15 });
     const toEvening = shadeRanking(doc, [D1], 15, { endHour: 17 });
-    expect(minutesOf(toEvening, 'east')).toBeGreaterThan(0);
-    expect(minutesOf(toEvening, 'west')).toBe(minutesOf(toNoon, 'west'));
+    expect(toNoon.map(({ id }) => id)).toEqual(['west', 'east']);
+    // Pinned (sim-2-report, MST): the west tent's shade is all before noon; the east tent's all after it.
+    for (const ranking of [toNoon, toAfternoon, toEvening]) {
+      expect(countsOf(ranking, 'west')).toEqual({ shaded: 135, full: 90, partial: 90 });
+    }
+    expect(countsOf(toNoon, 'east')).toEqual({ shaded: 0, full: 0, partial: 0 });
+    expect(countsOf(toAfternoon, 'east')).toEqual({ shaded: 97.5, full: 60, partial: 75 });
+    expect(countsOf(toEvening, 'east')).toEqual({ shaded: 135, full: 90, partial: 90 });
   });
 
-  it('stops at sunset when the end hour is later', () => {
-    const doc = docOf([NET, EAST]);
-    // Sunset on 2 November is 16:50:56: 17:00 and 23:00 count the same samples.
-    expect(shadeRanking(doc, [D1], 15, { endHour: 23 })).toEqual(shadeRanking(doc, [D1], 15, { endHour: 17 }));
+  /*
+   * A net 2 km across, centred on a tent: its shade covers the tent whenever
+   * the sun is up at all — a 3 m cloth throws its shade under 1 km once the
+   * sun is 0.17° high, and at 06:00, 2½ minutes after sunrise, it is about
+   * half a degree up. So every sample from 06:00 is full shade, and what the
+   * end hour and sunset do to the count is all there is to see.
+   */
+  const WIDE = make({ id: 'wide', kind: 'shade', xCm: -100_000, yCm: -100_000, widthCm: 200_000, depthCm: 200_000, insetCm: 50 });
+  const MIDDLE = tent('middle', -100, -100);
+
+  it('stops the last sample at sunset when the end hour is later — about six minutes, not fifteen', () => {
+    const doc = docOf([WIDE, MIDDLE]);
+    const set = daylight(D1)!.set;
+    const [toEvening] = shadeRanking(doc, [D1], 15, { endHour: 17 });
+    // 06:00 to 16:30 is 43 whole quarter hours; then 16:45 to sunset (16:50:56 by the almanac, ±2 min).
+    expect(toEvening.fullMinutes).toBeCloseTo(43 * 15 + (set * 60 - (16 * 60 + 45)), 9);
+    expect(toEvening.fullMinutes - 43 * 15).toBeGreaterThan(4);
+    expect(toEvening.fullMinutes - 43 * 15).toBeLessThan(8);
+    expect(toEvening.partialMinutes).toBe(0);
+    // Later end hours stop at the same sunset.
+    expect(shadeRanking(doc, [D1], 15, { endHour: 23 })[0].fullMinutes).toBe(toEvening.fullMinutes);
+    // An end hour before sunset is whole steps: 06:00 to 15:00.
+    expect(shadeRanking(doc, [D1], 15, { endHour: 15 })[0].fullMinutes).toBe(540);
+  });
+
+  it('says for each day whether the count stopped at sunset rather than at the end hour', () => {
+    const doc = docOf([WIDE, MIDDLE]);
+    expect(shadeRanking(doc, [D1, D2], 15, { endHour: 17 })[0].days.map(({ untilSunset }) => untilSunset)).toEqual([true, true]);
+    expect(shadeRanking(doc, [D1, D2], 15, { endHour: 15 })[0].days.map(({ untilSunset }) => untilSunset)).toEqual([false, false]);
   });
 
   it('sums the days of the burn, and keeps each day’s own count', () => {
