@@ -19,6 +19,7 @@ export type SiteItemKind =
   | 'kitchen' | 'bar' | 'sofa' | 'armchair' | 'table' | 'fire'
   | 'shower' | 'toilet' | 'changing' | 'sink'
   | 'fridge' | 'generator' | 'water' | 'greywater' | 'boiler' | 'storage' | 'light'
+  | 'splitter'
   | 'other';
 
 /**

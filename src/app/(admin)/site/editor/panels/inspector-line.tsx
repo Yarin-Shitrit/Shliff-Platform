@@ -24,7 +24,7 @@ import { findItem, type EditorDoc, type EditorLine } from '@/lib/site/editor/mod
 import type { SiteOp } from '@/lib/site/editor/ops';
 import { patchLineOps } from '@/lib/site/editor/commands';
 import { POSITION_RANGE, readMetres } from '@/lib/site/editor/metres';
-import { joins, LINE_KINDS, pathLengthCm, pathOf } from '@/lib/site/lines';
+import { eligiblePartners, LINE_KINDS, pathLengthCm, pathOf } from '@/lib/site/lines';
 import { LINE_LABEL_REQUIRED } from '../../failure-messages';
 import chrome from './panel.module.css';
 import styles from './inspector.module.css';
@@ -69,8 +69,8 @@ export function LineInspector({ doc, line, onRun, onPickIds, footer }: {
   const to = findItem(doc, line.toId);
   const path = pathOf(doc, line);
   const length = path === null ? null : pathLengthCm(path);
-  /** What either end may be moved to: every item the utility reaches, but the other end. */
-  const endsFor = (otherId: string) => doc.items.filter((item) => item.id !== otherId && joins(line.kind, item.kind));
+  /** What either end may be moved to: what a run could join the other end to (`eligiblePartners`, the one rule). */
+  const endsFor = (otherId: string) => eligiblePartners(doc, otherId, line.kind);
 
   function draft(field: Field, value: string): void {
     setDrafts((current) => ({ ...current, [field]: value }));
