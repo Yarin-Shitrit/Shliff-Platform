@@ -318,8 +318,8 @@ made since the morning's landing went with it.
 columns, `site_items.rope_angle_deg` and `site_kind_defaults.rope_angle_deg`.
 Additive: every existing row takes null, which means "no angle", so no net's
 checks change until the camp sets one (D16). It must be on Railway **after
-`0013` and before** the code that reads it deploys, because every `/site`
-query selects the new columns. Applying it is the camp lead's step, by the
+`0013` and before this merges** — `main` deploys itself on merge — because
+every `/site` query selects the new columns. Applying it is the camp lead's step, by the
 same procedure as `0012`:
 
 ```sh

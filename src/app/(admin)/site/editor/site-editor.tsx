@@ -463,7 +463,8 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
   const tableRows = useMemo<SiteTableRow[]>(() => {
     if (!tableShown) return [];
     const titles = new Map(buildTasks.map((task) => [task.id, task.title]));
-    return derive(store.doc.plot, store.doc.items).items.map((item) => ({
+    // With the camp's defaults, so a net's rope footprint flags here as it does in the checks (review I2).
+    return derive(store.doc.plot, store.doc.items, store.doc.defaults).items.map((item) => ({
       ...item,
       taskTitle: item.taskId === null ? null : titles.get(item.taskId) ?? null,
     }));
