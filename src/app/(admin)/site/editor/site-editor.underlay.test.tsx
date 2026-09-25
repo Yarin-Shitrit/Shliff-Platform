@@ -167,6 +167,18 @@ describe('the picture under the map, in the editor', () => {
     expect(picture()).toEqual(IMAGE);
   });
 
+  it('ends the calibration on Esc typed in the distance box, back to the view it came from (review U1)', async () => {
+    await renderEditor(IMAGE);
+    await calibrating();
+    sceneSays({ type: 'point', uv: [0.1, 0.5] });
+    sceneSays({ type: 'point', uv: [0.9, 0.5] });
+    const distance = card().getByLabelText('המרחק בין שתי הנקודות, במטרים');
+    fireEvent.change(distance, { target: { value: '2' } });
+    fireEvent.keyDown(distance, { key: 'Escape', code: 'Escape' });
+    expect(lastScene().ui).toMatchObject({ tool: 'select', mode: '3d' });
+    expect(picture()).toEqual(IMAGE);
+  });
+
   it('refuses in Hebrew a point beside the picture, a point too near the first, and a distance that is not one', async () => {
     await renderEditor(IMAGE);
     await calibrating();

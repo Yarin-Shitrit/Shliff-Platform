@@ -134,6 +134,18 @@ describe('the picture’s card', () => {
     expect(props.onCancelCalibration).toHaveBeenCalled();
   });
 
+  it('ends the calibration on Esc in its form, the distance box included (review U1)', () => {
+    const { props } = renderCard({ tool: 'calibrate', draft: { points: [[0.1, 0.5], [0.9, 0.5]], refusal: null } });
+    const distance = screen.getByLabelText('המרחק בין שתי הנקודות, במטרים');
+    fireEvent.change(distance, { target: { value: '2' } });
+    fireEvent.keyDown(distance, { key: 'Escape', code: 'Escape' });
+    expect(props.onCancelCalibration).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(screen.getByRole('checkbox', { name: 'הקו הזה מקביל לגדר' }), { key: 'Escape', code: 'Escape' });
+    expect(props.onCancelCalibration).toHaveBeenCalledTimes(2);
+    fireEvent.keyDown(distance, { key: 'Enter', code: 'Enter' });
+    expect(props.onCancelCalibration).toHaveBeenCalledTimes(2);
+  });
+
   it('shows a calibration refusal in Hebrew, beside the distance it is about', () => {
     renderCard({ tool: 'calibrate', draft: { points: [[0.1, 0.5], [0.12, 0.5]], refusal: 'שתי הנקודות קרובות מדי זו לזו. מרחק ארוך, כמו צלע של הגדר, נותן כיול מדויק יותר.' } });
     expect(screen.getByRole('alert').textContent).toBe('שתי הנקודות קרובות מדי זו לזו. מרחק ארוך, כמו צלע של הגדר, נותן כיול מדויק יותר.');

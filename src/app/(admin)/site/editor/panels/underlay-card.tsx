@@ -230,7 +230,16 @@ function Calibration({ draft, onApply, onCancel }: {
           </div>
         </>
       ) : (
-        <form className={styles.form} onSubmit={(event) => { event.preventDefault(); onApply(distance, parallel); }}>
+        <form
+          className={styles.form}
+          onSubmit={(event) => { event.preventDefault(); onApply(distance, parallel); }}
+          onKeyDown={(event) => {
+            // The editor leaves keys typed into a box alone, so Esc here is the form's to end the calibration (review U1).
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            onCancel();
+          }}
+        >
           <label htmlFor={distanceId} className={styles.label}>המרחק בין שתי הנקודות, במטרים</label>
           <input
             id={distanceId}
