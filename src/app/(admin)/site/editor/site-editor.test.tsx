@@ -987,7 +987,7 @@ describe('shade by hour', () => {
     expect(rows.map((row) => row.textContent?.startsWith('אוהל 1') ? 'a' : row.textContent?.startsWith('אוהל רחוק') ? 'far' : '?'))
       .toEqual(['a', 'far']);
     expect(rows[0].textContent).toMatch(/בצל$/);
-    expect(rows[1].textContent).toBe('אוהל רחוקאין צל');
+    expect(rows[1].textContent).toBe('אוהל רחוק אין צל');
     fireEvent.click(rows[0]);
     expect(lastScene().store.selection).toEqual(['a']);
     expect(scene.handle.fitIds).toHaveBeenLastCalledWith(['a']);

@@ -21,8 +21,28 @@ const RANKED = [
   tentShade('t4', 'אוהל 4', 0),
 ];
 
+/**
+ * The tents with a day entry for each date, saying whether that day's count
+ * stopped at sunset — as `shadeRanking` says it. `stoppedAtSunset` stands in
+ * for the core's own rule (2 November's sunset is 16:50:56).
+ */
+function withDays(
+  tents: readonly TentShade[],
+  dates: readonly string[],
+  stoppedAtSunset: (date: string) => boolean,
+): TentShade[] {
+  return tents.map((tent) => ({
+    ...tent,
+    days: dates.map((date) => ({
+      date, shadedMinutes: 0, fullMinutes: 0, partialMinutes: 0, untilSunset: stoppedAtSunset(date),
+    })),
+  }));
+}
+
 function renderCard(over: Partial<SunCardProps> = {}) {
-  const rankTents = vi.fn<(dates: readonly string[], endHour: number) => TentShade[]>(() => RANKED);
+  const rankTents = vi.fn<(dates: readonly string[], endHour: number) => TentShade[]>(
+    (dates, endHour) => withDays(RANKED, dates, () => endHour >= 17),
+  );
   const onPickIds = vi.fn();
   const props: SunCardProps = {
     hour: 12,
@@ -63,7 +83,13 @@ describe('how long, in words', () => {
     // Part shade counts half, so half minutes happen: said to the nearest minute.
     expect(shadeDurationText(37.5)).toBe('38 דקות בצל');
     expect(shadeDurationText(0)).toBe('אין צל');
-    expect(shadeDurationText(0.4)).toBe('אין צל');
+  });
+
+  it('says a little shade is a little, never none', () => {
+    // A sample cut short at sunset can leave seconds of part shade: some, not none.
+    expect(shadeDurationText(0.4)).toBe('פחות מדקה בצל');
+    expect(shadeDurationText(0.01)).toBe('פחות מדקה בצל');
+    expect(shadeDurationText(0.5)).toBe('דקה בצל');
   });
 });
 
@@ -80,15 +106,18 @@ describe('the most shaded tents', () => {
     fireEvent.click(disclosure());
     expect(disclosure().getAttribute('aria-expanded')).toBe('true');
     expect(rankTents).toHaveBeenLastCalledWith([NOV2], 15);
+    // The name and the time are two isolated runs with a space between, so a reader hears two phrases.
     expect(rows()).toEqual([
-      'אוהל 14 שעות ו־30 דקות בצל',
-      'אוהל 2שעה ו־15 דקות בצל',
-      'אוהל 345 דקות בצל',
-      'אוהל 4אין צל',
+      'אוהל 1 4 שעות ו־30 דקות בצל',
+      'אוהל 2 שעה ו־15 דקות בצל',
+      'אוהל 3 45 דקות בצל',
+      'אוהל 4 אין צל',
     ]);
     expect(paragraph('ביום 2.11, מהזריחה עד 15:00. צל חלקי נספר כחצי.')).toBeTruthy();
     const figures = [...list().getAllByRole('button')[0].querySelectorAll('bdi')].map((node) => node.textContent);
     expect(figures).toEqual(['אוהל 1', '4 שעות ו־30 דקות בצל']);
+    // WebKit drops an unstyled list's role; it is said outright.
+    expect(screen.getByRole('list', { name: 'האוהלים המוצלים ביותר' }).getAttribute('role')).toBe('list');
   });
 
   it('selects a tent from its row — a figure links to what changes it', () => {
@@ -107,10 +136,27 @@ describe('the most shaded tents', () => {
     fireEvent.click(until.getByRole('radio', { name: '13:00' }));
     expect(rankTents).toHaveBeenLastCalledWith([NOV2], 13);
     expect(paragraph('ביום 2.11, מהזריחה עד 13:00. צל חלקי נספר כחצי.')).toBeTruthy();
-    // 2 November's sunset is 16:50:56: 17:00 is past it.
+    // 2 November's sunset is 16:50:56: 17:00 is past it, and the ranking says so.
     fireEvent.click(until.getByRole('radio', { name: '17:00' }));
     expect(rankTents).toHaveBeenLastCalledWith([NOV2], 17);
     expect(paragraph('ביום 2.11, מהזריחה עד השקיעה. צל חלקי נספר כחצי.')).toBeTruthy();
+  });
+
+  it('says "to sunset" when the ranking says every day stopped there — the rule is the ranking’s, not the card’s', () => {
+    // A ranking that stopped at sunset even at 13:00 (a winter's day, say): the card believes it.
+    renderCard({ rankTents: vi.fn((dates: readonly string[]) => withDays(RANKED, dates, () => true)) });
+    fireEvent.click(disclosure());
+    expect(paragraph('ביום 2.11, מהזריחה עד השקיעה. צל חלקי נספר כחצי.')).toBeTruthy();
+  });
+
+  it('names the hour when only some days of the burn stopped at sunset', () => {
+    renderCard({
+      endDay: '2026-11-03',
+      rankTents: vi.fn((dates: readonly string[]) => withDays(RANKED, dates, (date) => date === NOV2)),
+    });
+    fireEvent.click(screen.getByRole('radio', { name: 'כל ימי הברן' }));
+    fireEvent.click(disclosure());
+    expect(paragraph('בכל 2 ימי הברן, מהזריחה עד 15:00 בכל יום. צל חלקי נספר כחצי.')).toBeTruthy();
   });
 
   it('ranks every day of the burn when the burn is what plays', () => {
@@ -139,17 +185,34 @@ describe('the most shaded tents', () => {
     expect(screen.queryByRole('list', { name: 'האוהלים המוצלים ביותר' })).toBeNull();
   });
 
-  it('invites a net when the map has none', () => {
-    const { rankTents } = renderCard({ hasNets: false });
+  it('says there are no nets once, and points a net at the tents there are', () => {
+    renderCard({ hasNets: false });
     fireEvent.click(disclosure());
-    expect(paragraph('אין עדיין רשתות צל במפה. רשת צל מעל האוהלים תראה כאן כמה זמן כל אחד מהם בצל.')).toBeTruthy();
-    expect(rankTents).not.toHaveBeenCalled();
+    // The card's own sentence already says it; the ranking does not say it again.
+    expect(screen.getAllByText(/אין עדיין רשתות צל/)).toHaveLength(1);
+    expect(paragraph('רשת צל מעל האוהלים תראה כאן כמה זמן כל אחד מהם בצל.')).toBeTruthy();
+    expect(screen.queryByRole('list', { name: 'האוהלים המוצלים ביותר' })).toBeNull();
+  });
+
+  it('with no nets and no tents, invites a tent — no talk of nets over tents that are not there', () => {
+    renderCard({ hasNets: false, rankTents: vi.fn(() => []) });
+    fireEvent.click(disclosure());
+    expect(screen.getAllByText(/אין עדיין רשתות צל/)).toHaveLength(1);
+    expect(paragraph('אין עדיין אוהלים במפה. גרירה של אוהל מהספרייה תוסיף אחד, וכאן יופיע כמה זמן הוא בצל.')).toBeTruthy();
+    expect(screen.queryByText(/מעל האוהלים/)).toBeNull();
   });
 
   it('invites moving a net over a tent when no tent gets any shade', () => {
     renderCard({ rankTents: vi.fn(() => [tentShade('t1', 'אוהל 1', 0), tentShade('t2', 'אוהל 2', 0)]) });
     fireEvent.click(disclosure());
-    expect(rows()).toEqual(['אוהל 1אין צל', 'אוהל 2אין צל']);
+    expect(rows()).toEqual(['אוהל 1 אין צל', 'אוהל 2 אין צל']);
     expect(paragraph('הזזה של רשת צל מעל אוהל תוסיף לו צל.')).toBeTruthy();
+  });
+
+  it('does not invite moving a net when a tent has even a little shade', () => {
+    renderCard({ rankTents: vi.fn(() => [tentShade('t1', 'אוהל 1', 0.4), tentShade('t2', 'אוהל 2', 0)]) });
+    fireEvent.click(disclosure());
+    expect(rows()).toEqual(['אוהל 1 פחות מדקה בצל', 'אוהל 2 אין צל']);
+    expect(screen.queryByText(/הזזה של רשת צל מעל אוהל/)).toBeNull();
   });
 });

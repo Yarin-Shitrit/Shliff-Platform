@@ -13,7 +13,7 @@
 
 import { useId, useMemo, useState, type ReactElement } from 'react';
 import { Icon } from '@/components/ui/icon';
-import { daylight, RANKING_END_HOUR, type TentShade } from '@/lib/site/editor/shade-timeline';
+import { RANKING_END_HOUR, type TentShade } from '@/lib/site/editor/shade-timeline';
 import { Choice } from './choice';
 import { shortDayText } from './sun-text';
 import chrome from './panel.module.css';
@@ -30,11 +30,13 @@ const SHOWN = 5;
 /**
  * 270 → "4 שעות ו־30 דקות בצל": whole hours and minutes, to the nearest
  * minute (part shade counts half, so half minutes happen), one of each in the
- * singular. Under half a minute is no shade: "אין צל".
+ * singular. None at all is "אין צל"; some, but under half a minute — a
+ * sample cut short at sunset can leave seconds — is "פחות מדקה בצל", never none.
  */
 export function shadeDurationText(minutes: number): string {
+  if (minutes <= 0) return 'אין צל';
   const total = Math.round(minutes);
-  if (total <= 0) return 'אין צל';
+  if (total === 0) return 'פחות מדקה בצל';
   const hours = Math.floor(total / 60);
   const rest = total % 60;
   const hoursText = hours === 0 ? '' : hours === 1 ? 'שעה' : `${hours} שעות`;
@@ -63,29 +65,28 @@ export function TentRanking({ days, scope, rankTents, hasNets, onPickIds }: {
   const [endHour, setEndHour] = useState<number>(RANKING_END_HOUR);
   const [showAll, setShowAll] = useState(false);
   const daysKey = days.join(' ');
+  /* Worked out only while the section is open. With no nets too: whether
+     there are tents at all decides which invitation to give. */
   const ranking = useMemo(
-    () => (open && hasNets && daysKey !== '' ? rankTents(daysKey.split(' '), endHour) : null),
-    [open, hasNets, daysKey, endHour, rankTents],
-  );
-  /* Past every day's sunset the count stops at sunset (`shadeRanking`), and
-     the line says so rather than naming an hour the sun never reached. */
-  const pastSunset = useMemo(
-    () => daysKey !== '' && daysKey.split(' ').every((day) => {
-      const light = daylight(day);
-      return light !== null && light.set <= endHour;
-    }),
-    [daysKey, endHour],
+    () => (open && daysKey !== '' ? rankTents(daysKey.split(' '), endHour) : null),
+    [open, daysKey, endHour, rankTents],
   );
 
   function body(): ReactElement {
-    if (!hasNets) {
-      return <p className={chrome.invite}>אין עדיין רשתות צל במפה. רשת צל מעל האוהלים תראה כאן כמה זמן כל אחד מהם בצל.</p>;
-    }
     if (ranking === null) return <></>;
     if (ranking.length === 0) {
       return <p className={chrome.invite}>אין עדיין אוהלים במפה. גרירה של אוהל מהספרייה תוסיף אחד, וכאן יופיע כמה זמן הוא בצל.</p>;
     }
+    if (!hasNets) {
+      /* The card's own sentence already says the map has no nets; this says
+         only what a net would show here. */
+      return <p className={chrome.invite}>רשת צל מעל האוהלים תראה כאן כמה זמן כל אחד מהם בצל.</p>;
+    }
     const rows = showAll ? ranking : ranking.slice(0, SHOWN);
+    /* Where every day's count stopped at sunset, before the hour chosen, the
+       line says so — the ranking's own word for it (`untilSunset`), never
+       the card's reckoning of the sun. */
+    const pastSunset = ranking[0].days.length > 0 && ranking[0].days.every((day) => day.untilSunset);
     const until = pastSunset ? 'השקיעה' : <bdi>{wholeHourText(endHour)}</bdi>;
     return (
       <>
@@ -96,11 +97,13 @@ export function TentRanking({ days, scope, rankTents, hasNets, onPickIds }: {
           value={String(endHour)}
           onChange={(value) => { setEndHour(Number(value)); }}
         />
-        <ol className={styles.tentList} aria-label={TITLE}>
+        {/* `role="list"` outright: WebKit drops the list role of a list drawn without markers. */}
+        <ol className={styles.tentList} role="list" aria-label={TITLE}>
           {rows.map((tent) => (
             <li key={tent.id}>
               <button type="button" className={styles.tentRow} onClick={() => { onPickIds?.([tent.id]); }}>
                 <bdi className={styles.tentName}>{tent.label}</bdi>
+                {' '}
                 <bdi className={styles.tentTime}>{shadeDurationText(tent.shadedMinutes)}</bdi>
               </button>
             </li>
@@ -111,7 +114,7 @@ export function TentRanking({ days, scope, rankTents, hasNets, onPickIds }: {
             {showAll ? 'חמשת הראשונים בלבד' : `כל ${ranking.length} האוהלים`}
           </button>
         ) : null}
-        {ranking.every((tent) => Math.round(tent.shadedMinutes) === 0) ? (
+        {ranking.every((tent) => tent.shadedMinutes === 0) ? (
           <p className={chrome.invite}>הזזה של רשת צל מעל אוהל תוסיף לו צל.</p>
         ) : null}
         <p className={chrome.meta}>
