@@ -10,6 +10,7 @@ import {
   planById, planForSeason, seasonsWithPlans, setPlot, siteView,
 } from './plan';
 import type { EditorItem, EditorLine } from './editor/model';
+import type { KindSize } from './defaults';
 import type { ItemPatch, SiteOp } from './editor/ops';
 
 const LEAD = 'lead@shliff.camp';
@@ -718,5 +719,73 @@ describe('the camp map’s rope angles', () => {
     const defaults = await kindDefaults(db);
     expect(defaults.shade?.ropeAngleDeg).toBe(45);
     expect(defaults.tent?.ropeAngleDeg).toBeNull();
+  });
+
+  it('stores a net’s angle on add and on update, and none on anything else', async () => {
+    const net = netOf({ ropeAngleDeg: 45 });
+    const tent = tentOf({ xCm: 1500, ropeAngleDeg: 45 });
+    await save([{ type: 'add', item: net }, { type: 'add', item: tent }]);
+    const angleOf = async (id: string) => (await listItems(db, planId)).find((row) => row.id === id)?.ropeAngleDeg;
+    expect(await angleOf(net.id)).toBe(45);
+    expect(await angleOf(tent.id)).toBeNull();
+    await save([{ type: 'update', id: net.id, patch: { ropeAngleDeg: 30 } }]);
+    expect(await angleOf(net.id)).toBe(30);
+    await save([{ type: 'update', id: net.id, patch: { ropeAngleDeg: null } }]);
+    expect(await angleOf(net.id)).toBeNull();
+  });
+
+  it('clears a net’s angle, with its strip, when it becomes another kind', async () => {
+    const net = netOf({ ropeAngleDeg: 45 });
+    await save([{ type: 'add', item: net }]);
+    await save([{ type: 'update', id: net.id, patch: { kind: 'tent' } }]);
+    expect((await listItems(db, planId))[0]).toMatchObject({ kind: 'tent', insetCm: null, ropeAngleDeg: null });
+  });
+
+  it('refuses an angle outside whole degrees from 20 to 80, and writes nothing', async () => {
+    for (const bad of [19, 81, 45.5]) {
+      await expect(applySiteOps(db, planId, 0, [{ type: 'add', item: netOf({ ropeAngleDeg: bad }) }], LEAD))
+        .rejects.toThrow('a rope angle must be');
+    }
+    expect(await listItems(db, planId)).toEqual([]);
+    expect((await planById(db, planId))?.version).toBe(0);
+  });
+
+  it('keeps a locked net’s angle until the same patch unlocks it', async () => {
+    const net = netOf({ ropeAngleDeg: 45, locked: true });
+    await save([{ type: 'add', item: net }]);
+    await expect(applySiteOps(db, planId, 1, [{ type: 'update', id: net.id, patch: { ropeAngleDeg: 30 } }], LEAD))
+      .rejects.toThrow('that item is locked');
+    await save([{ type: 'update', id: net.id, patch: { locked: false, ropeAngleDeg: 30 } }]);
+    expect((await listItems(db, planId))[0]).toMatchObject({ locked: false, ropeAngleDeg: 30 });
+  });
+
+  it('stores the camp’s angle with the nets’ default and none with another kind’s, and refuses a bad one', async () => {
+    await save([
+      { type: 'setKindDefault', kind: 'shade', size: { widthCm: 800, depthCm: 800, heightCm: 300, insetCm: 50, ropeAngleDeg: 45 } },
+      { type: 'setKindDefault', kind: 'tent', size: { widthCm: 300, depthCm: 300, heightCm: 200, insetCm: null, ropeAngleDeg: 45 } },
+    ]);
+    const defaults = await kindDefaults(db);
+    expect(defaults.shade?.ropeAngleDeg).toBe(45);
+    expect(defaults.tent?.ropeAngleDeg).toBeNull();
+    const [row] = await db.select().from(siteKindDefaults).where(eq(siteKindDefaults.kind, 'tent'));
+    expect(row.ropeAngleDeg).toBeNull();
+    await expect(applySiteOps(db, planId, 1, [
+      { type: 'setKindDefault', kind: 'shade', size: { widthCm: 800, depthCm: 800, heightCm: 300, insetCm: 50, ropeAngleDeg: 81 } },
+    ], LEAD)).rejects.toThrow('a rope angle must be');
+  });
+
+  it('leaves the camp’s angle as it was when a page from before rope angles saves a net’s size (Review Focus #3)', async () => {
+    await save([{ type: 'setKindDefault', kind: 'shade', size: { widthCm: 800, depthCm: 800, heightCm: 300, insetCm: 50, ropeAngleDeg: 45 } }]);
+    // What such a page sends: a size with no `ropeAngleDeg` key at all.
+    const older = { widthCm: 700, depthCm: 700, heightCm: 300, insetCm: 50 } as unknown as KindSize;
+    await save([{ type: 'setKindDefault', kind: 'shade', size: older }]);
+    expect((await kindDefaults(db)).shade).toEqual({ widthCm: 700, depthCm: 700, heightCm: 300, insetCm: 50, ropeAngleDeg: 45 });
+  });
+
+  it('copies a net’s own angle to next year’s map', async () => {
+    await save([{ type: 'add', item: netOf({ ropeAngleDeg: 45 }) }]);
+    const [next] = await db.insert(seasons).values({ name: 'ברן 27', year: 2027, flatRate: '1200.00' }).returning();
+    const copied = await copyPlan(db, s26, next.id, LEAD);
+    expect((await listItems(db, copied))[0].ropeAngleDeg).toBe(45);
   });
 });

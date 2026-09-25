@@ -5,8 +5,10 @@ import { describe, it, expect, vi, type Mock } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { KindDefaults, KindSize } from '@/lib/site/defaults';
 import { derive } from '@/lib/site/derive';
+import { ROPE_ANGLE_OUT_OF_RANGE } from '@/lib/site/editor/degrees';
 import type { EditorDoc, EditorItem } from '@/lib/site/editor/model';
 import { applyOps, type SiteOp } from '@/lib/site/editor/ops';
+import { siteFailureMessage } from '../../failure-messages';
 import type { EditorFlags } from '../use-editor-store';
 import { ItemInspector } from './inspector-item';
 import { MultiInspector } from './inspector-multi';
@@ -75,5 +77,12 @@ describe('the camp’s rope angle is not a size (Review Focus #2)', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'לשמור גם כברירת המחדל של רשת צל' }));
     expect(applyOps(map, lastOps(onRun)).doc.defaults.shade)
       .toEqual({ widthCm: 800, depthCm: 800, heightCm: 300, insetCm: 50, ropeAngleDeg: 45 });
+  });
+});
+
+describe('a refused rope angle', () => {
+  it('reads the same in Hebrew whether the box or the server refused it', () => {
+    expect(siteFailureMessage(new Error('a rope angle must be a whole number of degrees from 20 to 80')))
+      .toBe(ROPE_ANGLE_OUT_OF_RANGE);
   });
 });

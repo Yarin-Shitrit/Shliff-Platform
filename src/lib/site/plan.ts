@@ -215,6 +215,7 @@ export async function copyPlan(
       depthCm: row.depthCm,
       insetCm: row.insetCm,
       heightCm: row.heightCm,
+      ropeAngleDeg: row.ropeAngleDeg,
       sort: row.sort,
       notes: row.notes,
       updatedBy: actor,
@@ -370,6 +371,7 @@ function patchSet(
   if (stored.notes !== undefined) set.notes = stored.notes;
   if (stored.locked !== undefined) set.locked = stored.locked;
   if (stored.insetCm !== undefined) set.insetCm = stored.insetCm;
+  if (stored.ropeAngleDeg !== undefined) set.ropeAngleDeg = stored.ropeAngleDeg;
   return set;
 }
 
@@ -580,6 +582,8 @@ export async function applySiteOps(
           xCm: entry.xCm, yCm: entry.yCm, widthCm: entry.widthCm, depthCm: entry.depthCm,
           heightCm: entry.heightCm,
           insetCm: entry.kind === 'shade' ? (entry.insetCm ?? DEFAULT_SHADE_INSET_CM) : null,
+          // A net's own angle; none on anything else, and none from a page older than rope angles.
+          ropeAngleDeg: entry.kind === 'shade' ? (entry.ropeAngleDeg ?? null) : null,
           // The client owns draw order (spec §6.2): what it sent is what is drawn.
           sort: entry.sort, taskId: entry.taskId, notes: cleanNotes(entry.notes), locked: entry.locked,
           updatedBy: actor,
@@ -611,10 +615,15 @@ export async function applySiteOps(
       } else if (op.size === null) {
         await tx.delete(siteKindDefaults).where(eq(siteKindDefaults.kind, op.kind));
       } else {
-        // Inset is a fact about nets only, same as an item's (`patchSet` above).
+        /* Inset and rope angle are facts about nets only, same as an item's
+           (`patchSet` above). A size from a page older than rope angles has
+           no `ropeAngleDeg` key at all: it leaves the camp's angle as it was
+           rather than wiping it (Review Focus #3). */
+        const angle: number | null | undefined = op.kind === 'shade' ? op.size.ropeAngleDeg : null;
         const size = {
           widthCm: op.size.widthCm, depthCm: op.size.depthCm, heightCm: op.size.heightCm,
           insetCm: op.kind === 'shade' ? op.size.insetCm : null,
+          ...(angle === undefined ? {} : { ropeAngleDeg: angle }),
         };
         await tx.insert(siteKindDefaults).values({ kind: op.kind, ...size, updatedBy: actor })
           .onConflictDoUpdate({ target: siteKindDefaults.kind, set: { ...size, updatedAt: new Date(), updatedBy: actor } });
