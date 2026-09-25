@@ -2,10 +2,11 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { EditorDoc, EditorItem } from '@/lib/site/editor/model';
 import { applyOps, type SiteOp } from '@/lib/site/editor/ops';
 import { NOT_A_LENGTH } from '@/lib/site/editor/metres';
+import { LOCKED_ALL_NOTICE } from '../notices';
 import { MultiInspector } from './inspector-multi';
 
 /* This file's own fixture: two tents that differ in width, and a caravan. */
@@ -204,6 +205,39 @@ describe('several items', () => {
     renderMulti([T1, T2]);
     const spread = screen.getByRole('button', { name: 'פיזור שווה, מזרח־מערב' }) as HTMLButtonElement;
     expect(spread.disabled).toBe(true);
+  });
+
+  /* Review minor: with every selected item locked, the way back to the
+     default sizes, or Enter in the gap box, did nothing — and said nothing. */
+  it('says why nothing happened when every selected item is locked', () => {
+    const { onRun } = renderMulti([
+      item({ id: 't1', locked: true, widthCm: 350 }),
+      item({ id: 't2', label: 'אוהל 2', xCm: 1000, locked: true }),
+    ]);
+    expect(screen.queryByRole('status')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'החזרת הנבחרים למידות ברירת המחדל' }));
+    expect(onRun).not.toHaveBeenCalled();
+    expect(screen.getByRole('status').textContent).toBe(LOCKED_ALL_NOTICE);
+  });
+
+  it('says it for Enter in the gap box too, and nothing when an edit simply changes nothing', () => {
+    const locked = renderMulti([
+      item({ id: 't1', locked: true }),
+      item({ id: 't2', label: 'אוהל 2', xCm: 1000, locked: true }),
+    ]);
+    fireEvent.keyDown(screen.getByLabelText('מרווח בשורה'), { key: 'Enter' });
+    expect(locked.onRun).not.toHaveBeenCalled();
+    expect(screen.getByRole('status').textContent).toBe(LOCKED_ALL_NOTICE);
+    cleanup();
+
+    // Free tents already at the kind's size (3 × 3 m): nothing to change, and nothing to explain.
+    const free = renderMulti([
+      item({ id: 't1', depthCm: 300 }),
+      item({ id: 't2', label: 'אוהל 2', xCm: 1000, depthCm: 300 }),
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: 'החזרת הנבחרים למידות ברירת המחדל' }));
+    expect(free.onRun).not.toHaveBeenCalled();
+    expect(screen.queryByRole('status')).toBeNull();
   });
 
   it('arranges a row with the typed gap, and refuses a gap that is not a length', () => {
