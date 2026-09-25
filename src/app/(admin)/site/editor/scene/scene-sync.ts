@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { itemHeight } from '@/lib/site/defaults';
+import { toPlaced } from '@/lib/site/derive';
 import { rectOf, type EditorDoc, type EditorItem } from '@/lib/site/editor/model';
 import { SITE_KINDS, type SiteKindGroup } from '@/lib/site/kinds';
 import { linePath } from '@/lib/site/lines';
@@ -68,7 +69,9 @@ export class SceneSync {
       const drawn: EditorItem = rect === undefined ? item : { ...item, ...rect };
       drawnRects.set(item.id, drawn);
       const height = itemHeight(item, input.doc.defaults);
-      const key = geometryKey(drawn, height);
+      // A net's ropes: its own angle, else the camp's (spec §12); its height moves them too (D18).
+      const ropeCm = toPlaced(drawn, input.doc.defaults).ropeCm;
+      const key = geometryKey(drawn, height, ropeCm);
       const look: ItemLook = {
         theme: input.theme,
         state: input.selection.has(item.id) ? 'selected' : input.hover === item.id ? 'hover' : 'normal',
@@ -82,7 +85,7 @@ export class SceneSync {
         object = undefined;
       }
       if (object === undefined) {
-        object = buildItemObject(drawn, height, look);
+        object = buildItemObject(drawn, height, look, ropeCm);
         this.root.add(object);
         this.objects.set(item.id, object);
         this.looks.set(item.id, lookKey(look));

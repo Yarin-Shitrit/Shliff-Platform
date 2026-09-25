@@ -168,3 +168,54 @@ describe('disposal', () => {
     expect(disposed).toBeGreaterThan(6);
   });
 });
+
+describe('a net’s ropes', () => {
+  // Spec §12's example: 8 × 8 m, 3 m high, ropes at 45°: stakes 3 m out.
+  const roped = () => buildItemObject(item({ kind: 'shade', widthCm: 800, depthCm: 800, insetCm: 50 }), 300, NORMAL, 300);
+
+  it('run two ropes from each corner to stakes one offset out, at right angles to its sides', () => {
+    const net = roped();
+    const [ropes] = parts(net, 'rope');
+    expect(ropes.geometry.getAttribute('position').count).toBe(16);
+    const stakes = parts(net, 'stake');
+    expect(stakes.map((stake) => `${stake.position.x},${stake.position.z}`).sort()).toEqual([
+      '-3,0', '-3,8', '0,-3', '0,11', '11,0', '11,8', '8,-3', '8,11',
+    ]);
+  });
+
+  it('dash the footprint on the ground: 14 × 14 m', () => {
+    const [edge] = parts(roped(), 'ropeEdge');
+    const bounds = new THREE.Box3().setFromObject(edge);
+    expect(bounds.max.x - bounds.min.x).toBeCloseTo(14);
+    expect(bounds.max.z - bounds.min.z).toBeCloseTo(14);
+    expect(bounds.max.y).toBeLessThan(0.01);
+  });
+
+  it('are click-through and cast no shadow: ropes take ground, they do not shade it', () => {
+    const net = roped();
+    for (const part of ['rope', 'stake', 'ropeEdge']) {
+      for (const mesh of parts(net, part)) {
+        expect(mesh.userData.pick).toBe(false);
+        expect(mesh.castShadow).toBe(false);
+      }
+    }
+  });
+
+  it('draw the footprint in the "bad" colour when the ropes cross the fence', () => {
+    const net = roped();
+    const [edge] = parts(net, 'ropeEdge');
+    const colour = () => (edge.material as THREE.LineBasicMaterial).color.getHex();
+    expect(colour()).toBe(new THREE.Color(SCENE_PALETTE.light.clothEdge).getHex());
+    restyleItemObject(net, { ...NORMAL, issue: 'outside' });
+    expect(colour()).toBe(new THREE.Color(SCENE_PALETTE.light.bad).getHex());
+  });
+
+  it('are not there without an angle, and a rope change is a new geometry', () => {
+    const bare = buildItemObject(item({ kind: 'shade', widthCm: 800, depthCm: 800, insetCm: 50 }), 300, NORMAL);
+    expect(parts(bare, 'rope')).toHaveLength(0);
+    expect(parts(bare, 'stake')).toHaveLength(0);
+    const net = item({ kind: 'shade', insetCm: 50 });
+    expect(geometryKey(net, 300, 300)).not.toBe(geometryKey(net, 300, 0));
+    expect(geometryKey(net, 300)).toBe(geometryKey(net, 300, 0));
+  });
+});
