@@ -1,7 +1,8 @@
-import type { SiteItemKind } from '@/db/schema/site';
+import type { SiteItemKind, SiteLineKind, SiteLinePoint } from '@/db/schema/site';
 import type { KindDefaults } from '../defaults';
 import type { Rect } from '../geometry';
 import { SITE_KINDS } from '../kinds';
+import { LINE_KINDS } from '../lines';
 
 /**
  * What the editor holds once the page has loaded (spec §6.1): the server's
@@ -35,9 +36,27 @@ export interface EditorPlot {
   northDeg: number;
 }
 
+/**
+ * A pipe or a cable between two items (`site_lines`): its ends are item ids,
+ * so it follows them; `points` are the bends between the ends, in order,
+ * whole centimetres. The rules of which kinds it may join, and its length,
+ * are `src/lib/site/lines.ts`'s.
+ */
+export interface EditorLine {
+  id: string;
+  kind: SiteLineKind;
+  label: string;
+  fromId: string;
+  toId: string;
+  points: SiteLinePoint[];
+  sort: number;
+  notes: string | null;
+}
+
 export interface EditorDoc {
   plot: EditorPlot;
   items: EditorItem[];
+  lines: EditorLine[];
   defaults: KindDefaults;
 }
 
@@ -47,6 +66,26 @@ export function rectOf(item: Pick<EditorItem, 'xCm' | 'yCm' | 'widthCm' | 'depth
 
 export function findItem(doc: EditorDoc, id: string): EditorItem | undefined {
   return doc.items.find((entry) => entry.id === id);
+}
+
+export function findLine(doc: EditorDoc, id: string): EditorLine | undefined {
+  return doc.lines.find((entry) => entry.id === id);
+}
+
+/** Every line with this item at either end, in the order the doc holds them. */
+export function linesAt(doc: EditorDoc, itemId: string): EditorLine[] {
+  return doc.lines.filter((line) => line.fromId === itemId || line.toId === itemId);
+}
+
+/** "כבל חשמל 3": numbered like items are (`nextLabel`), per line kind. */
+export function nextLineLabel(lines: readonly EditorLine[], kind: SiteLineKind): string {
+  let top = 0;
+  for (const entry of lines) {
+    if (entry.kind !== kind) continue;
+    const match = /(\d+)\s*$/.exec(entry.label);
+    top = Math.max(top, match ? Number(match[1]) : 1);
+  }
+  return `${LINE_KINDS[kind].label} ${top + 1}`;
 }
 
 /**

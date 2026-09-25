@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { gateRelation, type GateRelation } from '@/lib/work/gate';
 
 /**
@@ -23,4 +24,18 @@ export function GateOpens({ gate, now }: { gate: Date | null; now?: Date }) {
   const lead = relation.kind === 'before' ? 'השער נפתח בעוד ' : 'השער נפתח לפני ';
   if (relation.days === 1) return <>{`${lead}יום אחד`}</>;
   return <>{lead}<bdi>{relation.days}</bdi>{' ימים'}</>;
+}
+
+/**
+ * The gate line as a link to what changes it (`?act=season-date`, built by
+ * the page with `seasonDateHref`). A season with no date gets an invitation
+ * to set one rather than no line at all — the countdown is missing because
+ * a fact is missing, and the lead is one click from supplying it.
+ */
+export function GateLink({ gate, href, now }: { gate: Date | null; href: string; now?: Date }) {
+  return (
+    <Link href={href}>
+      {gate === null ? 'תאריך הפתיחה לא נרשם · קביעה' : <GateOpens gate={gate} now={now} />}
+    </Link>
+  );
 }

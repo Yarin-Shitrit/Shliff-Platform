@@ -2,47 +2,46 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { ReactNode } from 'react';
 import { render, screen, within } from '@testing-library/react';
 import { ToastProvider } from '@/components/ui/toaster';
 import type { SiteItemView, SitePlan } from '@/lib/site/plan';
+import type { EditorDoc } from '@/lib/site/editor/model';
 
-const { requireAdmin, resolveSeason, siteView, seasonsWithPlans, itemById, listTasks, loadDoc } = vi.hoisted(() => ({
+const { requireAdmin, resolveSeason, siteView, seasonsWithPlans, loadDoc, listTasks } = vi.hoisted(() => ({
   requireAdmin: vi.fn(), resolveSeason: vi.fn(), siteView: vi.fn(),
-  seasonsWithPlans: vi.fn(), itemById: vi.fn(), listTasks: vi.fn(), loadDoc: vi.fn(),
+  seasonsWithPlans: vi.fn(), loadDoc: vi.fn(), listTasks: vi.fn(),
 }));
-const { replace } = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock('next/navigation', async (importOriginal) => ({
   ...(await importOriginal<typeof import('next/navigation')>()),
-  useRouter: () => ({ replace, push: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), refresh: vi.fn() }),
 }));
 vi.mock('@/db', () => ({ db: {} }));
 vi.mock('@/lib/auth/guard', () => ({ requireAdmin }));
 vi.mock('@/lib/seasons/current', () => ({ resolveSeason }));
 vi.mock('@/lib/work/tasks', () => ({ listTasks }));
-/* Only the readers are replaced; the geometry the screen draws stays real. */
+/* Only the readers are replaced; the geometry the table draws stays real. */
 vi.mock('@/lib/site/plan', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/site/plan')>()),
-  siteView, seasonsWithPlans, itemById, loadDoc,
+  siteView, seasonsWithPlans, loadDoc,
 }));
-/* The board reaches `useToast`, which needs a provider the page does not
-   render (the admin layout does). The board has its own test. */
-vi.mock('./site-board', () => ({
-  SiteBoard: ({ items }: { items: unknown[] }) => <div data-testid="board">{`board:${items.length}`}</div>,
-}));
-/* The editor has its own tests, with the scene mocked; here it only has to be handed the right things.
-   Each mount takes the next number, so a test can tell a remount from a re-render. */
+/* The editor has its own tests, with the scene mocked. Here it only has to be
+   handed the right things; the table it is given is rendered, as a phone and
+   a browser without WebGL see it. Each mount takes the next number, so a test
+   can tell a remount from a re-render. */
 const mounts = vi.hoisted(() => ({ count: 0 }));
 vi.mock('./editor/site-editor', async () => {
   const { useState } = await import('react');
   return {
     SiteEditor: function FakeEditor(props: {
-      initial: { doc: { items: unknown[] }; version: number };
+      initial: { doc: EditorDoc; version: number };
       initialSelection: string | null;
       seasonName: string;
       sunDate: string | null;
       buildTasks: ReadonlyArray<{ id: string; title: string }>;
       plotHref: string;
       seasonDateHref: string;
+      fallback?: ReactNode;
     }) {
       const [mount] = useState(() => { mounts.count += 1; return mounts.count; });
       return (
@@ -56,7 +55,8 @@ vi.mock('./editor/site-editor', async () => {
           data-plot={props.plotHref}
           data-date={props.seasonDateHref}
         >
-          {`editor:${props.initial.doc.items.length}:v${props.initial.version}`}
+          <span data-testid="editor-map">{`editor:${props.initial.doc.items.length}:v${props.initial.version}`}</span>
+          {props.fallback}
         </div>
       );
     },
@@ -70,7 +70,7 @@ const S25 = { id: 's25', name: 'ברן 25', year: 2025, flatRate: '1500.00', pla
 
 const PLAN: SitePlan = {
   id: 'p1', seasonId: 's26', widthCm: 2600, depthCm: 2400, gridCm: 50, notes: null,
-  version: 0, northDeg: 0,
+  version: 3, northDeg: 0,
   updatedAt: new Date('2026-09-01T00:00:00Z'), updatedBy: 'lead@shliff.camp',
 };
 
@@ -83,14 +83,31 @@ function item(over: Partial<SiteItemView> & { id: string }): SiteItemView {
   };
 }
 
-function view(items: SiteItemView[], counts: Partial<ReturnType<typeof baseCounts>> = {}) {
-  return { plan: PLAN, items, counts: { ...baseCounts(items.length), ...counts } };
+function view(items: SiteItemView[]) {
+  return {
+    plan: PLAN,
+    items,
+    lines: [],
+    counts: {
+      items: items.length, outside: items.filter((row) => row.outside).length, overlapping: 0, overlapPairs: 0,
+      plotAreaM2: 624, shade: { nets: 0, shaded: 0, partly: 0, unshaded: items.length, shadedAreaM2: 0 },
+    },
+  };
 }
 
-function baseCounts(items: number) {
+/** What `loadDoc` answers for the same rows: the editor's document and the version it saves against. */
+function loaded(ids: string[], planId = 'p1', version = 3): { doc: EditorDoc; version: number } {
   return {
-    items, outside: 0, overlapping: 0, overlapPairs: 0, plotAreaM2: 624,
-    shade: { nets: 0, shaded: 0, partly: 0, unshaded: items, shadedAreaM2: 0 },
+    version,
+    doc: {
+      plot: { id: planId, widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0 },
+      items: ids.map((id, index) => ({
+        id, kind: 'tent', label: `אוהל ${index + 1}`, xCm: 0, yCm: 0, widthCm: 300, depthCm: 300,
+        heightCm: null, insetCm: null, sort: index, taskId: null, notes: null, locked: false,
+      })),
+      lines: [],
+      defaults: {},
+    },
   };
 }
 
@@ -100,9 +117,8 @@ beforeEach(() => {
   resolveSeason.mockResolvedValue({ seasons: [S26, S25], current: S26 });
   siteView.mockResolvedValue(null);
   seasonsWithPlans.mockResolvedValue([]);
-  itemById.mockResolvedValue(null);
-  listTasks.mockResolvedValue([]);
   loadDoc.mockResolvedValue(null);
+  listTasks.mockResolvedValue([]);
 });
 
 /* The admin layout mounts the `ToastProvider` the drawers report through. */
@@ -129,6 +145,7 @@ describe('the camp map screen', () => {
     expect(screen.getByRole('link', { name: 'יצירת מפה' }).getAttribute('href'))
       .toBe('/site?season=s26&act=plot');
     expect(screen.queryByRole('link', { name: /העתקה/ })).toBeNull();
+    expect(screen.queryByTestId('editor')).toBeNull();
   });
 
   it('offers a copy from a season that has a map', async () => {
@@ -145,206 +162,149 @@ describe('the camp map screen', () => {
     expect(within(drawer).getByRole('button', { name: 'יצירת המפה' })).toBeTruthy();
   });
 
-  it('draws the plot, its tiles and its list, every figure linking onward', async () => {
-    siteView.mockResolvedValue(view([
-      item({ id: 'a', label: 'אוהל 1' }),
-      item({ id: 'b', label: 'מטבח 1', kind: 'kitchen', xCm: 500, widthCm: 400, taskId: 't1', taskTitle: 'הקמת המטבח' }),
-    ]));
+  it('mounts the editor with the map it saves against, the season’s build tasks and the drawers’ addresses', async () => {
+    siteView.mockResolvedValue(view([item({ id: 'a' }), item({ id: 'b', label: 'אוהל 2' })]));
+    loadDoc.mockResolvedValue(loaded(['a', 'b']));
+    listTasks.mockResolvedValue([{ taskId: 't1', title: 'הקמת המטבח' }]);
     await renderPage();
 
-    expect(screen.getByText('624 מ״ר')).toBeTruthy();
-    expect(screen.getByText('26 × 24 מ׳ · נרשם ידנית')).toBeTruthy();
-    expect(screen.getByRole('link', { name: /שטח המגרש/ }).getAttribute('href'))
-      .toBe('/site?season=s26&act=plot');
-    expect(screen.getByTestId('board').textContent).toBe('board:2');
-
-    const table = screen.getByRole('table', { name: 'הפריטים במפה' });
-    expect(within(table).getByRole('link', { name: 'אוהל 1' }).getAttribute('href'))
-      .toBe('/site?season=s26&peek=a');
-    expect(within(table).getByRole('link', { name: 'הקמת המטבח' }).getAttribute('href'))
-      .toBe('/logistics/build?season=s26');
-    // Two icon-only actions per row, each named (E4), the bin pointing at the confirmation.
-    expect(within(table).getAllByRole('link', { name: 'עריכה' }).map((a) => a.getAttribute('href')))
-      .toEqual(['/site?season=s26&peek=a', '/site?season=s26&peek=b']);
-    expect(within(table).getAllByRole('link', { name: 'מחיקה' }).map((a) => a.getAttribute('href')))
-      .toEqual(['/site?season=s26&peek=a&act=remove', '/site?season=s26&peek=b&act=remove']);
-    // R11, on every row.
-    expect(within(table).getAllByRole('img', { name: 'מקור: נרשם ידנית' })).toHaveLength(2);
+    const editor = screen.getByTestId('editor');
+    expect(screen.getByTestId('editor-map').textContent).toBe('editor:2:v3');
+    expect(editor.getAttribute('data-tasks')).toBe('הקמת המטבח');
+    expect(editor.getAttribute('data-plot')).toBe('/site?season=s26&act=plot');
+    // The sun card's gate day links to the shell's drawer for this season's opening date (SD4).
+    expect(editor.getAttribute('data-date')).toBe('/site?season=s26&act=season-date');
+    expect(loadDoc).toHaveBeenCalledWith({}, 'p1');
+    expect(listTasks).toHaveBeenCalledWith({}, 's26', { kind: 'build' });
   });
 
-  it('counts what the fence cuts through and points at the first offender, moving nothing', async () => {
+  /* Ruling T26-1: the flag retired, but a link that still carries it (one was
+     handed out) opens the same editor, and nothing built from it carries it on. */
+  it('opens the editor from an old ?editor=3d link too, and carries the flag no further', async () => {
+    siteView.mockResolvedValue(view([item({ id: 'a' })]));
+    loadDoc.mockResolvedValue(loaded(['a']));
+    await renderPage({ editor: '3d', act: 'plot' });
+
+    const editor = screen.getByTestId('editor');
+    expect(screen.getByTestId('editor-map').textContent).toBe('editor:1:v3');
+    expect(editor.getAttribute('data-plot')).toBe('/site?season=s26&act=plot');
+    expect(editor.getAttribute('data-date')).toBe('/site?season=s26&act=season-date');
+    const drawer = within(screen.getByRole('dialog'));
+    expect(drawer.getByRole('link', { name: 'סגירה' }).getAttribute('href')).toBe('/site?season=s26');
+    const table = within(editor).getByRole('table', { name: 'הפריטים במפה' });
+    expect(within(table).getByRole('link', { name: 'אוהל 1' }).getAttribute('href')).toBe('/site?season=s26&peek=a');
+  });
+
+  it('hands the editor the item table, which says each state in words and offers no delete page', async () => {
     siteView.mockResolvedValue(view([
       item({ id: 'in' }),
       item({ id: 'out', label: 'קראוון 1', kind: 'caravan', xCm: 2500, outside: true }),
-    ], { outside: 1 }));
+    ]));
+    loadDoc.mockResolvedValue(loaded(['in', 'out']));
     await renderPage();
 
-    const banner = screen.getByRole('region', { name: 'פריטים מחוץ למגרש' });
-    expect(within(banner).getByText('1 פריטים נמצאים מחוץ למגרש.')).toBeTruthy();
-    expect(within(banner).getByRole('link', { name: 'לפריט הראשון' }).getAttribute('href'))
-      .toBe('/site?season=s26&peek=out');
-    expect(screen.getByRole('link', { name: /מחוץ למגרש/ }).getAttribute('href'))
-      .toBe('/site?season=s26&peek=out');
-    // The row says the word, not just the colour.
-    const table = screen.getByRole('table', { name: 'הפריטים במפה' });
+    const table = within(screen.getByTestId('editor')).getByRole('table', { name: 'הפריטים במפה' });
+    expect(within(table).getByRole('link', { name: 'קראוון 1' }).getAttribute('href')).toBe('/site?season=s26&peek=out');
     expect(within(table).getAllByText('מחוץ למגרש').length).toBeGreaterThan(0);
+    // R11, on every row.
+    expect(within(table).getAllByRole('img', { name: 'מקור: נרשם ידנית' })).toHaveLength(2);
+    // Removal is undoable in the editor now; there is no confirmation page to link to.
+    expect(within(table).queryByRole('link', { name: 'מחיקה' })).toBeNull();
+    expect(within(table).queryByRole('link', { name: 'עריכה' })).toBeNull();
   });
 
-  it('says how much of the ground is in shade, and who is not', async () => {
-    siteView.mockResolvedValue(view([
-      item({ id: 'net', kind: 'shade', label: 'רשת צל 1', widthCm: 800, depthCm: 800, insetCm: 50, shade: null }),
-      item({ id: 'sofa', kind: 'sofa', label: 'ספה 1', xCm: 200, yCm: 200, widthCm: 200, depthCm: 90, shade: 'shaded' }),
-      item({ id: 'chair', kind: 'armchair', label: 'כורסה 1', widthCm: 90, depthCm: 90, shade: 'partly' }),
-    ], { shade: { nets: 1, shaded: 1, partly: 1, unshaded: 0, shadedAreaM2: 49 } }));
+  it('draws no stat tiles and no outside banner: the checks bar and the inspector say it now', async () => {
+    siteView.mockResolvedValue(view([item({ id: 'out', xCm: 2500, outside: true })]));
+    loadDoc.mockResolvedValue(loaded(['out']));
     await renderPage();
-
-    expect(screen.getByText('49 מ״ר')).toBeTruthy();
-    expect(screen.getByText('1 רשתות צל · 1 פריטים חלקית או ללא צל')).toBeTruthy();
-    const table = screen.getByRole('table', { name: 'הפריטים במפה' });
-    expect(within(table).getByText('בצל 7 × 7 מ׳')).toBeTruthy();
-    expect(within(table).getByText('חלקית בצל')).toBeTruthy();
-    expect(within(table).getByText('בצל')).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'פריטים מחוץ למגרש' })).toBeNull();
+    expect(screen.queryByText('שטח המגרש')).toBeNull();
   });
 
-  it('opens the item drawer over the row the URL names, with the season’s build tasks', async () => {
-    const row = item({ id: 'a', label: 'אוהל 1' });
-    siteView.mockResolvedValue(view([row]));
-    itemById.mockResolvedValue(row);
-    listTasks.mockResolvedValue([{ taskId: 't1', title: 'הקמת המטבח' }]);
-    await renderPage({ peek: 'a' });
-
-    const drawer = screen.getByRole('dialog');
-    expect(within(drawer).getByRole('heading', { name: 'אוהל 1' })).toBeTruthy();
-    expect(within(drawer).getByRole('option', { name: 'הקמת המטבח' })).toBeTruthy();
-    expect(within(drawer).getByRole('link', { name: 'הסרה מהמפה' }).getAttribute('href'))
-      .toBe('/site?season=s26&peek=a&act=remove');
-  });
-
-  it('raises the confirmation, naming the verb, when asked to remove', async () => {
-    const row = item({ id: 'a', label: 'אוהל 1' });
-    siteView.mockResolvedValue(view([row]));
-    itemById.mockResolvedValue(row);
-    await renderPage({ peek: 'a', act: 'remove' });
-    const dialog = screen.getByRole('alertdialog');
-    expect(within(dialog).getByRole('button', { name: 'הסרת הפריט' })).toBeTruthy();
-  });
-
-  it('opens no drawer for an item on another season’s map', async () => {
+  it('selects the item ?peek= names when the map loads, and opens nothing over it — not even for ?act=remove', async () => {
     siteView.mockResolvedValue(view([item({ id: 'a' })]));
-    itemById.mockResolvedValue(item({ id: 'z', planId: 'p-other' }));
-    await renderPage({ peek: 'z' });
+    loadDoc.mockResolvedValue(loaded(['a']));
+    resolveSeason.mockResolvedValue({ seasons: [S26], current: { ...S26, startsOn: new Date('2026-06-03T22:30:00Z') } });
+    await renderPage({ peek: 'a', act: 'remove' });
+    const editor = screen.getByTestId('editor');
+    expect(editor.getAttribute('data-selection')).toBe('a');
+    // The gate day, as the calendar date it is in Israel.
+    expect(editor.getAttribute('data-sun')).toBe('2026-06-04');
     expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 
-  describe('behind ?editor=3d', () => {
-    const LOADED = {
-      version: 4,
-      doc: {
-        plot: { id: 'p1', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0 },
-        items: [{ id: 'a' }, { id: 'b' }],
-        defaults: {},
-      },
-    };
+  it('selects nothing for a ?peek= that is not on this map, and passes no day when the season has none', async () => {
+    siteView.mockResolvedValue(view([item({ id: 'a' })]));
+    loadDoc.mockResolvedValue(loaded(['a']));
+    await renderPage({ peek: 'z' });
+    const editor = screen.getByTestId('editor');
+    expect(editor.getAttribute('data-selection')).toBe('');
+    expect(editor.getAttribute('data-sun')).toBe('');
+  });
 
-    it('mounts the editor with the document it saves against, instead of the board', async () => {
-      siteView.mockResolvedValue(view([item({ id: 'a' }), item({ id: 'b', label: 'אוהל 2' })]));
-      loadDoc.mockResolvedValue(LOADED);
-      listTasks.mockResolvedValue([{ taskId: 't1', title: 'הקמת המטבח' }]);
-      await renderPage({ editor: '3d' });
+  it('opens the plot settings over the editor, north included', async () => {
+    siteView.mockResolvedValue(view([item({ id: 'a' })]));
+    loadDoc.mockResolvedValue(loaded(['a']));
+    await renderPage({ act: 'plot' });
+    const drawer = within(screen.getByRole('dialog'));
+    expect(drawer.getByRole('heading', { name: 'הגדרות המגרש' })).toBeTruthy();
+    expect((drawer.getByLabelText('כיוון הצפון') as HTMLInputElement).value).toBe('0');
+    expect(drawer.getByRole('link', { name: 'סגירה' }).getAttribute('href')).toBe('/site?season=s26');
+    expect(screen.getByTestId('editor')).toBeTruthy();
+  });
 
-      expect(loadDoc).toHaveBeenCalledWith({}, 'p1');
-      const editor = screen.getByTestId('editor');
-      expect(editor.textContent).toBe('editor:2:v4');
-      expect(editor.getAttribute('data-tasks')).toBe('הקמת המטבח');
-      // The plot settings open over the editor, not over the board.
-      expect(editor.getAttribute('data-plot')).toBe('/site?season=s26&editor=3d&act=plot');
-      // The sun card's gate day links to the shell's drawer for this season's opening date (SD4), and back to the editor.
-      expect(editor.getAttribute('data-date')).toBe('/site?season=s26&editor=3d&act=season-date');
-      expect(screen.queryByTestId('board')).toBeNull();
-      expect(screen.queryByRole('table', { name: 'הפריטים במפה' })).toBeNull();
+  /* Keyed on the plan: another season's map is another editor, so one
+     season's name can never sit over another season's frozen map. Never on
+     the version: the page re-renders after the plot drawer saves, and a
+     remount then would throw away edits the queue has not sent yet. */
+  it('remounts the editor for another season’s map, and never for a newer version of the same one', async () => {
+    siteView.mockResolvedValue(view([item({ id: 'a' }), item({ id: 'b' })]));
+    loadDoc.mockResolvedValue(loaded(['a', 'b'], 'p1', 4));
+    const { rerender } = await renderPage();
+    const first = screen.getByTestId('editor').getAttribute('data-mount');
+
+    loadDoc.mockResolvedValue(loaded(['a', 'b'], 'p1', 5));
+    rerender(await pageFor());
+    expect(screen.getByTestId('editor-map').textContent).toBe('editor:2:v5');
+    expect(screen.getByTestId('editor').getAttribute('data-mount')).toBe(first);
+
+    resolveSeason.mockResolvedValue({ seasons: [S26, S25], current: S25 });
+    siteView.mockResolvedValue({
+      ...view([item({ id: 'c', planId: 'p2' })]),
+      plan: { ...PLAN, id: 'p2', seasonId: 's25' },
     });
+    loadDoc.mockResolvedValue(loaded(['c'], 'p2', 1));
+    rerender(await pageFor({ season: 's25' }));
+    const editor = screen.getByTestId('editor');
+    expect(editor.getAttribute('data-season')).toBe('ברן 25');
+    expect(screen.getByTestId('editor-map').textContent).toBe('editor:1:v1');
+    expect(editor.getAttribute('data-mount')).not.toBe(first);
+  });
 
-    it('selects the item ?peek= names instead of opening a drawer, and passes the gate day in Israel', async () => {
-      siteView.mockResolvedValue(view([item({ id: 'a' })]));
-      loadDoc.mockResolvedValue(LOADED);
-      resolveSeason.mockResolvedValue({ seasons: [S26], current: { ...S26, startsOn: new Date('2026-06-03T22:30:00Z') } });
-      await renderPage({ editor: '3d', peek: 'a' });
-      const editor = screen.getByTestId('editor');
-      expect(editor.getAttribute('data-selection')).toBe('a');
-      expect(editor.getAttribute('data-sun')).toBe('2026-06-04');
-      expect(screen.queryByRole('dialog')).toBeNull();
-      // The drawer's own read is not made for a drawer that never opens.
-      expect(itemById).not.toHaveBeenCalled();
-    });
+  /* `loadDoc` answers null only if the plan was there for `siteView` and gone
+     a moment later. The board used to be the fallback; it retired, and a 404
+     would say the page does not exist, which is not true. So the page says
+     what happened, in Hebrew, offers the reload that fixes it, and keeps what
+     it did read readable. */
+  it('says so, and offers a reload, when the map changed while the page loaded — never a crash', async () => {
+    siteView.mockResolvedValue(view([item({ id: 'a' })]));
+    loadDoc.mockResolvedValue(null);
+    // The old flag too: nothing on this fallback may carry it on (integration I's minor).
+    await renderPage({ editor: '3d', act: 'plot' });
 
-    it('selects nothing for a ?peek= that is not on this map, and no sun without a gate day', async () => {
-      siteView.mockResolvedValue(view([item({ id: 'a' })]));
-      loadDoc.mockResolvedValue(LOADED);
-      await renderPage({ editor: '3d', peek: 'z' });
-      const editor = screen.getByTestId('editor');
-      expect(editor.getAttribute('data-selection')).toBe('');
-      expect(editor.getAttribute('data-sun')).toBe('');
-    });
-
-    it('still opens the plot drawer over it', async () => {
-      siteView.mockResolvedValue(view([item({ id: 'a' })]));
-      loadDoc.mockResolvedValue(LOADED);
-      await renderPage({ editor: '3d', act: 'plot' });
-      expect(screen.getByTestId('editor')).toBeTruthy();
-      expect(screen.getByRole('dialog')).toBeTruthy();
-    });
-
-    it('closes the plot drawer back into the editor, not onto the board', async () => {
-      siteView.mockResolvedValue(view([item({ id: 'a' })]));
-      loadDoc.mockResolvedValue(LOADED);
-      await renderPage({ editor: '3d', act: 'plot' });
-      const drawer = screen.getByRole('dialog');
-      expect(within(drawer).getByRole('link', { name: 'סגירה' }).getAttribute('href'))
-        .toBe('/site?season=s26&editor=3d');
-    });
-
-    /* Keyed on the plan: another season's map is another editor, so one
-       season's name can never sit over another season's frozen map. Never on
-       the version: the page re-renders after the plot drawer saves, and a
-       remount then would throw away edits the queue has not sent yet. */
-    it('remounts the editor for another season’s map, and never for a newer version of the same one', async () => {
-      siteView.mockResolvedValue(view([item({ id: 'a' }), item({ id: 'b' })]));
-      loadDoc.mockResolvedValue(LOADED);
-      const { rerender } = await renderPage({ editor: '3d' });
-      const first = screen.getByTestId('editor').getAttribute('data-mount');
-
-      loadDoc.mockResolvedValue({ ...LOADED, version: 5 });
-      rerender(await pageFor({ editor: '3d' }));
-      expect(screen.getByTestId('editor').textContent).toBe('editor:2:v5');
-      expect(screen.getByTestId('editor').getAttribute('data-mount')).toBe(first);
-
-      resolveSeason.mockResolvedValue({ seasons: [S26, S25], current: S25 });
-      siteView.mockResolvedValue({
-        ...view([item({ id: 'c', planId: 'p2' })]),
-        plan: { ...PLAN, id: 'p2', seasonId: 's25' },
-      });
-      loadDoc.mockResolvedValue({ version: 1, doc: { ...LOADED.doc, plot: { ...LOADED.doc.plot, id: 'p2' }, items: [{ id: 'c' }] } });
-      rerender(await pageFor({ season: 's25', editor: '3d' }));
-      const editor = screen.getByTestId('editor');
-      expect(editor.getAttribute('data-season')).toBe('ברן 25');
-      expect(editor.textContent).toBe('editor:1:v1');
-      expect(editor.getAttribute('data-mount')).not.toBe(first);
-    });
-
-    it('keeps the board for any other value of ?editor', async () => {
-      siteView.mockResolvedValue(view([item({ id: 'a' })]));
-      await renderPage({ editor: '2d' });
-      expect(screen.getByTestId('board')).toBeTruthy();
-      expect(loadDoc).not.toHaveBeenCalled();
-    });
-
-    it('falls back to the board when the plan vanished between the two reads', async () => {
-      siteView.mockResolvedValue(view([item({ id: 'a' })]));
-      loadDoc.mockResolvedValue(null);
-      await renderPage({ editor: '3d' });
-      expect(screen.queryByTestId('editor')).toBeNull();
-      expect(screen.getByTestId('board')).toBeTruthy();
-    });
+    const notice = within(screen.getByRole('region', { name: 'המפה לא נפתחה לעריכה' }));
+    expect(notice.getByText('המפה לא נפתחה לעריכה.')).toBeTruthy();
+    expect(notice.getByText(/השתנתה ממקום אחר בזמן שהדף נטען/)).toBeTruthy();
+    expect(notice.getByRole('link', { name: 'טעינה מחדש' }).getAttribute('href')).toBe('/site?season=s26');
+    // What was read a moment ago stays readable, and says it was typed by hand (R11).
+    const table = within(screen.getByRole('table', { name: 'הפריטים במפה' }));
+    expect(table.getByRole('link', { name: 'אוהל 1' }).getAttribute('href')).toBe('/site?season=s26&peek=a');
+    expect(table.getAllByRole('img', { name: 'מקור: נרשם ידנית' })).toHaveLength(1);
+    // No editor over a map that is not there, and no drawer that would save into it.
+    expect(screen.queryByTestId('editor')).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('heading', { level: 1, name: 'מפת הקאמפ' })).toBeTruthy();
   });
 
   it('is not found for a signed-in non-admin', async () => {

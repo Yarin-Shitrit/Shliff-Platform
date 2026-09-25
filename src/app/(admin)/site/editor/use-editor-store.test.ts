@@ -29,7 +29,7 @@ function item(over: Partial<EditorItem> & { id: string }): EditorItem {
 }
 
 function doc(items: EditorItem[]): EditorDoc {
-  return { plot: { id: 'p1', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0 }, items, defaults: {} };
+  return { plot: { id: 'p1', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0 }, items, lines: [], defaults: {} };
 }
 
 const moveTo = (id: string, xCm: number): SiteOp => ({ type: 'update', id, patch: { xCm } });

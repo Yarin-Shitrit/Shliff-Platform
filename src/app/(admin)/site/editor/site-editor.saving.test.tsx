@@ -9,7 +9,7 @@
  * server, and that the lead's answer to a conflict or a refusal really does
  * what it says — the path the original bug was on (overview, Review Focus #1).
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ToastProvider } from '@/components/ui/toaster';
 import type { EditorDoc, EditorItem, EditorPlot } from '@/lib/site/editor/model';
@@ -27,7 +27,7 @@ function siteItem(over: Partial<EditorItem> & { id: string }): EditorItem {
 }
 
 function siteDoc(items: EditorItem[], plot: Partial<EditorPlot> = {}): EditorDoc {
-  return { plot: { id: 'p1', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0, ...plot }, items, defaults: {} };
+  return { plot: { id: 'p1', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0, ...plot }, items, lines: [], defaults: {} };
 }
 
 const { saveSiteChangesAction, loadSiteDocAction } = vi.hoisted(() => ({
@@ -56,10 +56,16 @@ const PLOT_SAVED = 'הגדרות המגרש נשמרו, ויש כאן שינוי
 const SITE_UPDATED = 'האתר עודכן בזמן העבודה. צריך לרענן את הדף; השינויים שלא נשמרו יחכו אחרי הרענון.';
 const WAIT = { timeout: 3000 };
 
+beforeAll(() => {
+  // jsdom draws nothing; a context object is enough for the editor's one-time WebGL question.
+  HTMLCanvasElement.prototype.getContext = (() => ({ getExtension: () => null })) as unknown as HTMLCanvasElement['getContext'];
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
+  // A wide screen (the map is the view) in the light theme.
   window.matchMedia = ((query: string) => ({
-    matches: false, media: query, onchange: null,
+    matches: query.includes('min-width'), media: query, onchange: null,
     addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {},
     dispatchEvent: () => false,
   })) as unknown as typeof window.matchMedia;

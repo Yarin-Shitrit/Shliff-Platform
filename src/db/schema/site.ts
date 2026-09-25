@@ -1,5 +1,5 @@
 import {
-  pgTable, uuid, text, integer, timestamp, unique, boolean,
+  pgTable, uuid, text, integer, timestamp, unique, boolean, jsonb,
 } from 'drizzle-orm/pg-core';
 import { seasons, tasks } from './camp';
 
@@ -9,13 +9,27 @@ import { seasons, tasks } from './camp';
  * closed set the column accepts. `other` is the free-form one — a lead types
  * its label — so a thing the list never thought of can still be drawn rather
  * than forced into the nearest wrong box.
+ *
+ * `sink` and `light` came with the utility lines (migration `0013`): a sink
+ * is where a water pipe ends, a light is where a power cable ends, and until
+ * they were kinds of their own a pipe had nothing to be drawn to.
  */
 export type SiteItemKind =
   | 'tent' | 'caravan' | 'shade'
   | 'kitchen' | 'bar' | 'sofa' | 'armchair' | 'table' | 'fire'
-  | 'shower' | 'toilet' | 'changing'
-  | 'fridge' | 'generator' | 'water' | 'greywater' | 'boiler' | 'storage'
+  | 'shower' | 'toilet' | 'changing' | 'sink'
+  | 'fridge' | 'generator' | 'water' | 'greywater' | 'boiler' | 'storage' | 'light'
   | 'other';
+
+/**
+ * What runs along the ground between two items: a water pipe or a power
+ * cable. The rules of which kinds each may join live in
+ * `src/lib/site/lines.ts`; this is only the closed set the column accepts.
+ */
+export type SiteLineKind = 'water' | 'power';
+
+/** A bend in a line, as whole centimetres on the map: `[xCm, yCm]`. */
+export type SiteLinePoint = [number, number];
 
 /**
  * The plot one season builds on. One per season, because the plot changes
@@ -122,6 +136,42 @@ export const siteKindDefaults = pgTable('site_kind_defaults', {
   depthCm: integer('depth_cm').notNull(),
   heightCm: integer('height_cm').notNull(),
   insetCm: integer('inset_cm'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: text('updated_by'),
+});
+
+/**
+ * A pipe or a cable on the map (migration `0013`): what the camp has to buy
+ * by the metre. It runs from one item to another — a drinking-water tank to
+ * a shower, the generator to a fridge — and the map measures how long it is.
+ *
+ * The two ends are items, not points, so a line follows its fridge when the
+ * fridge is dragged, and the length on screen is always the length between
+ * where the things actually stand. `points_cm` holds the bends between the
+ * ends, in order, as whole centimetres; an empty list is a straight run.
+ * The ends themselves are never stored here — they are the items'.
+ *
+ * Deleting an end deletes the line: a cable to nowhere measures nothing. The
+ * editor removes a line with its item explicitly, so an undo brings both
+ * back; the cascade is the database's own guarantee for everything else.
+ *
+ * `sort` is the order the lines were drawn in, kept so a copied map keeps
+ * it; nothing is drawn over a line, so it is not draw order.
+ */
+export const siteLines = pgTable('site_lines', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  planId: uuid('plan_id').notNull()
+    .references(() => sitePlans.id, { onDelete: 'cascade' }),
+  kind: text('kind').$type<SiteLineKind>().notNull(),
+  label: text('label').notNull(),
+  fromItemId: uuid('from_item_id').notNull()
+    .references(() => siteItems.id, { onDelete: 'cascade' }),
+  toItemId: uuid('to_item_id').notNull()
+    .references(() => siteItems.id, { onDelete: 'cascade' }),
+  pointsCm: jsonb('points_cm').$type<SiteLinePoint[]>().notNull().default([]),
+  sort: integer('sort').notNull().default(0),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   updatedBy: text('updated_by'),
 });

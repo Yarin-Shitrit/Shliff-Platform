@@ -188,7 +188,7 @@ describe('shade at an hour', () => {
   ];
 
   function docOf(items: EditorItem[], northDeg: number): EditorDoc {
-    return { plot: { id: 'p', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg }, items, defaults: {} };
+    return { plot: { id: 'p', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg }, items, lines: [], defaults: {} };
   }
 
   const NOON = { azimuthDeg: 180, elevationDeg: 45 };

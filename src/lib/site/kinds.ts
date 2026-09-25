@@ -9,8 +9,9 @@ import type { SiteItemKind } from '@/db/schema/site';
  * by typing centimetres. What this table fixes is only that a new tent is
  * tent-sized rather than a 1 × 1 square somebody has to stretch every time.
  *
- * Centimetres, integers, like the schema. `group` is what the board colours
- * by; the tones are the platform's own tokens, never a chart series colour.
+ * Centimetres, integers, like the schema. `group` is what the map colours
+ * by — the scene's own palette (`editor/scene/palette.ts`), which the panels
+ * take as `--group-*` custom properties.
  */
 export type SiteKindGroup = 'sleep' | 'living' | 'sanitation' | 'utility' | 'other';
 
@@ -42,12 +43,16 @@ export const SITE_KINDS: Record<SiteItemKind, SiteKindPreset> = {
   shower: { label: 'מקלחת', plural: 'מקלחות', group: 'sanitation', shape: 'box', widthCm: 100, depthCm: 100, heightCm: 210 },
   toilet: { label: 'תא שירותים', plural: 'תאי שירותים', group: 'sanitation', shape: 'box', widthCm: 100, depthCm: 100, heightCm: 220 },
   changing: { label: 'אזור הלבשה', plural: 'אזורי הלבשה', group: 'sanitation', shape: 'box', widthCm: 200, depthCm: 150, heightCm: 200 },
+  // The camp's sink comes as a table with the basin built in: 1.5 × 0.6 m (the lead, 2026-09-25). Where a water pipe ends (`lines.ts`).
+  sink: { label: 'כיור', plural: 'כיורים', group: 'sanitation', shape: 'box', widthCm: 150, depthCm: 60, heightCm: 90 },
   fridge: { label: 'מקרר', plural: 'מקררים', group: 'utility', shape: 'box', widthCm: 70, depthCm: 70, heightCm: 170 },
   generator: { label: 'גנרטור', plural: 'גנרטורים', group: 'utility', shape: 'box', widthCm: 100, depthCm: 80, heightCm: 100 },
   water: { label: 'מיכל מי שתייה', plural: 'מיכלי מי שתייה', group: 'utility', shape: 'cylinder', widthCm: 120, depthCm: 120, heightCm: 130 },
   greywater: { label: 'מים אפורים', plural: 'מיכלי מים אפורים', group: 'utility', shape: 'cylinder', widthCm: 100, depthCm: 100, heightCm: 100 },
   boiler: { label: 'דוד', plural: 'דודים', group: 'utility', shape: 'cylinder', widthCm: 60, depthCm: 60, heightCm: 60 },
   storage: { label: 'מחסן', plural: 'מחסנים', group: 'utility', shape: 'box', widthCm: 200, depthCm: 200, heightCm: 220 },
+  // A light on a pole: a small footprint, tall. Where a power cable ends (`lines.ts`).
+  light: { label: 'תאורה', plural: 'נקודות תאורה', group: 'utility', shape: 'box', widthCm: 40, depthCm: 40, heightCm: 250 },
   other: { label: 'אחר', plural: 'פריטים', group: 'other', shape: 'box', widthCm: 100, depthCm: 100, heightCm: 100 },
 };
 
@@ -55,8 +60,8 @@ export const SITE_KINDS: Record<SiteItemKind, SiteKindPreset> = {
 export const KIND_ORDER: readonly SiteItemKind[] = [
   'shade', 'tent', 'caravan',
   'kitchen', 'bar', 'sofa', 'armchair', 'table', 'fire',
-  'shower', 'toilet', 'changing',
-  'fridge', 'generator', 'water', 'greywater', 'boiler', 'storage',
+  'shower', 'toilet', 'changing', 'sink',
+  'fridge', 'generator', 'water', 'greywater', 'boiler', 'storage', 'light',
   'other',
 ];
 

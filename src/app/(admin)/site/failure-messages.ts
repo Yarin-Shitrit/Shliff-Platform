@@ -34,6 +34,20 @@ export const SITE_ERRORS: HebrewErrors = [
   ['north must be', 'כיוון הצפון נמדד במעלות שלמות, מ־0 עד 359'],
   ['unknown operation', 'השינוי הזה לא מוכר למפה. טעינה מחדש של המפה תסדר את זה'],
   ['an item sort must be', 'סדר הציור של פריט הוא מספר שלם, אפס או יותר. טעינה מחדש של המפה תסדר את זה'],
+  // The pipes and cables (`src/lib/site/lines.ts`, `editor/ops.ts`).
+  ['unknown site line', 'לא מצאנו את הצינור או הכבל הזה במפה — אולי הוסר בינתיים'],
+  ['a line end is not an item on this map', 'אחד הקצוות של הקו כבר לא במפה — אולי הפריט הוסר בינתיים'],
+  ['unknown line kind', 'הסוג הזה אינו צינור מים ואינו כבל חשמל'],
+  ['a line must have a label', 'לצינור או לכבל חייב להיות שם, אחרת אי אפשר לזהות אותו במפה'],
+  ['a line must join two different items', 'צינור או כבל מחברים שני פריטים שונים'],
+  ['a water pipe joins only', 'צינור מים מחבר רק מיכל מי שתייה, מקלחת או כיור'],
+  ['a power cable joins only', 'כבל חשמל מחבר רק גנרטור, מקרר או תאורה'],
+  ['a line bend must be', 'נקודת פנייה נמדדת במספר שלם של סנטימטרים על המפה'],
+  ['a line end must be', 'קצה של קו הוא פריט במפה. טעינה מחדש של המפה תסדר את זה'],
+  ['a line id must be a uuid', 'לקו החדש אין מזהה תקין. טעינה מחדש של המפה תסדר את זה'],
+  ['a line id is already in use', 'הקו הזה כבר נמצא במפה. טעינה מחדש של המפה תסדר את זה'],
+  ['a line sort must be', 'סדר הקווים הוא מספר שלם, אפס או יותר. טעינה מחדש של המפה תסדר את זה'],
+  ['an item with a line attached keeps', 'לפריט מחובר צינור או כבל, ולכן אי אפשר להפוך אותו לסוג שהקו לא מגיע אליו. קודם מסירים את הקו'],
 ];
 
 export function siteFailureMessage(error: unknown): string {
@@ -42,6 +56,7 @@ export function siteFailureMessage(error: unknown): string {
 
 /** The drawer's own pre-flight refusals, in the library's words. */
 export const LABEL_REQUIRED = SITE_ERRORS.find(([prefix]) => prefix === 'an item must have a label')![1];
+export const LINE_LABEL_REQUIRED = SITE_ERRORS.find(([prefix]) => prefix === 'a line must have a label')![1];
 export const PLOT_SIDE_INVALID = SITE_ERRORS.find(([prefix]) => prefix === 'a plot side must be')![1];
 export const ITEM_SIDE_INVALID = SITE_ERRORS.find(([prefix]) => prefix === 'an item side must be')![1];
 export const NORTH_INVALID = SITE_ERRORS.find(([prefix]) => prefix === 'north must be')![1];

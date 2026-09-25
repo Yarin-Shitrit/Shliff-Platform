@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { basename, dirname, extname, join, relative, resolve } from 'node:path';
+import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
 
 const ROOT = resolve(process.cwd(), 'src');
 const APP = join(ROOT, 'app');
@@ -62,7 +62,7 @@ function allSourceFiles(): string[] {
     .filter((path) => !/\.test\.tsx?$/.test(path));
 }
 
-const rel = (path: string) => relative(process.cwd(), path);
+const rel = (path: string) => relative(process.cwd(), path).split(sep).join('/');
 
 /**
  * E6. `/data` used to open every workbook in a directory with `readFileSync`

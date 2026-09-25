@@ -20,7 +20,7 @@ function item(over: Partial<EditorItem> & { id: string }): EditorItem {
 }
 
 function doc(items: EditorItem[], northDeg = 0): EditorDoc {
-  return { plot: { id: 'p1', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg }, items, defaults: {} };
+  return { plot: { id: 'p1', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg }, items, lines: [], defaults: {} };
 }
 
 /** The flags, worked out with `derive.ts` — the server's rule — not with the store. */

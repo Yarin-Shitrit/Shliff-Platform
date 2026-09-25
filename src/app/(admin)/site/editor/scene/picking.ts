@@ -24,10 +24,12 @@ function firstItem(hits: readonly THREE.Intersection[]): string | null {
 }
 
 /**
- * The item under a screen point (spec §7). Solid items first: a shade net is
- * picked only where no tent, sofa or caravan is under the pointer, so a net
- * covering half the lounge never steals the click meant for what is under it.
- * `sx`, `sy` are CSS pixels from the canvas's top-left corner.
+ * The item — or the pipe or cable — under a screen point (spec §7). Solid
+ * items first: a shade net is picked only where no tent, sofa or caravan is
+ * under the pointer, so a net covering half the lounge never steals the click
+ * meant for what is under it. A line lies on the ground, so it comes after
+ * the solids standing on it and before the net over it. `sx`, `sy` are CSS
+ * pixels from the canvas's top-left corner.
  */
 export function pickItemId(
   camera: THREE.Camera, sync: SceneSync, sx: number, sy: number, viewport: Viewport,
@@ -35,5 +37,6 @@ export function pickItemId(
   pointer.set((sx / viewport.width) * 2 - 1, -(sy / viewport.height) * 2 + 1);
   raycaster.setFromCamera(pointer, camera);
   return firstItem(raycaster.intersectObjects(sync.solidObjects(), true))
+    ?? firstItem(raycaster.intersectObjects(sync.lineObjects(), true))
     ?? firstItem(raycaster.intersectObjects(sync.netObjects(), true));
 }

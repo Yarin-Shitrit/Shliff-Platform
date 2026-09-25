@@ -1,30 +1,30 @@
 import { describe, it, expect } from 'vitest';
 import {
-  copyHref, itemHref, parseSiteQuery, plotHref, readSunDate, removeItemHref, seasonDateHref, siteHref, sunDateOf,
+  copyHref, itemHref, parseSiteQuery, plotHref, readSunDate, seasonDateHref, siteHref, sunDateOf,
 } from './views';
 
 describe('the camp map’s address', () => {
-  it('asks for the 3D map only with ?editor=3d', () => {
-    expect(parseSiteQuery({ season: 's26', editor: '3d' }).editor3d).toBe(true);
-    expect(parseSiteQuery({ editor: ['3d', '2d'] }).editor3d).toBe(true);
-    expect(parseSiteQuery({ season: 's26' }).editor3d).toBe(false);
-    expect(parseSiteQuery({ editor: '2d' }).editor3d).toBe(false);
-    expect(parseSiteQuery({ editor: '' }).editor3d).toBe(false);
+  it('reads the season, the item to select and the drawer — and nothing the old board read', () => {
+    expect(parseSiteQuery({ season: 's26', peek: 'a', act: 'remove', editor: '3d' }))
+      .toEqual({ season: 's26', peek: 'a', plot: false, copy: false });
+    expect(parseSiteQuery({ act: 'plot' })).toEqual({ season: '', peek: null, plot: true, copy: false });
+    expect(parseSiteQuery({ act: ['copy', 'plot'] })).toEqual({ season: '', peek: null, plot: false, copy: true });
   });
 
-  /* While the flag exists (Task 26 retires it), a link the editor builds —
-     the plot settings, a drawer's close — must lead back to the editor, not
-     drop the lead onto the board. */
-  it('keeps ?editor=3d on every link it builds, and nothing else of the flag', () => {
-    const inEditor = { season: 's26', editor: '3d' };
-    expect(siteHref(inEditor)).toBe('/site?season=s26&editor=3d');
-    expect(plotHref(inEditor)).toBe('/site?season=s26&editor=3d&act=plot');
-    expect(copyHref(inEditor)).toBe('/site?season=s26&editor=3d&act=copy');
-    expect(itemHref(inEditor, 'a')).toBe('/site?season=s26&editor=3d&peek=a');
-    expect(removeItemHref(inEditor, 'a')).toBe('/site?season=s26&editor=3d&peek=a&act=remove');
-    // Any other value is not the flag, and is not carried.
-    expect(siteHref({ season: 's26', editor: '2d' })).toBe('/site?season=s26');
-    expect(plotHref({ season: 's26' })).toBe('/site?season=s26&act=plot');
+  it('links to an item by selecting it on the map', () => {
+    expect(itemHref({ season: 's26' }, 'a')).toBe('/site?season=s26&peek=a');
+  });
+
+  /* Ruling T26-1: the editor is the page, so `?editor=3d` means nothing any
+     more. A link that still carries it (one was handed out) opens the editor
+     like any other, and no link this page builds carries it on. */
+  it('carries only the season from one link to the next — an old ?editor=3d is dropped', () => {
+    const old = { season: 's26', editor: '3d', peek: 'a', act: 'plot' };
+    expect(siteHref(old)).toBe('/site?season=s26');
+    expect(plotHref(old)).toBe('/site?season=s26&act=plot');
+    expect(copyHref(old)).toBe('/site?season=s26&act=copy');
+    expect(itemHref(old, 'b')).toBe('/site?season=s26&peek=b');
+    expect(seasonDateHref(old)).toBe('/site?season=s26&act=season-date');
   });
 
   it('opens the season’s opening date from here, for the season on screen (ruling SD4)', () => {
@@ -32,8 +32,8 @@ describe('the camp map’s address', () => {
     expect(seasonDateHref({ season: 's26', peek: 'a', act: 'plot' })).toBe('/site?season=s26&act=season-date');
     expect(seasonDateHref({})).toBe('/site?act=season-date');
     // Nothing on the site page reads it as one of its own drawers.
-    const query = parseSiteQuery({ season: 's26', act: 'season-date' });
-    expect([query.plot, query.copy, query.removing]).toEqual([false, false, false]);
+    expect(parseSiteQuery({ season: 's26', act: 'season-date' }))
+      .toEqual({ season: 's26', peek: null, plot: false, copy: false });
   });
 });
 

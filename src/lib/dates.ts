@@ -79,3 +79,26 @@ export function formatTime(at: Date): string {
 export function formatDateTime(at: Date): string {
   return `${formatDateShort(at)} ${formatTime(at)}`;
 }
+
+/** The one shape `<input type="date">` submits. */
+const DATE_INPUT = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * The day an `<input type="date">` submitted — `2026-06-04` — as UTC
+ * midnight of that day, which reads back as the same day in the camp's
+ * timezone. `null` for anything else, blank included; what blank *means* is
+ * the caller's decision, not this function's.
+ *
+ * `new Date` alone is not a parser for this: it rolls `2026-02-30` over to
+ * 2 March, reads `2026-6-4` and `4/6/2026` as local time (the second
+ * month-first), and keeps whatever time of day it is handed. Each of those
+ * stores a day nobody typed. So the shape is checked, and the value must
+ * come back out of the `Date` exactly as it went in.
+ */
+export function parseDateInput(value: string): Date | null {
+  const typed = value.trim();
+  if (!DATE_INPUT.test(typed)) return null;
+  const day = new Date(typed);
+  if (Number.isNaN(day.getTime()) || day.toISOString().slice(0, 10) !== typed) return null;
+  return day;
+}

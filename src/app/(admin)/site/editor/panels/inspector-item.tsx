@@ -18,6 +18,7 @@
  */
 
 import { useId, useState, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
+import type { SiteLineKind } from '@/db/schema/site';
 import { Button } from '@/components/ui/button';
 import { cx } from '@/components/ui/cx';
 import { Icon } from '@/components/ui/icon';
@@ -25,9 +26,10 @@ import { Pill } from '@/components/ui/pill';
 import { SourceChip } from '@/components/ui/source-chip';
 import { effectiveSize, itemHeight } from '@/lib/site/defaults';
 import { toPlaced } from '@/lib/site/derive';
-import { areaM2, formatArea, formatSize, metres, shadedRect, shadeState } from '@/lib/site/geometry';
+import { areaM2, formatArea, formatMetres, formatSize, metres, shadedRect, shadeState } from '@/lib/site/geometry';
 import { DEFAULT_SHADE_INSET_CM, SITE_KINDS } from '@/lib/site/kinds';
-import { rectOf, type EditorDoc, type EditorItem } from '@/lib/site/editor/model';
+import { eligibleEnds, LINE_KINDS, lineKindsOf, lineLengthCm, unconnected } from '@/lib/site/lines';
+import { linesAt, rectOf, type EditorDoc, type EditorItem } from '@/lib/site/editor/model';
 import { LOCKED_FIELDS, type ItemPatch, type SiteOp } from '@/lib/site/editor/ops';
 import { patchOps, resetSizeOps, setKindDefaultOps } from '@/lib/site/editor/commands';
 import {
@@ -62,13 +64,15 @@ function heldByLock(item: EditorItem, field: Length): boolean {
   return item.locked && key !== undefined && LOCKED_FIELDS.includes(key);
 }
 
-export function ItemInspector({ doc, item, flags, buildTasks, onRun, onPickIds, footer }: {
+export function ItemInspector({ doc, item, flags, buildTasks, onRun, onPickIds, onAddLine, footer }: {
   doc: EditorDoc;
   item: EditorItem;
   flags: EditorFlags;
   buildTasks: ReadonlyArray<{ id: string; title: string }>;
   onRun: (label: string, ops: SiteOp[]) => void;
   onPickIds: (ids: string[]) => void;
+  /** A new pipe or cable from this item to another — SiteEditor's, so its toast is too. Without it the panel offers none. */
+  onAddLine?: (kind: SiteLineKind, fromId: string, toId: string) => void;
   /** Turn, duplicate, lock and remove — SiteEditor's, so their toasts are too. */
   footer?: ReactNode;
 }): ReactElement {
@@ -94,6 +98,13 @@ export function ItemInspector({ doc, item, flags, buildTasks, onRun, onPickIds, 
     .filter((label): label is string => label !== undefined);
   const nets = doc.items.filter((other) => other.kind === 'shade').map(toPlaced);
   const inShade = !isNet && nets.length > 0 && shadeState(rectOf(item), nets) === 'shaded';
+
+  /* The utilities this item takes part in (`lines.ts`): every line already
+     at it, and for each utility the items a new line could run to. A
+     consumer no chain reaches from a source says so — a fact, not a fault. */
+  const utilities = lineKindsOf(item.kind);
+  const attached = linesAt(doc, item.id);
+  const missing = utilities.filter((kind) => LINE_KINDS[kind].consumers.includes(item.kind) && unconnected(doc, kind).includes(item.id));
 
   function draft(field: Field, value: string): void {
     setDrafts((current) => ({ ...current, [field]: value }));
@@ -234,6 +245,7 @@ export function ItemInspector({ doc, item, flags, buildTasks, onRun, onPickIds, 
           ) : null}
           {flags.partly.has(item.id) ? <Pill tone="warn" dot>בשולי רשת הצל, בלי צל</Pill> : null}
           {inShade ? <Pill tone="ok" dot>בצל</Pill> : null}
+          {missing.map((kind) => <Pill key={kind} tone="warn" dot>{`בלי חיבור ל${LINE_KINDS[kind].noun}`}</Pill>)}
         </div>
 
         {refusal === null ? null : <p className={styles.error} id={errorId} role="alert">{refusal.message}</p>}
@@ -289,6 +301,50 @@ export function ItemInspector({ doc, item, flags, buildTasks, onRun, onPickIds, 
             </div>
           </div>
         ) : null}
+
+        {utilities.length === 0 ? null : (
+          <div className={styles.section}>
+            <h3 className={styles.sectionTitle}>
+              חיבורים
+              <span className={styles.sectionMeta}>{utilities.map((kind) => LINE_KINDS[kind].noun).join(' · ')}</span>
+            </h3>
+            {attached.map((line) => {
+              const otherId = line.fromId === item.id ? line.toId : line.fromId;
+              const other = doc.items.find((entry) => entry.id === otherId);
+              const length = lineLengthCm(doc, line);
+              return (
+                <button key={line.id} type="button" className={styles.groupStat} onClick={() => { onPickIds([line.id]); }}>
+                  <span className={cx(chrome.swatch, chrome[`l_${line.kind}`])} aria-hidden="true" />
+                  <span className={styles.groupName}>{`${line.label} · אל ${other?.label ?? 'פריט שכבר לא במפה'}`}</span>
+                  {' '}
+                  <span className={styles.groupCount}><bdi>{length === null ? '—' : formatMetres(length)}</bdi></span>
+                </button>
+              );
+            })}
+            {onAddLine === undefined ? null : utilities.map((kind) => {
+              const ends = eligibleEnds(doc, item.id, kind);
+              const title = `${LINE_KINDS[kind].label} חדש אל`;
+              if (ends.length === 0) {
+                return (
+                  <p key={kind} className={chrome.hint}>
+                    {attached.some((line) => line.kind === kind)
+                      ? `אין במפה פריט נוסף ש${LINE_KINDS[kind].noun} מגיעים אליו.`
+                      : `אין במפה פריט אחר ש${LINE_KINDS[kind].noun} מגיעים אליו. מוסיפים אותו מהספרייה, ואז מחברים.`}
+                  </p>
+                );
+              }
+              return (
+                <label key={kind} className={styles.field}>
+                  {title}
+                  <select className={styles.input} value="" onChange={(event) => { if (event.target.value !== '') onAddLine(kind, item.id, event.target.value); }}>
+                    <option value="">בחירת פריט…</option>
+                    {ends.map((end) => <option key={end.id} value={end.id}>{end.label}</option>)}
+                  </select>
+                </label>
+              );
+            })}
+          </div>
+        )}
 
         <label className={styles.field}>
           משימת הקמה

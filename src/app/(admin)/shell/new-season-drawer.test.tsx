@@ -105,4 +105,45 @@ describe('NewSeasonDrawer', () => {
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'יש להזין דמי קאמפ.');
     expect(replace).not.toHaveBeenCalled();
   });
+
+  /**
+   * Chromium reports a half-typed or impossible date (31/02, a year still
+   * being typed) as `value === ''` with `validity.badInput` set. The gate
+   * date is optional, so that empty value used to create the season with no
+   * date at all — silently, with a date on screen. jsdom never sets
+   * `badInput`, so it is stubbed on the element.
+   */
+  it('refuses a half-typed or impossible gate date, in Hebrew, and creates nothing', () => {
+    route.search = 'act=season';
+    render(<NewSeasonDrawer />);
+
+    fireEvent.change(screen.getByLabelText(/^שם/), { target: { value: 'ברן 26' } });
+    fireEvent.change(screen.getByLabelText(/^שנה קלנדרית/), { target: { value: '2026' } });
+    fireEvent.change(screen.getByLabelText(/^דמי קאמפ/), { target: { value: '1200' } });
+    const gate = screen.getByLabelText('פתיחת השער') as HTMLInputElement;
+    Object.defineProperty(gate, 'validity', {
+      configurable: true,
+      value: { ...gate.validity, badInput: true, valid: false },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'יצירת שנה' }));
+
+    expect(screen.getByRole('alert').textContent).toBe('תאריך פתיחת השער אינו תקין.');
+    expect(createSeasonAction).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+
+  /**
+   * The rail hosts this drawer, and below 1024px a closed rail is moved
+   * off-screen with a `transform` — the containing block of every
+   * `position: fixed` element inside it. `?act=season` loaded on a phone
+   * (a refresh, a pasted link) would open the drawer inside that off-screen
+   * box while its focus trap made the page inert.
+   */
+  it('renders outside whatever hosts it, so a closed phone rail cannot carry it off-screen', () => {
+    route.search = 'act=season';
+    const { container } = render(<div data-rail><NewSeasonDrawer /></div>);
+    const dialog = screen.getByRole('dialog', { name: 'שנה חדשה' });
+    expect(container.contains(dialog)).toBe(false);
+    expect(dialog.parentElement).toBe(document.body);
+  });
 });

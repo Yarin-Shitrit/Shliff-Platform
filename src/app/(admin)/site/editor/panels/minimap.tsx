@@ -12,6 +12,7 @@ import { useRef, type PointerEvent, type ReactElement } from 'react';
 import { cx } from '@/components/ui/cx';
 import { unionRect } from '@/lib/site/geometry';
 import { SITE_KINDS } from '@/lib/site/kinds';
+import { pathOf } from '@/lib/site/lines';
 import { rectOf, type EditorDoc } from '@/lib/site/editor/model';
 import type { EditorFlags } from '../use-editor-store';
 import type { ViewInfo } from '../scene/scene-view';
@@ -114,6 +115,20 @@ export function Minimap({ doc, flags, selection, info, onJump }: {
             height={item.depthCm}
           />
         ))}
+        {/* The pipes and cables, over the items they run between, in their kind's colour. */}
+        {doc.lines.map((line) => {
+          const path = pathOf(doc, line);
+          if (path === null) return null;
+          return (
+            <polyline
+              key={line.id}
+              data-id={line.id}
+              data-selected={selected.has(line.id) || undefined}
+              className={cx(styles.mmLine, chrome[`l_${line.kind}`])}
+              points={path.map(([x, y]) => `${x},${y}`).join(' ')}
+            />
+          );
+        })}
         {seen === null ? null : <polygon className={styles.mmView} points={seen} />}
       </svg>
     </div>

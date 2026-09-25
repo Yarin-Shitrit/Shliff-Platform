@@ -1,16 +1,4 @@
-import type { Handle, ShadeState } from './geometry';
-
-/** The eight resize handles, named for a reader who cannot see them. */
-export const HANDLE_LABELS: Record<Handle, string> = {
-  n: 'שינוי גודל מלמעלה',
-  s: 'שינוי גודל מלמטה',
-  e: 'שינוי גודל מימין',
-  w: 'שינוי גודל משמאל',
-  ne: 'שינוי גודל מהפינה הימנית העליונה',
-  nw: 'שינוי גודל מהפינה השמאלית העליונה',
-  se: 'שינוי גודל מהפינה הימנית התחתונה',
-  sw: 'שינוי גודל מהפינה השמאלית התחתונה',
-};
+import type { ShadeState } from './geometry';
 
 export type SiteState = 'inside' | 'outside' | 'overlapping';
 

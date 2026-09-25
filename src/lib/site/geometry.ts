@@ -125,35 +125,6 @@ export function resize(
   return { x: left, y: top, width: right - left, depth: bottom - top };
 }
 
-/** A quarter turn. The item pivots on its own corner, which is where a lead expects it. */
-export function swapSides(rect: Rect): Rect {
-  return { ...rect, width: rect.depth, depth: rect.width };
-}
-
-/**
- * Where a new item lands: the first grid cell, reading across then down,
- * where it fits inside the plot and sits on nobody. Null when the plot has no
- * such spot — the caller then says so rather than inventing one.
- *
- * A shade net is not an obstacle (a new sofa may land under it), and a new
- * shade net may land over anything, for the same reason `overlapPairs` gives.
- */
-export function placeNew(
-  items: readonly PlacedItem[], plot: Plot, size: { width: number; depth: number },
-  step: number, kind: SiteItemKind,
-): { x: number; y: number } | null {
-  const stride = step > 0 ? step : 10;
-  const obstacles = kind === 'shade' ? [] : items.filter((item) => !isShade(item));
-
-  for (let y = 0; y + size.depth <= plot.depthCm; y += stride) {
-    for (let x = 0; x + size.width <= plot.widthCm; x += stride) {
-      const candidate: Rect = { x, y, width: size.width, depth: size.depth };
-      if (!obstacles.some((item) => overlap(item, candidate))) return { x, y };
-    }
-  }
-  return null;
-}
-
 /**
  * The ground a shade net actually shades: its footprint minus the strip on
  * every side. Null when the net is too small to shade anything at all — a
