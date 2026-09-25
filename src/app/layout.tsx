@@ -1,10 +1,5 @@
-<<<<<<< HEAD
-import type { Metadata } from 'next';
-import localFont from 'next/font/local';
-=======
 import type { Metadata, Viewport } from 'next';
-import { Frank_Ruhl_Libre, Heebo, IBM_Plex_Mono } from 'next/font/google';
->>>>>>> origin/main
+import localFont from 'next/font/local';
 import { cookies } from 'next/headers';
 import { parseTheme, THEME_COOKIE } from '@/lib/theme';
 import './globals.css';
