@@ -64,6 +64,12 @@ describe('proxy matcher (M15: whole-segment exclusions)', () => {
     // segment anchors above.
     ['/logo.png/edit', true],
     ['/reports/chart.png.json', true],
+    // The web manifest (`app/manifest.ts`): a launcher fetches it with no
+    // session when the site is saved to a home screen, so it is public — the
+    // exact file, anchored to the end like the images, and nothing near it.
+    ['/manifest.webmanifest', false],
+    ['/manifest.webmanifest/x', true],
+    ['/reports/manifest.webmanifest.json', true],
   ] as const)('%s → gated: %s', (url, expected) => {
     expect(unstable_doesMiddlewareMatch({ config, url })).toBe(expected);
   });

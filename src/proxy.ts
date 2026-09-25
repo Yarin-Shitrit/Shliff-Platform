@@ -22,8 +22,14 @@ export const config = {
    * anchored with `(?:/|$)`: `/logo.png/edit` and `/reports/chart.png.json` are
    * ordinary routes and stay gated. Only a path that *ends* in an image
    * extension is excluded.
+   *
+   * `/manifest.webmanifest` is excluded for the same reason as the images: a
+   * phone's launcher fetches it with no session when the site is saved to the
+   * home screen (`app/manifest.ts`), and a 307 to `/signin` left Android with
+   * no name and no icon. It holds the app's name, colours and icon paths —
+   * nothing about the camp. Exactly that file, anchored with `$`.
    */
   matcher: [
-    '/((?!signin(?:/|$)|api/auth(?:/|$)|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|.*\\.(?:png|svg|jpe?g|webp|avif|gif)$).*)',
+    '/((?!signin(?:/|$)|api/auth(?:/|$)|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|manifest\\.webmanifest$|.*\\.(?:png|svg|jpe?g|webp|avif|gif)$).*)',
   ],
 };
