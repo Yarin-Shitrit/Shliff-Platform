@@ -291,8 +291,8 @@ function held(): { promise: Promise<void>; settle: () => void } {
 const stage = () => screen.getByRole('region', { name: 'מפת הקאמפ' });
 const firstItem = () => lastScene().store.doc.items[0];
 const button = (name: string | RegExp) => screen.getByRole('button', { name }) as HTMLButtonElement;
-/** An item's name inside a Hebrew toast, bidi-isolated as the store's notices isolate names (A17). */
-const named = (label: string) => `⁦${label}⁩`;
+/** An item's name inside a Hebrew toast, isolated first-strong (FSI … PDI) as the store's notices isolate names (A17). */
+const named = (label: string) => `\u2068${label}\u2069`;
 /** Inside the properties panel. */
 const inspectorRegion = () => within(screen.getByRole('region', { name: 'מאפיינים' }));
 

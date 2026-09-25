@@ -19,9 +19,9 @@ const SHOWER = 'aaaaaaaa-0000-4000-8000-000000000002';
 const PIPE = 'bbbbbbbb-0000-4000-8000-000000000001';
 const PIPE2 = 'bbbbbbbb-0000-4000-8000-000000000002';
 
-const LRI = '⁦';
+const FSI = '\u2068'; // first-strong: a name keeps its own direction (#25 fix round)
 const PDI = '⁩';
-const isolate = (name: string) => `${LRI}${name}${PDI}`;
+const isolate = (name: string) => `${FSI}${name}${PDI}`;
 
 function item(over: Partial<EditorItem> & { id: string; kind: EditorItem['kind']; label: string }): EditorItem {
   return {

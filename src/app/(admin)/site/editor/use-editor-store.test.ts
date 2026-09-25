@@ -13,9 +13,9 @@ const C = '2d1b8c0a-3e4f-4061-8c1d-2e3f4a5b6c7d';
 const F = '3e2c9d1b-4f50-4172-9d2e-3f4a5b6c7d8e';
 
 /** Matches the store's own bidi isolate around a name dropped into a notice (A17). */
-const LRI = '⁦';
+const FSI = '\u2068'; // first-strong: a name keeps its own direction (#25 fix round)
 const PDI = '⁩';
-const isolate = (name: string) => `${LRI}${name}${PDI}`;
+const isolate = (name: string) => `${FSI}${name}${PDI}`;
 const goneNotice = (...names: string[]) => `לא נשמרו שינויים בפריטים שכבר לא במפה: ${names.map(isolate).join(', ')}.`;
 const lockedNotice = (...names: string[]) => `לא נשמרו שינויים בפריטים נעולים: ${names.map(isolate).join(', ')}.`;
 const LOAD_FAILED = 'לא הצלחנו לטעון את המפה העדכנית. אפשר לנסות שוב.';
