@@ -173,8 +173,9 @@ export class SceneEngine {
   private anchors = new Map<string, [number, number]>();
   private seen: {
     doc: unknown; selection: unknown; flags: unknown; ui: string; light: string; insets: string; tool: string; marks: string;
+    underlayView: string;
   } = {
-    doc: null, selection: null, flags: null, ui: '', light: '', insets: '', tool: '', marks: '',
+    doc: null, selection: null, flags: null, ui: '', light: '', insets: '', tool: '', marks: '', underlayView: '',
   };
 
   /**
@@ -286,8 +287,11 @@ export class SceneEngine {
     const plot = store.doc.plot;
     const uiKey = [
       ui.tool, ui.labels, ui.sun, ui.netsHidden, ui.snap, ui.hiddenGroups.join(','), ui.theme,
-      ui.underlay.shown, ui.underlay.opacity,
     ].join('|');
+    /* How this viewer sees the picture (review U1), apart from `uiKey` as the
+       light is: a fade or a hide re-places one plane, and neither rebuilds the
+       scene nor lays the labels out again. */
+    const underlayViewKey = `${ui.underlay.shown}|${ui.underlay.opacity}`;
     const marksKey = (underlayMarks ?? []).map(([u, v]) => `${u},${v}`).join(';');
     /* What only the light reads (SIM2 fix round 1): shade by hour plays the
        hour up to ten times a second, and a new hour or day moves the sun and
@@ -318,6 +322,10 @@ export class SceneEngine {
       changed = true;
     }
     if (marksKey !== this.seen.marks) changed = true;
+    if (underlayViewKey !== this.seen.underlayView) {
+      this.syncUnderlay();
+      changed = true;
+    }
     if (ui.tool !== this.seen.tool) {
       // The measure and calibration tools' crosshair; back to the plain arrow until the next hover says otherwise.
       this.canvas.style.cursor = ui.tool === 'measure' || ui.tool === 'calibrate' ? 'crosshair' : 'default';
@@ -331,7 +339,7 @@ export class SceneEngine {
     }
     this.seen = {
       doc: store.doc, selection: store.selection, flags: store.flags, ui: uiKey, light: lightKey, insets: insetsKey, tool: ui.tool,
-      marks: marksKey,
+      marks: marksKey, underlayView: underlayViewKey,
     };
     if (ui.tool !== 'measure' && this.measuring !== null && !this.gestures.active) {
       this.measuring = null;
@@ -826,9 +834,15 @@ export class SceneEngine {
       theme: ui.theme,
       sun: this.sunOn,
     });
+    this.syncUnderlay();
+  }
+
+  /** The picture: its file, where it lies (or is being dragged to), and how this viewer sees it. */
+  private syncUnderlay(): void {
+    const { store, ui } = this.options.props();
     const underlay = underlayOf(store.doc);
     this.underlay.sync({
-      url: underlay === null ? null : underlayUrl(plot.id, underlay.storageKey),
+      url: underlay === null ? null : underlayUrl(store.doc.plot.id, underlay.storageKey),
       placement: this.underlayPreview ?? underlay,
       shown: ui.underlay.shown,
       opacity: ui.underlay.opacity,
