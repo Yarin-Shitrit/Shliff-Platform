@@ -2,13 +2,14 @@ import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-/* `next/font/google` is empty outside Next's compiler (see `layout.test.tsx`); the layout's loaders are stubbed the same way. */
-vi.mock('next/font/google', () => {
-  const loader = () => (options: { variable: string }) => ({
-    className: `__mock_${options.variable}`, variable: `__mock_var_${options.variable}`, style: { fontFamily: options.variable },
-  });
-  return { Frank_Ruhl_Libre: loader(), Heebo: loader(), IBM_Plex_Mono: loader() };
-});
+/* `next/font/local` is empty outside Next's compiler (see `layout.test.tsx`); the layout's loader is stubbed the same way. */
+vi.mock('next/font/local', () => ({
+  default: (options: { variable?: string }) => ({
+    className: `__mock_${options.variable ?? 'face'}`,
+    ...(options.variable ? { variable: `__mock_var_${options.variable}` } : {}),
+    style: { fontFamily: options.variable ?? 'face' },
+  }),
+}));
 vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined }) }));
 
 import manifest from './manifest';
