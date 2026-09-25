@@ -21,6 +21,7 @@ import { SourceChip } from '@/components/ui/source-chip';
 import { useToast } from '@/components/ui/toaster';
 import { areaM2, formatArea, outsideIds } from '@/lib/site/geometry';
 import { toPlaced, type ItemShape } from '@/lib/site/derive';
+import type { KindDefaults } from '@/lib/site/defaults';
 import { createPlanAction, setPlotAction } from './actions';
 import { notePlotSaved } from './editor/own-plot-saves';
 import { NORTH_INVALID, PLOT_SIDE_INVALID } from './failure-messages';
@@ -39,11 +40,13 @@ function toCm(metresText: string): number {
   return Number.isFinite(value) ? Math.round(value * 100) : Number.NaN;
 }
 
-export function PlotDrawer({ seasonId, seasonName, plan, items, closeHref }: {
+export function PlotDrawer({ seasonId, seasonName, plan, items, defaults = {}, closeHref }: {
   seasonId: string;
   seasonName: string;
   plan: { id: string; widthCm: number; depthCm: number; gridCm: number; northDeg: number; notes: string | null } | null;
   items: readonly ItemShape[];
+  /** The camp's kind defaults: a net's rope footprint takes the camp's angle, so this count agrees with the editor's (spec §14). */
+  defaults?: KindDefaults;
   closeHref: string;
 }) {
   const router = useRouter();
@@ -64,7 +67,7 @@ export function PlotDrawer({ seasonId, seasonName, plan, items, closeHref }: {
   const northDeg = Number(north.trim());
   const northValid = north.trim() !== '' && Number.isInteger(northDeg) && northDeg >= 0 && northDeg <= 359;
   const wouldBeOutside = valid
-    ? outsideIds(items.map((item) => toPlaced(item)), { widthCm, depthCm }).length
+    ? outsideIds(items.map((item) => toPlaced(item, defaults)), { widthCm, depthCm }).length
     : null;
 
   async function save(event?: FormEvent): Promise<void> {

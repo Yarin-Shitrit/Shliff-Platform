@@ -63,4 +63,18 @@ describe('ropes in the store', () => {
     expect(conflicting).toHaveBeenCalledTimes(2);
     expect(conflicting.mock.calls[1][1]).toEqual([{ type: 'update', id: NET, patch: { ropeAngleDeg: 45 } }]);
   });
+
+  it('flags what stands in a net’s rope band once the camp has an angle, and nothing before', () => {
+    // 300 × 300 at (750, 1100): half in the band west of the cloth (which starts at 1000).
+    const inBand = item({ id: A, xCm: 750, yCm: 1100 });
+    const before = setup({ doc: doc([net, inBand]) }).result.current.flags;
+    expect(before.ropePairs).toEqual([]);
+    expect(before.onRopes.size).toBe(0);
+    const roped = setup({
+      doc: doc([net, inBand], { shade: { widthCm: 800, depthCm: 800, heightCm: 300, insetCm: 50, ropeAngleDeg: 45 } }),
+    }).result.current.flags;
+    expect(roped.ropePairs).toEqual([[NET, A]]);
+    expect([...roped.onRopes]).toEqual([A]);
+    expect(roped.outside.size).toBe(0); // the footprint (7–21 m) stays inside the fence
+  });
 });

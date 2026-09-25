@@ -1,8 +1,8 @@
 import type { SiteItemKind } from '@/db/schema/site';
 import { itemHeight, type KindDefaults } from './defaults';
 import {
-  areaM2, outsideIds, overlapPairs, ropeOffsetCm, shadeCounts, shadeState,
-  type PlacedItem, type Plot, type ShadeCounts, type ShadeState,
+  areaM2, groundRect, outsideIds, overlap, overlapPairs, ropeBandPairs, ropeOffsetCm, shadeCounts, shadeState,
+  unionAreaM2, type PlacedItem, type Plot, type Rect, type ShadeCounts, type ShadeState,
 } from './geometry';
 
 /**
@@ -13,6 +13,10 @@ import {
  * moment it crosses the fence and not after the save's round trip. `plan.ts`
  * calls the same function for the server's read, which the item table draws,
  * so the two can never disagree about what "outside" means.
+ *
+ * The camp's kind defaults give a net its rope footprint: the camp's angle
+ * and its kind's height (spec §12). With no angle anywhere a net derives
+ * exactly what it did before ropes existed (D16).
  */
 
 export interface PlotShape {
@@ -50,6 +54,8 @@ export interface SiteCounts {
   overlapping: number;
   overlapPairs: number;
   plotAreaM2: number;
+  /** שטח תפוס (spec §3): the union of every item's footprint — a net's with its ropes — inside the fence, m² to one decimal. */
+  takenAreaM2: number;
   shade: ShadeCounts;
 }
 
@@ -58,6 +64,8 @@ export interface Derived<Item extends ItemShape> {
   counts: SiteCounts;
   /** Every overlapping pair of item ids — the same list `counts.overlapPairs` is the length of, so a caller that needs the pairs themselves (the store's flags) is not left recomputing them. */
   pairs: Array<[string, string]>;
+  /** `[net id, item id]`: an item standing in a net's rope band (spec §15) — the checks bar's "בשטח החבלים". */
+  ropePairs: Array<[string, string]>;
 }
 
 /**
@@ -87,11 +95,36 @@ export function toPlaced(item: ItemShape, defaults: KindDefaults = {}): PlacedIt
   };
 }
 
+export interface TakenArea {
+  /** m², one decimal. */
+  areaM2: number;
+  /** The items whose footprint reaches inside the fence: what the figure counts, and what pressing it selects. */
+  ids: string[];
+  /** Whether any net's ropes are in it — "כולל החבלים של רשתות הצל". */
+  withRopes: boolean;
+}
+
+/**
+ * שטח תפוס (spec §3, §15): the ground the items take, as the union of their
+ * footprints — a net's with its ropes — inside the fence. The plot
+ * inspector shows it against the plot's area; `derive` counts it.
+ */
+export function takenArea(plot: Plot, placed: readonly PlacedItem[]): TakenArea {
+  const field: Rect = { x: 0, y: 0, width: plot.widthCm, depth: plot.depthCm };
+  const footprints = placed.map(groundRect);
+  return {
+    areaM2: unionAreaM2(footprints, plot),
+    ids: placed.flatMap((entry, index) => (overlap(footprints[index], field) ? [entry.id] : [])),
+    withRopes: placed.some((entry) => entry.ropeCm > 0),
+  };
+}
+
 export function derive<Item extends ItemShape>(
-  plot: PlotShape, items: readonly Item[],
+  plot: PlotShape, items: readonly Item[], defaults: KindDefaults = {},
 ): Derived<Item> {
-  const placed = items.map((item) => toPlaced(item));
+  const placed = items.map((item) => toPlaced(item, defaults));
   const bounds: Plot = { widthCm: plot.widthCm, depthCm: plot.depthCm };
+  // By footprint: a net whose ropes cross the fence is outside (D8).
   const outside = new Set(outsideIds(placed, bounds));
   const pairs = overlapPairs(placed);
   const overlapping = new Set(pairs.flat());
@@ -110,8 +143,10 @@ export function derive<Item extends ItemShape>(
       overlapping: overlapping.size,
       overlapPairs: pairs.length,
       plotAreaM2: areaM2(bounds),
+      takenAreaM2: takenArea(bounds, placed).areaM2,
       shade: shadeCounts(placed),
     },
     pairs,
+    ropePairs: ropeBandPairs(placed),
   };
 }

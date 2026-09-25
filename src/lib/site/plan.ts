@@ -408,21 +408,24 @@ export async function siteView(db: AnyDb, seasonId: string): Promise<SiteView | 
   if (!plan) return null;
   const items = await listItems(db, plan.id);
   const lines = await listLines(db, plan.id);
-  return deriveView(plan, items, lines);
+  // The camp's rope angle moves nets' footprints: the table the page prints without WebGL flags what the editor flags (spec §14).
+  return deriveView(plan, items, lines, await kindDefaults(db));
 }
 
-/** The same derivation the editor's store runs in the browser (`derive.ts`, `lines.ts`), over the server's rows. */
-export function deriveView(plan: SitePlan, items: readonly SiteItem[], lines: readonly SiteLine[] = []): SiteView {
+/** The same derivation the editor's store runs in the browser (`derive.ts`, `lines.ts`), over the server's rows and the camp's kind defaults. */
+export function deriveView(
+  plan: SitePlan, items: readonly SiteItem[], lines: readonly SiteLine[] = [], defaults: KindDefaults = {},
+): SiteView {
   const doc: EditorDoc = {
     plot: { id: plan.id, widthCm: plan.widthCm, depthCm: plan.depthCm, gridCm: plan.gridCm, northDeg: plan.northDeg },
     items: items.map(toEditorItem),
     lines: lines.map(toEditorLine),
-    defaults: {},
+    defaults,
   };
   const labelOf = (id: string) => items.find((item) => item.id === id)?.label ?? '';
   return {
     plan,
-    ...derive(plan, items),
+    ...derive(plan, items, defaults),
     lines: lines.map((line) => ({
       ...line,
       fromLabel: labelOf(line.fromItemId),

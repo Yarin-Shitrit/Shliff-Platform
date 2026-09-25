@@ -27,12 +27,14 @@ function doc(items: EditorItem[]): EditorDoc {
 }
 
 function flagsOf(map: EditorDoc): EditorFlags {
-  const { items } = derive(map.plot, map.items);
+  const { items, ropePairs } = derive(map.plot, map.items, map.defaults);
   return {
     outside: new Set(items.filter((entry) => entry.outside).map((entry) => entry.id)),
     overlapping: new Set(items.filter((entry) => entry.overlapping).map((entry) => entry.id)),
     partly: new Set(items.filter((entry) => entry.shade === 'partly').map((entry) => entry.id)),
     pairs: overlapPairs(map.items.map((entry) => toPlaced(entry))),
+    onRopes: new Set(ropePairs.map(([, id]) => id)),
+    ropePairs,
   };
 }
 

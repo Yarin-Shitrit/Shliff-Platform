@@ -40,7 +40,7 @@ function doc(lines: EditorLine[] = [PIPE]): EditorDoc {
   return { plot: { id: 'p1', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0 }, items: [TANK, SHOWER, SINK, GEN, FRIDGE, TENT], lines, defaults: {} };
 }
 
-const NO_FLAGS: EditorFlags = { outside: new Set(), overlapping: new Set(), partly: new Set(), pairs: [] };
+const NO_FLAGS: EditorFlags = { outside: new Set(), overlapping: new Set(), partly: new Set(), pairs: [], onRopes: new Set(), ropePairs: [] };
 
 describe('the item inspector’s connections', () => {
   function renderItem(shown: EditorItem, lines: EditorLine[] = [PIPE]) {

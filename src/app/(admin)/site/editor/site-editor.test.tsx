@@ -114,7 +114,7 @@ vi.mock('./use-editor-store', async () => {
      own rule — so the checks bar and the list see a real problem. */
   function flagsOf(doc: EditorDoc): EditorStore['flags'] {
     const derived = derive(doc.plot, doc.items);
-    const flags: EditorStore['flags'] = { outside: new Set(), overlapping: new Set(), partly: new Set(), pairs: derived.pairs };
+    const flags: EditorStore['flags'] = { outside: new Set(), overlapping: new Set(), partly: new Set(), pairs: derived.pairs, onRopes: new Set(), ropePairs: derived.ropePairs };
     for (const item of derived.items) {
       if (item.outside) flags.outside.add(item.id);
       if (item.overlapping) flags.overlapping.add(item.id);

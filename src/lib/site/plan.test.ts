@@ -310,6 +310,7 @@ describe('the camp map', () => {
         overlapping: 0,
         overlapPairs: 0,
         plotAreaM2: 624,
+        takenAreaM2: 64,
         shade: { nets: 1, shaded: 1, partly: 1, unshaded: 1, shadedAreaM2: 49 },
       });
     });
@@ -787,5 +788,19 @@ describe('the camp map’s rope angles', () => {
     const [next] = await db.insert(seasons).values({ name: 'ברן 27', year: 2027, flatRate: '1200.00' }).returning();
     const copied = await copyPlan(db, s26, next.id, LEAD);
     expect((await listItems(db, copied))[0].ropeAngleDeg).toBe(45);
+  });
+
+  it('flags a net by its ropes in the page’s own view, with the camp’s angle (Review Focus #4)', async () => {
+    // Flush with the east fence by its cloth; at 45° its stakes stand 3 m further out.
+    await save([{ type: 'add', item: netOf({ xCm: 1800, yCm: 800 }) }]);
+    const before = await siteView(db, s26);
+    expect(before?.items[0].outside).toBe(false);
+    expect(before?.counts.takenAreaM2).toBe(64);
+    await save([{ type: 'setKindDefault', kind: 'shade', size: { widthCm: 800, depthCm: 800, heightCm: 300, insetCm: 50, ropeAngleDeg: 45 } }]);
+    const after = await siteView(db, s26);
+    expect(after?.items[0].outside).toBe(true);
+    expect(after?.counts.outside).toBe(1);
+    // 14 × 14 m of footprint, of which 11 × 14 m lie inside the fence.
+    expect(after?.counts.takenAreaM2).toBe(154);
   });
 });

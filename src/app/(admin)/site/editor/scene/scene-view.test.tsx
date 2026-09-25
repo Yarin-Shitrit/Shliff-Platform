@@ -98,7 +98,7 @@ function docOf(items: EditorItem[], plot: EditorDoc['plot'] = DOC.plot): EditorD
 function fakeStore(over: Partial<EditorStore> = {}): EditorStore {
   return {
     doc: DOC, selection: [], canUndo: false, canRedo: false,
-    flags: { outside: new Set(), overlapping: new Set(), partly: new Set(), pairs: [] },
+    flags: { outside: new Set(), overlapping: new Set(), partly: new Set(), pairs: [], onRopes: new Set(), ropePairs: [] },
     save: { status: 'saved', version: 0, pending: 0, error: null, errorKind: null }, conflict: null, notice: null,
     run: vi.fn(), undo: vi.fn(() => null), redo: vi.fn(() => null), select: vi.fn(),
     resolveConflict: vi.fn(async () => {}), retrySave: vi.fn(), dismissNotice: vi.fn(), pendingOps: vi.fn(() => []), allowUnload: vi.fn(),
@@ -903,7 +903,7 @@ describe('the 3D map with WebGL', () => {
       const store = fakeStore({
         doc: docOf(ROW),
         selection: ['w1'],
-        flags: { outside: new Set(['w4']), overlapping: new Set(), partly: new Set(), pairs: [] },
+        flags: { outside: new Set(['w4']), overlapping: new Set(), partly: new Set(), pairs: [], onRopes: new Set(), ropePairs: [] },
       });
       const { container, onView } = renderScene(store, PLAN);
       await waitFor(() => { expect(onView).toHaveBeenCalled(); });

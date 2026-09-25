@@ -19,7 +19,7 @@ const TANK = item({ id: 'tank', kind: 'water', label: 'מי שתייה 1' });
 const S1 = item({ id: 's1', kind: 'shower', label: 'מקלחת 1', xCm: 1000 });
 const S2 = item({ id: 's2', kind: 'shower', label: 'מקלחת 2', xCm: 1000, yCm: 1000 });
 const SINK = item({ id: 'sink', kind: 'sink', label: 'כיור 1', xCm: 1000, yCm: 500 });
-const NO_FLAGS: EditorFlags = { outside: new Set(), overlapping: new Set(), partly: new Set(), pairs: [] };
+const NO_FLAGS: EditorFlags = { outside: new Set(), overlapping: new Set(), partly: new Set(), pairs: [], onRopes: new Set(), ropePairs: [] };
 
 function renderFor(shown: EditorItem, items: EditorItem[], lines: EditorLine[] = []) {
   const doc: EditorDoc = { plot: { id: 'p', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0 }, items, lines, defaults: {} };
