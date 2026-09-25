@@ -6,7 +6,7 @@ import { isShown, SceneSync, type SyncInput } from './scene-sync';
 function item(over: Partial<EditorItem> & { id: string }): EditorItem {
   return {
     kind: 'tent', label: 'אוהל 1', xCm: 100, yCm: 200, widthCm: 300, depthCm: 300,
-    heightCm: null, insetCm: null, sort: 0, taskId: null, notes: null, locked: false, ...over,
+    heightCm: null, insetCm: null, ropeAngleDeg: null, sort: 0, taskId: null, notes: null, locked: false, ...over,
   };
 }
 
@@ -91,7 +91,7 @@ describe('keeping the scene in step with the store', () => {
     sync.sync(input([TENT]));
     const before = sync.objectOf('tent');
     const withDefault = input([TENT]);
-    withDefault.doc.defaults = { tent: { widthCm: 300, depthCm: 300, heightCm: 260, insetCm: null } };
+    withDefault.doc.defaults = { tent: { widthCm: 300, depthCm: 300, heightCm: 260, insetCm: null, ropeAngleDeg: null } };
     sync.sync(withDefault);
     expect(sync.objectOf('tent')).not.toBe(before);
   });

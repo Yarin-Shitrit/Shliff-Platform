@@ -21,7 +21,7 @@ import type { SceneHandle, SceneViewProps, ViewInfo } from './scene/scene-view';
 function siteItem(over: Partial<EditorItem> & { id: string }): EditorItem {
   return {
     kind: 'tent', label: 'אוהל 1', xCm: 500, yCm: 500, widthCm: 300, depthCm: 200,
-    heightCm: null, insetCm: null, sort: 0, taskId: null, notes: null, locked: false,
+    heightCm: null, insetCm: null, ropeAngleDeg: null, sort: 0, taskId: null, notes: null, locked: false,
     ...over,
   };
 }

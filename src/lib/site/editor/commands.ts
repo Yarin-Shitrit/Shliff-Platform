@@ -105,7 +105,8 @@ export function turnOps(doc: EditorDoc, ids: readonly string[]): SiteOp[] {
  * A new item of `kind` with its north-west corner at `at`, at the kind's
  * effective size (the camp's own default, else the preset). Its height is
  * the kind's (null); a net gets the kind's unshaded strip, or the standard
- * one, exactly as the server would give it (`applySiteOps`).
+ * one, exactly as the server would give it (`applySiteOps`). A net follows
+ * the camp's rope angle (null), as it follows its kind's height.
  */
 export function addOps(
   doc: EditorDoc, kind: SiteItemKind, at: { xCm: number; yCm: number }, id: string,
@@ -117,7 +118,7 @@ export function addOps(
     item: {
       id, kind, label: nextLabel(doc.items, kind),
       xCm: wholeCm(at.xCm), yCm: wholeCm(at.yCm), widthCm: size.widthCm, depthCm: size.depthCm,
-      heightCm: null, insetCm: kind === 'shade' ? (size.insetCm ?? DEFAULT_SHADE_INSET_CM) : null,
+      heightCm: null, insetCm: kind === 'shade' ? (size.insetCm ?? DEFAULT_SHADE_INSET_CM) : null, ropeAngleDeg: null,
       sort: nextSort(doc.items), taskId: null, notes: null, locked: false,
     },
   }];
@@ -305,7 +306,7 @@ export function splitOps(
   const splitter: EditorItem = {
     id: ids.splitter, kind: 'splitter', label: nextLabel(doc.items, 'splitter'),
     xCm: spot.xCm, yCm: spot.yCm, widthCm: size.widthCm, depthCm: size.depthCm,
-    heightCm: null, insetCm: null, sort: nextSort(doc.items), taskId: null, notes: null, locked: false,
+    heightCm: null, insetCm: null, ropeAngleDeg: null, sort: nextSort(doc.items), taskId: null, notes: null, locked: false,
   };
   const made: EditorLine[] = [];
   let sort = nextLineSort(doc.lines);
@@ -389,13 +390,14 @@ export function resetSizeOps(doc: EditorDoc, ids: readonly string[]): SiteOp[] {
 
 function sameSize(a: KindSize | null, b: KindSize | null): boolean {
   if (a === null || b === null) return a === b;
-  return a.widthCm === b.widthCm && a.depthCm === b.depthCm && a.heightCm === b.heightCm && a.insetCm === b.insetCm;
+  return a.widthCm === b.widthCm && a.depthCm === b.depthCm && a.heightCm === b.heightCm && a.insetCm === b.insetCm
+    && a.ropeAngleDeg === b.ropeAngleDeg;
 }
 
 /**
  * The camp's own size for a kind (spec D4); null goes back to the preset.
  * Sides and height are rounded to whole centimetres; a non-net kind never
- * carries an inset — the server stores null for one regardless of what was
+ * carries an inset or a rope angle — the server stores null for one regardless of what was
  * passed in.
  */
 export function setKindDefaultOps(doc: EditorDoc, kind: SiteItemKind, size: KindSize | null): SiteOp[] {
@@ -404,6 +406,7 @@ export function setKindDefaultOps(doc: EditorDoc, kind: SiteItemKind, size: Kind
     depthCm: wholeCm(size.depthCm),
     heightCm: wholeCm(size.heightCm),
     insetCm: kind === 'shade' && size.insetCm !== null ? wholeCm(size.insetCm) : null,
+    ropeAngleDeg: kind === 'shade' ? size.ropeAngleDeg : null,
   };
   if (sameSize(doc.defaults[kind] ?? null, rounded)) return [];
   return [{ type: 'setKindDefault', kind, size: rounded }];

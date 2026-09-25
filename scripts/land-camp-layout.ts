@@ -215,6 +215,7 @@ export function toEditorItems(items: readonly SketchItem[]): EditorItem[] {
     depthCm: item.depthCm,
     heightCm: item.heightCm ?? null,
     insetCm: null,
+    ropeAngleDeg: null,
     sort,
     taskId: null,
     locked: false,

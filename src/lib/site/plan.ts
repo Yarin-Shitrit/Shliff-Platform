@@ -56,6 +56,8 @@ export interface SiteItem {
   depthCm: number;
   insetCm: number | null;
   heightCm: number | null;
+  /** Shade nets only; null follows the camp's angle (spec §13). */
+  ropeAngleDeg: number | null;
   locked: boolean;
   sort: number;
   taskId: string | null;
@@ -269,6 +271,7 @@ const ITEM_COLUMNS = {
   depthCm: siteItems.depthCm,
   insetCm: siteItems.insetCm,
   heightCm: siteItems.heightCm,
+  ropeAngleDeg: siteItems.ropeAngleDeg,
   locked: siteItems.locked,
   sort: siteItems.sort,
   taskId: siteItems.taskId,
@@ -433,7 +436,11 @@ export async function kindDefaults(db: AnyDb): Promise<KindDefaults> {
   const out: KindDefaults = {};
   for (const row of rows) {
     if (!isSiteItemKind(row.kind)) continue;
-    out[row.kind] = { widthCm: row.widthCm, depthCm: row.depthCm, heightCm: row.heightCm, insetCm: row.insetCm };
+    // The rope angle is read on the nets' row only (spec §13).
+    out[row.kind] = {
+      widthCm: row.widthCm, depthCm: row.depthCm, heightCm: row.heightCm, insetCm: row.insetCm,
+      ropeAngleDeg: row.kind === 'shade' ? row.ropeAngleDeg : null,
+    };
   }
   return out;
 }
@@ -442,7 +449,7 @@ export function toEditorItem(row: SiteItem): EditorItem {
   return {
     id: row.id, kind: row.kind, label: row.label,
     xCm: row.xCm, yCm: row.yCm, widthCm: row.widthCm, depthCm: row.depthCm,
-    heightCm: row.heightCm, insetCm: row.insetCm, sort: row.sort,
+    heightCm: row.heightCm, insetCm: row.insetCm, ropeAngleDeg: row.ropeAngleDeg, sort: row.sort,
     taskId: row.taskId, notes: row.notes, locked: row.locked,
   };
 }

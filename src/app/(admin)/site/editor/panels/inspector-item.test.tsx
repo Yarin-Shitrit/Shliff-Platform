@@ -17,7 +17,7 @@ import { ItemInspector } from './inspector-item';
 function item(over: Partial<EditorItem> & { id: string }): EditorItem {
   return {
     kind: 'tent', label: 'אוהל 1', xCm: 500, yCm: 500, widthCm: 300, depthCm: 200,
-    heightCm: null, insetCm: null, sort: 0, taskId: null, notes: null, locked: false, ...over,
+    heightCm: null, insetCm: null, ropeAngleDeg: null, sort: 0, taskId: null, notes: null, locked: false, ...over,
   };
 }
 
@@ -145,7 +145,7 @@ describe('one item', () => {
   it('keeps these sizes as the kind’s default, and goes back to the default', () => {
     const { after } = renderItem();
     fireEvent.click(screen.getByRole('button', { name: 'שמירת המידות כברירת המחדל של אוהל' }));
-    expect(after().defaults.tent).toEqual({ widthCm: 300, depthCm: 200, heightCm: 200, insetCm: null });
+    expect(after().defaults.tent).toEqual({ widthCm: 300, depthCm: 200, heightCm: 200, insetCm: null, ropeAngleDeg: null });
     fireEvent.click(screen.getByRole('button', { name: 'חזרה לברירת המחדל' }));
     expect(after().items[0]).toMatchObject({ widthCm: 300, depthCm: 300, heightCm: null });
   });

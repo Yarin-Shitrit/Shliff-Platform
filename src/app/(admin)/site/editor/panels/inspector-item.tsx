@@ -194,6 +194,8 @@ export function ItemInspector({ doc, item, flags, buildTasks, onRun, onPickIds, 
       depthCm: item.depthCm,
       heightCm: height,
       insetCm: isNet ? (item.insetCm ?? DEFAULT_SHADE_INSET_CM) : null,
+      // The camp's rope angle is not a size: saving sizes keeps it (Review Focus #2).
+      ropeAngleDeg: standard.ropeAngleDeg,
     });
     if (ops.length > 0) onRun(`ברירת המחדל של ${preset.label}`, ops);
   }

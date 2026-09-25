@@ -11,6 +11,12 @@ export interface KindSize {
   heightCm: number;
   /** Shade nets only; null for every other kind. */
   insetCm: number | null;
+  /**
+   * Shade nets only: the camp's rope angle for nets, whole degrees 20–80
+   * (spec D9, D17). Null for every other kind, and for nets until the camp
+   * sets one — no angle is ever assumed (D16).
+   */
+  ropeAngleDeg: number | null;
 }
 
 export type KindDefaults = Partial<Record<SiteItemKind, KindSize>>;
@@ -22,6 +28,7 @@ export function presetSize(kind: SiteItemKind): KindSize {
     depthCm: preset.depthCm,
     heightCm: preset.heightCm,
     insetCm: kind === 'shade' ? DEFAULT_SHADE_INSET_CM : null,
+    ropeAngleDeg: null,
   };
 }
 

@@ -4,6 +4,7 @@ import type { KindDefaults, KindSize } from '../defaults';
 import { MIN_SIDE_CM } from '../geometry';
 import { DEFAULT_SHADE_INSET_CM, isSiteItemKind } from '../kinds';
 import { endpointRefusal, isSiteLineKind, joins } from '../lines';
+import { isRopeAngle } from './degrees';
 import { findItem, findLine, type EditorDoc, type EditorItem, type EditorLine } from './model';
 
 /**
@@ -26,6 +27,8 @@ export interface ItemPatch {
   depthCm?: number;
   heightCm?: number | null;
   insetCm?: number | null;
+  /** Shade nets only (spec §13); null follows the camp's angle. */
+  ropeAngleDeg?: number | null;
   taskId?: string | null;
   notes?: string | null;
   locked?: boolean;
@@ -97,6 +100,9 @@ function isHeight(value: number): boolean {
   return Number.isInteger(value) && value >= MIN_SIDE_CM && value <= MAX_HEIGHT_CM;
 }
 
+/** Shade nets only (spec §13). `failure-messages.ts` maps it to the sentence `degrees.ts` shows a lead who types one. */
+const ROPE_ANGLE_REFUSAL = 'a rope angle must be a whole number of degrees from 20 to 80';
+
 export function patchRefusal(patch: ItemPatch): string | null {
   if (patch.label !== undefined && isBlank(patch.label)) return 'an item must have a label';
   if (patch.kind !== undefined && !isSiteItemKind(patch.kind)) return `unknown item kind: ${String(patch.kind)}`;
@@ -119,6 +125,9 @@ export function patchRefusal(patch: ItemPatch): string | null {
   if (patch.heightCm !== undefined && patch.heightCm !== null && !isHeight(patch.heightCm)) {
     return 'an item height must be a whole number of centimetres between 10 and 2000';
   }
+  if (patch.ropeAngleDeg !== undefined && patch.ropeAngleDeg !== null && !isRopeAngle(patch.ropeAngleDeg)) {
+    return ROPE_ANGLE_REFUSAL;
+  }
   if (patch.locked !== undefined && typeof patch.locked !== 'boolean') return 'a lock must be true or false';
   return null;
 }
@@ -131,11 +140,16 @@ export function newItemRefusal(entry: EditorItem): string | null {
   return patchRefusal({
     label: entry.label, kind: entry.kind, xCm: entry.xCm, yCm: entry.yCm,
     widthCm: entry.widthCm, depthCm: entry.depthCm, heightCm: entry.heightCm,
-    insetCm: entry.insetCm, locked: entry.locked,
+    insetCm: entry.insetCm, ropeAngleDeg: entry.ropeAngleDeg, locked: entry.locked,
   });
 }
 
 export function kindSizeRefusal(size: KindSize): string | null {
+  /* A size sent by a page older than rope angles has no `ropeAngleDeg` key
+     at all — #25 replays such a page's unsaved edits after a deploy. That is
+     no angle given, not a bad one (Review Focus #3). */
+  const angle: number | null | undefined = size.ropeAngleDeg;
+  if (angle !== undefined && angle !== null && !isRopeAngle(angle)) return ROPE_ANGLE_REFUSAL;
   const insetOk = size.insetCm === null || (Number.isInteger(size.insetCm) && size.insetCm >= 0);
   return isSide(size.widthCm) && isSide(size.depthCm) && isHeight(size.heightCm) && insetOk
     ? null
@@ -215,9 +229,13 @@ export function storedLinePatch(patch: LinePatch): LinePatch {
   return out;
 }
 
-/** Moving, resizing (height included), turning or re-kinding — what a lock forbids. Renaming, notes and task links are not. */
+/**
+ * Moving, resizing (height included), turning, re-kinding or changing a
+ * net's rope angle — what a lock forbids. The angle moves the net's footprint
+ * (spec §13), so it is held like a side. Renaming, notes and task links are not.
+ */
 export const LOCKED_FIELDS: ReadonlyArray<keyof ItemPatch> = [
-  'xCm', 'yCm', 'widthCm', 'depthCm', 'heightCm', 'kind', 'insetCm',
+  'xCm', 'yCm', 'widthCm', 'depthCm', 'heightCm', 'kind', 'insetCm', 'ropeAngleDeg',
 ];
 
 /** The one lock rule the client and `plan.ts`'s `applySiteOps` both run. */
@@ -233,7 +251,9 @@ export function lockRefusal(locked: boolean, patch: ItemPatch): string | null {
  * `null` or blank, else trimmed; a net (`kind: 'shade'`) keeps or gains its
  * inset default; anything else never carries one — turning another kind into
  * a net, or a net into something else, resets the inset rather than leaving
- * a stale number. Every other field passes through unchanged.
+ * a stale number. Nothing but a net carries a rope angle either: a kind
+ * change away from a net, or an angle on anything else, stores none. Every
+ * other field passes through unchanged.
  */
 export function storedPatch(
   existing: Pick<EditorItem, 'kind' | 'insetCm'>, patch: ItemPatch,
@@ -247,8 +267,10 @@ export function storedPatch(
   if (kind === 'shade') {
     if (patch.insetCm !== undefined) out.insetCm = patch.insetCm ?? DEFAULT_SHADE_INSET_CM;
     else if (existing.insetCm === null) out.insetCm = DEFAULT_SHADE_INSET_CM;
-  } else if (patch.kind !== undefined || patch.insetCm !== undefined) {
-    out.insetCm = null;
+  } else {
+    if (patch.kind !== undefined || patch.insetCm !== undefined) out.insetCm = null;
+    // A rope angle is a net's alone (spec §13): explicit in the op, so undoing a kind change brings the net's own angle back.
+    if (patch.kind !== undefined || patch.ropeAngleDeg !== undefined) out.ropeAngleDeg = null;
   }
   return out;
 }

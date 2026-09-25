@@ -7,7 +7,7 @@ import { SCENE_PALETTE } from './palette';
 function item(over: Partial<EditorItem> = {}): EditorItem {
   return {
     id: 'a', kind: 'tent', label: 'אוהל 1', xCm: 100, yCm: 200, widthCm: 300, depthCm: 200,
-    heightCm: null, insetCm: null, sort: 0, taskId: null, notes: null, locked: false, ...over,
+    heightCm: null, insetCm: null, ropeAngleDeg: null, sort: 0, taskId: null, notes: null, locked: false, ...over,
   };
 }
 

@@ -8,7 +8,7 @@ import { applyOps, invertOps, type SiteOp } from './ops';
 
 function make(over: Partial<EditorItem> & Pick<EditorItem, 'id' | 'label'>): EditorItem {
   return {
-    kind: 'tent', xCm: 0, yCm: 0, widthCm: 300, depthCm: 300, heightCm: null, insetCm: null,
+    kind: 'tent', xCm: 0, yCm: 0, widthCm: 300, depthCm: 300, heightCm: null, insetCm: null, ropeAngleDeg: null,
     sort: 0, taskId: null, notes: null, locked: false, ...over,
   };
 }
@@ -40,7 +40,7 @@ const DOC: EditorDoc = {
   defaults: {},
 };
 
-const TENT_350 = { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: null };
+const TENT_350 = { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: null, ropeAngleDeg: null };
 
 function ids(...list: string[]): () => string {
   const queue = [...list];
@@ -98,13 +98,13 @@ describe('adding', () => {
       type: 'add',
       item: {
         id: 'n1', kind: 'tent', label: 'אוהל 4', xCm: 1500, yCm: 200, widthCm: 300, depthCm: 300,
-        heightCm: null, insetCm: null, sort: 6, taskId: null, notes: null, locked: false,
+        heightCm: null, insetCm: null, ropeAngleDeg: null, sort: 6, taskId: null, notes: null, locked: false,
       },
     }]);
   });
 
   it('uses the camp’s own size, and gives a net a strip even when that size has none', () => {
-    const doc = { ...DOC, defaults: { shade: { widthCm: 600, depthCm: 400, heightCm: 280, insetCm: null } } };
+    const doc = { ...DOC, defaults: { shade: { widthCm: 600, depthCm: 400, heightCm: 280, insetCm: null, ropeAngleDeg: null } } };
     const [op] = addOps(doc, 'shade', { xCm: 0, yCm: 1500 }, 'n2');
     expect(op).toMatchObject({
       type: 'add',
@@ -274,8 +274,8 @@ describe('a kind’s default', () => {
   });
 
   it('never lets a non-net kind’s default carry an inset, even a whole one', () => {
-    expect(setKindDefaultOps(DOC, 'tent', { widthCm: 300, depthCm: 300, heightCm: 200, insetCm: 40 })).toEqual([
-      { type: 'setKindDefault', kind: 'tent', size: { widthCm: 300, depthCm: 300, heightCm: 200, insetCm: null } },
+    expect(setKindDefaultOps(DOC, 'tent', { widthCm: 300, depthCm: 300, heightCm: 200, insetCm: 40, ropeAngleDeg: null })).toEqual([
+      { type: 'setKindDefault', kind: 'tent', size: { widthCm: 300, depthCm: 300, heightCm: 200, insetCm: null, ropeAngleDeg: null } },
     ]);
   });
 });
@@ -388,8 +388,8 @@ describe('every fractional input becomes a whole centimetre, never -0', () => {
     assertWholeOps(resizeKindOps(doc, ['ti'], 'tent', { widthCm: 13 }));
     assertWholeOps(resizeKindOps(doc, ['t1'], 'tent', { widthCm: 350.4, depthCm: 300.2, heightCm: 210.6 }));
     assertWholeOps(resetSizeOps(doc, ['t1']));
-    assertWholeOps(setKindDefaultOps(doc, 'tent', { widthCm: 350.4, depthCm: 300.2, heightCm: 210.6, insetCm: null }));
-    assertWholeOps(setKindDefaultOps(doc, 'shade', { widthCm: 800, depthCm: 800, heightCm: 300, insetCm: 18.5 }));
+    assertWholeOps(setKindDefaultOps(doc, 'tent', { widthCm: 350.4, depthCm: 300.2, heightCm: 210.6, insetCm: null, ropeAngleDeg: null }));
+    assertWholeOps(setKindDefaultOps(doc, 'shade', { widthCm: 800, depthCm: 800, heightCm: 300, insetCm: 18.5, ropeAngleDeg: null }));
     assertWholeOps(alignOps(doc, ['eg', 'rt'], 'centreX'));
     assertWholeOps(distributeOps(doc, ['t1', 't2', 'f1'], 'x'));
     assertWholeOps(rowOps(doc, ['t2', 't1', 'c1'], 12.6));
@@ -472,5 +472,52 @@ describe('lines', () => {
   it('copies items without their lines', () => {
     const { ops } = duplicateOps(WIRED, ['f1'], () => 'copy');
     expect(ops.every((op) => op.type === 'add')).toBe(true);
+  });
+});
+
+describe('a shade net’s rope angle', () => {
+  const ROPED = make({
+    id: 'n1', kind: 'shade', label: 'רשת צל 2', xCm: 100, yCm: 1200, widthCm: 800, depthCm: 800,
+    insetCm: 50, ropeAngleDeg: 45, sort: 6,
+  });
+  const WITH_ROPED: EditorDoc = { ...DOC, items: [...DOC.items, ROPED] };
+  const NETS_45 = { widthCm: 800, depthCm: 800, heightCm: 300, insetCm: 50, ropeAngleDeg: 45 };
+
+  it('starts a new net on the camp’s angle, not on a copy of it', () => {
+    const [op] = addOps(DOC, 'shade', { xCm: 0, yCm: 1500 }, 'n9');
+    expect(op).toMatchObject({ type: 'add', item: { ropeAngleDeg: null } });
+  });
+
+  it('clears the angle when a roped net becomes a tent, and an undo brings it back', () => {
+    const ops = patchOps(WITH_ROPED, 'n1', { kind: 'tent' });
+    expect(ops).toEqual([{ type: 'update', id: 'n1', patch: { kind: 'tent', insetCm: null, ropeAngleDeg: null } }]);
+    const turned = applyOps(WITH_ROPED, ops).doc;
+    const undone = applyOps(turned, invertOps(WITH_ROPED, ops)).doc;
+    expect(undone.items.find((entry) => entry.id === 'n1')).toEqual(ROPED);
+  });
+
+  it('keeps a locked net’s angle until the same patch unlocks it', () => {
+    const locked: EditorDoc = {
+      ...WITH_ROPED, items: WITH_ROPED.items.map((entry) => (entry.id === 'n1' ? { ...entry, locked: true } : entry)),
+    };
+    expect(patchOps(locked, 'n1', { ropeAngleDeg: 30 })).toEqual([]);
+    expect(patchOps(locked, 'n1', { ropeAngleDeg: 30, locked: false })).toEqual([
+      { type: 'update', id: 'n1', patch: { ropeAngleDeg: 30, locked: false } },
+    ]);
+  });
+
+  it('stores the camp’s angle with the nets’ default, never with another kind’s, and an angle alone is a change', () => {
+    expect(setKindDefaultOps(DOC, 'shade', NETS_45)).toEqual([{ type: 'setKindDefault', kind: 'shade', size: NETS_45 }]);
+    expect(setKindDefaultOps(DOC, 'tent', { widthCm: 300, depthCm: 300, heightCm: 200, insetCm: null, ropeAngleDeg: 45 })).toEqual([
+      { type: 'setKindDefault', kind: 'tent', size: { widthCm: 300, depthCm: 300, heightCm: 200, insetCm: null, ropeAngleDeg: null } },
+    ]);
+    const withNets = { ...DOC, defaults: { shade: NETS_45 } };
+    expect(setKindDefaultOps(withNets, 'shade', { ...NETS_45, ropeAngleDeg: 30 })).toHaveLength(1);
+    expect(setKindDefaultOps(withNets, 'shade', { ...NETS_45 })).toEqual([]);
+  });
+
+  it('copies a net’s own angle with the net', () => {
+    const { ops } = duplicateOps(WITH_ROPED, ['n1'], ids('c1'));
+    expect(ops[0]).toMatchObject({ type: 'add', item: { ropeAngleDeg: 45 } });
   });
 });

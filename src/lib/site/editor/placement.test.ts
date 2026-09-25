@@ -4,7 +4,7 @@ import { nearestFreeSpot } from './placement';
 
 function make(over: Partial<EditorItem> & Pick<EditorItem, 'id'>): EditorItem {
   return {
-    kind: 'tent', label: 'אוהל', xCm: 0, yCm: 0, widthCm: 300, depthCm: 300, heightCm: null, insetCm: null,
+    kind: 'tent', label: 'אוהל', xCm: 0, yCm: 0, widthCm: 300, depthCm: 300, heightCm: null, insetCm: null, ropeAngleDeg: null,
     sort: 0, taskId: null, notes: null, locked: false, ...over,
   };
 }

@@ -18,7 +18,7 @@ const PLOT = { widthCm: 2600, depthCm: 2400, gridCm: 50 };
 /** An item as the editor sends it; a 3 × 3 m tent unless told otherwise. */
 const tentOf = (over: Partial<EditorItem> = {}): EditorItem => ({
   id: crypto.randomUUID(), kind: 'tent', label: 'אוהל 1', xCm: 100, yCm: 100,
-  widthCm: 300, depthCm: 300, heightCm: null, insetCm: null, sort: 0,
+  widthCm: 300, depthCm: 300, heightCm: null, insetCm: null, ropeAngleDeg: null, sort: 0,
   taskId: null, notes: null, locked: false, ...over,
 });
 
@@ -354,7 +354,7 @@ describe('the camp map', () => {
         { kind: 'tent', widthCm: 350, depthCm: 300, heightCm: 210 },
         { kind: 'spaceship' as never, widthCm: 100, depthCm: 100, heightCm: 100 },
       ]);
-      expect(await kindDefaults(db)).toEqual({ tent: { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: null } });
+      expect(await kindDefaults(db)).toEqual({ tent: { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: null, ropeAngleDeg: null } });
     });
 
     it('loads one document for the editor', async () => {
@@ -381,13 +381,13 @@ describe('the camp map', () => {
       const result = await applySiteOps(db, planId, 0, [
         { type: 'add', item: tent },
         { type: 'update', id: tent.id, patch: { xCm: 400, heightCm: 180 } },
-        { type: 'setKindDefault', kind: 'tent', size: { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: null } },
+        { type: 'setKindDefault', kind: 'tent', size: { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: null, ropeAngleDeg: null } },
       ], LEAD);
 
       expect(result).toEqual({ status: 'saved', version: 1, skipped: [] });
       const [row] = await listItems(db, planId);
       expect(row).toMatchObject({ id: tent.id, xCm: 400, heightCm: 180, sort: 0 });
-      expect(await kindDefaults(db)).toEqual({ tent: { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: null } });
+      expect(await kindDefaults(db)).toEqual({ tent: { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: null, ropeAngleDeg: null } });
       expect((await planForSeason(db, s26))?.version).toBe(1);
     });
 
@@ -485,7 +485,7 @@ describe('the camp map', () => {
 
     it('drops a kind default when told to', async () => {
       const planId = await createPlan(db, s26, PLOT, LEAD);
-      const size = { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: null };
+      const size = { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: null, ropeAngleDeg: null };
       await applySiteOps(db, planId, 0, [{ type: 'setKindDefault', kind: 'tent', size }], LEAD);
       await applySiteOps(db, planId, 1, [{ type: 'setKindDefault', kind: 'tent', size: null }], LEAD);
       expect(await kindDefaults(db)).toEqual({});
@@ -553,7 +553,7 @@ describe('the camp map', () => {
     it('keeps a kind default’s inset only for a shade net', async () => {
       const planId = await createPlan(db, s26, PLOT, LEAD);
       await applySiteOps(db, planId, 0, [
-        { type: 'setKindDefault', kind: 'tent', size: { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: 40 } },
+        { type: 'setKindDefault', kind: 'tent', size: { widthCm: 350, depthCm: 300, heightCm: 210, insetCm: 40, ropeAngleDeg: null } },
       ], LEAD);
       expect((await kindDefaults(db)).tent?.insetCm).toBeNull();
     });
@@ -674,5 +674,49 @@ describe('the camp map’s lines', () => {
     expect(lines[0]).toMatchObject({ planId: copied, kind: 'water', pointsCm: [[50, 300]] });
     expect(items.find((row) => row.id === lines[0].fromItemId)?.label).toBe('מי שתייה 1');
     expect(items.find((row) => row.id === lines[0].toItemId)?.label).toBe('מקלחת 1');
+  });
+});
+
+/* ── shade-net ropes (migration 0014) ──────────────────────────────────── */
+
+describe('the camp map’s rope angles', () => {
+  let db: TestDb;
+  let s26: string;
+  let planId: string;
+
+  beforeEach(async () => {
+    db = await createTestDb();
+    const [season] = await db.insert(seasons).values({ name: 'ברן 26', year: 2026, flatRate: '1200.00' }).returning();
+    s26 = season.id;
+    planId = await createPlan(db, s26, PLOT, LEAD);
+  });
+
+  /** One saved batch against the map's version now. `toMatchObject`, because the result may carry more than its status (#25 adds `skipped`). */
+  async function save(ops: SiteOp[]): Promise<void> {
+    const plan = await planById(db, planId);
+    if (plan === null) throw new Error(`no map ${planId}`);
+    expect(await applySiteOps(db, planId, plan.version, ops, LEAD)).toMatchObject({ status: 'saved' });
+  }
+
+  const netOf = (over: Partial<EditorItem> = {}): EditorItem => tentOf({
+    kind: 'shade', label: 'רשת צל 1', widthCm: 800, depthCm: 800, insetCm: 50, ...over,
+  });
+
+  it('reads a net’s own angle into the list and into the editor’s document', async () => {
+    const net = netOf();
+    await save([{ type: 'add', item: net }]);
+    await db.update(siteItems).set({ ropeAngleDeg: 45 }).where(eq(siteItems.id, net.id));
+    expect((await listItems(db, planId))[0].ropeAngleDeg).toBe(45);
+    expect((await loadDoc(db, planId))?.doc.items[0].ropeAngleDeg).toBe(45);
+  });
+
+  it('reads the camp’s angle from the nets’ row only', async () => {
+    await db.insert(siteKindDefaults).values([
+      { kind: 'shade', widthCm: 800, depthCm: 800, heightCm: 300, insetCm: 50, ropeAngleDeg: 45 },
+      { kind: 'tent', widthCm: 300, depthCm: 300, heightCm: 200, ropeAngleDeg: 45 },
+    ]);
+    const defaults = await kindDefaults(db);
+    expect(defaults.shade?.ropeAngleDeg).toBe(45);
+    expect(defaults.tent?.ropeAngleDeg).toBeNull();
   });
 });
