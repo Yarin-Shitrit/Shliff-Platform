@@ -22,6 +22,7 @@ import { EMPTY_MAP } from '../notices';
 import { northText } from './north';
 import chrome from './panel.module.css';
 import styles from './inspector.module.css';
+import { outsideText, PlotRopes, PlotTaken, ropeProblems } from './ropes';
 
 interface Problem {
   key: string;
@@ -34,7 +35,7 @@ function problemsOf(doc: EditorDoc, flags: EditorFlags): Problem[] {
   const labelOf = (id: string) => doc.items.find((entry) => entry.id === id)?.label ?? '';
   return [
     ...doc.items.filter((entry) => flags.outside.has(entry.id)).map((entry): Problem => ({
-      key: `outside:${entry.id}`, tone: 'bad', text: `מחוץ לגדר: ${entry.label}`, ids: [entry.id],
+      key: `outside:${entry.id}`, tone: 'bad', text: `${outsideText(doc, entry)}: ${entry.label}`, ids: [entry.id],
     })),
     ...flags.pairs.map(([a, b]): Problem => ({
       key: `pair:${a}:${b}`, tone: 'warn', text: `חפיפה: ${labelOf(a)} · ${labelOf(b)}`, ids: [a, b],
@@ -42,6 +43,7 @@ function problemsOf(doc: EditorDoc, flags: EditorFlags): Problem[] {
     ...doc.items.filter((entry) => flags.partly.has(entry.id)).map((entry): Problem => ({
       key: `edge:${entry.id}`, tone: 'warn', text: `בשולי רשת צל: ${entry.label}`, ids: [entry.id],
     })),
+    ...ropeProblems(doc, flags),
   ];
 }
 
@@ -99,6 +101,7 @@ export function PlotInspector({ doc, flags, plotHref, onPickIds }: {
           <dd><Link href={plotHref} className={chrome.link}><bdi>{formatSize(plot.widthCm, plot.depthCm)}</bdi></Link></dd>
           <dt>שטח</dt>
           <dd><Link href={plotHref} className={chrome.link}><bdi>{formatArea(areaM2(plot))}</bdi></Link></dd>
+          <PlotTaken doc={doc} onPickIds={onPickIds} />
           <dt>רשת הצמדה</dt>
           <dd><Link href={plotHref} className={chrome.link}><bdi>{formatMetres(plot.gridCm)}</bdi></Link></dd>
           <dt>צפון</dt>
@@ -145,6 +148,7 @@ export function PlotInspector({ doc, flags, plotHref, onPickIds }: {
             <>
               <Count name="שטח בצל" figure={formatArea(shade.shadedAreaM2)} ids={netIds} onPickIds={onPickIds} />
               <Count name="רשתות צל" figure={String(shade.nets)} ids={netIds} onPickIds={onPickIds} />
+              <PlotRopes doc={doc} onPickIds={onPickIds} />
             </>
           )}
           <p className={chrome.hint}>

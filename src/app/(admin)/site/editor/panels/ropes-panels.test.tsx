@@ -10,6 +10,10 @@ import type { EditorDoc, EditorItem } from '@/lib/site/editor/model';
 import { applyOps, type SiteOp } from '@/lib/site/editor/ops';
 import { siteFailureMessage } from '../../failure-messages';
 import type { EditorFlags } from '../use-editor-store';
+import type { ViewInfo } from '../scene/scene-view';
+import { ChecksBar } from './checks-bar';
+import { PlotInspector } from './inspector-plot';
+import { Minimap } from './minimap';
 import { ItemInspector } from './inspector-item';
 import { MultiInspector } from './inspector-multi';
 
@@ -195,5 +199,93 @@ describe('a net’s ropes, in its inspector', () => {
     const { onPickIds } = renderItem(t3, { shade: CAMP_NETS }, [net]);
     fireEvent.click(screen.getByRole('button', { name: `בשטח החבלים של ${iso('רשת צל 1')}` }));
     expect(onPickIds).toHaveBeenLastCalledWith(['t3', 'n1']);
+  });
+});
+
+describe('the ropes on the plot, when nothing is selected', () => {
+  const HREF = '/site?season=s26&act=plot';
+
+  function renderPlot(map: EditorDoc) {
+    const onPickIds = vi.fn();
+    render(<PlotInspector doc={map} flags={flagsOf(map)} plotHref={HREF} onPickIds={onPickIds} />);
+    return { onPickIds };
+  }
+
+  it('gives the area taken — footprints, ropes included, shared ground once — and it selects what it counts', () => {
+    // The net's 14 × 14 m with its ropes, and a 3 × 3 m tent apart from it, of the plot's 624 m².
+    const { onPickIds } = renderPlot(doc([item({ id: 'n1' }), tent({ id: 't1', xCm: 2000, yCm: 2000 })]));
+    fireEvent.click(screen.getByRole('button', { name: '205 מ״ר מתוך 624 · 33%' }));
+    expect(onPickIds).toHaveBeenLastCalledWith(['n1', 't1']);
+    expect(screen.getByText('כולל החבלים של רשתות הצל')).toBeTruthy();
+  });
+
+  it('says the camp’s angle, and the line opens a net', () => {
+    const { onPickIds } = renderPlot(doc([item({ id: 'n1' }), item({ id: 'n2', label: 'רשת צל 2', xCm: 1500 })]));
+    fireEvent.click(screen.getByRole('button', { name: 'זווית החבלים: 45° לכל הרשתות' }));
+    expect(onPickIds).toHaveBeenLastCalledWith(['n1']);
+    expect(screen.getByText('החבלים לא מצלים — הם רק תופסים שטח.')).toBeTruthy();
+  });
+
+  it('says so when some nets keep an angle of their own', () => {
+    const { onPickIds } = renderPlot(doc([item({ id: 'n1', ropeAngleDeg: 30 }), item({ id: 'n2', label: 'רשת צל 2', xCm: 1500 })]));
+    fireEvent.click(screen.getByRole('button', { name: 'זווית החבלים: 45° לכל רשת בלי זווית משלה' }));
+    expect(onPickIds).toHaveBeenLastCalledWith(['n2']);
+  });
+
+  it('invites an angle while the camp has none, and the invitation opens a net without one of its own', () => {
+    const { onPickIds } = renderPlot(doc([item({ id: 'n1', ropeAngleDeg: 30 }), item({ id: 'n2', label: 'רשת צל 2', xCm: 1500 })], {}));
+    expect(screen.getByText('זווית החבלים עוד לא נקבעה')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'קביעת זווית' }));
+    expect(onPickIds).toHaveBeenLastCalledWith(['n2']);
+  });
+
+  it('lists a net whose ropes cross the fence, and each item in a band, as rows that select them', () => {
+    const net = item({ id: 'n1', xCm: 1800, yCm: 800 });
+    const { onPickIds } = renderPlot(doc([net, tent({ id: 't3', label: 'אוהל 3', xCm: 1450, yCm: 1000 })]));
+    fireEvent.click(screen.getByRole('button', { name: 'החבלים יוצאים מהגדר: רשת צל 1' }));
+    expect(onPickIds).toHaveBeenLastCalledWith(['n1']);
+    fireEvent.click(screen.getByRole('button', { name: 'בשטח החבלים: אוהל 3 · רשת צל 1' }));
+    expect(onPickIds).toHaveBeenLastCalledWith(['n1', 't3']);
+  });
+});
+
+describe('the checks bar, with ropes', () => {
+  // A tent half in the band west of the net's cloth.
+  const map = (defaults?: KindDefaults) => doc([item({ id: 'n1' }), tent({ id: 't1', xCm: 250, yCm: 700 })], defaults);
+
+  it('counts what stands in a net’s rope band, and a press goes to the net and the item', () => {
+    const shown = map();
+    const onGo = vi.fn();
+    render(<ChecksBar doc={shown} flags={flagsOf(shown)} onGo={onGo} />);
+    const chip = screen.getByRole('button', { name: '1 בשטח החבלים' });
+    expect(chip.getAttribute('title')).toBe('פריטים שעומדים בין שולי הבד של רשת צל לבין היתדות שלה');
+    fireEvent.click(chip);
+    expect(onGo).toHaveBeenCalledWith(['n1', 't1']);
+  });
+
+  it('says nothing about ropes while the camp has no angle (D16)', () => {
+    const shown = map({});
+    render(<ChecksBar doc={shown} flags={flagsOf(shown)} onGo={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: /בשטח החבלים/ })).toBeNull();
+  });
+});
+
+describe('the minimap, with ropes', () => {
+  const STILL: ViewInfo = { yaw: 0, zoomPct: 100, pxPerM: 20, groundCorners: [], selectionBox: null, moving: false };
+
+  it('dashes a net’s rope footprint, marks it when it crosses the fence, and frames the stakes past the fence', () => {
+    const shown = doc([item({ id: 'n1', xCm: 1800, yCm: 800 })]);
+    const { container } = render(<Minimap doc={shown} flags={flagsOf(shown)} selection={[]} info={STILL} onJump={vi.fn()} />);
+    const ropes = container.querySelector('rect[data-ropes="n1"]');
+    expect(['x', 'y', 'width', 'height'].map((name) => ropes?.getAttribute(name))).toEqual(['1500', '500', '1400', '1400']);
+    expect(ropes?.getAttribute('data-outside')).toBe('true');
+    const [x, , width] = (screen.getByRole('img', { name: /מפה מוקטנת/ }).getAttribute('viewBox') ?? '').split(' ').map(Number);
+    expect(x + width).toBeGreaterThanOrEqual(2900);
+  });
+
+  it('draws no rope footprint while the camp has no angle', () => {
+    const shown = doc([item({ id: 'n1' })], {});
+    const { container } = render(<Minimap doc={shown} flags={flagsOf(shown)} selection={[]} info={STILL} onJump={vi.fn()} />);
+    expect(container.querySelector('rect[data-ropes]')).toBeNull();
   });
 });

@@ -17,7 +17,7 @@ import { useId, useState, type KeyboardEvent, type ReactElement } from 'react';
 import { cx } from '@/components/ui/cx';
 import { Pill } from '@/components/ui/pill';
 import { effectiveSize, itemHeight } from '@/lib/site/defaults';
-import { toPlaced } from '@/lib/site/derive';
+import { takenArea, toPlaced } from '@/lib/site/derive';
 import { areaM2, contains, formatArea, formatMetres, formatSize, groundRect, shadedRect } from '@/lib/site/geometry';
 import { patchOps, setKindDefaultOps } from '@/lib/site/editor/commands';
 import { readDegrees } from '@/lib/site/editor/degrees';
@@ -202,4 +202,79 @@ export function RopeSection({ doc, item, onRun }: {
       </div>
     </>
   );
+}
+
+/**
+ * שטח תפוס (spec §3, §15): the union of every item's footprint — a net's
+ * with its ropes — inside the fence, against the plot's area. Pressing the
+ * figure selects every item it counts; "כולל החבלים של רשתות הצל" says when
+ * ropes are in it. A `<dt>`/`<dd>` pair for `PlotInspector`'s figures.
+ */
+export function PlotTaken({ doc, onPickIds }: {
+  doc: EditorDoc;
+  onPickIds: (ids: string[]) => void;
+}): ReactElement {
+  const taken = takenArea(doc.plot, doc.items.map((entry) => toPlaced(entry, doc.defaults)));
+  const plotM2 = areaM2(doc.plot);
+  const share = plotM2 === 0 ? 0 : Math.round((taken.areaM2 / plotM2) * 100);
+  const figure = `${formatArea(taken.areaM2)} מתוך ${plotM2} · ${share}%`;
+  return (
+    <>
+      <dt>שטח תפוס</dt>
+      <dd>
+        {taken.ids.length === 0 ? <bdi>{figure}</bdi> : (
+          <button type="button" className={chrome.link} onClick={() => { onPickIds(taken.ids); }}>
+            <bdi>{figure}</bdi>
+          </button>
+        )}
+        {taken.withRopes ? <p className={chrome.meta}>כולל החבלים של רשתות הצל</p> : null}
+      </dd>
+    </>
+  );
+}
+
+/**
+ * The camp's rope angle, under "צל" in the plot inspector (spec §15): a line
+ * that opens a net following it — "זווית החבלים: 45° לכל הרשתות", or "… לכל
+ * רשת בלי זווית משלה" when some nets keep their own — and, while the camp
+ * has none, an invitation whose button opens a net without an angle of its
+ * own. With no nets there is nothing to say.
+ */
+export function PlotRopes({ doc, onPickIds }: {
+  doc: EditorDoc;
+  onPickIds: (ids: string[]) => void;
+}): ReactElement | null {
+  const nets = doc.items.filter((entry) => entry.kind === 'shade');
+  if (nets.length === 0) return null;
+  const camp = campRopeAngle(doc);
+  const following = nets.find((net) => net.ropeAngleDeg === null) ?? nets[0];
+  const someOwn = nets.some((net) => net.ropeAngleDeg !== null);
+  return (
+    <>
+      {camp === null ? (
+        <p className={chrome.invite}>
+          <span>זווית החבלים עוד לא נקבעה</span>
+          {' '}
+          <button type="button" className={chrome.link} onClick={() => { onPickIds([following.id]); }}>קביעת זווית</button>
+        </p>
+      ) : (
+        <p className={chrome.meta}>
+          <button type="button" className={chrome.link} onClick={() => { onPickIds([following.id]); }}>
+            <bdi>{someOwn ? `זווית החבלים: ${camp}° לכל רשת בלי זווית משלה` : `זווית החבלים: ${camp}° לכל הרשתות`}</bdi>
+          </button>
+        </p>
+      )}
+      <p className={chrome.hint}>החבלים לא מצלים — הם רק תופסים שטח.</p>
+    </>
+  );
+}
+
+/** The plot inspector's rows for items in a rope band (spec §15): "בשטח החבלים: אוהל 3 · רשת צל 1", selecting both. */
+export function ropeProblems(
+  doc: EditorDoc, flags: EditorFlags,
+): Array<{ key: string; tone: 'warn'; text: string; ids: string[] }> {
+  const labelOf = (id: string) => doc.items.find((entry) => entry.id === id)?.label ?? '';
+  return flags.ropePairs.map(([net, id]) => ({
+    key: `ropes:${net}:${id}`, tone: 'warn', text: `בשטח החבלים: ${labelOf(id)} · ${labelOf(net)}`, ids: [net, id],
+  }));
 }
