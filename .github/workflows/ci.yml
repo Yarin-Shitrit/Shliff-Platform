@@ -16,11 +16,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Shape: typecheck+lint, eight test shards and the build all start at once; a
+# Shape: typecheck+lint, four test shards and the build all start at once; a
 # last job waits for all of them and decides the result. Until 2026-09-25 this
-# was one job running typecheck, lint and the whole suite in a row -- 3749
-# tests in 270 files, measured at 1421s for the Test step alone (run
-# 36071133680), about 25 minutes end to end.
+# was one job running typecheck, lint and the whole suite in a row: about 25
+# minutes (run 36071133680, Test 1421s), then about 10 once #21 pooled PGlite
+# per worker (run 36115059878, Test 512s).
 
 jobs:
   checks:
@@ -49,9 +49,10 @@ jobs:
   test:
     name: test ${{ matrix.shard }}/${{ strategy.job-total }}
     runs-on: ubuntu-latest
-    # A shard is measured at about 5 minutes. Headroom is deliberate: a timeout
-    # kills the job before the report is written, which the verdict job below
-    # then reports as a shard that left no report.
+    # A shard runs in a few minutes. Headroom is deliberate: even without #21's
+    # pooled PGlite, a quarter of the old 1421s suite fits well inside this.
+    # A timeout kills the job before the report is written, which the verdict
+    # job below then reports as a shard that left no report.
     timeout-minutes: 20
 
     strategy:
@@ -60,12 +61,13 @@ jobs:
       fail-fast: false
       matrix:
         # vitest splits by FILE COUNT over a hash of each path, not by duration,
-        # so shards are uneven. Eight is the fewest that keeps the heaviest shard
-        # near its floor: the one holding src/lib/import/promote/promote.test.ts
-        # (226s on its own, in one worker) -- at six, that shard modelled at
-        # ~6.6 minutes of tests. The count comes from this list via
+        # so shards are uneven. Measured on PR #22: at eight shards the whole
+        # workflow took 1m55s but billed 20 runner-minutes. Four keeps it at a
+        # few minutes for fewer billed minutes and fewer concurrent runners --
+        # the Free plan caps a private repo at 20 jobs at once, and several
+        # lanes push together. The count comes from this list via
         # strategy.job-total, so adding a shard is one edit.
-        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+        shard: [1, 2, 3, 4]
 
     env:
       # src/db/index.ts reads DATABASE_URL at import time. The suite never talks
