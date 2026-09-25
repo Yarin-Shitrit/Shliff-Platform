@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { SiteLineKind, SiteLinePoint } from '@/db/schema/site';
 import type { EditorItem, EditorPlot } from '@/lib/site/editor/model';
 import { SITE_KINDS, type SiteKindGroup } from '@/lib/site/kinds';
 import { SCENE_ALPHA, SCENE_PALETTE, type SceneTheme } from './palette';
@@ -40,7 +41,8 @@ export interface ItemLook {
   sun?: boolean;
 }
 
-type Part = 'body' | 'edge' | 'ember' | 'pole' | 'cloth' | 'clothEdge' | 'inset' | 'caster' | 'patch' | 'contact';
+type Part = 'body' | 'edge' | 'ember' | 'pole' | 'cloth' | 'clothEdge' | 'inset' | 'caster' | 'patch' | 'contact'
+  | 'lineBody' | 'lineJoint';
 type Point = [number, number, number];
 
 /** What decides the geometry. Position is not in it: a move never rebuilds. */
@@ -292,6 +294,74 @@ export function restyleItemObject(object: THREE.Group, look: ItemLook): void {
         break;
       case 'caster': break;
     }
+  });
+}
+
+/* ── the pipes and cables ─────────────────────────────────────────────── */
+
+/** A run's width and height on the ground, in metres: wide enough to see and to click at the plot's zoom, low enough to be a hose. */
+const LINE_WIDTH = 0.12;
+const LINE_HEIGHT = 0.05;
+
+export interface LineLook {
+  theme: SceneTheme;
+  state: 'normal' | 'hover' | 'selected';
+}
+
+/** What decides a line's geometry: its kind and every point of its path. A moved end or a moved bend rebuilds it. */
+export function lineGeometryKey(kind: SiteLineKind, path: readonly SiteLinePoint[]): string {
+  return `${kind}:${path.map((p) => `${p[0]},${p[1]}`).join(';')}`;
+}
+
+/**
+ * A pipe or a cable as it lies on the ground: one low box per leg of its
+ * path, turned to run along the leg, and a short round joint at every point
+ * of the path — the ends included, where the run meets the item's wall.
+ * Every part is a solid the raycaster can hit, so a click on a run selects
+ * it (`picking.ts`). Origin is the map's origin: the path is in world
+ * coordinates, so a move of either end is a rebuild, never a reposition.
+ */
+export function buildLineObject(line: { id: string; kind: SiteLineKind }, path: readonly SiteLinePoint[], look: LineLook): THREE.Group {
+  const group = new THREE.Group();
+  group.name = line.id;
+  group.userData = { id: line.id, isLine: true, kind: line.kind, key: lineGeometryKey(line.kind, path) };
+  const material = new THREE.MeshLambertMaterial();
+  const joint = new THREE.CylinderGeometry(LINE_WIDTH * 0.9, LINE_WIDTH * 0.9, LINE_HEIGHT * 1.4, 12);
+  for (let i = 0; i < path.length; i += 1) {
+    const at = worldOf(path[i][0], path[i][1], 0);
+    const cap = tag(new THREE.Mesh(joint, material), 'lineJoint');
+    cap.position.set(at.x, LINE_HEIGHT * 0.7, at.z);
+    cap.castShadow = true;
+    group.add(cap);
+    if (i === 0) continue;
+    const from = worldOf(path[i - 1][0], path[i - 1][1], 0);
+    const dx = at.x - from.x;
+    const dz = at.z - from.z;
+    const length = Math.hypot(dx, dz);
+    if (length === 0) continue;
+    const leg = tag(new THREE.Mesh(new THREE.BoxGeometry(length, LINE_HEIGHT, LINE_WIDTH), material), 'lineBody');
+    leg.position.set((from.x + at.x) / 2, LINE_HEIGHT / 2, (from.z + at.z) / 2);
+    // A box along +X turned about +Y by θ points at (cos θ, 0, −sin θ).
+    leg.rotation.y = Math.atan2(-dz, dx);
+    leg.castShadow = true;
+    leg.receiveShadow = true;
+    group.add(leg);
+  }
+  restyleLineObject(group, look);
+  return group;
+}
+
+/** Colour only: hover, selection and theme never rebuild a run. */
+export function restyleLineObject(object: THREE.Group, look: LineLook): void {
+  const palette = SCENE_PALETTE[look.theme];
+  const kind = object.userData.kind as SiteLineKind;
+  const colour = new THREE.Color(palette.lines[kind]);
+  if (look.state === 'selected') colour.lerp(new THREE.Color(palette.selected), 0.45);
+  else if (look.state === 'hover') colour.lerp(new THREE.Color(palette.hover), look.theme === 'dark' ? 0.12 : 0.25);
+  object.traverse((child) => {
+    const part = child.userData.part as Part | undefined;
+    if (part !== 'lineBody' && part !== 'lineJoint') return;
+    ((child as THREE.Mesh).material as THREE.MeshLambertMaterial).color.copy(colour);
   });
 }
 

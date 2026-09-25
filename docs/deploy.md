@@ -173,11 +173,11 @@ number. If the diff is ever non-empty, read the difference and apply the
 specific change by hand — with the camp lead's approval, because it is real
 financial data.
 
-### Migrations `0009` and `0010` have never reached Railway
+### Migrations `0009` and `0010` — applied to Railway on 2026-09-24
 
-As of 2026-09-24 the production database is at `0008`. Two migrations on
-`main` create tables it does not have, and every screen that reads them
-throws during its server render (React #441) instead of loading:
+Until 2026-09-24 the production database was at `0008`. Two migrations on
+`main` created tables it did not have, and every screen that reads them
+threw during its server render (React #441) instead of loading:
 
 | Migration | Creates | Screens that throw without it |
 |---|---|---|
@@ -192,11 +192,17 @@ the camp lead's decision, because it is the camp's real database.
 First confirm they are genuinely missing. Read-only:
 
 ```sh
-docker run --rm -e R="$RAILWAY_URL" postgres:18-alpine \
+docker run --rm -e R="$RAILWAY_URL" postgres:18-alpine sh -c '
   psql "$R" -tAc "select table_name from information_schema.tables
-    where table_schema='public' and table_name in
-    ('inventory_items','acquisition_items','task_materials','site_plans','site_items')"
+    where table_schema='"'"'public'"'"' and table_name in
+    ('"'"'inventory_items'"'"','"'"'acquisition_items'"'"','"'"'task_materials'"'"','"'"'site_plans'"'"','"'"'site_items'"'"')"'
 ```
+
+The `sh -c` matters: written as `psql "$R"` directly on the `docker run` line,
+`$R` is expanded by *your* shell, where it is empty, and psql silently falls
+back to a local socket inside the container (`connection to server on socket
+"/var/run/postgresql/.s.PGSQL.5432" failed`) — an error that reads like
+Railway being down.
 
 Expected before: nothing. Then apply, one transaction per file, stopping on the
 first error:
@@ -225,22 +231,23 @@ each `UNIQUE (source_block_id, source_row)`. `promote.ts` upserts with
 `onConflictDoUpdate` on exactly those columns, so without them Postgres raises
 `42P10` and block promotion fails outright.
 
-### Migration `0011` — **not yet applied** to Railway
+### Migration `0011` — applied to Railway on 2026-09-25
 
 `0011_faithful_starjammers` is one statement:
 `ALTER TABLE "acquisition_items" ALTER COLUMN "season_id" DROP NOT NULL;`
 It lets a רכש row belong to no season (camp-wide, listed under every year).
 Not additive like `0009`/`0010` — it is an `ALTER` — but it touches no row and
 loosens a constraint rather than adding one, so the same `psql -f` procedure
-applies. Until it is applied, saving a row with «לא שייך לברן מסוים» ticked
-fails in production with a `23502` not-null violation; every other רכש path
-keeps working. Applying it is the camp lead's decision, like the two above.
+applies. Before it was applied, saving a row with «לא שייך לברן מסוים» ticked
+failed in production with a `23502` not-null violation. The camp lead approved
+it on 2026-09-25 and it went in together with `0012` (below).
 
-Read-only check that it is genuinely missing (expected before: `NO`):
+Read-only check (before: `NO`; after: `YES`):
 
 ```sh
-docker run --rm -e R="$RAILWAY_URL" postgres:18-alpine   psql "$R" -tAc "select is_nullable from information_schema.columns
-    where table_name='acquisition_items' and column_name='season_id'"
+docker run --rm -e R="$RAILWAY_URL" postgres:18-alpine sh -c '
+  psql "$R" -tAc "select is_nullable from information_schema.columns
+    where table_name='"'"'acquisition_items'"'"' and column_name='"'"'season_id'"'"'"'
 ```
 
 Then:
@@ -253,6 +260,46 @@ docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine s
 
 Afterwards the query above prints `YES`, and the parity check comes back empty
 against a local database that also carries `0011`.
+
+### Migration `0012` — applied to Railway on 2026-09-25
+
+`0012_site_3d_editor` is the camp map's 3D editor: a new, empty
+`site_kind_defaults` table, and four columns — `site_items.height_cm` (null),
+`site_items.locked` (default `false`), `site_plans.version` (default `0`) and
+`site_plans.north_deg` (default `0`). Additive: every existing row takes the
+default, nothing is dropped or rewritten. It must be on Railway **before** the
+code that reads it deploys, because every `/site` query selects the new
+columns. The camp lead approved it on 2026-09-25; it was applied right after
+`0011`, with the same procedure:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine sh -euc '
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0011_faithful_starjammers.sql
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0012_site_3d_editor.sql
+'
+```
+
+Measured before: the four columns and the table absent, 1 plan and 29 items.
+After: all present, still 1 plan and 29 items.
+
+### Migration `0013` — generated 2026-09-25, **not yet applied**
+
+`0013_site_lines` is the camp map's pipes and cables: one new, empty table,
+`site_lines`, with three foreign keys (to `site_plans` and twice to
+`site_items`, all `ON DELETE cascade`). Additive: no existing table or row
+changes. It must be on Railway **before** the code that reads it deploys,
+because every `/site` load selects from it. Applying it is the camp lead's
+step, by the same procedure as `0012`:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine sh -euc '
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0013_site_lines.sql
+'
+```
+
+Read-only check before and after: `select count(*) from site_lines` fails
+before (no such table) and answers `0` after; the plan and item counts do not
+move. Record the measured numbers here when it is done.
 
 ### Copying the laptop's database up
 

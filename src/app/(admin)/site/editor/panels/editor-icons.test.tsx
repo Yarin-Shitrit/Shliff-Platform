@@ -9,7 +9,7 @@ import { EditorIcon, type EditorIconName } from './editor-icons';
 const NAMES: readonly EditorIconName[] = [
   'undo', 'redo', 'turn', 'lock', 'magnet', 'ruler', 'pointer', 'cube', 'plan', 'tag', 'eyeOff', 'minus', 'fit',
   'rotateLeft', 'rotateRight', 'help', 'alignWest', 'alignCentreX', 'alignEast', 'alignNorth', 'alignCentreY',
-  'alignSouth', 'distributeX', 'distributeY', 'row', 'play', 'pause',
+  'alignSouth', 'distributeX', 'distributeY', 'row', 'play', 'pause', 'drop', 'bolt',
 ];
 
 function drawing(name: EditorIconName): string {
@@ -28,7 +28,7 @@ describe('the editor’s glyphs', () => {
       expect(seen.get(drawn), `${name} is drawn like ${seen.get(drawn)}`).toBeUndefined();
       seen.set(drawn, name);
     }
-    expect(seen.size).toBe(27);
+    expect(seen.size).toBe(29);
   });
 
   it('are decoration, named by the control they sit in', () => {

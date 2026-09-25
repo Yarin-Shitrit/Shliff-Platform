@@ -4,12 +4,10 @@ import {
 
 export const SITE_PATH = '/site';
 
-/** `?act=plot`: the plot-size drawer — create the map, or resize its plot. */
+/** `?act=plot`: the plot drawer — create the map, or change its size, grid and north. */
 export const PLOT_ACT = 'plot';
 /** `?act=copy`: the drawer that copies another season's map into this one. */
 export const COPY_ACT = 'copy';
-/** `?peek=<id>&act=remove`: the confirmation over one item. */
-export const REMOVE_ACT = 'remove';
 /**
  * `?act=season-date`: the shell's drawer for the opening date of the season
  * `?season=` names (ruling SD2) — the day shade by hour is worked out for.
@@ -19,19 +17,18 @@ export const SEASON_DATE_ACT = 'season-date';
 
 export type RawParams = Record<string, string | string[] | undefined>;
 
+/**
+ * What `/site` reads from its address. The editor is the page (Task 26):
+ * `?editor=3d`, the flag it sat behind, is read by nothing — an old link that
+ * carries it opens the editor like any other (ruling T26-1) — and so is the
+ * retired board's `?act=remove`.
+ */
 export interface SiteQuery {
   season: string;
-  /** The item a drawer is open over. */
+  /** `?peek=<id>`: the item selected when the map loads — a deep link (spec §12). */
   peek: string | null;
   plot: boolean;
   copy: boolean;
-  removing: boolean;
-  /**
-   * `?editor=3d`: the bare 3D map instead of the board — temporary, so the
-   * scene can be checked in a browser before the panels exist (plan 03,
-   * Task 20). Task 26 makes the editor the page and removes the flag.
-   */
-  editor3d: boolean;
 }
 
 function one(value: string | string[] | undefined): string {
@@ -40,29 +37,20 @@ function one(value: string | string[] | undefined): string {
 }
 
 export function parseSiteQuery(params: RawParams): SiteQuery {
-  const peek = one(params[PEEK_PARAM]) || null;
   const act = one(params[ACT_PARAM]);
   return {
     season: one(params.season),
-    peek,
+    peek: one(params[PEEK_PARAM]) || null,
     plot: act === PLOT_ACT,
     copy: act === COPY_ACT,
-    removing: peek !== null && act === REMOVE_ACT,
-    editor3d: one(params.editor) === '3d',
   };
 }
 
-/**
- * The season survives from one URL to the next (R5); drawers are the kit's.
- * So does `?editor=3d` while the flag exists: a drawer opened from the editor
- * closes back into it, not onto the board. Task 26 removes the flag, and this
- * with it. Only the flag's own value is carried.
- */
+/** Only the season survives from one URL to the next (R5); drawers are the kit's. */
 function carried(params: RawParams): URLSearchParams {
   const next = new URLSearchParams();
   const season = one(params.season);
   if (season) next.set('season', season);
-  if (one(params.editor) === '3d') next.set('editor', '3d');
   return next;
 }
 
@@ -71,12 +59,9 @@ export function siteHref(params: RawParams): string {
   return closePeekHref(SITE_PATH, carried(params));
 }
 
+/** The map with this item selected when it loads (the table's rows link here). */
 export function itemHref(params: RawParams, id: string): string {
   return openPeekHref(SITE_PATH, carried(params), id);
-}
-
-export function removeItemHref(params: RawParams, id: string): string {
-  return openPeekHref(SITE_PATH, carried(params), id, REMOVE_ACT);
 }
 
 export function plotHref(params: RawParams): string {

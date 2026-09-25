@@ -13,10 +13,15 @@ vi.mock('next/navigation', () => ({
 
 import { SeasonSwitch } from '@/app/(admin)/shell/season-switch';
 
+/**
+ * b26's gate date is an instant whose UTC day and Israel day differ:
+ * 22:30 UTC on 3 June is 01:30 on 4 June in Israel, and 4 June is the day a
+ * lead set. b24 has no date at all.
+ */
 const SEASONS = [
-  { id: 'b26', name: 'ברן 26', state: 'פעילה' },
-  { id: 'b25', name: 'ברן 25', state: 'הסתיימה' },
-  { id: 'b24', name: 'ברן 24', state: 'בלי דמי קאמפ' },
+  { id: 'b26', name: 'ברן 26', state: 'פעילה', startsOn: new Date('2026-06-03T22:30:00Z') },
+  { id: 'b25', name: 'ברן 25', state: 'הסתיימה', startsOn: new Date('2025-06-05T00:00:00Z') },
+  { id: 'b24', name: 'ברן 24', state: 'בלי דמי קאמפ', startsOn: null },
 ];
 
 describe('SeasonSwitch', () => {
@@ -87,5 +92,39 @@ describe('SeasonSwitch', () => {
     fireEvent.click(screen.getByRole('button', { name: /ברן 25/ }));
     expect(screen.getByRole('link', { name: 'שנה חדשה' }).getAttribute('href'))
       .toBe('/tasks?season=b25&view=gaps&act=season');
+  });
+
+  describe('the gate date — every figure links to what changes it', () => {
+    it("shows the active season's gate date, as the Israel calendar day, linking to its drawer", () => {
+      render(<SeasonSwitch seasons={SEASONS} />);
+      fireEvent.click(screen.getByRole('button', { name: /ברן 26/ }));
+
+      const link = screen.getByRole('link', { name: /פתיחת השער/ });
+      expect(link.textContent).toContain('4 ביוני 2026');
+      expect(link.getAttribute('href')).toBe('/fees?act=season-date');
+    });
+
+    it('shows the date of the season the URL names, not the newest', () => {
+      route.pathname = '/tasks';
+      route.search = 'season=b25&view=gaps';
+      render(<SeasonSwitch seasons={SEASONS} />);
+      fireEvent.click(screen.getByRole('button', { name: /ברן 25/ }));
+
+      const link = screen.getByRole('link', { name: /פתיחת השער/ });
+      expect(link.textContent).toContain('5 ביוני 2025');
+      expect(link.getAttribute('href')).toBe('/tasks?season=b25&view=gaps&act=season-date');
+    });
+
+    it('invites setting a date when none is recorded, rather than showing a blank', () => {
+      route.search = 'season=b24';
+      render(<SeasonSwitch seasons={SEASONS} />);
+      fireEvent.click(screen.getByRole('button', { name: /ברן 24/ }));
+
+      const link = screen.getByRole('link', { name: /תאריך הפתיחה לא נרשם/ });
+      expect(link.textContent).toContain('קביעה');
+      expect(link.textContent).not.toMatch(/\d/);
+      expect(link.getAttribute('href')).toBe('/fees?season=b24&act=season-date');
+      expect(screen.queryByRole('link', { name: /פתיחת השער/ })).toBeNull();
+    });
   });
 });

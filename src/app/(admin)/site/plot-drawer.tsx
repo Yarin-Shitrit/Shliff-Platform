@@ -9,7 +9,7 @@
  * items the new fence would cut through — computed here, from the rows the
  * page handed over, with the same function the server uses — so the
  * decision is made with the number in front of them rather than discovered
- * on the board afterwards.
+ * on the map afterwards.
  */
 
 import { useState, type FormEvent } from 'react';

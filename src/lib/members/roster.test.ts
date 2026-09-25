@@ -3,7 +3,7 @@ import { createTestDb, type TestDb } from '@/test/db';
 import { persons } from '@/db/schema/camp';
 import {
   createSeason, listSeasons, getSeasonByName,
-  addMember, listRoster, removeMember,
+  addMember, listRoster, removeMember, setSeasonStartsOn,
 } from '@/lib/members/roster';
 
 describe('roster', () => {
@@ -79,5 +79,72 @@ describe('roster', () => {
 
     expect(await listRoster(db, s25.id)).toHaveLength(1);
     expect(await listRoster(db, s26.id)).toHaveLength(0);
+  });
+
+  describe('setSeasonStartsOn', () => {
+    it('sets the gate date on a season that had none', async () => {
+      const season = await createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1200 });
+
+      const updated = await setSeasonStartsOn(db, season.id, new Date('2026-06-04'));
+
+      expect(updated?.startsOn?.toISOString()).toBe('2026-06-04T00:00:00.000Z');
+      expect((await getSeasonByName(db, 'ברן 26'))?.startsOn?.toISOString())
+        .toBe('2026-06-04T00:00:00.000Z');
+    });
+
+    it('changes a date that was already set', async () => {
+      const season = await createSeason(db, {
+        name: 'ברן 26', year: 2026, flatRate: 1200, startsOn: new Date('2026-06-04'),
+      });
+
+      await setSeasonStartsOn(db, season.id, new Date('2026-06-11'));
+
+      expect((await getSeasonByName(db, 'ברן 26'))?.startsOn?.toISOString())
+        .toBe('2026-06-11T00:00:00.000Z');
+    });
+
+    it('clears the date when given null', async () => {
+      const season = await createSeason(db, {
+        name: 'ברן 26', year: 2026, flatRate: 1200, startsOn: new Date('2026-06-04'),
+      });
+
+      const updated = await setSeasonStartsOn(db, season.id, null);
+
+      expect(updated?.startsOn).toBeNull();
+      expect((await getSeasonByName(db, 'ברן 26'))?.startsOn).toBeNull();
+    });
+
+    it('touches only the season it names', async () => {
+      await createSeason(db, {
+        name: 'ברן 25', year: 2025, flatRate: 1500, startsOn: new Date('2025-06-05'),
+      });
+      const s26 = await createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1200 });
+
+      await setSeasonStartsOn(db, s26.id, new Date('2026-06-04'));
+
+      expect((await getSeasonByName(db, 'ברן 25'))?.startsOn?.toISOString())
+        .toBe('2025-06-05T00:00:00.000Z');
+    });
+
+    it('returns undefined, and writes nothing, for an id no season has', async () => {
+      await createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1200 });
+
+      const updated = await setSeasonStartsOn(
+        db, '00000000-0000-4000-8000-000000000000', new Date('2026-06-04'),
+      );
+
+      expect(updated).toBeUndefined();
+      expect((await getSeasonByName(db, 'ברן 26'))?.startsOn).toBeNull();
+    });
+
+    /**
+     * Postgres refuses a malformed uuid with `invalid input syntax for type
+     * uuid` rather than matching nothing — the same trap `link.ts` guards.
+     * A truncated id is still "no such season", not a crash.
+     */
+    it('returns undefined for an id that is not a uuid at all, rather than throwing', async () => {
+      await expect(setSeasonStartsOn(db, 'not-a-uuid', new Date('2026-06-04')))
+        .resolves.toBeUndefined();
+    });
   });
 });

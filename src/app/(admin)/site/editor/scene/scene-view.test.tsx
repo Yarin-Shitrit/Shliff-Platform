@@ -87,11 +87,12 @@ function item(over: Partial<EditorItem> & { id: string }): EditorItem {
 const DOC: EditorDoc = {
   plot: { id: 'p1', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0 },
   items: [item({ id: 'tent' })],
+  lines: [],
   defaults: {},
 };
 
 function docOf(items: EditorItem[], plot: EditorDoc['plot'] = DOC.plot): EditorDoc {
-  return { plot, items, defaults: {} };
+  return { plot, items, lines: [], defaults: {} };
 }
 
 function fakeStore(over: Partial<EditorStore> = {}): EditorStore {

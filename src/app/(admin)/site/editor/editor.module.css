@@ -8,9 +8,9 @@
  * is the colour of the thing on the map. They are scoped data, like the
  * chart palette in `charts.module.css`'s `.viz`.
  *
- * This file holds the shell only — the layout, the tool row, the save state
- * and the banners. Each panel keeps its own styles beside it
- * (`panels/<name>.module.css`).
+ * This file holds the shell only — the layout, the tool row, the save state,
+ * the banners, and where the item table goes when it is the view. Each panel
+ * keeps its own styles beside it (`panels/<name>.module.css`).
  */
 
 .root {
@@ -220,4 +220,42 @@
   flex-direction: column;
   align-items: center;
   gap: var(--space-2);
+}
+
+/* ---- the item table: a narrow screen, and a browser without WebGL ------ */
+
+.narrowView { display: none; }
+
+.fallback {
+  flex: 1;
+  min-block-size: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+/* The scene's own box, holding its no-WebGL sentence where the map would be. */
+.noScene {
+  position: relative;
+  flex-shrink: 0;
+  block-size: 360px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+}
+
+/* Spec §7: under 900 px the table is the view. The same line as the editor's
+   `WIDE_QUERY` (`editor-styles.test.ts` holds the two together): this draws
+   it before the client has asked, as the server renders the wide page. */
+@media (max-width: 899.98px) {
+  .editorArea { display: none; }
+  .narrowView {
+    display: block;
+    flex: 1;
+    min-block-size: 0;
+    overflow-y: auto;
+    padding: var(--space-4);
+  }
 }

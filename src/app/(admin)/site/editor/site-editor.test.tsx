@@ -26,7 +26,7 @@ function siteItem(over: Partial<EditorItem> & { id: string }): EditorItem {
 }
 
 function siteDoc(items: EditorItem[], plot: Partial<EditorPlot> = {}): EditorDoc {
-  return { plot: { id: 'p1', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0, ...plot }, items, defaults: {} };
+  return { plot: { id: 'p1', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0, ...plot }, items, lines: [], defaults: {} };
 }
 
 const { saveSiteChangesAction, loadSiteDocAction } = vi.hoisted(() => ({
@@ -199,6 +199,8 @@ function stubMedia({ wide = true, dark = false }: { wide?: boolean; dark?: boole
 
 beforeAll(() => {
   stubMedia();
+  // jsdom draws nothing; a context object is enough for the editor's one-time WebGL question.
+  HTMLCanvasElement.prototype.getContext = (() => ({ getExtension: () => null })) as unknown as HTMLCanvasElement['getContext'];
   // jsdom captures no pointer; the library's tiles only need the calls to exist.
   Element.prototype.setPointerCapture = () => {};
   Element.prototype.releasePointerCapture = () => {};
@@ -1106,11 +1108,12 @@ describe('shade by hour, played', () => {
 describe('a plot saved in the drawer', () => {
   const widened = () => ({ doc: siteDoc([siteItem({ id: 'a' })], { widthCm: 3000 }), version: 1 });
 
-  it('is taken up once, as the reload a conflict offers, when nothing is waiting to be saved', async () => {
+  it('is taken up once, through \'mine\', when nothing is waiting to be saved', async () => {
     const { rerenderWith } = renderEditor();
     await screen.findByTestId('scene');
     rerenderWith({ initial: widened() });
-    await waitFor(() => { expect(fake.resolveConflict).toHaveBeenCalledWith('theirs'); });
+    // 'mine', never 'theirs': an edit made while the map loads is replayed, not emptied out (hotfix H1).
+    await waitFor(() => { expect(fake.resolveConflict).toHaveBeenCalledWith('mine'); });
     rerenderWith({ initial: widened() });
     expect(fake.resolveConflict).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(CONFLICT)).toBeNull();
@@ -1204,5 +1207,82 @@ describe('the checks, the view controls and the minimap', () => {
     fireEvent.keyDown(stage(), { code: 'Escape' });
     expect(screen.queryByRole('dialog', { name: 'קיצורי מקלדת' })).toBeNull();
     expect(lastScene().store.selection).toEqual(['a']);
+  });
+});
+
+describe('what a narrow screen gets, and the picture of the view', () => {
+  const TABLE = <table aria-label="הפריטים במפה"><tbody><tr><td>אוהל 1</td></tr></tbody></table>;
+
+  /**
+   * The scene is lazy. Loaded once here, a scene the editor does mount is on
+   * screen at once — so an absent scene means it was not mounted, not that
+   * its chunk is still on the way.
+   */
+  async function sceneLoaded(): Promise<void> {
+    const wide = renderEditor();
+    await screen.findByTestId('scene');
+    wide.unmount();
+    scene.props.mockClear();
+  }
+
+  it('gives a screen under 900 px the table, and mounts no scene', async () => {
+    await sceneLoaded();
+    stubMedia({ wide: false });
+    renderEditor({ fallback: TABLE });
+    await act(async () => {});
+    expect(screen.getByRole('table', { name: 'הפריטים במפה' })).toBeTruthy();
+    expect(screen.queryByTestId('scene')).toBeNull();
+    expect(scene.props).not.toHaveBeenCalled();
+  });
+
+  /* Ruling P7: no shortcut acts on a map that is not shown. */
+  it('leaves every key to the page while the table is the view', () => {
+    stubMedia({ wide: false });
+    renderEditor({ fallback: TABLE });
+    const table = screen.getByRole('table', { name: 'הפריטים במפה' });
+    for (const keys of [
+      { code: 'Delete' }, { code: 'KeyR' }, { code: 'KeyL' }, { code: 'KeyD', metaKey: true },
+      { code: 'KeyZ', metaKey: true }, { code: 'Slash', shiftKey: true },
+    ]) {
+      const press = createEvent.keyDown(table, keys);
+      fireEvent(table, press);
+      expect(press.defaultPrevented).toBe(false);
+    }
+    // Nothing was removed, turned, locked or copied: the item is still the one inspected, and there is nothing to undo.
+    const inspector = within(screen.getByRole('region', { name: 'מאפיינים' }));
+    expect(inspector.getByRole('heading', { name: 'אוהל 1' })).toBeTruthy();
+    expect(inspector.getByRole('button', { name: 'נעילה' })).toBeTruthy();
+    expect(button('ביטול הפעולה האחרונה').disabled).toBe(true);
+    expect(screen.queryByRole('dialog', { name: 'קיצורי מקלדת' })).toBeNull();
+  });
+
+  it('offers no picture of a map that is not shown', () => {
+    stubMedia({ wide: false });
+    renderEditor({ fallback: TABLE });
+    expect(button('ייצוא תמונה').disabled).toBe(true);
+  });
+
+  it('saves a picture of the view as a PNG named for the season', async () => {
+    scene.handle.exportPng.mockReturnValue('data:image/png;base64,AAAA');
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.click(button('ייצוא תמונה'));
+    expect(click).toHaveBeenCalledTimes(1);
+    const link = click.mock.contexts[0] as HTMLAnchorElement;
+    expect(link.href).toBe('data:image/png;base64,AAAA');
+    expect(link.download).toBe('מפת הקאמפ ברן 26.png');
+    click.mockRestore();
+  });
+
+  it('says so, in Hebrew, when the picture cannot be made', async () => {
+    scene.handle.exportPng.mockReturnValue(null);
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    renderEditor();
+    await screen.findByTestId('scene');
+    fireEvent.click(button('ייצוא תמונה'));
+    expect(await screen.findByText('לא הצלחנו לשמור תמונה של המפה. אפשר לנסות שוב.')).toBeTruthy();
+    expect(click).not.toHaveBeenCalled();
+    click.mockRestore();
   });
 });

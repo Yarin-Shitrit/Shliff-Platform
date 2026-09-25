@@ -88,7 +88,7 @@ function make(over: Partial<EditorItem> & Pick<EditorItem, 'id' | 'kind'>): Edit
 }
 
 function docOf(items: EditorItem[]): EditorDoc {
-  return { plot: { id: 'p', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0 }, items, defaults: {} };
+  return { plot: { id: 'p', widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0 }, items, lines: [], defaults: {} };
 }
 
 /*

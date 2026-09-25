@@ -15,6 +15,7 @@ import { SourceChip } from '@/components/ui/source-chip';
 import { toPlaced } from '@/lib/site/derive';
 import { areaM2, formatArea, formatMetres, formatSize, shadeCounts } from '@/lib/site/geometry';
 import { KIND_GROUP_LABELS, KIND_GROUP_ORDER, SITE_KINDS, type SiteKindGroup } from '@/lib/site/kinds';
+import { LINE_KIND_ORDER, LINE_KINDS, lineTotals, unconnected } from '@/lib/site/lines';
 import type { EditorDoc } from '@/lib/site/editor/model';
 import type { EditorFlags } from '../use-editor-store';
 import { northText } from './north';
@@ -44,16 +45,19 @@ function problemsOf(doc: EditorDoc, flags: EditorFlags): Problem[] {
 }
 
 /** A name and the figure beside it, as one button that selects what the figure counts. */
-function Count({ name, figure, ids, onPickIds, group }: {
+function Count({ name, figure, ids, onPickIds, group, swatch }: {
   name: string;
   figure: string;
   ids: string[];
   onPickIds: (ids: string[]) => void;
   group?: SiteKindGroup;
+  /** A swatch class of the panel chrome other than a group's: a line kind's. */
+  swatch?: string;
 }): ReactElement {
+  const swatchClass = swatch ?? (group === undefined ? undefined : chrome[`g_${group}`]);
   return (
     <button type="button" className={styles.groupStat} onClick={() => { onPickIds(ids); }}>
-      {group === undefined ? null : <span className={cx(chrome.swatch, chrome[`g_${group}`])} aria-hidden="true" />}
+      {swatchClass === undefined ? null : <span className={cx(chrome.swatch, swatchClass)} aria-hidden="true" />}
       <span className={styles.groupName}>{name}</span>
       {' '}
       <span className={styles.groupCount}><bdi>{figure}</bdi></span>
@@ -74,6 +78,13 @@ export function PlotInspector({ doc, flags, plotHref, onPickIds }: {
   const groups = KIND_GROUP_ORDER
     .map((group) => ({ group, ids: items.filter((entry) => SITE_KINDS[entry.kind].group === group).map((entry) => entry.id) }))
     .filter((entry) => entry.ids.length > 0);
+  /* The pipes and cables (`lines.ts`): how many runs and how many metres per
+     utility — the figure the camp buys by — and the consumers no run reaches
+     yet, each a button that selects what it counts. */
+  const totals = lineTotals(doc);
+  const utilities = LINE_KIND_ORDER.map((kind) => ({
+    kind, total: totals[kind], missing: unconnected(doc, kind),
+  })).filter(({ total, missing }) => total.ids.length > 0 || missing.length > 0);
 
   return (
     <>
@@ -138,6 +149,45 @@ export function PlotInspector({ doc, flags, plotHref, onPickIds }: {
           <p className={chrome.hint}>
             רשת של 8 × 8 עם חצי מטר שוליים מצלה על 7 × 7. מה שיושב בשוליים מסומן, כי בשרטוט הוא נראה מכוסה.
           </p>
+        </div>
+
+        <div className={styles.divider} />
+        <div className={styles.section}>
+          <h3 className={styles.sectionTitle}>
+            צנרת וכבלים
+            <span className={styles.sectionMeta}>אורך על המפה</span>
+          </h3>
+          {utilities.length === 0 ? (
+            <p className={chrome.hint}>
+              אין עדיין צינורות או כבלים. בוחרים מיכל מים, מקלחת, כיור, גנרטור, מקרר או תאורה, ובמאפייני הפריט מחברים אותו.
+            </p>
+          ) : utilities.map(({ kind, total, missing }) => (
+            <div key={kind} className={styles.section}>
+              {total.ids.length === 0 ? null : (
+                <Count
+                  name={LINE_KINDS[kind].plural}
+                  figure={`${total.ids.length} · ${formatMetres(total.lengthCm)}`}
+                  ids={total.ids}
+                  onPickIds={onPickIds}
+                  swatch={chrome[`l_${kind}`]}
+                />
+              )}
+              {missing.length === 0 ? null : (
+                <Count
+                  name={`בלי חיבור ל${LINE_KINDS[kind].noun}`}
+                  figure={String(missing.length)}
+                  ids={missing}
+                  onPickIds={onPickIds}
+                  swatch={chrome[`l_${kind}`]}
+                />
+              )}
+            </div>
+          ))}
+          {utilities.length === 0 ? null : (
+            <p className={chrome.hint}>
+              האורך נמדד מקיר לקיר דרך נקודות הפנייה, בלי רזרבה לגובה, לחיבורים או לרפיון.
+            </p>
+          )}
         </div>
 
         <div className={styles.divider} />

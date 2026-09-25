@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { GateNote, GateOpens } from './gate-note';
+import { GateLink, GateNote, GateOpens } from './gate-note';
 
 describe('GateNote', () => {
   it('reads "2 ימים לפני השער", with the number isolated', () => {
@@ -54,5 +54,24 @@ describe('GateOpens', () => {
   it('renders nothing for a season with no date', () => {
     const { container } = render(<GateOpens gate={null} now={now} />);
     expect(container.textContent).toBe('');
+  });
+});
+
+/** Every figure links to what changes it — and an empty one invites filling it. */
+describe('GateLink', () => {
+  const now = new Date('2026-09-16T10:00:00+03:00');
+  const href = '/tasks?season=s26&act=season-date';
+
+  it('makes the countdown a link to the drawer that sets the date', () => {
+    render(<GateLink gate={new Date('2026-10-22T00:00:00+03:00')} href={href} now={now} />);
+    const link = screen.getByRole('link', { name: /השער נפתח בעוד/ });
+    expect(link.getAttribute('href')).toBe(href);
+    expect(link.textContent).toBe('השער נפתח בעוד 36 ימים');
+  });
+
+  it('invites setting the date when none is recorded, linking to the same drawer', () => {
+    render(<GateLink gate={null} href={href} now={now} />);
+    const link = screen.getByRole('link', { name: 'תאריך הפתיחה לא נרשם · קביעה' });
+    expect(link.getAttribute('href')).toBe(href);
   });
 });

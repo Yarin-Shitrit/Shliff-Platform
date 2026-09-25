@@ -43,6 +43,9 @@ const PATHS = {
      control points the same way on every remote in the world: not mirrored. */
   play: '<polygon points="6 3 20 12 6 21 6 3"/>',
   pause: '<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',
+  /* The two utilities a line carries (`lines.ts`): a drop for water, a bolt for power. */
+  drop: '<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>',
+  bolt: '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>',
 } as const;
 
 export type EditorIconName = keyof typeof PATHS;

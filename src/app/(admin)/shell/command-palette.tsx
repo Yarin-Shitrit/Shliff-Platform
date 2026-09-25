@@ -3,12 +3,19 @@
 /**
  * Client component: it owns open/closed state, a keyboard selection, and two
  * window-level shortcuts. None of that has a server answer.
+ *
+ * The trigger stays in the rail; the open palette (scrim and dialog) goes
+ * through `BodyPortal`. ⌘K and / open it from anywhere, including below
+ * 1024px with the rail closed — off-screen under a `transform` that would
+ * otherwise carry the `position: fixed` palette, and the focus it takes,
+ * off-screen with it.
  */
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Icon, type IconName } from '@/components/ui/icon';
 import type { PaletteHit } from '@/lib/search/palette';
 import { searchCommandPalette } from './actions';
+import { BodyPortal } from './body-portal';
 import styles from './command-palette.module.css';
 
 interface Row {
@@ -153,7 +160,7 @@ export function CommandPalette() {
       </button>
 
       {open && (
-        <>
+        <BodyPortal>
           <button type="button" className={styles.scrim} aria-label="סגירה" onClick={close} />
           <div className={styles.pop} role="dialog" aria-modal="true" aria-label="חיפוש ופעולות">
             <div className={styles.boxrow}>
@@ -205,7 +212,7 @@ export function CommandPalette() {
               <span className={styles.footnote}>חיפוש על פני אנשים, תנועות, סעיפים וקבצים</span>
             </div>
           </div>
-        </>
+        </BodyPortal>
       )}
     </>
   );
