@@ -336,15 +336,17 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
   /**
    * The one door every edit goes through — the panels, the keys, the
    * inspector's typed values and the scene's drags alike — so no edit can
-   * leave an older undo toast standing (P6).
+   * leave an older undo toast standing (P6). True when the store recorded a
+   * step: the ops meet the map as it is now, which can be newer than the one
+   * they were built from, so an edit says what it did only when it did.
    */
-  function runEdit(label: string, ops: SiteOp[], selection?: string[]): void {
+  function runEdit(label: string, ops: SiteOp[], selection?: string[]): boolean {
     if (ops.length === 0) {
       if (selection !== undefined) store.select(selection);
-      return;
+      return false;
     }
     historyMoved();
-    store.run(label, ops, selection);
+    return store.run(label, ops, selection);
   }
 
   function undo(): void {
@@ -398,7 +400,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     }
     const gone = new Set(ops.flatMap((op) => (op.type === 'remove' ? [op.id] : [])));
     const kept = items.filter((item) => !gone.has(item.id));
-    runEdit('הסרה', ops, kept.map((item) => item.id));
+    if (!runEdit('הסרה', ops, kept.map((item) => item.id))) return;
     const first = items.find((item) => gone.has(item.id));
     const said = gone.size === 1 && first !== undefined
       ? `הפריט ${isolate(first.label)} הוסר מהמפה`
@@ -413,7 +415,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     const items = selected();
     const { ops, ids } = duplicateOps(store.doc, store.selection, () => crypto.randomUUID());
     if (ops.length === 0) return;
-    runEdit('שכפול', ops, ids);
+    if (!runEdit('שכפול', ops, ids)) return;
     saidWithUndo(items.length === 1 ? `נוצר עותק של ${isolate(items[0].label)}` : `נוצרו ${ids.length} עותקים`);
   }
 
@@ -434,7 +436,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     const locking = !items.every((item) => item.locked);
     const ops = lockOps(store.doc, store.selection, locking);
     if (ops.length === 0) return;
-    runEdit(locking ? 'נעילה' : 'שחרור נעילה', ops);
+    if (!runEdit(locking ? 'נעילה' : 'שחרור נעילה', ops)) return;
     /* Ruling P12: the toast counts what changed — an item already locked (or
        already free) is not in `ops`, so it is neither counted nor named. */
     const only = ops.length === 1 && ops[0].type === 'update' ? findItem(store.doc, ops[0].id) : undefined;
@@ -467,7 +469,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     // The new item is selected, so its group — or the nets — is shown first (G2).
     revealFor([kind]);
     // Through a fixed noun: "הוספת" + the kind's name would read "הוספת אחר" for the kind אחר.
-    runEdit(`הוספת פריט מסוג ${SITE_KINDS[kind].label}`, ops, [id]);
+    if (!runEdit(`הוספת פריט מסוג ${SITE_KINDS[kind].label}`, ops, [id])) return;
     saidWithUndo(`הפריט ${isolate(added.item.label)} נוסף למפה`);
   }
   // ── end of edits ──────────────────────────────────────────────────────

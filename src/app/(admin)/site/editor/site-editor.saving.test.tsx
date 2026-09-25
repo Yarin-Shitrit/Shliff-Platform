@@ -227,6 +227,33 @@ describe('saving, through the store and the queue', () => {
     }
   });
 
+  /*
+   * Review minor (H1 5), the P6 blind spot: 'mine' has just landed a map in
+   * which the other lead locked the tent, but the editor has not re-rendered
+   * yet — a Delete pressed in that gap builds its remove from the map it last
+   * drew. The store skips it (the lock holds) and records nothing, so there
+   * is nothing to say "removed" about, and no ביטול to offer.
+   */
+  it('says nothing was removed when the store recorded nothing — a remove the map under it had just made impossible', async () => {
+    saveSiteChangesAction.mockResolvedValueOnce({ ok: false, reason: 'conflict', version: 5 });
+    let settle: (value: unknown) => void = () => {};
+    loadSiteDocAction.mockReturnValue(new Promise((resolve) => { settle = resolve; }));
+    await renderEditor();
+    fireEvent.keyDown(stage(), { code: 'ArrowRight' });
+    expect(await screen.findByText(CONFLICT, undefined, WAIT)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'שמירת השינויים שלי מעליה' }));
+    await act(async () => {
+      settle({ ok: true, value: { doc: siteDoc([siteItem({ id: 'a', locked: true })]), version: 5 } });
+      // Let 'mine' land in the store — and the Delete come before any re-render.
+      await Promise.resolve();
+      await Promise.resolve();
+      fireEvent.keyDown(stage(), { code: 'Delete' });
+    });
+    expect(firstItem()).toMatchObject({ id: 'a', locked: true });
+    expect(screen.queryByText(/הוסר מהמפה/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'ביטול' })).toBeNull();
+  });
+
   it('turns a stale version into a choice, and the other lead’s map replaces mine when chosen', async () => {
     saveSiteChangesAction.mockResolvedValue({ ok: false, reason: 'conflict', version: 4 });
     loadSiteDocAction.mockResolvedValue({

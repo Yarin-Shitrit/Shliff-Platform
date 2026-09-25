@@ -246,7 +246,8 @@ export interface EditorStore {
   doc: EditorDoc; selection: string[]; flags: EditorFlags;
   canUndo: boolean; canRedo: boolean;
   save: QueueSnapshot; conflict: { version: number } | null; notice: string | null;
-  run(label: string, ops: SiteOp[], selection?: string[]): void;   // applies, records history (with invertOps), enqueues
+  run(label: string, ops: SiteOp[], selection?: string[]): boolean; // applies, records history (with invertOps), enqueues;
+                                                                    // true when a step was recorded (additive): a caller reports an edit only then
   undo(): string | null; redo(): string | null;                   // the entry's label, for a toast
   select(ids: string[]): void;
   resolveConflict(choice: 'theirs' | 'mine'): Promise<void>;

@@ -47,7 +47,8 @@ export interface EditorStore {
   save: QueueSnapshot;
   conflict: { version: number } | null;
   notice: string | null;
-  run(label: string, ops: SiteOp[], selection?: string[]): void;
+  /** Applies, records and enqueues; true when a step was recorded (review minor, additive). */
+  run(label: string, ops: SiteOp[], selection?: string[]): boolean;
   undo(): string | null;
   redo(): string | null;
   select(ids: string[]): void;
@@ -239,13 +240,17 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
     };
   }, [initial, commit]); // `commit` is stable: the queue is still made once per `initial`
 
-  const run = useCallback((label: string, ops: SiteOp[], selection?: string[]) => {
+  /* True when a step was recorded. The ops are checked against the map as it
+     is now, which can be newer than the one the caller built them from (a
+     conflict answer landing between two renders): a caller that says what
+     its edit did says so only when there was one (review minor, P6). */
+  const run = useCallback((label: string, ops: SiteOp[], selection?: string[]): boolean => {
     const current = latest.current;
     const { doc, applied } = applyEach(current.doc, ops);
     const nextSelection = existing(doc, selection ?? current.selection);
     if (applied.length === 0) {
       if (selection !== undefined) commit({ ...current, selection: nextSelection });
-      return;
+      return false;
     }
     const inverse = invertOps(current.doc, applied);
     commit({
@@ -255,6 +260,7 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
       history: record(current.history, { label, ops: applied, inverse }),
     });
     queueRef.current?.enqueue(applied);
+    return true;
   }, [commit]);
 
   const step = useCallback((direction: 'undo' | 'redo'): string | null => {

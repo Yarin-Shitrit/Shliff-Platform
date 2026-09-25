@@ -131,6 +131,19 @@ describe('the editor store', () => {
     expect(save).not.toHaveBeenCalled();
   });
 
+  it('says whether a run recorded a step, so a caller never reports an edit that did not happen', () => {
+    const { result } = setup({
+      doc: doc([item({ id: A, label: 'אוהל 1', locked: true }), item({ id: B, label: 'אוהל 2', xCm: 600 })]),
+    });
+    let recorded: boolean | null = null;
+    act(() => { recorded = result.current.run('הזזה', [moveTo(B, 900)]); });
+    expect(recorded).toBe(true);
+    act(() => { recorded = result.current.run('הסרה', [{ type: 'remove', id: A }]); }); // the lock holds
+    expect(recorded).toBe(false);
+    act(() => { recorded = result.current.run('הזזה', [moveTo('nobody', 5)]); });
+    expect(recorded).toBe(false);
+  });
+
   it('records nothing and sends nothing for an edit that changes nothing', async () => {
     const { result, save } = setup();
     act(() => { result.current.run('הזזה', [moveTo('nobody', 5)]); });

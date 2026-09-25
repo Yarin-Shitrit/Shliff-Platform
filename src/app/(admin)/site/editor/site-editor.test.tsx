@@ -160,6 +160,7 @@ vi.mock('./use-editor-store', async () => {
           selection: selection ?? current.selection,
           past: history.record(current.past, { label, ops, inverse: invertOps(current.doc, ops) }),
         });
+        return ops.length > 0; // `record` ignores an entry with no ops
       },
       undo: () => step(history.undo(latest.current.past)),
       redo: () => step(history.redo(latest.current.past)),
