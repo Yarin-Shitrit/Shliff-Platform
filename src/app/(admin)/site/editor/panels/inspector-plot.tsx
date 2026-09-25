@@ -16,7 +16,7 @@ import { toPlaced } from '@/lib/site/derive';
 import { areaM2, formatArea, formatMetres, formatSize, shadeCounts } from '@/lib/site/geometry';
 import { KIND_GROUP_LABELS, KIND_GROUP_ORDER, SITE_KINDS, type SiteKindGroup } from '@/lib/site/kinds';
 import { LINE_KIND_ORDER, LINE_KINDS, lineTotals, unconnected } from '@/lib/site/lines';
-import type { EditorDoc } from '@/lib/site/editor/model';
+import { underlayOf, type EditorDoc, type EditorUnderlay } from '@/lib/site/editor/model';
 import type { EditorFlags } from '../use-editor-store';
 import { EMPTY_MAP } from '../notices';
 import { northText } from './north';
@@ -66,11 +66,24 @@ function Count({ name, figure, ids, onPickIds, group, swatch }: {
   );
 }
 
-export function PlotInspector({ doc, flags, plotHref, onPickIds }: {
+/**
+ * The picture's row (spec §18.1): an invitation when there is none, its
+ * missing scale, or what it was calibrated from. Each opens the picture's
+ * card, since a figure links to what changes it.
+ */
+function underlayText(underlay: EditorUnderlay | null): string {
+  if (underlay === null) return 'העלאת תמונה';
+  if (underlay.calibration === null) return 'לא כוילה';
+  return `כויל לפי ⁦${formatMetres(underlay.calibration.distanceCm)}⁩`;
+}
+
+export function PlotInspector({ doc, flags, plotHref, onPickIds, onUnderlay }: {
   doc: EditorDoc;
   flags: EditorFlags;
   plotHref: string;
   onPickIds: (ids: string[]) => void;
+  /** Opens the picture's card (spec §18.1). Without it, no row. */
+  onUnderlay?: () => void;
 }): ReactElement {
   const { plot, items } = doc;
   const shade = shadeCounts(items.map(toPlaced));
@@ -103,6 +116,16 @@ export function PlotInspector({ doc, flags, plotHref, onPickIds }: {
           <dd><Link href={plotHref} className={chrome.link}><bdi>{formatMetres(plot.gridCm)}</bdi></Link></dd>
           <dt>צפון</dt>
           <dd><Link href={plotHref} className={chrome.link}><bdi>{northText(plot.northDeg)}</bdi></Link></dd>
+          {onUnderlay === undefined ? null : (
+            <>
+              <dt>תמונת רקע</dt>
+              <dd>
+                <button type="button" className={chrome.link} onClick={onUnderlay}>
+                  <bdi>{underlayText(underlayOf(doc))}</bdi>
+                </button>
+              </dd>
+            </>
+          )}
         </dl>
 
         <div className={styles.divider} />

@@ -35,7 +35,7 @@ import { formatSize, snap } from '@/lib/site/geometry';
 import { nearestFreeSpot } from '@/lib/site/editor/placement';
 import { KIND_GROUP_ORDER, SITE_KINDS, type SiteKindGroup } from '@/lib/site/kinds';
 import { LINE_KIND_ORDER, LINE_KINDS, lineLengthCm } from '@/lib/site/lines';
-import { findItem, findLine, type EditorDoc, type EditorItem, type EditorLine } from '@/lib/site/editor/model';
+import { findItem, findLine, underlayOf, type EditorDoc, type EditorItem, type EditorLine } from '@/lib/site/editor/model';
 import type { SiteOp } from '@/lib/site/editor/ops';
 import {
   addLineOps, addOps, duplicateOps, lockOps, moveOps, removeLineOps, removeOps, splitOps, turnOps,
@@ -69,6 +69,8 @@ import { ViewControls } from './panels/view-controls';
 import { SelectionBar } from './panels/selection-bar';
 import { ShortcutsCard } from './panels/shortcuts-card';
 import { SunCard } from './panels/sun-card';
+import { UnderlayCard } from './panels/underlay-card';
+import { useUnderlay } from './use-underlay';
 import chrome from './panels/panel.module.css';
 import inspectorStyles from './panels/inspector.module.css';
 import actionStyles from './panels/selection-actions.module.css';
@@ -719,6 +721,20 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     if (!runEdit(`הוספת פריט מסוג ${SITE_KINDS[kind].label}`, ops, [id])) return;
     saidWithUndo(`הפריט ${isolate(added.item.label)} נוסף למפה`);
   }
+
+  /* The picture under the map (spec §16–19): its card, its two tools and
+     their keys. Its edits go through `runEdit`, like every other edit, so
+     each is one undo step and takes older undo toasts away (P6). */
+  const picture = useUnderlay({
+    doc: store.doc,
+    ui,
+    yaw: view.yaw,
+    patchUi,
+    runEdit,
+    saidWithUndo,
+    select: store.select,
+    retry: () => { sceneRef.current?.retryUnderlay(); },
+  });
   // ── end of edits ──────────────────────────────────────────────────────
 
   /** Over the scene itself, and not over a panel floating on it (`data-panel`). */
@@ -871,7 +887,15 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
       return <LinesInspector doc={store.doc} lines={lines} onPickIds={pickIds} footer={removal} />;
     }
     if (items.length === 0) {
-      return <PlotInspector doc={store.doc} flags={store.flags} plotHref={plotHref} onPickIds={pickIds} />;
+      return (
+        <PlotInspector
+          doc={store.doc}
+          flags={store.flags}
+          plotHref={plotHref}
+          onPickIds={pickIds}
+          onUnderlay={() => { picture.setOpen(true); }}
+        />
+      );
     }
     const actions = (
       <SelectionActions
@@ -933,7 +957,29 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     show({ message: EXPORTED, tone: 'ok' });
   }
 
+  /**
+   * While the picture is calibrated or aligned (spec §18), the keys are its
+   * own. Esc ends the tool. Aligning, the arrows move the picture (10 cm, a
+   * metre with Shift), and undo, redo and the view's keys work as ever.
+   * Calibrating, only the view's keys do: the lead is marking two points in
+   * plan. A key that acts on items does nothing, since nothing is selected.
+   * Answers whether it took the key.
+   */
+  function runPictureShortcut(shortcut: Shortcut): boolean {
+    if (typeof shortcut === 'object') {
+      if (ui.tool === 'align') picture.nudge(shortcut.arrow, shortcut.big);
+      return true;
+    }
+    if (shortcut === 'escape') return picture.escape();
+    const viewKeys: ReadonlyArray<Shortcut> = ['fit', 'viewLeft', 'viewRight', 'zoomIn', 'zoomOut', 'keys'];
+    const alignKeys: ReadonlyArray<Shortcut> = ['undo', 'redo', 'plan', '3d'];
+    if (viewKeys.includes(shortcut)) return false;
+    if (ui.tool === 'align' && alignKeys.includes(shortcut)) return false;
+    return true;
+  }
+
   function runShortcut(shortcut: Shortcut): void {
+    if ((ui.tool === 'calibrate' || ui.tool === 'align') && runPictureShortcut(shortcut)) return;
     if (typeof shortcut === 'object') {
       nudge(shortcut.arrow, shortcut.big);
       return;
@@ -1017,6 +1063,8 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
       sunDate={sunDay}
       onView={onView}
       onNotice={onNotice}
+      underlayMarks={picture.marks}
+      onUnderlay={picture.onSceneEvent}
     />
   );
 
@@ -1101,6 +1149,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
         canRedo={store.canRedo}
         onUndo={undo}
         onRedo={redo}
+        hasUnderlay={underlayOf(store.doc) !== null}
       />
       <section className={styles.stage} aria-label="מפת הקאמפ" tabIndex={-1} ref={stageRef}>
         {wide ? <div className={styles.scene}>{scene}</div> : null}
@@ -1163,6 +1212,28 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
           onRemove={removeSelection}
         />
         <div className={styles.cards}>
+          {picture.open ? (
+            <UnderlayCard
+              underlay={underlayOf(store.doc)}
+              status={picture.status}
+              view={ui.underlay}
+              tool={ui.tool}
+              sending={picture.sending}
+              uploadError={picture.uploadError}
+              draft={picture.draft}
+              onFile={picture.sendFile}
+              onCalibrate={picture.startCalibration}
+              onApplyCalibration={picture.applyCalibration}
+              onCancelCalibration={picture.cancelCalibration}
+              onAlign={picture.startAlign}
+              onFinishAlign={picture.finishAlign}
+              onTurn={picture.turn}
+              onOpacity={picture.setOpacity}
+              onRemove={picture.remove}
+              onRetry={picture.retry}
+              onClose={picture.close}
+            />
+          ) : null}
           {ui.sun ? (
             <SunCard
               hour={ui.hour}
