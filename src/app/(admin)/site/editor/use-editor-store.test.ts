@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
-import type { EditorDoc, EditorItem } from '@/lib/site/editor/model';
+import type { EditorDoc, EditorItem, EditorLine } from '@/lib/site/editor/model';
 import type { SaveResult, SiteOp } from '@/lib/site/editor/ops';
 import { useEditorStore, type EditorStoreInit } from './use-editor-store';
 
@@ -216,6 +216,33 @@ describe('the editor store', () => {
     expect(result.current.selection).toEqual([A]);
     expect(result.current.notice).toBe(goneNotice('אוהל 2'));
     expect(result.current.save).toMatchObject({ status: 'saved', version: 1, pending: 0 });
+  });
+
+  /* #25 fix round, Minor 9: on the server an item's lines go with it (the
+     schema cascades). The store dropped the skipped item but kept its cable,
+     drawn to nothing. */
+  it('drops the lines of an item the server skipped because another lead removed it', async () => {
+    const save = vi.fn<EditorStoreInit['save']>(async (base) => ({ ok: true, version: base + 1, skipped: [B] }));
+    const cable: EditorLine = { id: 'cable', kind: 'power', label: 'כבל חשמל 1', fromId: A, toId: B, points: [], sort: 0, notes: null };
+    const other: EditorLine = { id: 'pipe', kind: 'water', label: 'צינור מים 1', fromId: A, toId: C, points: [], sort: 1, notes: null };
+    const { result } = setup({
+      save,
+      doc: {
+        ...doc([
+          item({ id: A, label: 'מקרר 1', kind: 'fridge' }),
+          item({ id: B, label: 'גנרטור 1', kind: 'generator', xCm: 600 }),
+          item({ id: C, label: 'כיור 1', kind: 'sink', xCm: 1200 }),
+        ]),
+        lines: [cable, other],
+      },
+    });
+    act(() => { result.current.select([A, 'cable']); });
+    act(() => { result.current.run('הזזה', [moveTo(B, 900)]); });
+    await waitForSave();
+    expect(result.current.doc.items.map((entry) => entry.id)).toEqual([A, C]);
+    expect(result.current.doc.lines.map((line) => line.id)).toEqual(['pipe']);
+    expect(result.current.selection).not.toContain('cable');
+    expect(result.current.notice).toBe(goneNotice('גנרטור 1'));
   });
 
   it('says nothing about a skipped removal of an item already gone here too', async () => {

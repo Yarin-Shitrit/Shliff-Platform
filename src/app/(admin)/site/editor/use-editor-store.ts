@@ -241,7 +241,12 @@ export function useEditorStore(init: EditorStoreInit): EditorStore {
         const gone = new Set(ids.filter((id) => findItem(current.doc, id) !== undefined));
         if (gone.size === 0) return;
         const names = current.doc.items.filter((entry) => gone.has(entry.id)).map((entry) => entry.label);
-        const doc = { ...current.doc, items: current.doc.items.filter((entry) => !gone.has(entry.id)) };
+        // Their lines went with them on the server (the schema cascades): here too (#25 fix round, Minor 9).
+        const doc = {
+          ...current.doc,
+          items: current.doc.items.filter((entry) => !gone.has(entry.id)),
+          lines: current.doc.lines.filter((line) => !gone.has(line.fromId) && !gone.has(line.toId)),
+        };
         commit({ ...current, doc, selection: existing(doc, current.selection), notice: goneSentence(names) });
       },
     });
