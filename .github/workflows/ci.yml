@@ -5,10 +5,32 @@ name: CI
 
 # Pushes to main, and every pull request. A feature branch without a PR is not
 # tested -- open the PR early if you want the signal.
+#
+# Not for a change that touches only prose. Nothing under docs/ and no *.md is
+# read by a test, a build or a route -- next.config.ts names docs/reference-data/
+# only to keep it OUT of every traced bundle, and the build job's check below
+# reads the trace manifests, not the folder -- so a docs-only run cannot fail
+# for a reason the previous run did not already have. It still costs about
+# twenty billed minutes: every job is rounded up to the whole minute, and there
+# are eleven. This repository is private, so those minutes are paid for, and on
+# 2026-09-26 the month's allowance ran out (docs/deploy.md §6: every run from
+# ~10:30 UTC failed in seconds with no runner), with six of the day's last eight
+# runs on docs-only commits. Two consequences worth knowing:
+#   a docs-only PR shows no CI check at all -- not a green one, none;
+#   a docs-only merge to main runs no CI, so deploy.yml (workflow_run on CI)
+#     does not fire and production is untouched. Right, since nothing under
+#     docs/ ships; deploy.yml's workflow_dispatch is the path if you need one.
+# A commit that touches docs/ AND anything else runs the whole workflow.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
 
 # A new push to the same branch cancels the run it superseded. This repository
 # is private, so Actions minutes are billed.

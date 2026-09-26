@@ -59,6 +59,12 @@ is not evidence.
 Normally: **merge to `main`**. CI runs the suite; when it goes green, the deploy
 workflow fires on `workflow_run` and ships production.
 
+A merge that touches only `docs/` or `*.md` files runs no CI at all — `ci.yml`
+skips those paths, because nothing under `docs/` is read by a test or shipped,
+and a private repository's runner minutes are paid for. So it fires no deploy
+either, and production stays on the build it had. If you do need a deploy
+after such a merge, use the manual path below.
+
 Manually, without a commit:
 
 ```sh
