@@ -72,7 +72,9 @@ import { SelectionBar } from './panels/selection-bar';
 import { ShortcutsCard } from './panels/shortcuts-card';
 import { SunCard } from './panels/sun-card';
 import { UnderlayCard } from './panels/underlay-card';
+import { PlansCard } from './panels/plans-card';
 import { useUnderlay } from './use-underlay';
+import { useSavedPlans } from './use-saved-plans';
 import chrome from './panels/panel.module.css';
 import inspectorStyles from './panels/inspector.module.css';
 import actionStyles from './panels/selection-actions.module.css';
@@ -777,6 +779,20 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     select: store.select,
     retry: () => { sceneRef.current?.retryUnderlay(); },
   });
+
+  /* Saved plans (`use-saved-plans.ts`): the map kept under a name, and
+     loaded back as one edit through `runEdit` — one undo step, saved like
+     any other, an older undo toast taken away (P6). */
+  const buildTaskIds = useMemo(() => new Set(buildTasks.map((task) => task.id)), [buildTasks]);
+  const plans = useSavedPlans({
+    planId,
+    doc: store.doc,
+    buildTaskIds,
+    runEdit,
+    saidWithUndo,
+    say: (message, tone) => { show({ message, tone }); },
+    onStaleBuild: () => { setStaleBuild(true); },
+  });
   // ── end of edits ──────────────────────────────────────────────────────
 
   /** Over the scene itself, and not over a panel floating on it (`data-panel`). */
@@ -1328,6 +1344,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
               onPickIds={pickIds}
             />
           ) : null}
+          {plans.open ? <PlansCard {...plans.card} plot={store.doc.plot} plotHref={plotHref} /> : null}
           {keysOpen ? <ShortcutsCard onClose={() => { setKeysOpen(false); }} /> : null}
         </div>
         {/* floating panels, over the scene */}
@@ -1352,6 +1369,12 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
                 client has asked the width — not under 900 px either. */}
             {tableMode ? null : (
               <span className={styles.wideOnly}>
+                {/* The card floats over the scene, so the button that opens it goes where the scene is. */}
+                <Button size="sm" onClick={() => { plans.setOpen(!plans.open); }}>
+                  <Icon name="history" size={14} />
+                  תוכניות שמורות
+                </Button>
+                {' '}
                 <Button size="sm" onClick={() => { void exportPicture(); }}>
                   <Icon name="download" size={14} />
                   ייצוא תמונה

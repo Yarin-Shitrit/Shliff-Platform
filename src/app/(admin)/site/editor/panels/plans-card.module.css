@@ -1,0 +1,90 @@
+/*
+ * The saved plans' card (תוכניות שמורות): its width, the save row and the
+ * list. The card itself, the hint, meta and invitation lines and the links
+ * are the shared `panel.module.css` (ruling W10).
+ *
+ * Tokens only, logical properties throughout (A10).
+ */
+
+.card { inline-size: 360px; }
+
+.title {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-dense);
+  font-weight: 600;
+}
+
+.saveRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.input {
+  flex: 1;
+  min-inline-size: 0;
+  block-size: 32px;
+  padding-inline: var(--space-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: var(--text-dense);
+}
+.input:focus-visible { border-color: var(--focus); }
+.input[aria-invalid='true'] { border-color: var(--bad); }
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  max-block-size: 320px;
+  overflow-y: auto;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-block: 8px;
+  border-block-start: 1px solid var(--line);
+}
+.row:first-child { border-block-start: 0; }
+
+.rowHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.name {
+  flex: 1;
+  min-inline-size: 0;
+  color: var(--ink);
+  font-size: var(--text-dense);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.rowActions {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 2px;
+}
+
+/* The plot has changed since the plan was saved: said on its row, with the figure that opens the plot settings. */
+.plotNote {
+  margin: 0;
+  color: var(--warn);
+  font-size: var(--text-label);
+}
+
+.error {
+  margin: 0;
+  color: var(--bad);
+  font-size: var(--text-meta);
+}

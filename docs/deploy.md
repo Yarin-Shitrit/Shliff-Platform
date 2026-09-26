@@ -490,6 +490,43 @@ is the number of sofas and armchairs standing taller than wide. Record the
 measured numbers here when it is done. Not applied to the local `shliff-pg`
 either when this was written.
 
+### Migration `0019` — not yet applied to Railway
+
+`0019_site_plan_snapshots` is the camp map's saved plans (תוכניות שמורות): one
+new, empty table, `site_plan_snapshots`, with a foreign key to `site_plans`
+that cascades on delete, and nothing else — no column on any existing table.
+A row is a map kept under a name, as one jsonb, and the editor loads it back
+as ordinary edits (`src/lib/site/snapshots.ts`, `src/lib/site/editor/restore.ts`).
+Additive and touched by nothing but the card that saves and lists plans: until
+it is on Railway, opening that card on `/site` answers a Hebrew error and every
+other part of the map keeps working. Applying it is the camp lead's step, by
+the same procedure as `0018`, after whichever earlier migrations are still
+pending — the order is migration first, merge second.
+
+It was generated on top of `0018_site_item_facing` and must be applied after it.
+
+Read-only check (before: no row; after: `site_plan_snapshots`):
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" postgres:18-alpine sh -c '
+  psql "$R" -tAc "select table_name from information_schema.tables
+    where table_schema='"'"'public'"'"' and table_name='"'"'site_plan_snapshots'"'"'"'
+```
+
+Then:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine sh -euc '
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0019_site_plan_snapshots.sql
+'
+```
+
+Afterwards the query above prints `site_plan_snapshots`, and
+`select count(*) from site_plan_snapshots` is 0. Record the measured numbers
+here when it is done. On the local `shliff-pg` the table was created on
+2026-09-26 from the same SQL under its earlier working name, so the query
+already prints it there; only Railway is pending.
+
 ### Copying the laptop's database up
 
 The local container is Postgres **16**; Railway is **18**. Dump with the

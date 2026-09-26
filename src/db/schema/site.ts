@@ -246,3 +246,36 @@ export const siteUnderlays = pgTable('site_underlays', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   updatedBy: text('updated_by'),
 });
+
+/**
+ * A map as it stood at one moment, kept under a name (migration `0018`): a
+ * lead tries one arrangement, saves it, tries another, and picks between them
+ * later. What is kept is the items and the lines as the editor held them —
+ * the same shape it saves through (`EditorItem`, `EditorLine`), with the
+ * plot's size, grid and north beside them so the card can say when the plot
+ * has changed since. One jsonb, never rows of its own: nothing is joined,
+ * looked up or edited in a kept plan; it is read back whole, and the editor
+ * works out on its own what differs from the map on screen
+ * (`src/lib/site/editor/restore.ts`).
+ *
+ * Not kept: the picture under the map, the camp's kind defaults, and the
+ * task links' titles. The picture is the plot's, not the arrangement's; the
+ * defaults are the camp's; a task's title lives on the task.
+ *
+ * Gone with the plan. Never changed once written: a saved plan is a fixed
+ * point to go back to, and a row that could drift would be a second map.
+ */
+export const sitePlanSnapshots = pgTable('site_plan_snapshots', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  planId: uuid('plan_id').notNull()
+    .references(() => sitePlans.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  /** `SnapshotContent` (`src/lib/site/snapshots.ts`), written here so the schema imports nothing from `lib`. */
+  content: jsonb('content').$type<{
+    plot: { widthCm: number; depthCm: number; gridCm: number; northDeg: number };
+    items: unknown[];
+    lines: unknown[];
+  }>().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  createdBy: text('created_by'),
+});
