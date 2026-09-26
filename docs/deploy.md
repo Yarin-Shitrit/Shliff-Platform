@@ -311,7 +311,7 @@ tree (`scripts/land-camp-layout.ts`, actor `yarin`): 68 items — the sink at
 overlapping pairs. The map it replaced was at version 2, so one editor save
 made since the morning's landing went with it.
 
-### Migration `0014` — generated 2026-09-25, **not yet applied**
+### Migration `0014` — applied to Railway by 2026-09-26
 
 `0014_site_rope_angles` is the shade nets' rope angle (spec
 `2026-09-25-site-map-pipes-ropes-underlay-design.md` §13): two nullable
@@ -336,13 +336,11 @@ docker run --rm -e R="$RAILWAY_URL" postgres:18-alpine sh -c '
   psql "$R" -tAc "select count(*) from information_schema.columns where column_name='"'"'rope_angle_deg'"'"'"'
 ```
 
-Record the measured numbers here when it is done.
+Measured on 2026-09-26, before the `0016`–`0019` batch below: the count was
+already `2`. It was applied to Railway between 2026-09-25 and then, and the
+step was not recorded here at the time. The local `shliff-pg` also carries it.
 
-Not yet applied to the local `shliff-pg` either: it was stopped to relieve memory
-pressure when this was written. Apply it there with `psql -1 -v ON_ERROR_STOP=1 -f`
-once the camp lead restarts it.
-
-### Migration `0015` — not yet applied to Railway
+### Migration `0015` — applied to Railway by 2026-09-26
 
 `0015_site_underlays` is Part C of the camp map's extensions, the image to
 trace (spec
@@ -384,7 +382,11 @@ Afterwards the query above prints `site_underlays`. The parity check at the
 top of this section must come back empty against a local database that also
 carries `0015`.
 
-### Migration `0016` — not yet applied to Railway
+Measured on 2026-09-26, before the `0016`–`0019` batch below: the table was
+already there. As with `0014`, the step itself was not recorded here when it
+happened. The local `shliff-pg` also carries it.
+
+### Migration `0016` — applied to Railway on 2026-09-26
 
 `0016_warehouse_boxes` is the warehouse's boxes: a new, empty table
 `inventory_boxes` (a name, a place, a note) and one nullable column
@@ -414,11 +416,13 @@ docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine s
 ```
 
 Afterwards the query above prints `inventory_boxes`, and
-`select count(*) from inventory_items` is what it was before. Record the
-measured numbers here when it is done. Not applied to the local `shliff-pg`
-either when this was written.
+`select count(*) from inventory_items` is what it was before.
 
-### Migration `0017` — not yet applied to Railway
+Applied on 2026-09-26 as the first of the `0016`–`0019` batch (see the record
+after `0019`): `CREATE TABLE`, `ALTER TABLE`, `ALTER TABLE`; `inventory_items`
+was 16 rows before and 16 after. The local `shliff-pg` carries it too.
+
+### Migration `0017` — applied to Railway on 2026-09-26
 
 `0017_site_item_groups` is the camp map's item groups: one nullable column,
 `site_items.group_id uuid`, and nothing else — no table, no foreign key.
@@ -447,11 +451,12 @@ docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine s
 ```
 
 Afterwards the query above prints `group_id`, and
-`select count(*) from site_items` is what it was before. Record the measured
-numbers here when it is done. Not applied to the local `shliff-pg` either
-when this was written.
+`select count(*) from site_items` is what it was before.
 
-### Migration `0018` — not yet applied to Railway
+Applied on 2026-09-26 in the `0016`–`0019` batch: `ALTER TABLE`; `site_items`
+was 69 rows before and 69 after. The local `shliff-pg` carries it too.
+
+### Migration `0018` — applied to Railway on 2026-09-26
 
 `0018_site_item_facing` is the camp map's fourth bit of a turn: one column,
 `site_items.facing integer not null default 0`, quarter turns clockwise from
@@ -486,11 +491,13 @@ docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine s
 
 Afterwards the query above prints `facing`, `select count(*) from site_items`
 is what it was before, and `select count(*) from site_items where facing = 3`
-is the number of sofas and armchairs standing taller than wide. Record the
-measured numbers here when it is done. Not applied to the local `shliff-pg`
-either when this was written.
+is the number of sofas and armchairs standing taller than wide.
 
-### Migration `0019` — not yet applied to Railway
+Applied on 2026-09-26 in the `0016`–`0019` batch: `ALTER TABLE`, then
+`UPDATE 12` — twelve sofas or armchairs took `facing = 3`; `site_items` was 69
+rows before and 69 after. The local `shliff-pg` carries it too.
+
+### Migration `0019` — applied to Railway on 2026-09-26
 
 `0019_site_plan_snapshots` is the camp map's saved plans (תוכניות שמורות): one
 new, empty table, `site_plan_snapshots`, with a foreign key to `site_plans`
@@ -522,10 +529,55 @@ docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine s
 ```
 
 Afterwards the query above prints `site_plan_snapshots`, and
-`select count(*) from site_plan_snapshots` is 0. Record the measured numbers
-here when it is done. On the local `shliff-pg` the table was created on
-2026-09-26 from the same SQL under its earlier working name, so the query
-already prints it there; only Railway is pending.
+`select count(*) from site_plan_snapshots` is 0. On the local `shliff-pg` the
+table was created on 2026-09-26 from the same SQL under its earlier working
+name, so the query already prints it there.
+
+Applied on 2026-09-26 as the last of the `0016`–`0019` batch: `CREATE TABLE`,
+`ALTER TABLE`; the table is empty by construction.
+
+### The `0016`–`0019` batch — applied to Railway on 2026-09-26
+
+All four merged to `main` on 2026-09-26 (#40, #41, #42, #43) with none of
+them on Railway — the rule in §2, migration first, merge second, was broken
+four times in one day. Production did **not** break, and only by accident:
+GitHub Actions was billing-blocked from about 10:30 UTC that day, every CI
+run failed with zero steps, and the deploy workflow gates on a green CI. So
+Vercel stayed on `ead711e` (#39, deployed 09:07 UTC), whose code needs
+nothing past `0015`. Had CI been healthy, the first of the four merges would
+have shipped code that selects `box_id` against a database without it, and
+every load of `/logistics/warehouse` would have thrown; `/site` after #41.
+The database was brought up to `0019` before the deploys could resume, so
+the next deploy of `main` finds every column it reads.
+
+The read-only check found `0014` and `0015` present and the other four
+absent. The four were then applied in order with the runbook's own command,
+one transaction per file, `ON_ERROR_STOP=1`, from a clean checkout of
+`main`. Row counts before and after, unchanged:
+
+| Table | Before | After |
+|---|---|---|
+| `site_plans` | 1 | 1 |
+| `site_items` | 69 | 69 |
+| `inventory_items` | 16 | 16 |
+
+The check that decides "is it on Railway?" for each of the six, read-only,
+in one query — re-run it rather than trusting this section:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" postgres:18-alpine sh -c '
+psql "$R" -tAc "
+select '"'"'0014'"'"', count(*) from information_schema.columns where column_name='"'"'rope_angle_deg'"'"'
+union all select '"'"'0015'"'"', count(*) from information_schema.tables where table_name='"'"'site_underlays'"'"'
+union all select '"'"'0016'"'"', count(*) from information_schema.tables where table_name='"'"'inventory_boxes'"'"'
+union all select '"'"'0017'"'"', count(*) from information_schema.columns where table_name='"'"'site_items'"'"' and column_name='"'"'group_id'"'"'
+union all select '"'"'0018'"'"', count(*) from information_schema.columns where table_name='"'"'site_items'"'"' and column_name='"'"'facing'"'"'
+union all select '"'"'0019'"'"', count(*) from information_schema.tables where table_name='"'"'site_plan_snapshots'"'"'"'
+```
+
+Expected now: `2, 1, 1, 1, 1, 1`. The Postgres password was pasted into a
+Claude Code session to do this; rotating it in Railway, and the `DATABASE_URL`
+on Vercel with it, is still to do.
 
 ### Copying the laptop's database up
 
