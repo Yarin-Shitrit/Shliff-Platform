@@ -134,6 +134,13 @@
       "when": 1790426342195,
       "tag": "0018_site_item_facing",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790429852753,
+      "tag": "0019_site_plan_snapshots",
+      "breakpoints": true
     }
   ]
 }

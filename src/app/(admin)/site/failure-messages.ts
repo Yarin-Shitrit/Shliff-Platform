@@ -58,6 +58,13 @@ export const SITE_ERRORS: HebrewErrors = [
   ['an underlay placement must be', 'מיקום תמונת הרקע נמדד במספר שלם של סנטימטרים'],
   ['an underlay calibration must be', 'הכיול של תמונת הרקע לא נשמר כמו שצריך. אפשר לכייל שוב'],
   ['an underlay file name must be', 'שם הקובץ של תמונת הרקע ארוך מדי — עד 200 תווים'],
+  // Saved plans (`src/lib/site/snapshots.ts`).
+  ['unknown saved plan', 'לא מצאנו את התוכנית השמורה הזו — אולי נמחקה בינתיים'],
+  ['a saved plan must have a name', 'לתוכנית שמורה חייב להיות שם, אחרת אי אפשר להבדיל בינה לבין אחרות'],
+  ['a saved plan name must be', 'שם התוכנית ארוך מדי — עד 60 תווים'],
+  ['a saved plan must hold', 'התוכנית לא נשמרה כמו שצריך. טעינה מחדש של המפה תסדר את זה'],
+  ['a saved plan names', 'התוכנית לא נשמרה כמו שצריך. טעינה מחדש של המפה תסדר את זה'],
+  ['a map keeps at most', 'למפה יש כבר 30 תוכניות שמורות. כדי לשמור עוד אחת, מוחקים תוכנית שכבר לא צריך'],
 ];
 
 export function siteFailureMessage(error: unknown): string {

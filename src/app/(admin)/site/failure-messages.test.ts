@@ -56,6 +56,24 @@ describe('site failure messages', () => {
     }
   });
 
+  it('says every saved-plan refusal in Hebrew', () => {
+    expect(siteFailureMessage(new Error('unknown saved plan 7f3a')))
+      .toBe('לא מצאנו את התוכנית השמורה הזו — אולי נמחקה בינתיים');
+    expect(siteFailureMessage(new Error('a map keeps at most 30 saved plans')))
+      .toBe('למפה יש כבר 30 תוכניות שמורות. כדי לשמור עוד אחת, מוחקים תוכנית שכבר לא צריך');
+    for (const english of [
+      'a saved plan must have a name',
+      'a saved plan name must be at most 60 characters',
+      'a saved plan must hold a plot, its items and its lines',
+      'a saved plan names an item twice',
+      'a saved plan names a line twice',
+    ]) {
+      const hebrew = siteFailureMessage(new Error(english));
+      expect(hebrew).not.toBe(HEBREW_FALLBACK);
+      expect(hebrew).not.toMatch(/[A-Za-z]/);
+    }
+  });
+
   it('says the image’s three refusals in Hebrew, in the spec’s words', () => {
     expect(siteFailureMessage(new Error('an underlay file must be one uploaded to this map')))
       .toBe('קובץ תמונת הרקע לא שייך למפה הזו. טעינה מחדש של המפה תסדר את זה');

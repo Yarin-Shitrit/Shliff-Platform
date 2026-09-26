@@ -11,7 +11,11 @@ import { ToastProvider } from '@/components/ui/toaster';
 import type { EditorDoc } from '@/lib/site/editor/model';
 import type { SceneHandle, SceneViewProps } from './scene/scene-view';
 
-vi.mock('../actions', () => ({ saveSiteChangesAction: vi.fn(), loadSiteDocAction: vi.fn() }));
+vi.mock('../actions', () => ({
+  saveSiteChangesAction: vi.fn(), loadSiteDocAction: vi.fn(),
+  // The saved plans' four (`use-saved-plans.ts`): never called here, present so the mock is the module's whole face.
+  takeSnapshotAction: vi.fn(), listSnapshotsAction: vi.fn(), readSnapshotAction: vi.fn(), deleteSnapshotAction: vi.fn(),
+}));
 /* `next/dynamic` as the app router builds it — see `site-editor.test.tsx`. */
 vi.mock('next/dynamic', async () => ({
   default: (await import('next/dist/shared/lib/app-dynamic')).default,

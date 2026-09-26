@@ -24,7 +24,11 @@ function siteDoc(underlay: EditorUnderlay | null, plot: Partial<EditorPlot> = {}
 const { saveSiteChangesAction, loadSiteDocAction } = vi.hoisted(() => ({
   saveSiteChangesAction: vi.fn(), loadSiteDocAction: vi.fn(),
 }));
-vi.mock('../actions', () => ({ saveSiteChangesAction, loadSiteDocAction }));
+vi.mock('../actions', () => ({
+  saveSiteChangesAction, loadSiteDocAction,
+  // The saved plans' four (`use-saved-plans.ts`): never called here, present so the mock is the module's whole face.
+  takeSnapshotAction: vi.fn(), listSnapshotsAction: vi.fn(), readSnapshotAction: vi.fn(), deleteSnapshotAction: vi.fn(),
+}));
 
 /* `next/dynamic` as the app router builds it — see `site-editor.test.tsx`. */
 vi.mock('next/dynamic', async () => ({

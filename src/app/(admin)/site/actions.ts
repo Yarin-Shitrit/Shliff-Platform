@@ -9,6 +9,10 @@ import {
 } from '@/lib/site/plan';
 import type { EditorDoc } from '@/lib/site/editor/model';
 import type { SaveResult, SiteOp } from '@/lib/site/editor/ops';
+import {
+  deleteSnapshot, listSnapshots, readSnapshot, takeSnapshot,
+  type Snapshot, type SnapshotContent, type SnapshotSummary,
+} from '@/lib/site/snapshots';
 import { SITE_PATH } from '@/lib/site/views';
 import { siteFailureMessage } from './failure-messages';
 
@@ -94,6 +98,74 @@ export async function loadSiteDocAction(
     const loaded = await loadDoc(db, planId);
     if (loaded === null) return { ok: false, error: siteFailureMessage(new Error(`unknown site plan ${planId}`)) };
     return { ok: true, value: loaded };
+  } catch (error) {
+    return { ok: false, error: siteFailureMessage(error) };
+  }
+}
+
+/*
+ * Saved plans (`src/lib/site/snapshots.ts`): the map kept under a name, to
+ * come back to. None of these revalidates the page — the editor's store is
+ * the truth once loaded, and a saved plan is a copy beside the map, not the
+ * map; the card keeps its own list.
+ */
+
+/** Keeps the map as the editor shows it now, under `name`; answers the list as it then stands. */
+export async function takeSnapshotAction(
+  planId: string, name: string, content: SnapshotContent,
+): Promise<ActionResult<SnapshotSummary[]>> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: NO_ACCESS };
+  try {
+    await takeSnapshot(db, planId, name, content, admin.email);
+    return { ok: true, value: await listSnapshots(db, planId) };
+  } catch (error) {
+    return { ok: false, error: siteFailureMessage(error) };
+  }
+}
+
+export async function listSnapshotsAction(planId: string): Promise<ActionResult<SnapshotSummary[]>> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: NO_ACCESS };
+  try {
+    return { ok: true, value: await listSnapshots(db, planId) };
+  } catch (error) {
+    return { ok: false, error: siteFailureMessage(error) };
+  }
+}
+
+/** One saved plan, whole, for the editor to load over the map. Only a plan of this map: another map's arrangement means nothing here. */
+export async function readSnapshotAction(planId: string, id: string): Promise<ActionResult<Snapshot>> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: NO_ACCESS };
+  try {
+    const found = await readSnapshot(db, id);
+    if (found === null || found.planId !== planId) {
+      return { ok: false, error: siteFailureMessage(new Error(`unknown saved plan ${id}`)) };
+    }
+    return {
+      ok: true,
+      value: {
+        id: found.id, name: found.name, plot: found.plot, itemCount: found.itemCount, lineCount: found.lineCount,
+        createdAt: found.createdAt, createdBy: found.createdBy, items: found.items, lines: found.lines,
+      },
+    };
+  } catch (error) {
+    return { ok: false, error: siteFailureMessage(error) };
+  }
+}
+
+/** Forgets a saved plan; answers the list as it then stands. */
+export async function deleteSnapshotAction(planId: string, id: string): Promise<ActionResult<SnapshotSummary[]>> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: NO_ACCESS };
+  try {
+    const found = await readSnapshot(db, id);
+    if (found === null || found.planId !== planId) {
+      return { ok: false, error: siteFailureMessage(new Error(`unknown saved plan ${id}`)) };
+    }
+    await deleteSnapshot(db, id);
+    return { ok: true, value: await listSnapshots(db, planId) };
   } catch (error) {
     return { ok: false, error: siteFailureMessage(error) };
   }

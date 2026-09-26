@@ -33,7 +33,11 @@ function siteDoc(items: EditorItem[], plot: Partial<EditorPlot> = {}): EditorDoc
 const { saveSiteChangesAction, loadSiteDocAction } = vi.hoisted(() => ({
   saveSiteChangesAction: vi.fn(), loadSiteDocAction: vi.fn(),
 }));
-vi.mock('../actions', () => ({ saveSiteChangesAction, loadSiteDocAction }));
+vi.mock('../actions', () => ({
+  saveSiteChangesAction, loadSiteDocAction,
+  // The saved plans' four (`use-saved-plans.ts`): never called here, present so the mock is the module's whole face.
+  takeSnapshotAction: vi.fn(), listSnapshotsAction: vi.fn(), readSnapshotAction: vi.fn(), deleteSnapshotAction: vi.fn(),
+}));
 
 /*
  * `next/dynamic` as the app is built with it. Next aliases `next/dynamic` to
