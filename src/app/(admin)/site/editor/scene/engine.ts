@@ -8,7 +8,7 @@ import {
 } from '@/lib/site/editor/camera';
 import { moveOps, setRectOps } from '@/lib/site/editor/commands';
 import { layoutLabels, type LabelInput, type PlacedLabel } from '@/lib/site/editor/label-layout';
-import { findItem, findLine, rectOf, underlayOf, type EditorItem } from '@/lib/site/editor/model';
+import { findItem, findLine, groupMembers, rectOf, underlayOf, type EditorItem } from '@/lib/site/editor/model';
 import { landingRule, type Landing } from '@/lib/site/editor/placement';
 import { placeOps } from '@/lib/site/editor/underlay-commands';
 import { pathOf } from '@/lib/site/lines';
@@ -243,6 +243,7 @@ export class SceneEngine {
         itemAt: (x, y) => this.itemAt(x, y),
         groundAt: (x, y) => (this.cam === null ? null : groundAt(this.cam, this.viewport, this.drawMode, x, y)),
         selection: () => this.options.props().store.selection,
+        groupOf: (id) => groupMembers(this.options.props().store.doc, [id]),
       };
       this.gestures = new Gestures(world);
 
@@ -1174,14 +1175,20 @@ export class SceneEngine {
     const { store } = props;
     for (const intent of intents) {
       switch (intent.type) {
+        /* A grouped item is selected as its whole group, however it was
+           picked — a press, a Shift-click, a marquee that caught one corner
+           of it. Toggling takes the whole group out, or brings all of it in:
+           a selection that held half a group would move half a lounge. */
         case 'select':
-          store.select(intent.ids);
+          store.select(groupMembers(store.doc, intent.ids));
           break;
-        case 'toggleSelect':
-          store.select(store.selection.includes(intent.id)
-            ? store.selection.filter((id) => id !== intent.id)
-            : [...store.selection, intent.id]);
+        case 'toggleSelect': {
+          const members = groupMembers(store.doc, [intent.id]);
+          store.select(members.every((id) => store.selection.includes(id))
+            ? store.selection.filter((id) => !members.includes(id))
+            : [...store.selection, ...members.filter((id) => !store.selection.includes(id))]);
           break;
+        }
         case 'clearSelection':
           store.select([]);
           this.measuring = null;
@@ -1222,7 +1229,7 @@ export class SceneEngine {
         }
         case 'marquee': {
           this.marquee = intent.box;
-          const inside = this.itemsInside(intent.box).filter((id) => !intent.base.includes(id));
+          const inside = groupMembers(store.doc, this.itemsInside(intent.box)).filter((id) => !intent.base.includes(id));
           store.select([...intent.base, ...inside]);
           break;
         }

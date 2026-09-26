@@ -35,10 +35,12 @@ import { formatSize, snap } from '@/lib/site/geometry';
 import { nearestFreeSpot } from '@/lib/site/editor/placement';
 import { KIND_GROUP_ORDER, SITE_KINDS, type SiteKindGroup } from '@/lib/site/kinds';
 import { LINE_KIND_ORDER, LINE_KINDS, lineLengthCm } from '@/lib/site/lines';
-import { findItem, findLine, underlayOf, type EditorDoc, type EditorItem, type EditorLine } from '@/lib/site/editor/model';
+import {
+  findItem, findLine, groupIdOf, groupMembers, underlayOf, type EditorDoc, type EditorItem, type EditorLine,
+} from '@/lib/site/editor/model';
 import type { SiteOp } from '@/lib/site/editor/ops';
 import {
-  addLineOps, addOps, duplicateOps, lockOps, moveOps, removeLineOps, removeOps, splitOps, turnOps,
+  addLineOps, addOps, duplicateOps, groupOps, lockOps, moveOps, removeLineOps, removeOps, splitOps, turnOps, ungroupOps,
 } from '@/lib/site/editor/commands';
 import { screenArrowToMap } from '@/lib/site/editor/camera';
 import { CAMP_SITE, jerusalemInstant, shadeAtHour, sunPosition } from '@/lib/site/editor/sun';
@@ -669,6 +671,45 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     saidWithUndo(items.length === 1 ? `נוצר עותק של ${isolate(items[0].label)}` : `נוצרו ${ids.length} עותקים`);
   }
 
+  /** Whether grouping these would change anything: two or more, not already one group (`groupOps`'s own rule). */
+  function groupable(items: readonly EditorItem[]): boolean {
+    if (items.length < 2) return false;
+    const groups = new Set(items.map(groupIdOf));
+    return groups.size > 1 || groups.has(null);
+  }
+
+  function grouped(items: readonly EditorItem[]): boolean {
+    return items.some((item) => groupIdOf(item) !== null);
+  }
+
+  /**
+   * ⌘G: the selected items become one group — picked together and dragged
+   * together from now on, wherever each one stands. A selection that cannot
+   * be grouped is told why, rather than nothing happening on a shortcut.
+   */
+  function groupSelection(): void {
+    const items = selected();
+    const ops = groupOps(store.doc, store.selection, crypto.randomUUID());
+    if (ops.length === 0) {
+      if (items.length === 0) return;
+      show({
+        message: items.length < 2 ? 'לקיבוץ בוחרים לפחות שני פריטים.' : 'הפריטים שנבחרו כבר קבוצה אחת.',
+        tone: 'bad',
+      });
+      return;
+    }
+    if (!runEdit('קיבוץ', ops)) return;
+    saidWithUndo(`${ops.length} פריטים קובצו — מעכשיו הם נבחרים ומוזזים יחד`);
+  }
+
+  /** ⇧⌘G: every group in the selection is dissolved. The items stay selected; each is its own again. */
+  function ungroupSelection(): void {
+    const ops = ungroupOps(store.doc, store.selection);
+    if (ops.length === 0) return;
+    if (!runEdit('פירוק הקיבוץ', ops)) return;
+    saidWithUndo(`הקיבוץ של ${ops.length} פריטים פורק`);
+  }
+
   /** A square turns into itself (no ops); only an all-locked selection is told it is locked. */
   function turnSelection(): void {
     const items = selected();
@@ -815,24 +856,28 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
    * select a hidden item. An empty list clears the selection.
    */
   function pickIds(ids: string[]): void {
-    revealIds(ids);
-    store.select(ids);
-    if (ids.length > 0) sceneRef.current?.fitIds(ids);
+    // A grouped item is picked as its whole group, here as on the map (`engine.ts`).
+    const wanted = groupMembers(store.doc, ids);
+    revealIds(wanted);
+    store.select(wanted);
+    if (wanted.length > 0) sceneRef.current?.fitIds(wanted);
   }
 
   /**
    * A row in the list: selects its item and flies to it; shift or ⌘ adds it
    * to the selection instead, or takes it out when it is already in. An item
-   * about to be selected is shown first.
+   * about to be selected is shown first. A grouped item's row stands for its
+   * group: in or out together.
    */
   function pickRow(id: string, additive: boolean): void {
-    if (additive && store.selection.includes(id)) {
-      store.select(store.selection.filter((other) => other !== id));
+    const members = groupMembers(store.doc, [id]);
+    if (additive && members.every((member) => store.selection.includes(member))) {
+      store.select(store.selection.filter((other) => !members.includes(other)));
       return;
     }
     if (additive) {
-      revealIds([id]);
-      store.select([...store.selection, id]);
+      revealIds(members);
+      store.select([...store.selection, ...members.filter((member) => !store.selection.includes(member))]);
       return;
     }
     pickIds([id]);
@@ -906,6 +951,8 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
         onDuplicate={duplicateSelection}
         onLock={toggleLock}
         onRemove={removeSelection}
+        onGroup={groupable(items) ? groupSelection : undefined}
+        onUngroup={grouped(items) ? ungroupSelection : undefined}
       />
     );
     if (items.length === 1) {
@@ -1011,6 +1058,8 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
       case 'redo': redo(); break;
       case 'duplicate': duplicateSelection(); break;
       case 'selectAll': selectAll(); break;
+      case 'group': groupSelection(); break;
+      case 'ungroup': ungroupSelection(); break;
       case 'escape':
         if (keysOpen) {
           setKeysOpen(false);
@@ -1232,6 +1281,8 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
           onDuplicate={duplicateSelection}
           onLock={toggleLock}
           onRemove={removeSelection}
+          onGroup={groupable(selectedNow) ? groupSelection : undefined}
+          onUngroup={grouped(selectedNow) ? ungroupSelection : undefined}
         />
         <div className={styles.cards}>
           {picture.open ? (

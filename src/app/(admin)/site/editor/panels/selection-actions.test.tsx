@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { unnamedControls } from '@/test/a11y';
 import { SelectionActions } from './selection-actions';
 
@@ -37,5 +37,30 @@ describe('the selection’s actions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'נעילה' }));
     fireEvent.click(screen.getByRole('button', { name: 'הסרה' }));
     for (const handler of Object.values(calls)) expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers group and ungroup only when given one, in words and as named icons', () => {
+    // A button that would answer with nothing is not drawn (one item cannot be a group; nothing here is grouped).
+    renderActions(false, true);
+    expect(screen.queryByRole('button', { name: 'קיבוץ' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'פירוק הקיבוץ' })).toBeNull();
+    cleanup();
+
+    const onGroup = vi.fn();
+    const onUngroup = vi.fn();
+    const base = { onTurn: vi.fn(), onDuplicate: vi.fn(), onLock: vi.fn(), onRemove: vi.fn() };
+    render(<SelectionActions locked={false} labelled {...base} onGroup={onGroup} onUngroup={onUngroup} />);
+    fireEvent.click(screen.getByRole('button', { name: 'קיבוץ' }));
+    fireEvent.click(screen.getByRole('button', { name: 'פירוק הקיבוץ' }));
+    expect(onGroup).toHaveBeenCalledTimes(1);
+    expect(onUngroup).toHaveBeenCalledTimes(1);
+    cleanup();
+
+    const { container } = render(<SelectionActions locked={false} labelled={false} {...base} onGroup={onGroup} onUngroup={onUngroup} />);
+    expect(unnamedControls(container)).toEqual([]);
+    fireEvent.click(screen.getByRole('button', { name: 'קיבוץ' }));
+    fireEvent.click(screen.getByRole('button', { name: 'פירוק הקיבוץ' }));
+    expect(onGroup).toHaveBeenCalledTimes(2);
+    expect(onUngroup).toHaveBeenCalledTimes(2);
   });
 });

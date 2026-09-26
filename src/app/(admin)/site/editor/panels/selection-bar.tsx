@@ -16,11 +16,12 @@ import { SelectionActions } from './selection-actions';
 import styles from './selection-bar.module.css';
 
 /**
- * The most room the bar takes: four 44 px targets on a coarse pointer (A8),
- * their gaps and padding (`selection-bar.module.css`). The room it is given
- * is worked out for that, so it fits on any pointer.
+ * The most room the bar takes: six 44 px targets on a coarse pointer (A8) —
+ * the four that are always there, group and ungroup when the selection
+ * allows both — their gaps and padding (`selection-bar.module.css`). The
+ * room it is given is worked out for that, so it fits on any pointer.
  */
-export const BAR = { width: 188, height: 50 } as const;
+export const BAR = { width: 280, height: 50 } as const;
 /** From the selection's edge to the bar, and the least from the stage's edge to it. */
 const GAP = 10;
 const EDGE = 8;
@@ -55,7 +56,7 @@ export function placeBar(box: ScreenBox, stage: { width: number; height: number 
   return { left, top, place: 'below' };
 }
 
-export function SelectionBar({ box, stage = null, locked, onTurn, onDuplicate, onLock, onRemove }: {
+export function SelectionBar({ box, stage = null, locked, onTurn, onDuplicate, onLock, onRemove, onGroup, onUngroup }: {
   box: ScreenBox | null;
   /** The stage's size, to keep the bar on it; null until measured. */
   stage?: { width: number; height: number } | null;
@@ -65,6 +66,9 @@ export function SelectionBar({ box, stage = null, locked, onTurn, onDuplicate, o
   onDuplicate: () => void;
   onLock: () => void;
   onRemove: () => void;
+  /** As on `SelectionActions`: each drawn only when given. */
+  onGroup?: () => void;
+  onUngroup?: () => void;
 }): ReactElement | null {
   if (box === null) return null;
   const at = placeBar(box, stage);
@@ -84,6 +88,8 @@ export function SelectionBar({ box, stage = null, locked, onTurn, onDuplicate, o
         onDuplicate={onDuplicate}
         onLock={onLock}
         onRemove={onRemove}
+        onGroup={onGroup}
+        onUngroup={onUngroup}
       />
     </div>
   );

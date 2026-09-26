@@ -125,6 +125,15 @@ export const siteItems = pgTable('site_items', {
   ropeAngleDeg: integer('rope_angle_deg'),
   /** A locked item is not dragged, nudged, resized, turned or removed until it is unlocked. */
   locked: boolean('locked').notNull().default(false),
+  /**
+   * Items a lead grouped together (migration `0017`): every item carrying the
+   * same id is one group — selected together, dragged together. The id is a
+   * uuid the editor mints when it groups; there is no groups table, because a
+   * group has nothing of its own to store — no name, no place — and a row
+   * that only existed to be pointed at would have to be tidied when its last
+   * member left. Null is the ordinary item, in no group.
+   */
+  groupId: uuid('group_id'),
   sort: integer('sort').notNull().default(0),
   taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'set null' }),
   notes: text('notes'),

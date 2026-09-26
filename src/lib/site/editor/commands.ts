@@ -3,10 +3,13 @@ import { effectiveSize, itemHeight, type KindSize } from '../defaults';
 import { turnAboutCentre, unionRect, wholeCm, type Rect } from '../geometry';
 import { DEFAULT_SHADE_INSET_CM } from '../kinds';
 import { centreOfItem, eligibleEnds, geometricMedian, splits } from '../lines';
-import { findItem, findLine, linesAt, nextLabel, nextLineLabel, rectOf, type EditorDoc, type EditorItem, type EditorLine } from './model';
+import {
+  findItem, findLine, groupIdOf, groupMembers, linesAt, nextLabel, nextLineLabel, rectOf,
+  type EditorDoc, type EditorItem, type EditorLine,
+} from './model';
 import { landingRule, nearestFreeSpot } from './placement';
 import {
-  lineEndsRefusal, lockRefusal, rekindRefusal, samePoints, storedLinePatch, storedPatch,
+  fieldOf, lineEndsRefusal, lockRefusal, rekindRefusal, samePoints, storedLinePatch, storedPatch,
   type ItemPatch, type LinePatch, type SiteOp,
 } from './ops';
 
@@ -50,7 +53,7 @@ export function changedUpdate(entry: EditorItem, patch: ItemPatch): UpdateOp | n
   const changed: ItemPatch = {};
   for (const key of Object.keys(patch) as Array<keyof ItemPatch>) {
     const value = patch[key];
-    if (value !== undefined && value !== entry[key]) (changed as Record<string, unknown>)[key] = value;
+    if (value !== undefined && value !== fieldOf(entry, key)) (changed as Record<string, unknown>)[key] = value;
   }
   return Object.keys(changed).length === 0 ? null : { type: 'update', id: entry.id, patch: changed };
 }
@@ -171,8 +174,21 @@ export function duplicateOps(
   ) === 'ok');
   const [dx, dy] = shifts.find(clear) ?? [100, 100];
   const made: EditorItem[] = [];
+  /* Copies of a group are a group of their own, under a fresh id: the copy of
+     a lounge moves as one, and moving it never drags the original along. A
+     copy of part of a group is in no group — its partners were not copied. */
+  const groupCopies = new Map<string, string>();
+  const copiedGroup = (group: string | null): string | null => {
+    if (group === null) return null;
+    const members = sources.filter((source) => groupIdOf(source) === group).length;
+    if (members < 2) return null;
+    const copy = groupCopies.get(group) ?? newId();
+    groupCopies.set(group, copy);
+    return copy;
+  };
   let sort = nextSort(doc.items);
   for (const source of sources) {
+    const group = groupIdOf(source);
     made.push({
       ...source,
       id: newId(),
@@ -181,6 +197,8 @@ export function duplicateOps(
       yCm: source.yCm + dy,
       sort,
       locked: false,
+      // Only an item that was in a group says anything about one; the rest keep the shape they came with.
+      ...(group === null ? {} : { groupId: copiedGroup(group) }),
     });
     sort += 1;
   }
@@ -189,6 +207,30 @@ export function duplicateOps(
 
 export function lockOps(doc: EditorDoc, ids: readonly string[], locked: boolean): SiteOp[] {
   return present(itemsOf(doc, ids).map((entry) => changedUpdate(entry, { locked })));
+}
+
+/**
+ * Two or more items become one group, under `groupId` — a uuid the caller
+ * mints. An item already in a group brings the rest of its group along, so
+ * grouping the lounge with a tent that is half of another group merges the
+ * two rather than tearing the tent out of its own. A lock does not stop it:
+ * a group is about what goes together, not about where anything goes.
+ * Nothing when fewer than two items would be in it, or when they already
+ * are one group.
+ */
+export function groupOps(doc: EditorDoc, ids: readonly string[], groupId: string): SiteOp[] {
+  const members = itemsOf(doc, groupMembers(doc, ids));
+  if (members.length < 2) return [];
+  const groups = new Set(members.map(groupIdOf));
+  if (groups.size === 1 && !groups.has(null)) return [];
+  return present(members.map((entry) => changedUpdate(entry, { groupId })));
+}
+
+/** Every group any of these items is in is dissolved: each member back on its own. Nothing when none is grouped. */
+export function ungroupOps(doc: EditorDoc, ids: readonly string[]): SiteOp[] {
+  return present(itemsOf(doc, groupMembers(doc, ids))
+    .filter((entry) => groupIdOf(entry) !== null)
+    .map((entry) => changedUpdate(entry, { groupId: null })));
 }
 
 /**

@@ -418,6 +418,39 @@ Afterwards the query above prints `inventory_boxes`, and
 measured numbers here when it is done. Not applied to the local `shliff-pg`
 either when this was written.
 
+### Migration `0017` — not yet applied to Railway
+
+`0017_site_item_groups` is the camp map's item groups: one nullable column,
+`site_items.group_id uuid`, and nothing else — no table, no foreign key.
+Items a lead groups in the editor share an id the editor mints; null is the
+ordinary item. Additive: every existing item takes null, so no row changes
+meaning. It must be on Railway **before** the code that reads it deploys,
+because every load of `/site` selects the column (`plan.ts` `listItems`) and
+a save that groups items writes it. Applying it is the camp lead's step, by
+the same procedure as `0016`, after whichever earlier migrations are still
+pending — the order is migration first, merge second.
+
+Read-only check (before: nothing; after: `group_id`):
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" postgres:18-alpine sh -c '
+  psql "$R" -tAc "select column_name from information_schema.columns
+    where table_name='"'"'site_items'"'"' and column_name='"'"'group_id'"'"'"'
+```
+
+Then:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine sh -euc '
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0017_site_item_groups.sql
+'
+```
+
+Afterwards the query above prints `group_id`, and
+`select count(*) from site_items` is what it was before. Record the measured
+numbers here when it is done. Not applied to the local `shliff-pg` either
+when this was written.
+
 ### Copying the laptop's database up
 
 The local container is Postgres **16**; Railway is **18**. Dump with the

@@ -60,6 +60,8 @@ export interface SiteItem {
   /** Shade nets only; null follows the camp's angle (spec §13). */
   ropeAngleDeg: number | null;
   locked: boolean;
+  /** Items grouped by a lead share an id (`site.ts`); null is in no group. */
+  groupId: string | null;
   sort: number;
   taskId: string | null;
   taskTitle: string | null;
@@ -204,6 +206,14 @@ export async function copyPlan(
   const rows = await db.select().from(siteItems)
     .where(eq(siteItems.planId, source.id)).orderBy(asc(siteItems.sort), asc(siteItems.id));
   if (rows.length > 0) {
+    // The groups come along under fresh ids, one per group, so next year's lounge still moves as one.
+    const groupCopies = new Map<string, string>();
+    const copiedGroup = (group: string | null): string | null => {
+      if (group === null) return null;
+      const copy = groupCopies.get(group) ?? crypto.randomUUID();
+      groupCopies.set(group, copy);
+      return copy;
+    };
     // New ids for the copies, remembered so the copied lines run between the copies.
     const copies = rows.map((row) => ({
       id: crypto.randomUUID(),
@@ -217,6 +227,7 @@ export async function copyPlan(
       insetCm: row.insetCm,
       heightCm: row.heightCm,
       ropeAngleDeg: row.ropeAngleDeg,
+      groupId: copiedGroup(row.groupId),
       sort: row.sort,
       notes: row.notes,
       updatedBy: actor,
@@ -275,6 +286,7 @@ const ITEM_COLUMNS = {
   heightCm: siteItems.heightCm,
   ropeAngleDeg: siteItems.ropeAngleDeg,
   locked: siteItems.locked,
+  groupId: siteItems.groupId,
   sort: siteItems.sort,
   taskId: siteItems.taskId,
   taskTitle: tasks.title,
@@ -373,6 +385,7 @@ function patchSet(
   if (stored.locked !== undefined) set.locked = stored.locked;
   if (stored.insetCm !== undefined) set.insetCm = stored.insetCm;
   if (stored.ropeAngleDeg !== undefined) set.ropeAngleDeg = stored.ropeAngleDeg;
+  if (stored.groupId !== undefined) set.groupId = stored.groupId;
   return set;
 }
 
@@ -473,7 +486,7 @@ export function toEditorItem(row: SiteItem): EditorItem {
     id: row.id, kind: row.kind, label: row.label,
     xCm: row.xCm, yCm: row.yCm, widthCm: row.widthCm, depthCm: row.depthCm,
     heightCm: row.heightCm, insetCm: row.insetCm, ropeAngleDeg: row.ropeAngleDeg, sort: row.sort,
-    taskId: row.taskId, notes: row.notes, locked: row.locked,
+    taskId: row.taskId, notes: row.notes, locked: row.locked, groupId: row.groupId,
   };
 }
 
@@ -648,6 +661,8 @@ export async function applySiteOps(
           ropeAngleDeg: entry.kind === 'shade' ? (entry.ropeAngleDeg ?? null) : null,
           // The client owns draw order (spec §6.2): what it sent is what is drawn.
           sort: entry.sort, taskId: entry.taskId, notes: cleanNotes(entry.notes), locked: entry.locked,
+          // In no group unless the op says so — an op from a page older than groups says nothing.
+          groupId: entry.groupId ?? null,
           updatedBy: actor,
         }).returning();
         byId.set(row.id, row);

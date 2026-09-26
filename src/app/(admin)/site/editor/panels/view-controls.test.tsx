@@ -118,6 +118,8 @@ const PRINTED: Record<Exclude<Shortcut, object>, { row: string; cap: string; eve
   turn: { row: 'סיבוב ברבע · שכפול · נעילה', cap: 'R', event: { code: 'KeyR' } },
   duplicate: { row: 'סיבוב ברבע · שכפול · נעילה', cap: '⌘D', event: { code: 'KeyD', metaKey: true } },
   lock: { row: 'סיבוב ברבע · שכפול · נעילה', cap: 'L', event: { code: 'KeyL' } },
+  group: { row: 'קיבוץ · פירוק הקיבוץ', cap: '⌘G', event: { code: 'KeyG', metaKey: true } },
+  ungroup: { row: 'קיבוץ · פירוק הקיבוץ', cap: '⇧⌘G', event: { code: 'KeyG', metaKey: true, shiftKey: true } },
   remove: { row: 'הסרה', cap: '⌫', event: { code: 'Backspace' } },
   undo: { row: 'ביטול · ביצוע מחדש', cap: '⌘Z', event: { code: 'KeyZ', metaKey: true } },
   redo: { row: 'ביטול · ביצוע מחדש', cap: '⇧⌘Z', event: { code: 'KeyZ', metaKey: true, shiftKey: true } },
@@ -145,7 +147,7 @@ const OTHER_CAPS: Record<string, readonly string[]> = {
   'סיבוב המבט בתלת־ממד': ['גרירה ימנית', '⌃ גרירה'],
   'טיסה אל פריט': ['לחיצה כפולה'],
   'הזזה בצעד רשת · בצעד של מטר': ['←↑→↓', '⇧'],
-  'הזזה בלי הצמדה': ['⌥', 'גרירה'],
+  'הזזה בלי הצמדה, גם באמצע הגרירה': ['⌥', '⌃', 'גרירה'],
 };
 
 function read(event: KeyEvent): Shortcut | null {
