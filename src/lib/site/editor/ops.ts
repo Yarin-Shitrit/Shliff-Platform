@@ -10,7 +10,7 @@ import {
 } from '../underlay-limits';
 import { isRopeAngle } from './degrees';
 import {
-  copyUnderlay, findItem, findLine, sameUnderlay, underlayOf,
+  copyUnderlay, findItem, findLine, groupIdOf, sameUnderlay, underlayOf,
   type EditorDoc, type EditorItem, type EditorLine, type EditorUnderlay,
 } from './model';
 
@@ -39,6 +39,8 @@ export interface ItemPatch {
   taskId?: string | null;
   notes?: string | null;
   locked?: boolean;
+  /** The group the item is in; null takes it out of its group. Not a locked field: a lock is about where a thing goes. */
+  groupId?: string | null;
 }
 
 /** What may change on a line once it is drawn. Its kind may not: a pipe does not become a cable. */
@@ -138,6 +140,10 @@ export function patchRefusal(patch: ItemPatch): string | null {
     return ROPE_ANGLE_REFUSAL;
   }
   if (patch.locked !== undefined && typeof patch.locked !== 'boolean') return 'a lock must be true or false';
+  if (patch.groupId !== undefined && patch.groupId !== null && !UUID.test(patch.groupId)) {
+    // The editor mints the id; anything else arrived from a stash or a request that was tampered with or is broken.
+    return 'an item group must be an id';
+  }
   return null;
 }
 
@@ -149,7 +155,7 @@ export function newItemRefusal(entry: EditorItem): string | null {
   return patchRefusal({
     label: entry.label, kind: entry.kind, xCm: entry.xCm, yCm: entry.yCm,
     widthCm: entry.widthCm, depthCm: entry.depthCm, heightCm: entry.heightCm,
-    insetCm: entry.insetCm, ropeAngleDeg: entry.ropeAngleDeg, locked: entry.locked,
+    insetCm: entry.insetCm, ropeAngleDeg: entry.ropeAngleDeg, locked: entry.locked, groupId: entry.groupId,
   });
 }
 
@@ -336,6 +342,17 @@ export function storedPatch(
  * because history and the queue both keep references to them.
  */
 
+/**
+ * An item's value for a patchable field, as a patch would state it. The one
+ * field with two spellings of "none" is the group — `groupId` absent on an
+ * item from before groups, null since — and reading both as null is what
+ * lets an undo of a grouping put such an item back to no group at all,
+ * rather than to an `undefined` that sets nothing.
+ */
+export function fieldOf(item: EditorItem, key: keyof ItemPatch): ItemPatch[keyof ItemPatch] {
+  return key === 'groupId' ? groupIdOf(item) : item[key];
+}
+
 /** Only the fields a patch actually sets: `{ xCm: undefined }` sets nothing. */
 function definedFields<P extends ItemPatch | LinePatch>(patch: P): P {
   const out = {} as P;
@@ -442,6 +459,7 @@ export function applyOps(doc: EditorDoc, ops: readonly SiteOp[]): { doc: EditorD
     if (op.type === 'add') {
       if (index !== -1) { skipped.push(op); continue; }
       // An item from a page older than rope angles has no key: that is a net on the camp's angle, null (review M1).
+      // An item from a page older than groups has no `groupId` key: that is no group, and `groupIdOf` reads it so.
       items = insertInOrder(items, { ...op.item, ropeAngleDeg: op.item.ropeAngleDeg ?? null });
     } else if (index === -1) {
       skipped.push(op);
@@ -471,7 +489,8 @@ function inverseOf(doc: EditorDoc, op: SiteOp): SiteOp | null {
       const patch: ItemPatch = {};
       for (const key of Object.keys(op.patch) as Array<keyof ItemPatch>) {
         const value = op.patch[key];
-        if (value !== undefined && value !== before[key]) (patch as Record<string, unknown>)[key] = before[key];
+        const was = fieldOf(before, key);
+        if (value !== undefined && value !== was) (patch as Record<string, unknown>)[key] = was;
       }
       return Object.keys(patch).length === 0 ? null : { type: 'update', id: op.id, patch };
     }

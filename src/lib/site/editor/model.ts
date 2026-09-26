@@ -33,6 +33,45 @@ export interface EditorItem {
   taskId: string | null;
   notes: string | null;
   locked: boolean;
+  /**
+   * The group this item is in (`site_items.group_id`): every item with the
+   * same id selects and moves as one. Absent and null both mean none — read
+   * it only through `groupIdOf`. Optional for the reason `EditorDoc.underlay`
+   * is: an item built before groups existed (every test fixture, an op
+   * stashed by an older page) is still an item; `toEditorItem` always sets it.
+   */
+  groupId?: string | null;
+}
+
+/** The one way to read `EditorItem.groupId`. */
+export function groupIdOf(item: Pick<EditorItem, 'groupId'>): string | null {
+  return item.groupId ?? null;
+}
+
+/**
+ * The ids given plus every item that shares a group with one of them — what
+ * a click on a grouped item selects, and what a drag on it moves. The given
+ * ids first, in their order, then the rest of each group in draw order; an id
+ * that is not an item (a line's) passes through untouched.
+ */
+export function groupMembers(doc: EditorDoc, ids: readonly string[]): string[] {
+  const groups = new Set<string>();
+  for (const id of ids) {
+    const entry = findItem(doc, id);
+    const group = entry === undefined ? null : groupIdOf(entry);
+    if (group !== null) groups.add(group);
+  }
+  if (groups.size === 0) return [...ids];
+  const out = [...new Set(ids)];
+  const have = new Set(out);
+  for (const entry of doc.items) {
+    const group = groupIdOf(entry);
+    if (group !== null && groups.has(group) && !have.has(entry.id)) {
+      have.add(entry.id);
+      out.push(entry.id);
+    }
+  }
+  return out;
 }
 
 export interface EditorPlot {

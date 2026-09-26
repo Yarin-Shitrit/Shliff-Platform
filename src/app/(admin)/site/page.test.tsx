@@ -76,7 +76,7 @@ const PLAN: SitePlan = {
 function item(over: Partial<SiteItemView> & { id: string }): SiteItemView {
   return {
     planId: 'p1', kind: 'tent', label: 'אוהל 1', xCm: 0, yCm: 0, widthCm: 300, depthCm: 300,
-    insetCm: null, ropeAngleDeg: null, heightCm: null, locked: false, sort: 0, taskId: null, taskTitle: null, notes: null,
+    insetCm: null, ropeAngleDeg: null, heightCm: null, locked: false, groupId: null, sort: 0, taskId: null, taskTitle: null, notes: null,
     updatedAt: new Date('2026-09-01T00:00:00Z'), updatedBy: 'lead@shliff.camp',
     outside: false, overlapping: false, shade: 'unshaded', ...over,
   };

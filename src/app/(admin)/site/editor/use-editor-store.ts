@@ -3,7 +3,7 @@ import type { ActionResult } from '@/lib/action-result';
 import { derive } from '@/lib/site/derive';
 import { changedLineUpdate, changedUpdate } from '@/lib/site/editor/commands';
 import { EMPTY_HISTORY, record, redo as redoStep, undo as undoStep, type History } from '@/lib/site/editor/history';
-import { findItem, findLine, type EditorDoc, type EditorItem, type EditorLine } from '@/lib/site/editor/model';
+import { findItem, findLine, groupIdOf, type EditorDoc, type EditorItem, type EditorLine } from '@/lib/site/editor/model';
 import {
   applyOps, invertOps, lineEndsRefusal, lockRefusal, type ItemPatch, type LinePatch, type SiteOp,
 } from '@/lib/site/editor/ops';
@@ -166,6 +166,7 @@ function itemPatch(item: EditorItem): ItemPatch {
     label: item.label, kind: item.kind, xCm: item.xCm, yCm: item.yCm,
     widthCm: item.widthCm, depthCm: item.depthCm, heightCm: item.heightCm,
     insetCm: item.insetCm, ropeAngleDeg: item.ropeAngleDeg, taskId: item.taskId, notes: item.notes,
+    groupId: groupIdOf(item),
   };
 }
 

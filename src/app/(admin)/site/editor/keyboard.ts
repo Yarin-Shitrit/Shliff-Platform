@@ -3,16 +3,17 @@
  * key is, not the letter it types — so `R` turns an item on a Hebrew layout,
  * where that key types ר. Pure: `SiteEditor` decides what each shortcut does.
  *
- * With ⌘ or Ctrl held, only the editor's four combinations are taken. Every
+ * With ⌘ or Ctrl held, only the editor's five combinations are taken. Every
  * other one — ⌘R, ⌘L, ⌘F, ⌘+ — stays the browser's. With Alt held, nothing is
  * taken: Alt + ← is Back and Alt + a letter opens a menu on Windows, and AltGr
- * (Ctrl + Alt) types letters. No shortcut in spec §8 uses Alt; Alt + drag is a
- * pointer gesture (`scene/gestures.ts`), not a key.
+ * (Ctrl + Alt) types letters. No shortcut in spec §8 uses Alt; Alt + drag (and
+ * Ctrl + drag, once an item is being dragged) is a pointer gesture
+ * (`scene/gestures.ts`), not a key.
  */
 
 export type Arrow = 'ArrowLeft' | 'ArrowRight' | 'ArrowUp' | 'ArrowDown';
 
-export type Shortcut = 'undo' | 'redo' | 'duplicate' | 'selectAll' | 'escape' | 'remove' | 'turn' | 'lock'
+export type Shortcut = 'undo' | 'redo' | 'duplicate' | 'selectAll' | 'group' | 'ungroup' | 'escape' | 'remove' | 'turn' | 'lock'
   | 'toolSelect' | 'toolMeasure' | 'fit' | 'plan' | '3d' | 'viewLeft' | 'viewRight' | 'zoomIn' | 'zoomOut' | 'keys'
   | { arrow: Arrow; big: boolean };
 
@@ -47,6 +48,8 @@ export function shortcutFor(
       case 'KeyY': return 'redo';
       case 'KeyD': return 'duplicate';
       case 'KeyA': return 'selectAll';
+      // ⌘G groups, ⇧⌘G ungroups — the pairing every drawing tool uses.
+      case 'KeyG': return event.shiftKey ? 'ungroup' : 'group';
       default: return null;
     }
   }

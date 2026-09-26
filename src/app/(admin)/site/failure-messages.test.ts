@@ -42,6 +42,7 @@ describe('site failure messages', () => {
       'an item id is already in use',
       'an item height must be a whole number of centimetres between 10 and 2000',
       'a lock must be true or false',
+      'an item group must be an id',
       'that item is locked',
       'a kind default must be whole centimetres: sides 10 to 50000, height 10 to 2000',
       'north must be a whole number of degrees from 0 to 359',

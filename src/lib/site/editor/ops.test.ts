@@ -4,8 +4,8 @@ import type { KindSize } from '../defaults';
 import type { EditorDoc, EditorItem, EditorLine } from './model';
 import { nextLabel } from './model';
 import {
-  applyOps, coalesceOps, invertOps, kindSizeRefusal, LOCKED_FIELDS, lineEndsRefusal, linePatchRefusal, lockRefusal, newItemRefusal,
-  newLineRefusal, opRefusal, patchRefusal, rekindRefusal, storedPatch, type SiteOp,
+  applyOps, coalesceOps, fieldOf, invertOps, kindSizeRefusal, LOCKED_FIELDS, lineEndsRefusal, linePatchRefusal, lockRefusal,
+  newItemRefusal, newLineRefusal, opRefusal, patchRefusal, rekindRefusal, storedPatch, type SiteOp,
 } from './ops';
 
 export function item(over: Partial<EditorItem> = {}): EditorItem {
@@ -507,6 +507,42 @@ describe('a shade net’s rope angle', () => {
     expect(storedPatch(item(), { ropeAngleDeg: 45 }).ropeAngleDeg).toBeNull();
     expect(storedPatch(roped, { ropeAngleDeg: 30 }).ropeAngleDeg).toBe(30);
     expect(storedPatch(roped, { label: 'רשת הבר' })).not.toHaveProperty('ropeAngleDeg');
+  });
+});
+
+describe('groups in ops', () => {
+  const GROUP = '7c2e9a10-3b4d-4e5f-8a9b-0c1d2e3f4a5b';
+
+  it('take a group id that is a uuid, or null for none, and refuse anything else', () => {
+    expect(patchRefusal({ groupId: GROUP })).toBeNull();
+    expect(patchRefusal({ groupId: null })).toBeNull();
+    expect(patchRefusal({ groupId: 'grp-a' })).toMatch(/^an item group must be an id/);
+    expect(newItemRefusal(item({ groupId: 'grp-a' }))).toMatch(/^an item group must be an id/);
+    expect(newItemRefusal(item({ groupId: GROUP }))).toBeNull();
+    expect(newItemRefusal(item())).toBeNull();
+  });
+
+  it('are not a locked field: grouping a locked item is not moving it', () => {
+    expect(lockRefusal(true, { groupId: GROUP })).toBeNull();
+    expect(LOCKED_FIELDS).not.toContain('groupId');
+  });
+
+  it('keep an added item’s shape from a page older than groups, and read its group as none', () => {
+    const older: Partial<EditorItem> = { ...item() };
+    delete older.groupId;
+    const { doc } = applyOps(docOf([]), [{ type: 'add', item: older as EditorItem }]);
+    expect('groupId' in doc.items[0]).toBe(false);
+    expect(fieldOf(doc.items[0], 'groupId')).toBeNull();
+    expect(fieldOf(item({ groupId: GROUP }), 'groupId')).toBe(GROUP);
+    expect(fieldOf(item({ xCm: 40 }), 'xCm')).toBe(40);
+  });
+
+  it('undo a grouping to null on such an item, not to an undefined that sets nothing', () => {
+    const doc = docOf([item()]);
+    const ops: SiteOp[] = [{ type: 'update', id: doc.items[0].id, patch: { groupId: GROUP } }];
+    expect(invertOps(doc, ops)).toEqual([{ type: 'update', id: doc.items[0].id, patch: { groupId: null } }]);
+    const back = applyOps(applyOps(doc, ops).doc, invertOps(doc, ops)).doc;
+    expect(back.items[0].groupId).toBeNull();
   });
 });
 

@@ -15,13 +15,18 @@ describe('the editor’s shortcuts', () => {
     expect(key('KeyF')).toBe('fit');
   });
 
-  it('take ⌘ or Ctrl for undo, redo, duplicate and select all', () => {
+  it('take ⌘ or Ctrl for undo, redo, duplicate, select all, group and ungroup', () => {
     expect(key('KeyZ', { metaKey: true })).toBe('undo');
     expect(key('KeyZ', { ctrlKey: true })).toBe('undo');
     expect(key('KeyZ', { metaKey: true, shiftKey: true })).toBe('redo');
     expect(key('KeyY', { ctrlKey: true })).toBe('redo');
     expect(key('KeyD', { metaKey: true })).toBe('duplicate');
     expect(key('KeyA', { metaKey: true })).toBe('selectAll');
+    expect(key('KeyG', { metaKey: true })).toBe('group');
+    expect(key('KeyG', { ctrlKey: true })).toBe('group');
+    expect(key('KeyG', { ctrlKey: true, shiftKey: true })).toBe('ungroup');
+    // Plain G is nobody's: it types ג on a Hebrew layout and nothing on the map.
+    expect(key('KeyG')).toBeNull();
   });
 
   it('leave every other ⌘ combination to the browser', () => {

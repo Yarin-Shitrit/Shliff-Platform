@@ -23,6 +23,8 @@ export interface GestureWorld {
   itemAt(x: number, y: number): { id: string; isNet: boolean; locked: boolean; line?: boolean } | null;
   groundAt(x: number, y: number): [number, number] | null;
   selection(): readonly string[];
+  /** The item and whatever is grouped with it (`groupMembers`): what a press on it selects and a drag on it moves. */
+  groupOf(id: string): string[];
 }
 
 export type GestureIntent =
@@ -64,6 +66,18 @@ type Drag =
 
 function far(a: Point, b: Point, slop: number): boolean {
   return Math.hypot(a.x - b.x, a.y - b.y) >= slop;
+}
+
+/**
+ * A move or a resize without snapping: the item rests wherever the pointer
+ * leaves it, between the guide and gap lines rather than on them. Alt or
+ * Ctrl, read on every move — so the key can go down mid-drag, once the lead
+ * sees the guides pulling. Ctrl only means this once a drag on an item is
+ * under way: pressed *before* the press, on the ground or on an item, it is
+ * still the orbit (3D) or the pan (plan) that `down` takes it for.
+ */
+function free(p: PointerInput): boolean {
+  return p.alt || p.ctrl;
 }
 
 export class Gestures {
@@ -130,14 +144,16 @@ export class Gestures {
         this.drag = { type: 'pan', start: at, grab: world.groundAt(p.x, p.y), moved: false, click: { type: 'select', id: item.id } };
         return [];
       }
-      const intents: GestureIntent[] = already ? [] : [{ type: 'select', ids: [item.id] }];
+      // A grouped item is pressed as its whole group: selected together, dragged together.
+      const group = world.groupOf(item.id);
+      const intents: GestureIntent[] = already ? [] : [{ type: 'select', ids: group }];
       if (item.locked) {
         this.drag = { type: 'locked', start: at, warned: false };
         return intents;
       }
       const grab = world.groundAt(p.x, p.y);
       if (grab !== null) {
-        this.drag = { type: 'move', ids: already ? [...selected] : [item.id], start: at, grab, moved: false, last: [0, 0] };
+        this.drag = { type: 'move', ids: already ? [...selected] : group, start: at, grab, moved: false, last: [0, 0] };
       }
       return intents;
     }
@@ -174,14 +190,14 @@ export class Gestures {
         drag.moved = true;
         const ground = this.world.groundAt(p.x, p.y);
         if (ground !== null) drag.last = [ground[0] - drag.grab[0], ground[1] - drag.grab[1]];
-        return [{ type: 'movePreview', ids: drag.ids, dxCm: drag.last[0], dyCm: drag.last[1], free: p.alt }];
+        return [{ type: 'movePreview', ids: drag.ids, dxCm: drag.last[0], dyCm: drag.last[1], free: free(p) }];
       }
       case 'resize': {
         if (!drag.moved && !far(drag.start, at, 1)) return [];
         drag.moved = true;
         const ground = this.world.groundAt(p.x, p.y);
         if (ground !== null) drag.last = [ground[0] - drag.grab[0], ground[1] - drag.grab[1]];
-        return [{ type: 'resizePreview', id: drag.id, handle: drag.handle, dxCm: drag.last[0], dyCm: drag.last[1], free: p.alt }];
+        return [{ type: 'resizePreview', id: drag.id, handle: drag.handle, dxCm: drag.last[0], dyCm: drag.last[1], free: free(p) }];
       }
       case 'marquee': {
         if (!drag.moved && !far(drag.start, at, CLICK_SLOP_PX)) return [];
@@ -214,20 +230,20 @@ export class Gestures {
       case 'pan': {
         if (drag.moved) return settle;
         if (drag.click.type === 'clear') return [{ type: 'clearSelection' }, ...settle];
-        if (drag.click.type === 'select') return [{ type: 'select', ids: [drag.click.id] }, ...settle];
+        if (drag.click.type === 'select') return [{ type: 'select', ids: this.world.groupOf(drag.click.id) }, ...settle];
         return settle;
       }
       case 'move': {
         if (!drag.moved) return settle;
         const ground = this.world.groundAt(p.x, p.y);
         const [dxCm, dyCm] = ground === null ? drag.last : [ground[0] - drag.grab[0], ground[1] - drag.grab[1]];
-        return [{ type: 'moveCommit', ids: drag.ids, dxCm, dyCm, free: p.alt }, ...settle];
+        return [{ type: 'moveCommit', ids: drag.ids, dxCm, dyCm, free: free(p) }, ...settle];
       }
       case 'resize': {
         if (!drag.moved) return settle;
         const ground = this.world.groundAt(p.x, p.y);
         const [dxCm, dyCm] = ground === null ? drag.last : [ground[0] - drag.grab[0], ground[1] - drag.grab[1]];
-        return [{ type: 'resizeCommit', id: drag.id, handle: drag.handle, dxCm, dyCm, free: p.alt }, ...settle];
+        return [{ type: 'resizeCommit', id: drag.id, handle: drag.handle, dxCm, dyCm, free: free(p) }, ...settle];
       }
       case 'marquee':
         return drag.moved ? [{ type: 'marqueeEnd' }, ...settle] : settle;

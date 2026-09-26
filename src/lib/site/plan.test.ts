@@ -351,6 +351,62 @@ describe('the camp map', () => {
       expect(copy).toMatchObject({ heightCm: 260, locked: false });
     });
 
+    it('stores a group on its members and hands it back to the editor', async () => {
+      const GROUP = '7c2e9a10-3b4d-4e5f-8a9b-0c1d2e3f4a5b';
+      const planId = await createPlan(db, s26, PLOT, LEAD);
+      const tent = tentOf();
+      const sofa = tentOf({ kind: 'sofa', label: 'ספה 1', widthCm: 200, depthCm: 90, xCm: 600 });
+      await seed(planId, tent, sofa);
+      // An added item from a page older than groups carried no field: it was stored as in no group.
+      expect((await listItems(db, planId)).map((row) => row.groupId)).toEqual([null, null]);
+
+      const result = await applySiteOps(db, planId, 1, [
+        { type: 'update', id: tent.id, patch: { groupId: GROUP } },
+        { type: 'update', id: sofa.id, patch: { groupId: GROUP } },
+      ], LEAD);
+      expect(result).toEqual({ status: 'saved', version: 2, skipped: [] });
+      expect((await listItems(db, planId)).map((row) => row.groupId)).toEqual([GROUP, GROUP]);
+      const loaded = await loadDoc(db, planId);
+      expect(loaded?.doc.items.map((entry) => entry.groupId)).toEqual([GROUP, GROUP]);
+
+      // Grouping is not a move: a locked member may still be ungrouped.
+      await db.update(siteItems).set({ locked: true }).where(eq(siteItems.id, tent.id));
+      const freed = await applySiteOps(db, planId, 2, [{ type: 'update', id: tent.id, patch: { groupId: null } }], LEAD);
+      expect(freed).toEqual({ status: 'saved', version: 3, skipped: [] });
+      expect((await itemById(db, tent.id))?.groupId).toBeNull();
+    });
+
+    it('refuses a group that is not an id, in the batch, whole', async () => {
+      const planId = await createPlan(db, s26, PLOT, LEAD);
+      const tent = tentOf();
+      await seed(planId, tent);
+      await expect(applySiteOps(db, planId, 1, [{ type: 'update', id: tent.id, patch: { groupId: 'grp-a' } }], LEAD))
+        .rejects.toThrow('an item group must be an id');
+    });
+
+    it('copies a group under a fresh id of its own, one per group, and a lone item as none', async () => {
+      const GROUP = '7c2e9a10-3b4d-4e5f-8a9b-0c1d2e3f4a5b';
+      const from = await createPlan(db, s25, PLOT, LEAD);
+      const tent = tentOf({ groupId: GROUP });
+      const sofa = tentOf({ kind: 'sofa', label: 'ספה 1', widthCm: 200, depthCm: 90, xCm: 600, groupId: GROUP });
+      const fridge = tentOf({ kind: 'fridge', label: 'מקרר 1', widthCm: 70, depthCm: 70, xCm: 1200 });
+      await seed(from, tent, sofa, fridge);
+
+      const to = await copyPlan(db, s25, s26, LEAD);
+      // By label, not by position: the three share a sort, so the list's order among them is by id.
+      const groupOf = async (planId: string, label: string) =>
+        (await listItems(db, planId)).find((row) => row.label === label)?.groupId;
+      const tentCopy = await groupOf(to, 'אוהל 1');
+      expect(tentCopy).toBeTruthy();
+      expect(tentCopy).not.toBe(GROUP);
+      expect(await groupOf(to, 'ספה 1')).toBe(tentCopy);
+      expect(await groupOf(to, 'מקרר 1')).toBeNull();
+      // Last year's group is still last year's.
+      expect(await groupOf(from, 'אוהל 1')).toBe(GROUP);
+      expect(await groupOf(from, 'ספה 1')).toBe(GROUP);
+      expect(await groupOf(from, 'מקרר 1')).toBeNull();
+    });
+
     it('reads the camp’s kind defaults, ignoring a kind the map no longer knows', async () => {
       await db.insert(siteKindDefaults).values([
         { kind: 'tent', widthCm: 350, depthCm: 300, heightCm: 210 },

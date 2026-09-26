@@ -1,0 +1,1 @@
+ALTER TABLE "site_items" ADD COLUMN "group_id" uuid;

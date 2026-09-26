@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
-  addLineOps, addOps, alignOps, distributeOps, duplicateOps, lockOps, moveOps, patchLineOps, patchOps, removeLineOps,
-  removeOps, resetSizeOps, resizeKindOps, rowOps, setKindDefaultOps, setRectOps, turnOps, uniformSize,
+  addLineOps, addOps, alignOps, changedUpdate, distributeOps, duplicateOps, groupOps, lockOps, moveOps, patchLineOps, patchOps,
+  removeLineOps, removeOps, resetSizeOps, resizeKindOps, rowOps, setKindDefaultOps, setRectOps, turnOps, ungroupOps, uniformSize,
 } from './commands';
-import type { EditorDoc, EditorItem } from './model';
+import { groupIdOf, groupMembers, type EditorDoc, type EditorItem } from './model';
 import { applyOps, invertOps, type SiteOp } from './ops';
 
 function make(over: Partial<EditorItem> & Pick<EditorItem, 'id' | 'label'>): EditorItem {
@@ -157,6 +157,79 @@ describe('duplicating', () => {
 
   it('copies nothing when nothing named is there', () => {
     expect(duplicateOps(DOC, ['nope'], ids())).toEqual({ ops: [], ids: [] });
+  });
+});
+
+describe('grouping', () => {
+  // t1 and t2 are one group; f1 stands alone; the caravan is in a group of its own with the locked tent.
+  const GROUPED: EditorDoc = {
+    ...DOC,
+    items: [
+      { ...T1, groupId: 'grp-a' }, { ...T2, groupId: 'grp-a' }, { ...C1, groupId: 'grp-b' }, S1, { ...LK, groupId: 'grp-b' }, F1,
+    ],
+  };
+
+  it('reads an item without the field, and one with null, as in no group', () => {
+    expect(groupIdOf(T1)).toBeNull();
+    expect(groupIdOf({ ...T1, groupId: null })).toBeNull();
+    expect(groupIdOf({ ...T1, groupId: 'grp-a' })).toBe('grp-a');
+  });
+
+  it('brings the rest of a group along with any member named, the named first and a line untouched', () => {
+    expect(groupMembers(GROUPED, ['t2'])).toEqual(['t2', 't1']);
+    expect(groupMembers(GROUPED, ['f1', 'lk', 'pipe-1'])).toEqual(['f1', 'lk', 'pipe-1', 'c1']);
+    expect(groupMembers(GROUPED, ['f1'])).toEqual(['f1']);
+    expect(groupMembers(DOC, ['t1', 't2'])).toEqual(['t1', 't2']);
+  });
+
+  it('makes two or more items one group under the id it is given, a locked one included', () => {
+    expect(groupOps(DOC, ['t1', 'lk'], 'grp-new')).toEqual([
+      { type: 'update', id: 't1', patch: { groupId: 'grp-new' } },
+      { type: 'update', id: 'lk', patch: { groupId: 'grp-new' } },
+    ]);
+  });
+
+  it('merges: an item that is half of another group brings its partner in', () => {
+    expect(groupOps(GROUPED, ['f1', 't1'], 'grp-new').map((op) => (op.type === 'update' ? op.id : op.type)))
+      .toEqual(['f1', 't1', 't2']);
+  });
+
+  it('does nothing for one item, for nothing, or for a selection that already is one group', () => {
+    expect(groupOps(DOC, ['t1'], 'grp-new')).toEqual([]);
+    expect(groupOps(DOC, ['nope'], 'grp-new')).toEqual([]);
+    expect(groupOps(GROUPED, ['t1', 't2'], 'grp-new')).toEqual([]);
+  });
+
+  it('dissolves every group any named item is in, and nothing else', () => {
+    expect(ungroupOps(GROUPED, ['t2'])).toEqual([
+      { type: 'update', id: 't2', patch: { groupId: null } },
+      { type: 'update', id: 't1', patch: { groupId: null } },
+    ]);
+    expect(ungroupOps(GROUPED, ['f1'])).toEqual([]);
+    expect(ungroupOps(DOC, ['t1', 't2'])).toEqual([]);
+  });
+
+  it('undoes a grouping back to no group, even on an item that never had the field', () => {
+    const ops = groupOps(DOC, ['t1', 't2'], 'grp-new');
+    const grouped = applyOps(DOC, ops).doc;
+    expect(groupMembers(grouped, ['t1'])).toEqual(['t1', 't2']);
+    const undone = applyOps(grouped, invertOps(DOC, ops)).doc;
+    expect(groupMembers(undone, ['t1'])).toEqual(['t1']);
+    expect(groupIdOf(undone.items[0])).toBeNull();
+    // Nothing to change: no op, so nothing is saved for it.
+    expect(changedUpdate(T1, { groupId: null })).toBeNull();
+  });
+
+  it('copies a group as a group of its own, and a lone member as no group', () => {
+    // n1, then the copies' group id, then n2: the id is minted when the first copy needs it.
+    const { ops } = duplicateOps(GROUPED, ['t1', 't2'], ids('n1', 'grp-copy', 'n2'));
+    expect(ops.map((op) => (op.type === 'add' ? op.item.groupId : op.type))).toEqual(['grp-copy', 'grp-copy']);
+    const { ops: alone } = duplicateOps(GROUPED, ['t1'], ids('n1'));
+    expect(alone).toHaveLength(1);
+    expect(alone[0].type === 'add' && alone[0].item.groupId).toBeNull();
+    // An item in no group keeps the shape it came with: no `groupId` key appears on its copy.
+    const { ops: loose } = duplicateOps(DOC, ['f1'], ids('n1'));
+    expect(loose[0].type === 'add' && 'groupId' in loose[0].item).toBe(false);
   });
 });
 

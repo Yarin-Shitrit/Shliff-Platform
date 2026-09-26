@@ -29,6 +29,7 @@ export const SITE_ERRORS: HebrewErrors = [
   ['an item id is already in use', 'הפריט הזה כבר נמצא במפה. טעינה מחדש של המפה תסדר את זה'],
   ['an item height must be', 'גובה של פריט צריך להיות בין 10 סנטימטר ל־20 מטר, במספר שלם של סנטימטרים'],
   ['a lock must be', 'נעילה היא כן או לא'],
+  ['an item group must be', 'הקיבוץ של הפריטים לא נשמר כמו שצריך. טעינה מחדש של המפה תסדר את זה'],
   ['that item is locked', LOCKED_NOTICE], // one sentence for a locked item everywhere (P14)
   ['a kind default must be', 'מידות ברירת המחדל צריכות להיות בין 10 סנטימטר ל־500 מטר, והגובה עד 20 מטר'],
   ['north must be', 'כיוון הצפון נמדד במעלות שלמות, מ־0 עד 359'],

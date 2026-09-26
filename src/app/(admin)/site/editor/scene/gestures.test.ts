@@ -21,8 +21,13 @@ const LABELS = [
   { ids: ['sofa'], group: false, box: [300, 80, 360, 96] as const },
 ];
 
-function fakeWorld(over: { selection?: string[]; tool?: 'select' | 'measure'; mode?: ViewMode } = {}) {
+function fakeWorld(over: { selection?: string[]; tool?: 'select' | 'measure'; mode?: ViewMode; groups?: string[][] } = {}) {
   const state = { selection: over.selection ?? [], tool: over.tool ?? 'select', mode: over.mode ?? '3d' as ViewMode };
+  /** The item first, then the rest of its group, as `groupMembers` answers. */
+  const groupOf = (id: string): string[] => {
+    const group = (over.groups ?? []).find((members) => members.includes(id));
+    return group === undefined ? [id] : [id, ...group.filter((member) => member !== id)];
+  };
   const inside = (box: readonly number[], x: number, y: number) => x >= box[0] && x <= box[2] && y >= box[1] && y <= box[3];
   const world: GestureWorld = {
     tool: () => state.tool,
@@ -35,6 +40,7 @@ function fakeWorld(over: { selection?: string[]; tool?: 'select' | 'measure'; mo
     },
     groundAt: (x, y) => [x * 10, y * 10],
     selection: () => state.selection,
+    groupOf,
   };
   return { world, state };
 }
@@ -103,6 +109,43 @@ describe('dragging an item', () => {
     const gestures = new Gestures(fakeWorld({ selection: ['tent'] }).world);
     expect(drag(gestures, [150, 150], [160, 150], { alt: true }).at(-1))
       .toEqual({ type: 'moveCommit', ids: ['tent'], dxCm: 100, dyCm: 0, free: true });
+  });
+
+  it('asks for no snapping while Ctrl is held too, even when it goes down mid-drag', () => {
+    // The lead sees the guides pull and presses Ctrl to rest the tent between them.
+    const gestures = new Gestures(fakeWorld({ selection: ['tent'] }).world);
+    const said = [
+      ...gestures.down(pointer(150, 150)),
+      ...gestures.move(pointer(155, 150)),
+      ...gestures.move(pointer(160, 150, { ctrl: true })),
+      ...gestures.up(pointer(160, 150, { ctrl: true })),
+    ].filter((intent) => intent.type !== 'hover');
+    expect(said).toEqual([
+      { type: 'movePreview', ids: ['tent'], dxCm: 50, dyCm: 0, free: false },
+      { type: 'movePreview', ids: ['tent'], dxCm: 100, dyCm: 0, free: true },
+      { type: 'moveCommit', ids: ['tent'], dxCm: 100, dyCm: 0, free: true },
+    ]);
+  });
+
+  it('still orbits when Ctrl is already down at the press, even on an item', () => {
+    // Ctrl + drag is the orbit (spec §8); only a drag that is already moving an item reads it as "no snapping".
+    const gestures = new Gestures(fakeWorld({ selection: ['tent'] }).world);
+    expect(drag(gestures, [150, 150], [160, 150], { ctrl: true })[0]).toEqual({ type: 'orbitBy', dYaw: 5 * 0.35, dPitch: 0 });
+  });
+
+  it('presses a grouped item as its whole group: selected together, moved together', () => {
+    const gestures = new Gestures(fakeWorld({ groups: [['tent', 'sofa']] }).world);
+    expect(drag(gestures, [150, 150], [170, 140])).toEqual([
+      { type: 'select', ids: ['tent', 'sofa'] },
+      { type: 'movePreview', ids: ['tent', 'sofa'], dxCm: 100, dyCm: -50, free: false },
+      { type: 'movePreview', ids: ['tent', 'sofa'], dxCm: 200, dyCm: -100, free: false },
+      { type: 'moveCommit', ids: ['tent', 'sofa'], dxCm: 200, dyCm: -100, free: false },
+    ]);
+  });
+
+  it('selects the group from a click on one member’s label', () => {
+    const gestures = new Gestures(fakeWorld({ groups: [['tent', 'sofa']] }).world);
+    expect(drag(gestures, [330, 88], [330, 88])).toEqual([{ type: 'select', ids: ['sofa', 'tent'] }]);
   });
 
   it('does not move a locked item, and says why once', () => {

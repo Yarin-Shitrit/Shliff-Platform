@@ -120,6 +120,13 @@
       "when": 1790416945878,
       "tag": "0016_warehouse_boxes",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790422373217,
+      "tag": "0017_site_item_groups",
+      "breakpoints": true
     }
   ]
 }
