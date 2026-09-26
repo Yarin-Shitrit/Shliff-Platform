@@ -70,11 +70,38 @@ describe('the item builders', () => {
     expect(backOf(3).x).toBeLessThan(1);
   });
 
-  it('keys a sofa’s geometry on its facing, and nothing without a front', () => {
+  it('keys a sofa’s geometry on its facing, a square tent’s too, and nothing else without a front', () => {
     expect(geometryKey(item({ kind: 'sofa', facing: 1 }), 80)).not.toBe(geometryKey(item({ kind: 'sofa' }), 80));
     expect(geometryKey(item({ kind: 'armchair', facing: 1 }), 80)).not.toBe(geometryKey(item({ kind: 'armchair' }), 80));
+    // A 300 × 200 tent runs its ridge along the longer side whatever the facing; a square has none, so the facing decides.
     expect(geometryKey(item({ facing: 1 }), 200)).toBe(geometryKey(item(), 200));
+    expect(geometryKey(item({ widthCm: 300, depthCm: 300, facing: 1 }), 200))
+      .not.toBe(geometryKey(item({ widthCm: 300, depthCm: 300 }), 200));
     expect(geometryKey(item({ kind: 'caravan', facing: 3 }), 270)).toBe(geometryKey(item({ kind: 'caravan' }), 270));
+  });
+
+  it('turns a square tent’s ridge with its facing: east–west at 0 and 2, north–south at 1 and 3', () => {
+    const ridgeOf = (facing: number) => {
+      const [body] = parts(buildItemObject(item({ widthCm: 300, depthCm: 300, facing }), 200, NORMAL), 'body');
+      const position = body.geometry.getAttribute('position');
+      const xs = new Set<number>();
+      const zs = new Set<number>();
+      for (let i = 0; i < position.count; i += 1) {
+        if (Math.abs(position.getY(i) - 2) < 1e-6) {
+          xs.add(position.getX(i));
+          zs.add(position.getZ(i));
+        }
+      }
+      return { xs, zs };
+    };
+    // Along x: every ridge point shares one z (the middle) and spans both ends in x.
+    expect(ridgeOf(0).zs).toEqual(new Set([1.5]));
+    expect(ridgeOf(0).xs).toEqual(new Set([0, 3]));
+    expect(ridgeOf(2).zs).toEqual(new Set([1.5]));
+    // Along z: the other way round.
+    expect(ridgeOf(1).xs).toEqual(new Set([1.5]));
+    expect(ridgeOf(1).zs).toEqual(new Set([0, 3]));
+    expect(ridgeOf(3).xs).toEqual(new Set([1.5]));
   });
 
   it('turns every face of a tent outwards, with the ridge along the longer side', () => {
