@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNotNull, or, sql } from 'drizzle-orm';
 import type { AnyDb } from '@/lib/db-types';
 import { isBlank } from '@/lib/text/normalize';
 import { inventoryItems, type ItemCondition, type LogisticsCategory } from '@/db/schema/logistics';
@@ -126,6 +126,31 @@ export async function warehouseCounts(db: AnyDb, query: WarehouseQuery): Promise
     total: all.length,
     lastUpdatedAt: newest,
   };
+}
+
+/**
+ * The places gear is already stored, most-used first — the item drawer offers
+ * them as one-tap chips under the location box.
+ *
+ * Exactly the stored strings, not normalised: a chip's whole point is that the
+ * next item lands under the same spelling as the last, so a search for the box
+ * keeps finding everything in it. Distinct by the stored value for the same
+ * reason; two spellings of one box are two chips, which is the screen telling
+ * the lead about the drift rather than hiding it. Retired items count: a
+ * retired saw still sits in a real box.
+ */
+export async function frequentLocations(db: AnyDb, limit = 8): Promise<string[]> {
+  const uses = sql<number>`count(*)`;
+  const rows = await db
+    .select({ location: inventoryItems.locationText, uses })
+    .from(inventoryItems)
+    .where(isNotNull(inventoryItems.locationText))
+    .groupBy(inventoryItems.locationText)
+    .orderBy(desc(uses), asc(inventoryItems.locationText))
+    .limit(limit);
+  return rows
+    .map((row) => row.location)
+    .filter((location): location is string => location !== null && !isBlank(location));
 }
 
 /** Null rather than a throw: the id comes from a URL someone may have edited. */

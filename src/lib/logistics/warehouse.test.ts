@@ -3,7 +3,7 @@ import { createTestDb, type TestDb } from '@/test/db';
 import { inventoryItems } from '@/db/schema/logistics';
 import {
   listWarehouse, warehouseCounts, itemById, setCondition,
-  createItem, updateItem, addToItem,
+  createItem, updateItem, addToItem, frequentLocations,
 } from './warehouse';
 
 const LEAD = 'lead@shliff.camp';
@@ -245,5 +245,42 @@ describe('what the header line says about the warehouse as a whole', () => {
       locationText: 'ארגז', condition: 'retired', notes: null,
     }, LEAD);
     expect((await warehouseCounts(db, ALL)).retired).toBe(1);
+  });
+});
+
+describe('frequentLocations — the chips under the location box', () => {
+  let db: TestDb;
+
+  beforeEach(async () => {
+    db = await createTestDb();
+    await db.insert(inventoryItems).values([
+      { name: 'א', category: 'kitchen', quantity: 1, locationText: 'ארגז כחול #1', condition: 'ready', updatedBy: LEAD },
+      { name: 'ב', category: 'kitchen', quantity: 1, locationText: 'ארגז כחול #1', condition: 'retired', updatedBy: LEAD },
+      { name: 'ג', category: 'build', quantity: 1, locationText: 'מדף עליון', condition: 'ready', updatedBy: LEAD },
+      { name: 'ד', category: 'build', quantity: 1, locationText: 'ארגז גדול #2', condition: 'ready', updatedBy: LEAD },
+      { name: 'ה', category: 'build', quantity: 1, locationText: 'ארגז גדול #2', condition: 'ready', updatedBy: LEAD },
+      { name: 'ו', category: 'build', quantity: 1, locationText: 'ארגז גדול #2', condition: 'ready', updatedBy: LEAD },
+      { name: 'ז', category: 'general', quantity: 1, locationText: null, condition: 'ready', updatedBy: LEAD },
+    ]);
+  });
+
+  it('lists each stored location once, most-used first, ties by name', async () => {
+    expect(await frequentLocations(db)).toEqual(['ארגז גדול #2', 'ארגז כחול #1', 'מדף עליון']);
+  });
+
+  it('counts a retired item’s box — the box is still real — and skips a missing location', async () => {
+    const locations = await frequentLocations(db);
+    expect(locations).toContain('ארגז כחול #1');
+    expect(locations).not.toContain(null);
+    expect(locations).toHaveLength(3);
+  });
+
+  it('stops at the limit it was given', async () => {
+    expect(await frequentLocations(db, 2)).toEqual(['ארגז גדול #2', 'ארגז כחול #1']);
+  });
+
+  it('is empty on an empty warehouse, so the drawer draws no chip row', async () => {
+    const fresh = await createTestDb();
+    expect(await frequentLocations(fresh)).toEqual([]);
   });
 });

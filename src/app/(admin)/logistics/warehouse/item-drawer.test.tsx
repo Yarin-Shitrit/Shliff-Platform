@@ -172,3 +172,103 @@ describe('the drawer over an item that already exists', () => {
     expect(screen.queryByRole('button', { name: 'הוספת הפריט' })).toBeNull();
   });
 });
+
+describe('the drawer on a phone held in the container', () => {
+  it('counts with − and +, named in words, and never below zero', () => {
+    mount(null);
+    const box = screen.getByLabelText(/כמות/) as HTMLInputElement;
+    const more = screen.getByRole('button', { name: 'עוד אחד' });
+    const less = screen.getByRole('button', { name: 'פחות אחד' });
+
+    expect((less as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(more);
+    fireEvent.click(more);
+    expect(box.value).toBe('2');
+    fireEvent.click(less);
+    expect(box.value).toBe('1');
+    fireEvent.click(less);
+    expect(box.value).toBe('0');
+    expect((less as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('steps from whatever was typed, so + after "4" is 5 and not "41"', () => {
+    mount(null);
+    type(/כמות/, '4');
+    fireEvent.click(screen.getByRole('button', { name: 'עוד אחד' }));
+    expect((screen.getByLabelText(/כמות/) as HTMLInputElement).value).toBe('5');
+  });
+
+  it('fills the location from a chip, exactly as stored, and a second tap clears it', () => {
+    render(
+      <ToastProvider>
+        <ItemDrawer item={null} closeHref="/logistics/warehouse" locations={['ארגז כחול #1', 'מדף עליון']} />
+      </ToastProvider>,
+    );
+    const chip = screen.getByRole('button', { name: 'ארגז כחול #1' });
+    fireEvent.click(chip);
+    expect((screen.getByLabelText(/מיקום במחסן/) as HTMLInputElement).value).toBe('ארגז כחול #1');
+    expect(chip.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(chip);
+    expect((screen.getByLabelText(/מיקום במחסן/) as HTMLInputElement).value).toBe('');
+  });
+
+  it('draws no chip row on a warehouse with nothing stored yet', () => {
+    mount(null);
+    expect(screen.queryByRole('group', { name: 'מיקומים שכבר בשימוש' })).toBeNull();
+  });
+
+  it('stays open for the next item when asked, keeping the box and the category', async () => {
+    render(
+      <ToastProvider>
+        <ItemDrawer item={null} closeHref="/logistics/warehouse" locations={['ארגז כחול #1']} />
+      </ToastProvider>,
+    );
+    fireEvent.click(screen.getByRole('checkbox', { name: /להישאר כאן/ }));
+    type(/שם הפריט/, 'גזייה');
+    fireEvent.click(screen.getByRole('button', { name: 'ארגז כחול #1' }));
+    fireEvent.change(screen.getByLabelText('קטגוריה'), { target: { value: 'kitchen' } });
+    type(/כמות/, '2');
+    type(/הערות/, 'בלי מצת');
+    await submit('הוספת הפריט');
+
+    expect(createItemAction).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'גזייה', locationText: 'ארגז כחול #1', category: 'kitchen', quantity: 2,
+    }));
+    // The drawer is still here, the list underneath was refreshed, nothing navigated.
+    expect(push).not.toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    // What describes the item is cleared; where it went and what it is stays.
+    expect((screen.getByLabelText(/שם הפריט/) as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText(/כמות/) as HTMLInputElement).value).toBe('0');
+    expect((screen.getByLabelText(/הערות/) as HTMLTextAreaElement).value).toBe('');
+    expect((screen.getByLabelText(/מיקום במחסן/) as HTMLInputElement).value).toBe('ארגז כחול #1');
+    expect((screen.getByLabelText('קטגוריה') as HTMLSelectElement).value).toBe('kitchen');
+    // The way out is now "done", not "cancel": there is nothing left to cancel.
+    expect(screen.getByRole('button', { name: 'סיום' })).toBeTruthy();
+  });
+
+  it('closes after the add as before while the box is not ticked', async () => {
+    mount(null);
+    type(/שם הפריט/, 'גזייה');
+    type(/מיקום במחסן/, 'מכולה');
+    await submit('הוספת הפריט');
+    expect(push).toHaveBeenCalledWith('/logistics/warehouse');
+  });
+
+  it('keeps a failed add on screen even in stay-open mode, with the form untouched', async () => {
+    createItemAction.mockResolvedValueOnce({ ok: false, error: 'לא נשמר' });
+    mount(null);
+    fireEvent.click(screen.getByRole('checkbox', { name: /להישאר כאן/ }));
+    type(/שם הפריט/, 'גזייה');
+    type(/מיקום במחסן/, 'מכולה');
+    await submit('הוספת הפריט');
+    expect(refusal()).toContain('לא נשמר');
+    expect((screen.getByLabelText(/שם הפריט/) as HTMLInputElement).value).toBe('גזייה');
+  });
+
+  it('never offers to stay open while editing — there is no next item', () => {
+    mount(ITEM);
+    expect(screen.queryByRole('checkbox', { name: /להישאר כאן/ })).toBeNull();
+  });
+});

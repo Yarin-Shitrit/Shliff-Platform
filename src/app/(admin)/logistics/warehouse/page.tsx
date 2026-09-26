@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
-import { listWarehouse, warehouseCounts, itemById } from '@/lib/logistics/warehouse';
+import { listWarehouse, warehouseCounts, itemById, frequentLocations } from '@/lib/logistics/warehouse';
 import {
   parseWarehouseQuery, warehouseHref, categoryHref, newItemHref, sortHref,
   warehouseExportHref, WAREHOUSE_SORTS,
@@ -62,9 +62,10 @@ export default async function WarehousePage(
 
   const params = await searchParams;
   const query = parseWarehouseQuery(params);
-  const [rows, counts] = await Promise.all([
+  const [rows, counts, locations] = await Promise.all([
     listWarehouse(db, query),
     warehouseCounts(db, query),
+    frequentLocations(db),
   ]);
 
   const filtered = Boolean(query.q || query.category || query.view !== 'all');
@@ -108,7 +109,10 @@ export default async function WarehousePage(
         crumbs={[{ label: 'לוגיסטיקה', href: '/logistics' }, { label: 'מחסן' }]}
         chip={<ScopeChip icon="layers">כלל־קאמפי · לא משויך לשנה</ScopeChip>}
         actions={(
-          <>
+          /* Laptop only (`.topActions`): on a phone these two move to the
+             fixed bar at the end of this page, because the top bar has no
+             room for them there — see `warehouse.module.css`. */
+          <span className={styles.topActions}>
             {/* `download`, because the destination is a file and not a page:
                 without it the client router fetches the Route Handler's CSV as
                 an RSC payload and nothing reaches the reader's downloads
@@ -121,7 +125,7 @@ export default async function WarehousePage(
               <Icon name="plus" size={14} />
               הוספת פריט
             </ButtonLink>
-          </>
+          </span>
         )}
       />
 
@@ -231,10 +235,27 @@ export default async function WarehousePage(
         )}
       />
 
+      {/*
+        The phone's copy of the two verbs, fixed above the tab bar (hidden from
+        768px up). Adding gear while standing in the container is the reason
+        this screen exists on a phone, so הוספת פריט is the wide primary
+        button and ייצוא the icon beside it — both the same URLs as the top
+        bar's, so there is one way to open the drawer and one file to export.
+      */}
+      <div className={styles.phoneActions}>
+        <ButtonLink tone="primary" href={addHref}>
+          <Icon name="plus" size={16} />
+          הוספת פריט
+        </ButtonLink>
+        <ButtonLink href={warehouseExportHref(params)} download iconLabel="ייצוא">
+          <Icon name="download" size={16} />
+        </ButtonLink>
+      </div>
+
       {peeked === null ? null : (
-        <ItemDrawer item={peeked} closeHref={closeHref} />
+        <ItemDrawer item={peeked} closeHref={closeHref} locations={locations} />
       )}
-      {query.creating ? <ItemDrawer item={null} closeHref={closeHref} /> : null}
+      {query.creating ? <ItemDrawer item={null} closeHref={closeHref} locations={locations} /> : null}
     </main>
   );
 }

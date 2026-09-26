@@ -101,8 +101,10 @@ export function WarehouseTable(
       rowActions={rowActions}
       rowActionsHeader="פעולות"
       totals={[
-        { key: 'label', content: 'סך הכול בתצוגה הזו' },
-        { key: 'category', content: '' },
+        /* The label spans the name and category columns so the row has no
+           empty cell before the figure: on a phone the kit stacks the footer's
+           cells as blocks, and an empty cell there is a blank block. */
+        { key: 'label', content: 'סך הכול בתצוגה הזו', colSpan: 2 },
         { key: 'quantity', content: shownQuantity, numeric: true },
         /* Four, not three: `rowActions` adds a column of its own. */
         { key: 'rest', content: '', colSpan: rowActions === undefined ? 3 : 4 },
