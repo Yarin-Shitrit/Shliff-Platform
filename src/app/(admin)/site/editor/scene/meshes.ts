@@ -48,13 +48,16 @@ type Point = [number, number, number];
 /**
  * What decides the geometry. Position is not in it: a move never rebuilds.
  * A net's ropes are (spec §14): a new angle, or a new height under an angle,
- * rebuilds the net. The facing is, for the one shape with a front: a sofa
- * turned in place keeps its rectangle and still has to move its back.
+ * rebuilds the net. The facing is, where it changes the picture: a sofa
+ * turned in place keeps its rectangle and still has to move its back, and a
+ * square tent has no longer side for its ridge to follow, so the facing
+ * says which way the ridge runs. Every other shape looks the same at every
+ * facing, and keys on none.
  */
 export function geometryKey(item: EditorItem, heightCm: number, ropeCm = 0): string {
   const shape = SITE_KINDS[item.kind].shape;
   const inset = shape === 'net' ? item.insetCm ?? 0 : 0;
-  const facing = shape === 'sofa' ? item.facing : 0;
+  const facing = shape === 'sofa' || (shape === 'tent' && item.widthCm === item.depthCm) ? item.facing : 0;
   return `${item.kind}:${item.widthCm}x${item.depthCm}x${heightCm}:${inset}:${ropeCm}:${facing}`;
 }
 
@@ -121,10 +124,16 @@ function convexGeometry(faces: Point[][]): THREE.BufferGeometry {
   return geometry;
 }
 
-/** Walls to half the height, then a gable roof whose ridge runs along the longer side. */
-function tentGeometry(w: number, h: number, d: number): THREE.BufferGeometry {
+/**
+ * Walls to half the height, then a gable roof whose ridge runs along the
+ * longer side. A square has no longer side, so there the facing decides:
+ * east–west at 0 and 2, north–south at 1 and 3 — a turn of a square tent
+ * is seen, like a turn of anything else.
+ */
+function tentGeometry(w: number, h: number, d: number, facing: number): THREE.BufferGeometry {
   const eave = h * 0.5;
-  if (w >= d) {
+  const ridgeEastWest = w > d || (w === d && facing % 2 === 0);
+  if (ridgeEastWest) {
     const m = d / 2;
     return convexGeometry([
       [[0, 0, d], [w, 0, d], [w, eave, d], [0, eave, d]],
@@ -270,7 +279,7 @@ export function buildItemObject(item: EditorItem, heightCm: number, look: ItemLo
       break;
     }
     case 'tent':
-      group.add(solid(tentGeometry(w, h, d), new THREE.Vector3(0, 0, 0)));
+      group.add(solid(tentGeometry(w, h, d, item.facing), new THREE.Vector3(0, 0, 0)));
       break;
     case 'cylinder':
       group.add(cylinder(w, h, d));
