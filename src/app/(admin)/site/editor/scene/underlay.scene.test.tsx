@@ -54,7 +54,7 @@ const DOC: EditorDoc = {
   plot: { id: PLAN, widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0 }, items: [TENT], lines: [], defaults: {}, underlay: IMAGE,
 };
 const UI: EditorUi = {
-  tool: 'select', mode: 'plan', labels: false, sun: false, netsHidden: false, snap: true,
+  tool: 'select', mode: 'plan', labels: 'none', sun: false, netsHidden: false, snap: true,
   hiddenGroups: [], hour: 14, theme: 'light', underlay: { shown: true, opacity: 0.5 },
 };
 
@@ -143,7 +143,7 @@ describe('the picture under the map, in the engine', () => {
   it('fades and hides the picture without rebuilding the scene or laying the labels out again (review U1)', async () => {
     const syncs = vi.spyOn(SceneSync.prototype, 'sync');
     try {
-      const LABELLED: EditorUi = { ...UI, labels: true };
+      const LABELLED: EditorUi = { ...UI, labels: 'floating' };
       const { onUnderlay, rerenderWith } = renderScene(LABELLED);
       await ready(onUnderlay);
       const [laid, synced] = [layouts.count, syncs.mock.calls.length];

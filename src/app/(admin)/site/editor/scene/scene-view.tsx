@@ -12,11 +12,19 @@ import type { SceneTheme } from './palette';
 import type { UnderlayEvent } from './underlay-mesh';
 import styles from './scene.module.css';
 
+/**
+ * How the items are named on the map: floating labels laid out in the DOM
+ * so they never overlap (spec §9), none, or the item's own name printed on
+ * its roof, lid, cloth or wall as part of the scene — lit and shadowed with
+ * it, and therefore in the exported picture (plan 2026-09-26-site-label-modes).
+ */
+export type LabelMode = 'floating' | 'none' | 'printed';
+
 export interface EditorUi {
   /** 'calibrate' and 'align' are the picture's two tools (spec §18), entered from its card. */
   tool: 'select' | 'measure' | 'calibrate' | 'align';
   mode: ViewMode;
-  labels: boolean;
+  labels: LabelMode;
   sun: boolean;
   netsHidden: boolean;
   snap: boolean;

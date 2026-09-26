@@ -460,3 +460,54 @@ Recorded before any of Part C's code, by this section's own rule. Additive excep
 - `scene/underlay-tool.ts` (new): `UnderlayGestures`, `UnderlayWorld`, `UnderlayIntent`, `classifyPick`, `CALIBRATION_MIN_PX = 20`. **`GestureWorld.tool()` stays `'select' | 'measure'`**: the engine gives the calibration and alignment tools' pointer events to `UnderlayGestures` and tells `Gestures` the tool is `'select'` meanwhile.
 - Panels: `Toolbar` gains `hasUnderlay?: boolean`; `PlotInspector` gains `onUnderlay?: () => void`; new `UnderlayCard` and `CalibrationDraft` (`panels/underlay-card.tsx`). Editor: new `uploadUnderlay` (`underlay-upload.ts`) and `useUnderlay` (`use-underlay.ts`).
 - Routes (new): `POST /site/underlay/[planId]` (201 `{ storageKey, contentType, sizeBytes, filename }`, or a machine code), `GET /site/underlay/[planId]/[file]` (admins only).
+
+### Amendments for the labels' three styles (plan `2026-09-26-site-label-modes.md`; additive; binding)
+
+Recorded before that plan's code, by this section's own rule. One edit is not additive — `EditorUi.labels` changes from `boolean` to `LabelMode` — and it is read nowhere outside the camp map area. The plan's three open questions were answered by the camp lead on 2026-09-26: the map opens floating; the viewer's choice is remembered per browser; no key.
+
+```ts
+// scene-view.tsx — Task 1
+export type LabelMode = 'floating' | 'none' | 'printed';
+// EditorUi.labels: LabelMode   ('floating' = §9's DOM labels; 'none'; 'printed' = the item's name on its faces, Tasks 2–5)
+
+// scene/print-texture.ts — Task 2 (three; scene adapter only)
+export interface Print { texture: THREE.Texture; /** width ÷ height of the drawn text block */ aspect: number }
+export interface PrintRasteriser {
+  print(text: string): Print | null;   // the same text gives the same Print until reset(); null where nothing can be drawn (no canvas 2D)
+  reset(): void;                        // the font changed: forget every texture so the next print() draws afresh
+  dispose(): void;
+  readonly size: number;                // textures held
+}
+export function canvasRasteriser(fontFamily: () => string, maxAnisotropy: number): PrintRasteriser;
+
+// src/lib/site/editor/prints.ts — Task 3 (pure: no three, no React, no DOM; whole centimetres)
+export type PrintFace = 'top' | 'cap' | 'seat' | 'cloth' | 'roofSouth' | 'roofWest' | 'wallSouth' | 'wallWest';
+export interface PrintSpot {
+  face: PrintFace;
+  xCm: number; yCm: number; zCm: number;          // centre of the printable rectangle, from the item's north-west ground corner
+  widthCm: number; heightCm: number;              // extent along the reading direction and across it
+  fracW: number; fracH: number;                   // the print is fitted inside this fraction of it
+  tiltDeg: number;                                // 0 a top, 90 a wall, the roof's pitch for a slope
+  readFrom: 'south' | 'west';                     // where a reader stands to read it upright
+}
+export function printSpots(shape: SiteKindShape, widthCm: number, depthCm: number, heightCm: number, facing: number, insetCm: number | null): PrintSpot[];
+export function fitPrint(spot: PrintSpot, aspect: number): { widthCm: number; heightCm: number };
+
+// scene/prints.ts — Task 4
+export function applyPrints(object: THREE.Group, label: string, spots: readonly PrintSpot[], rasteriser: PrintRasteriser, look: ItemLook): void;
+export function clearPrints(object: THREE.Group): void;
+// palette.ts: ScenePalette.ink — light '#2B2622', dark '#ECEEF2'
+// meshes.ts: Part gains 'print'; restyleItemObject colours it with palette.ink; a print's material never owns its map (the rasteriser does)
+
+// scene-sync.ts — Task 5 (all three optional, so every existing caller and fixture stands)
+// SyncInput.labelMode?: LabelMode            default 'floating'
+// SyncInput.prints?: PrintRasteriser | null  null (the default): no prints whatever the mode — the engine passes one only once 'printed' was asked for
+// SyncInput.fontEpoch?: number               part of every print key; the engine bumps it when the web font arrives
+
+// label-mode-memory.ts — the lead's answer to Q2 (remembered per browser)
+export function readLabelMode(): LabelMode | null;   // null when nothing is kept, or storage is unavailable
+export function keepLabelMode(mode: LabelMode): void; // never throws
+
+// site-editor.tsx — Task 6
+// exportedNotice(mode: LabelMode): string — what the toast says the exported picture carries
+```

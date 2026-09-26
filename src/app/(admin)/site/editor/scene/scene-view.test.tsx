@@ -73,7 +73,7 @@ import { SceneSync } from './scene-sync';
 import { NO_WEBGL, SCENE_FAILED, SceneView, type EditorUi } from './scene-view';
 
 const UI: EditorUi = {
-  tool: 'select', mode: '3d', labels: true, sun: false, netsHidden: false,
+  tool: 'select', mode: '3d', labels: 'floating', sun: false, netsHidden: false,
   snap: true, hiddenGroups: [], hour: 14, theme: 'light', underlay: { shown: true, opacity: 0.5 },
 };
 
@@ -515,7 +515,7 @@ describe('the 3D map with WebGL', () => {
     const removed = vi.spyOn(window, 'removeEventListener');
     const cancelled = vi.spyOn(globalThis, 'cancelAnimationFrame');
     try {
-      const { container, onView, rerenderWith, unmount } = renderScene(fakeStore(), { ...UI, mode: 'plan', labels: false });
+      const { container, onView, rerenderWith, unmount } = renderScene(fakeStore(), { ...UI, mode: 'plan', labels: 'none' });
       await waitFor(() => { expect(onView).toHaveBeenCalled(); });
       await frames();
       const canvas = canvasOf(container);
@@ -638,7 +638,7 @@ describe('the 3D map with WebGL', () => {
      The plot is 2600 × 2400 cm in a 1000 × 700 box: 0.2917 px a centimetre,
      so the tent's north-west corner is at (456.25, 306.25). */
   const PLAN: EditorUi = { ...UI, mode: 'plan' };
-  const QUIET_PLAN: EditorUi = { ...PLAN, labels: false };
+  const QUIET_PLAN: EditorUi = { ...PLAN, labels: 'none' };
 
   it('clears the selection on a click on empty ground', async () => {
     const { container, onView, store } = renderScene(fakeStore({ selection: ['tent'] }), PLAN);

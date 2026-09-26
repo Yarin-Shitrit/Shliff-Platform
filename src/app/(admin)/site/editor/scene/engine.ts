@@ -1039,7 +1039,8 @@ export class SceneEngine {
     const layer = this.options.labels();
     const { store, ui } = this.options.props();
     this.anchors.clear();
-    if (!ui.labels || this.cam === null) {
+    // Only the floating style lays labels out here; the printed one is in the scene itself (`scene-sync.ts`).
+    if (ui.labels !== 'floating' || this.cam === null) {
       this.placed = [];
       layer?.update([], new Set());
       return;

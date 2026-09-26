@@ -128,9 +128,9 @@ const INSETS: Insets = {
   bottom: 64,
 };
 
-/** The mock's opening state: 3D, labels on, snapping on, 14:00 for the sun; a picture under the map shown at 50% (spec §17). */
+/** The mock's opening state: 3D, floating labels, snapping on, 14:00 for the sun; a picture under the map shown at 50% (spec §17). */
 const INITIAL_UI: EditorUi = {
-  tool: 'select', mode: '3d', labels: true, sun: false, netsHidden: false, snap: true,
+  tool: 'select', mode: '3d', labels: 'floating', sun: false, netsHidden: false, snap: true,
   hiddenGroups: [], hour: 14, theme: 'light', underlay: { shown: true, opacity: 0.5 },
 };
 
