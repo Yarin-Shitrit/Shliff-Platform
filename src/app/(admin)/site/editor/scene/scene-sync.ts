@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { itemHeight } from '@/lib/site/defaults';
 import { toPlaced } from '@/lib/site/derive';
 import { rectOf, type EditorDoc, type EditorItem } from '@/lib/site/editor/model';
+import { printSpots } from '@/lib/site/editor/prints';
 import { SITE_KINDS, type SiteKindGroup } from '@/lib/site/kinds';
 import { linePath } from '@/lib/site/lines';
 import {
@@ -9,6 +10,9 @@ import {
   worldOf, type ItemLook, type LineLook,
 } from './meshes';
 import type { SceneTheme } from './palette';
+import type { PrintRasteriser } from './print-texture';
+import { applyPrints, clearPrints } from './prints';
+import type { LabelMode } from './scene-view';
 
 export interface SyncInput {
   doc: EditorDoc;
@@ -22,6 +26,12 @@ export interface SyncInput {
   theme: SceneTheme;
   /** Shade by hour is on (spec §11). */
   sun?: boolean;
+  /** How the items are named (plan 2026-09-26-site-label-modes); only 'printed' draws anything here. Floating when absent. */
+  labelMode?: LabelMode;
+  /** What draws the prints. Null or absent: no prints, whatever the mode — the engine passes one only once 'printed' was asked for. */
+  prints?: PrintRasteriser | null;
+  /** Bumped by the engine when the web font arrives: part of every print key, so each print is drawn again, once. */
+  fontEpoch?: number;
 }
 
 function lookKey(look: ItemLook): string {
@@ -50,6 +60,12 @@ export class SceneSync {
   readonly root = new THREE.Group();
   private readonly objects = new Map<string, THREE.Group>();
   private readonly looks = new Map<string, string>();
+  /**
+   * What each item's prints were drawn from — the name and the font epoch —
+   * apart from the geometry key, so a rename re-prints without a rebuild
+   * and a rebuild re-prints the same name. Empty means no prints.
+   */
+  private readonly printKeys = new Map<string, string>();
   /** The pipes and cables, by line id, apart from the items so neither map's ids can shadow the other's. */
   private readonly lines = new Map<string, THREE.Group>();
   private readonly lineLooks = new Map<string, string>();
@@ -94,6 +110,20 @@ export class SceneSync {
         this.looks.set(item.id, lookKey(look));
       }
       object.position.copy(worldOf(drawn.xCm, drawn.yCm, 0));
+
+      /* The name printed on the faces. A just-built object has no key yet, so
+         it is printed; a rebuilt one lost its key with the old object, so it
+         is printed again; an unchanged one is left alone. */
+      const prints = input.labelMode === 'printed' ? input.prints ?? null : null;
+      const printKey = prints === null ? '' : `${drawn.label}|${input.fontEpoch ?? 0}`;
+      if (this.printKeys.get(item.id) !== printKey) {
+        clearPrints(object);
+        if (prints !== null) {
+          const spots = printSpots(SITE_KINDS[item.kind].shape, drawn.widthCm, drawn.depthCm, height, drawn.facing, drawn.insetCm);
+          applyPrints(object, drawn.label, spots, prints, look);
+        }
+        this.printKeys.set(item.id, printKey);
+      }
     }
     for (const id of [...this.objects.keys()]) {
       if (!shown.has(id)) this.drop(id);
@@ -169,6 +199,7 @@ export class SceneSync {
     disposeObject(object);
     this.objects.delete(id);
     this.looks.delete(id);
+    this.printKeys.delete(id);
   }
 
   private dropLine(id: string): void {

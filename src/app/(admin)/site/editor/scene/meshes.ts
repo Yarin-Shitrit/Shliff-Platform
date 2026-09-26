@@ -42,7 +42,7 @@ export interface ItemLook {
 }
 
 type Part = 'body' | 'edge' | 'ember' | 'pole' | 'cloth' | 'clothEdge' | 'inset' | 'caster' | 'patch' | 'contact'
-  | 'lineBody' | 'lineJoint' | 'rope' | 'stake' | 'ropeEdge';
+  | 'lineBody' | 'lineJoint' | 'rope' | 'stake' | 'ropeEdge' | 'print';
 type Point = [number, number, number];
 
 /**
@@ -369,6 +369,8 @@ export function restyleItemObject(object: THREE.Group, look: ItemLook): void {
         material.opacity = alpha.contact;
         child.visible = look.sun !== true;
         break;
+      // The name printed on the face (`prints.ts`): the ink follows the theme and nothing else — the body's tint carries hover, selection and problems (D5).
+      case 'print': material.color.set(palette.ink); break;
       case 'caster': break;
     }
   });
@@ -485,7 +487,12 @@ export function buildGround(plot: EditorPlot, theme: SceneTheme): THREE.Group {
   return ground;
 }
 
-/** Frees every geometry and material under `object`, each once. */
+/**
+ * Frees every geometry and material under `object`, each once. A material's
+ * textures are not freed with it (three's `Material.dispose` never touches
+ * them), which is what a print relies on: its map is the rasteriser's, shared
+ * by every item with the same name, and lives until the rasteriser resets.
+ */
 export function disposeObject(object: THREE.Object3D): void {
   const geometries = new Set<THREE.BufferGeometry>();
   const materials = new Set<THREE.Material>();

@@ -50,8 +50,9 @@ import { loadSiteDocAction, saveSiteChangesAction } from '../actions';
 import { SiteLinesTable, SiteTable, type SiteLinesTableRow, type SiteTableRow } from '../site-table';
 import { useEditorStore } from './use-editor-store';
 import { SCENE_PALETTE, type SceneTheme } from './scene/palette';
-import type { EditorUi, Insets, SceneHandle, SceneViewProps, ViewInfo } from './scene/scene-view';
+import type { EditorUi, Insets, LabelMode, SceneHandle, SceneViewProps, ViewInfo } from './scene/scene-view';
 import { shortcutFor, ZOOM_IN, type Arrow, type Shortcut } from './keyboard';
+import { keepLabelMode, readLabelMode } from './label-mode-memory';
 import { isolate, LOCKED_ALL_NOTICE, LOCKED_NOTICE } from './notices';
 import { forgetUnsaved, isStaleBuild, keepUnsaved, readUnsaved, SITE_UPDATED } from './unsaved-work';
 import { isOwnPlotSave } from './own-plot-saves';
@@ -128,9 +129,9 @@ const INSETS: Insets = {
   bottom: 64,
 };
 
-/** The mock's opening state: 3D, labels on, snapping on, 14:00 for the sun; a picture under the map shown at 50% (spec §17). */
+/** The mock's opening state: 3D, floating labels, snapping on, 14:00 for the sun; a picture under the map shown at 50% (spec §17). */
 const INITIAL_UI: EditorUi = {
-  tool: 'select', mode: '3d', labels: true, sun: false, netsHidden: false, snap: true,
+  tool: 'select', mode: '3d', labels: 'floating', sun: false, netsHidden: false, snap: true,
   hiddenGroups: [], hour: 14, theme: 'light', underlay: { shown: true, opacity: 0.5 },
 };
 
@@ -142,6 +143,9 @@ const PLOT_SAVED_UNDER_EDITS = 'הגדרות המגרש נשמרו, ויש כא�
 
 /** An in-app link away from the editor while saving is stopped (review I3). */
 const LEAVE_UNSAVED = 'השינויים האחרונים עוד לא נשמרו, ומעבר לדף אחר יאבד אותם. לעבור בכל זאת?';
+
+/** What the server knows of the labels style this browser kept: nothing. */
+const noneKept = (): LabelMode | null => null;
 
 /** Until the scene reports: no scale bar (`pxPerM` 0), no selection box, nothing moving. */
 const INITIAL_VIEW: ViewInfo = {
@@ -243,7 +247,18 @@ const NARROW_NO_WEBGL_NEEDS = 'את המפה עורכים במסך ברוחב 90
 /* "ייצוא תמונה" (spec §10). The picture is the scene's canvas; the labels are
    DOM, so they are not in it — said once the file is saved, until the engine
    draws them in (a later task). */
-const EXPORTED = 'התמונה נשמרה, בלי התוויות שעל המפה.';
+/**
+ * What the toast says once the picture is saved: which labels it carries.
+ * Floating labels are DOM over the canvas, so they are never in it; printed
+ * names are part of the scene, so they are (plan 2026-09-26-site-label-modes).
+ */
+export function exportedNotice(mode: LabelMode): string {
+  switch (mode) {
+    case 'none': return 'התמונה נשמרה.';
+    case 'printed': return 'התמונה נשמרה, עם השמות המודפסים על הפריטים.';
+    default: return 'התמונה נשמרה, בלי התוויות שעל המפה.';
+  }
+}
 const EXPORT_FAILED = 'לא הצלחנו לשמור תמונה של המפה. אפשר לנסות שוב.';
 
 /** How long a picture's blob URL outlives the click — long after any browser has started the download (FileSaver.js waits 40 s). */
@@ -377,6 +392,13 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
   const hydrated = useSyncExternalStore(subscribeNever, clientYes, serverNo);
   const narrowTable = !hydrated || !wide;
   const [ui, setUi] = useState<EditorUi>(INITIAL_UI);
+  /* The labels style this browser chose last, read as an external store: the
+     server's paint knows nothing kept, the client's first paint agrees, and
+     the next one opens the map the way this viewer left it. A style chosen
+     on this page outranks it from then on. */
+  const keptLabels = useSyncExternalStore(subscribeNever, readLabelMode, noneKept);
+  const [labelsChosen, setLabelsChosen] = useState(false);
+  const labels: LabelMode = labelsChosen ? ui.labels : keptLabels ?? ui.labels;
   const [view, setView] = useState<ViewInfo>(INITIAL_VIEW);
   const [keysOpen, setKeysOpen] = useState(false);
   const [resolving, setResolving] = useState(false);
@@ -421,7 +443,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
      (`readSunDate`, the one check of that shape). Everything below that needs
      a day — the scene, and the sun card — takes this, never `sunDate` itself. */
   const gateDay = readSunDate(sunDate);
-  const fullUi = useMemo<EditorUi>(() => ({ ...ui, theme }), [ui, theme]);
+  const fullUi = useMemo<EditorUi>(() => ({ ...ui, theme, labels }), [ui, theme, labels]);
   /* The sun is drawn only for a real day (spec §13): with no gate date the
      toggle opens the card's invitation, and the scene lights no sun. */
   const sceneUi = useMemo<EditorUi>(() => ({ ...fullUi, sun: fullUi.sun && gateDay !== null }), [fullUi, gateDay]);
@@ -519,6 +541,10 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
 
   function patchUi(patch: Partial<EditorUi>): void {
     setUi((current) => ({ ...current, ...patch }));
+    if (patch.labels !== undefined) {
+      keepLabelMode(patch.labels);
+      setLabelsChosen(true);
+    }
     // A hidden net cannot stay selected: nobody could see it being moved.
     if (patch.netsHidden === true) {
       store.select(store.selection.filter((id) => findItem(store.doc, id)?.kind !== 'shade'));
@@ -1018,7 +1044,7 @@ export function SiteEditor(props: SiteEditorProps): ReactElement {
     link.click();
     link.remove();
     setTimeout(() => { URL.revokeObjectURL(url); }, REVOKE_AFTER_MS);
-    show({ message: EXPORTED, tone: 'ok' });
+    show({ message: exportedNotice(labels), tone: 'ok' });
   }
 
   /**

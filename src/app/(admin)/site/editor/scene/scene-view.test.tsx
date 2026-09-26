@@ -28,6 +28,7 @@ vi.mock('three', async (importOriginal) => {
   const actual = await importOriginal<typeof import('three')>();
   class WebGLRenderer {
     shadowMap = { enabled: false };
+    capabilities = { getMaxAnisotropy: () => 1 };
     constructor() {
       renderer.created += 1;
       if (renderer.fails) throw new Error('Error creating WebGL context.');
@@ -73,7 +74,7 @@ import { SceneSync } from './scene-sync';
 import { NO_WEBGL, SCENE_FAILED, SceneView, type EditorUi } from './scene-view';
 
 const UI: EditorUi = {
-  tool: 'select', mode: '3d', labels: true, sun: false, netsHidden: false,
+  tool: 'select', mode: '3d', labels: 'floating', sun: false, netsHidden: false,
   snap: true, hiddenGroups: [], hour: 14, theme: 'light', underlay: { shown: true, opacity: 0.5 },
 };
 
@@ -511,11 +512,30 @@ describe('the 3D map with WebGL', () => {
     }
   });
 
+  it('asks the scene for printed names once the labels style says so, and rasterises nothing before', async () => {
+    const syncs = vi.spyOn(SceneSync.prototype, 'sync');
+    try {
+      const store = fakeStore();
+      const { rerenderWith } = renderScene(store, UI);
+      await frames();
+      const floating = syncs.mock.calls[syncs.mock.calls.length - 1][0];
+      expect(floating).toMatchObject({ labelMode: 'floating', prints: null, fontEpoch: 0 });
+
+      rerenderWith(store, { ...UI, labels: 'printed' });
+      await frames();
+      const printed = syncs.mock.calls[syncs.mock.calls.length - 1][0];
+      expect(printed.labelMode).toBe('printed');
+      expect(printed.prints).not.toBeNull();
+    } finally {
+      syncs.mockRestore();
+    }
+  });
+
   it('lets go of everything when it goes: the renderer, the context, the listeners and the frame it asked for', async () => {
     const removed = vi.spyOn(window, 'removeEventListener');
     const cancelled = vi.spyOn(globalThis, 'cancelAnimationFrame');
     try {
-      const { container, onView, rerenderWith, unmount } = renderScene(fakeStore(), { ...UI, mode: 'plan', labels: false });
+      const { container, onView, rerenderWith, unmount } = renderScene(fakeStore(), { ...UI, mode: 'plan', labels: 'none' });
       await waitFor(() => { expect(onView).toHaveBeenCalled(); });
       await frames();
       const canvas = canvasOf(container);
@@ -638,7 +658,7 @@ describe('the 3D map with WebGL', () => {
      The plot is 2600 × 2400 cm in a 1000 × 700 box: 0.2917 px a centimetre,
      so the tent's north-west corner is at (456.25, 306.25). */
   const PLAN: EditorUi = { ...UI, mode: 'plan' };
-  const QUIET_PLAN: EditorUi = { ...PLAN, labels: false };
+  const QUIET_PLAN: EditorUi = { ...PLAN, labels: 'none' };
 
   it('clears the selection on a click on empty ground', async () => {
     const { container, onView, store } = renderScene(fakeStore({ selection: ['tent'] }), PLAN);

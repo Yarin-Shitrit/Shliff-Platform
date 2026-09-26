@@ -2,11 +2,15 @@
 
 /**
  * The 48px tool row (spec §10): select or measure, undo and redo, plan or 3D,
- * and the switches — labels, shade by hour, hiding the nets, the picture under
- * the map (once there is one), snapping.
+ * the labels' three styles — floating, none, printed on the item — and the
+ * switches: shade by hour, hiding the nets, the picture under the map (once
+ * there is one), snapping.
  * Each switch is a real button with `aria-pressed` and a label that does not
  * change; each keycap is the key `keyboard.ts` reads.
  */
+
+/** The three ways to name the items, in the tool row's order, with the mode each button chooses. */
+const LABEL_MODES = [['floating', 'מרחפות'], ['none', 'בלי'], ['printed', 'מודפסות']] as const;
 
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/button';
@@ -84,10 +88,20 @@ export function Toolbar({ ui, onUi, canUndo, canRedo, onUndo, onRedo, hasUnderla
 
       <span className={styles.grow} />
 
-      <button type="button" className={styles.toggle} aria-pressed={ui.labels} onClick={() => { onUi({ labels: !ui.labels }); }}>
-        <EditorIcon name="tag" size={14} />
-        תוויות
-      </button>
+      <div className={styles.seg} role="group" aria-label="תוויות">
+        {LABEL_MODES.map(([mode, name]) => (
+          <button
+            key={mode}
+            type="button"
+            className={styles.segButton}
+            aria-pressed={ui.labels === mode}
+            onClick={() => { onUi({ labels: mode }); }}
+          >
+            {mode === 'floating' ? <EditorIcon name="tag" size={14} /> : null}
+            {name}
+          </button>
+        ))}
+      </div>
       <button type="button" className={styles.toggle} aria-pressed={ui.sun} onClick={() => { onUi({ sun: !ui.sun }); }}>
         <Icon name="sun" size={14} />
         צל לפי שעה

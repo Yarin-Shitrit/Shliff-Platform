@@ -31,6 +31,7 @@ import { buildGround, CM, directionOf, disposeObject, worldOf } from './meshes';
 import { OverlayLayer, type OverlayClasses, type OverlayModel } from './overlay';
 import { SCENE_LIGHT, SCENE_PALETTE } from './palette';
 import { pickItemId } from './picking';
+import { canvasRasteriser, type PrintRasteriser } from './print-texture';
 import { isShown, SceneSync } from './scene-sync';
 import { loadUnderlayImage, UNDERLAY_LIFT_CM, UnderlayLayer } from './underlay-mesh';
 import { classifyPick, UnderlayGestures, type UnderlayIntent } from './underlay-tool';
@@ -122,6 +123,16 @@ export class SceneEngine {
   private ratioQuery: MediaQueryList | null = null;
   private readonly text: CanvasRenderingContext2D | null;
   private readonly font: string;
+  /** The stage's font family — the labels' and the prints' — read once; the web font, when it arrives, resolves to the same name. */
+  private readonly fontFamily: string;
+  /**
+   * What draws the printed names. Made the first time the printed style is
+   * asked for, never at load, so a map that stays floating rasterises
+   * nothing (plan 2026-09-26-site-label-modes, Review Focus #6).
+   */
+  private prints: PrintRasteriser | null = null;
+  /** Counts the web font's arrivals; part of every print key, so each print is drawn again once in the new font. */
+  private fontEpoch = 0;
 
   private viewport: Viewport = { width: 0, height: 0 };
   private cam: CameraState | null = null;
@@ -230,7 +241,8 @@ export class SceneEngine {
       const props = options.props();
       this.mode = props.ui.mode;
       this.drawMode = props.ui.mode;
-      this.font = `500 ${LABEL_FONT_PX}px ${getComputedStyle(stage).fontFamily || 'system-ui, sans-serif'}`;
+      this.fontFamily = getComputedStyle(stage).fontFamily || 'system-ui, sans-serif';
+      this.font = `500 ${LABEL_FONT_PX}px ${this.fontFamily}`;
       this.text = document.createElement('canvas').getContext('2d');
       if (this.text !== null) this.text.font = this.font;
 
@@ -381,6 +393,7 @@ export class SceneEngine {
     canvas.removeEventListener('webglcontextrestored', this.onContextRestored);
     window.removeEventListener('blur', this.onBlur);
     this.sync.dispose();
+    this.prints?.dispose();
     this.underlay.dispose();
     if (this.ground !== null) disposeObject(this.ground);
     this.setGhost(null);
@@ -392,11 +405,17 @@ export class SceneEngine {
     canvas.remove();
   }
 
-  /** The web font has arrived: labels are measured in it from now on, and laid out again. */
+  /** The web font has arrived: labels are measured in it from now on, and laid out again; prints are drawn again, once. */
   private remeasure(): void {
     if (!this.alive) return;
     if (this.text !== null) this.text.font = this.font;
     this.labelsDirty = true;
+    if (this.prints !== null) {
+      // A print drawn in the fallback font is the wrong shape: forget them all, and let the next sync draw each one afresh.
+      this.prints.reset();
+      this.fontEpoch += 1;
+      this.sceneDirty = true;
+    }
     this.requestFrame();
   }
 
@@ -824,6 +843,9 @@ export class SceneEngine {
       this.groundKey = key;
       this.scene.background = new THREE.Color(SCENE_PALETTE[ui.theme].outside);
     }
+    if (ui.labels === 'printed' && this.prints === null) {
+      this.prints = canvasRasteriser(() => this.fontFamily, this.renderer.capabilities.getMaxAnisotropy());
+    }
     this.sync.sync({
       doc: store.doc,
       preview: this.preview,
@@ -834,6 +856,9 @@ export class SceneEngine {
       netsHidden: ui.netsHidden,
       theme: ui.theme,
       sun: this.sunOn,
+      labelMode: ui.labels,
+      prints: this.prints,
+      fontEpoch: this.fontEpoch,
     });
     this.syncUnderlay();
   }
@@ -1039,7 +1064,8 @@ export class SceneEngine {
     const layer = this.options.labels();
     const { store, ui } = this.options.props();
     this.anchors.clear();
-    if (!ui.labels || this.cam === null) {
+    // Only the floating style lays labels out here; the printed one is in the scene itself (`scene-sync.ts`).
+    if (ui.labels !== 'floating' || this.cam === null) {
       this.placed = [];
       layer?.update([], new Set());
       return;

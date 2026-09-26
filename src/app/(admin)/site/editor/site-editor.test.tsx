@@ -1683,5 +1683,41 @@ describe('what a narrow screen gets, and the picture of the view', () => {
       expect(create).not.toHaveBeenCalled();
       expect(clicked).toHaveLength(0);
     });
+
+    it('names what the exported picture carries: the printed names when they are on, nothing when there are no labels', async () => {
+      scene.handle.exportPng.mockResolvedValue(new Blob(['png'], { type: 'image/png' }));
+      renderEditor();
+      await screen.findByTestId('scene');
+
+      fireEvent.click(button('מודפסות'));
+      fireEvent.click(button('ייצוא תמונה'));
+      expect(await screen.findByText('התמונה נשמרה, עם השמות המודפסים על הפריטים.')).toBeTruthy();
+
+      fireEvent.click(button('בלי'));
+      fireEvent.click(button('ייצוא תמונה'));
+      expect(await screen.findByText('התמונה נשמרה.')).toBeTruthy();
+    });
+  });
+});
+
+describe('the labels style this browser chose last', () => {
+  beforeEach(() => { window.localStorage.clear(); });
+  afterEach(() => { window.localStorage.clear(); });
+
+  it('opens floating on a first visit', async () => {
+    renderEditor();
+    await screen.findByTestId('scene');
+    expect(button('מרחפות').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('opens the way this browser left it, and keeps a new choice for the next time', async () => {
+    window.localStorage.setItem('shliff.site.labels', 'printed');
+    renderEditor();
+    await screen.findByTestId('scene');
+    await waitFor(() => { expect(button('מודפסות').getAttribute('aria-pressed')).toBe('true'); });
+
+    fireEvent.click(button('בלי'));
+    expect(button('בלי').getAttribute('aria-pressed')).toBe('true');
+    expect(window.localStorage.getItem('shliff.site.labels')).toBe('none');
   });
 });
