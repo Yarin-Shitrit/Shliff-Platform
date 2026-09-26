@@ -538,12 +538,17 @@ Applied on 2026-09-26 as the last of the `0016`–`0019` batch: `CREATE TABLE`,
 
 ### The `0016`–`0019` batch — applied to Railway on 2026-09-26
 
-All four merged to `main` on 2026-09-26 (#41, #42, #43 and the warehouse
-boxes), and `main` deploys itself on merge, so for the rest of that day
-`/site` and `/logistics/warehouse` threw on the server in production: every
-load selected a column or a table Railway did not have. That is the failure
-the rule in §2 exists to prevent — migration first, merge second — and it
-was broken four times in one day.
+All four merged to `main` on 2026-09-26 (#40, #41, #42, #43) with none of
+them on Railway — the rule in §2, migration first, merge second, was broken
+four times in one day. Production did **not** break, and only by accident:
+GitHub Actions was billing-blocked from about 10:30 UTC that day, every CI
+run failed with zero steps, and the deploy workflow gates on a green CI. So
+Vercel stayed on `ead711e` (#39, deployed 09:07 UTC), whose code needs
+nothing past `0015`. Had CI been healthy, the first of the four merges would
+have shipped code that selects `box_id` against a database without it, and
+every load of `/logistics/warehouse` would have thrown; `/site` after #41.
+The database was brought up to `0019` before the deploys could resume, so
+the next deploy of `main` finds every column it reads.
 
 The read-only check found `0014` and `0015` present and the other four
 absent. The four were then applied in order with the runbook's own command,
