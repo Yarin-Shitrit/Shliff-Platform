@@ -21,7 +21,7 @@ import type { SceneViewProps } from './scene/scene-view';
 function siteItem(over: Partial<EditorItem> & { id: string }): EditorItem {
   return {
     kind: 'tent', label: 'אוהל 1', xCm: 500, yCm: 500, widthCm: 300, depthCm: 200,
-    heightCm: null, insetCm: null, ropeAngleDeg: null, sort: 0, taskId: null, notes: null, locked: false,
+    heightCm: null, insetCm: null, ropeAngleDeg: null, sort: 0, taskId: null, notes: null, facing: 0, locked: false,
     ...over,
   };
 }
@@ -203,7 +203,7 @@ describe('saving, through the store and the queue', () => {
       // Nor the retry: it would resend to the same missing action (#25 fix round, Minor 11).
       expect(screen.queryByRole('button', { name: 'ניסיון חוזר' })).toBeNull();
       const kept = () => JSON.parse(window.sessionStorage.getItem('site-editor:pending:p1') ?? 'null') as unknown;
-      const turned = [{ type: 'update', id: 'a', patch: { xCm: 550, yCm: 450, widthCm: 200, depthCm: 300 } }];
+      const turned = [{ type: 'update', id: 'a', patch: { xCm: 550, yCm: 450, widthCm: 200, depthCm: 300, facing: 1 } }];
       // The unsaved turn waits in this tab for the page after the refresh — kept by an effect
       // once the banner is up, which under load can land a moment after it.
       await waitFor(() => { expect(kept()).toEqual(turned); });
@@ -253,7 +253,7 @@ describe('saving, through the store and the queue', () => {
       expect(screen.queryByRole('button', { name: 'שמירת השינויים שלי מעליה' })).toBeNull();
       await waitFor(() => {
         expect(JSON.parse(window.sessionStorage.getItem('site-editor:pending:p1') ?? 'null')).toEqual([
-          { type: 'update', id: 'a', patch: { xCm: 550, yCm: 450, widthCm: 200, depthCm: 300 } },
+          { type: 'update', id: 'a', patch: { xCm: 550, yCm: 450, widthCm: 200, depthCm: 300, facing: 1 } },
         ]);
       });
     } finally {
@@ -449,7 +449,7 @@ describe('the keyboard, through the store and the queue', () => {
     expect(saveSiteChangesAction).toHaveBeenCalledTimes(1);
     expect(lastSent()).toEqual({
       baseVersion: 0,
-      ops: [{ type: 'update', id: 'a', patch: { xCm: 550, yCm: 450, widthCm: 200, depthCm: 300 } }],
+      ops: [{ type: 'update', id: 'a', patch: { xCm: 550, yCm: 450, widthCm: 200, depthCm: 300, facing: 1 } }],
     });
   });
 
@@ -458,7 +458,7 @@ describe('the keyboard, through the store and the queue', () => {
     turn();
     expect(await saved()).toBeTruthy();
     expect(lastSent().ops).toEqual([
-      { type: 'update', id: 'a', patch: { xCm: 550, yCm: 450, widthCm: 200, depthCm: 300 } },
+      { type: 'update', id: 'a', patch: { xCm: 550, yCm: 450, widthCm: 200, depthCm: 300, facing: 1 } },
     ]);
 
     fireEvent.keyDown(stage(), { code: 'KeyZ', key: 'ז', ctrlKey: true });
@@ -466,7 +466,7 @@ describe('the keyboard, through the store and the queue', () => {
     await waitFor(() => { expect(saveSiteChangesAction).toHaveBeenCalledTimes(2); }, WAIT);
     expect(lastSent()).toEqual({
       baseVersion: 1,
-      ops: [{ type: 'update', id: 'a', patch: { xCm: 500, yCm: 500, widthCm: 300, depthCm: 200 } }],
+      ops: [{ type: 'update', id: 'a', patch: { xCm: 500, yCm: 500, widthCm: 300, depthCm: 200, facing: 0 } }],
     });
   });
 

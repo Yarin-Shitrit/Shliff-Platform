@@ -79,7 +79,7 @@ describe('the picture’s plane', () => {
     }
     const net: EditorItem = {
       id: 'n', kind: 'shade', label: 'רשת צל 1', xCm: 0, yCm: 0, widthCm: 800, depthCm: 800,
-      heightCm: null, insetCm: 50, sort: 0, taskId: null, notes: null, locked: false, ropeAngleDeg: null,
+      heightCm: null, insetCm: 50, sort: 0, taskId: null, notes: null, facing: 0, locked: false, ropeAngleDeg: null,
     };
     let patch: THREE.Mesh | undefined;
     buildItemObject(net, 300, { theme: 'light', state: 'normal', issue: 'none' }).traverse((child) => {

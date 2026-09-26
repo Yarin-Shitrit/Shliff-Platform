@@ -7,7 +7,7 @@ import { SCENE_PALETTE } from './palette';
 function item(over: Partial<EditorItem> = {}): EditorItem {
   return {
     id: 'a', kind: 'tent', label: 'אוהל 1', xCm: 100, yCm: 200, widthCm: 300, depthCm: 200,
-    heightCm: null, insetCm: null, ropeAngleDeg: null, sort: 0, taskId: null, notes: null, locked: false, ...over,
+    heightCm: null, insetCm: null, ropeAngleDeg: null, sort: 0, taskId: null, notes: null, facing: 0, locked: false, ...over,
   };
 }
 
@@ -51,6 +51,30 @@ describe('the item builders', () => {
     const back = new THREE.Box3().setFromObject(bodies[1]);
     expect(back.max.y).toBeCloseTo(0.8);
     expect(back.max.x - back.min.x).toBeCloseTo(2);
+  });
+
+  it('walks a sofa’s back round the four edges as the facing turns, clockwise from north', () => {
+    const backOf = (facing: number) => {
+      const bodies = parts(buildItemObject(item({ kind: 'sofa', widthCm: 200, depthCm: 90, facing }), 80, NORMAL), 'body');
+      expect(bodies).toHaveLength(2);
+      return bodies[1].position;
+    };
+    // The seat is 2 m by 0.9 m, so its middle is (1, 0.45); the back's middle sits in from the edge it stands on.
+    expect(backOf(0).x).toBeCloseTo(1);
+    expect(backOf(0).z).toBeLessThan(0.45);
+    expect(backOf(1).z).toBeCloseTo(0.45);
+    expect(backOf(1).x).toBeGreaterThan(1);
+    expect(backOf(2).x).toBeCloseTo(1);
+    expect(backOf(2).z).toBeGreaterThan(0.45);
+    expect(backOf(3).z).toBeCloseTo(0.45);
+    expect(backOf(3).x).toBeLessThan(1);
+  });
+
+  it('keys a sofa’s geometry on its facing, and nothing without a front', () => {
+    expect(geometryKey(item({ kind: 'sofa', facing: 1 }), 80)).not.toBe(geometryKey(item({ kind: 'sofa' }), 80));
+    expect(geometryKey(item({ kind: 'armchair', facing: 1 }), 80)).not.toBe(geometryKey(item({ kind: 'armchair' }), 80));
+    expect(geometryKey(item({ facing: 1 }), 200)).toBe(geometryKey(item(), 200));
+    expect(geometryKey(item({ kind: 'caravan', facing: 3 }), 270)).toBe(geometryKey(item({ kind: 'caravan' }), 270));
   });
 
   it('turns every face of a tent outwards, with the ridge along the longer side', () => {

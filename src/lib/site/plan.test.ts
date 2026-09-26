@@ -20,7 +20,7 @@ const PLOT = { widthCm: 2600, depthCm: 2400, gridCm: 50 };
 const tentOf = (over: Partial<EditorItem> = {}): EditorItem => ({
   id: crypto.randomUUID(), kind: 'tent', label: 'אוהל 1', xCm: 100, yCm: 100,
   widthCm: 300, depthCm: 300, heightCm: null, insetCm: null, ropeAngleDeg: null, sort: 0,
-  taskId: null, notes: null, locked: false, ...over,
+  taskId: null, notes: null, facing: 0, locked: false, ...over,
 });
 
 /*
@@ -429,6 +429,35 @@ describe('the camp map', () => {
       })]);
       expect(loaded?.doc.defaults).toEqual({});
       expect(await loadDoc(db, '00000000-0000-4000-8000-000000000000')).toBeNull();
+    });
+
+    it('stores which way an item faces, takes the drawn way from a page that sends none, and refuses a fifth quarter', async () => {
+      const planId = await createPlan(db, s26, PLOT, LEAD);
+      const sofa = tentOf({ kind: 'sofa', label: 'ספה 1', widthCm: 200, depthCm: 90 });
+      // A page built before facings sends an item without one.
+      const { facing: _drawn, ...older } = sofa;
+      void _drawn;
+      await applySiteOps(db, planId, 0, [{ type: 'add', item: older as EditorItem }], LEAD);
+      expect((await listItems(db, planId))[0]).toMatchObject({ id: sofa.id, facing: 0 });
+
+      await applySiteOps(db, planId, 1, [{ type: 'update', id: sofa.id, patch: { facing: 3 } }], LEAD);
+      expect((await listItems(db, planId))[0].facing).toBe(3);
+      expect((await loadDoc(db, planId))?.doc.items[0].facing).toBe(3);
+
+      await expect(applySiteOps(db, planId, 2, [{ type: 'update', id: sofa.id, patch: { facing: 4 } }], LEAD))
+        .rejects.toThrow(/an item facing must be a whole number of quarter turns from 0 to 3/);
+      expect((await listItems(db, planId))[0].facing).toBe(3);
+    });
+
+    it('holds the facing under a lock, and carries it into a copied map', async () => {
+      const old = await createPlan(db, s25, PLOT, LEAD);
+      const sofa = tentOf({ kind: 'sofa', label: 'ספה 1', widthCm: 200, depthCm: 90, facing: 2, locked: true });
+      await applySiteOps(db, old, 0, [{ type: 'add', item: sofa }], LEAD);
+      await expect(applySiteOps(db, old, 1, [{ type: 'update', id: sofa.id, patch: { facing: 3 } }], LEAD))
+        .rejects.toThrow('that item is locked');
+
+      const planId = await copyPlan(db, s25, s26, LEAD);
+      expect((await listItems(db, planId))[0]).toMatchObject({ kind: 'sofa', facing: 2, locked: false });
     });
   });
 

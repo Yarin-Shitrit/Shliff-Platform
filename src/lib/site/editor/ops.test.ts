@@ -12,7 +12,7 @@ export function item(over: Partial<EditorItem> = {}): EditorItem {
   return {
     id: '5b0f3c1e-2a4d-4f6b-9c8e-1d2a3b4c5d6e', kind: 'tent', label: 'אוהל 1',
     xCm: 0, yCm: 0, widthCm: 300, depthCm: 300, heightCm: null, insetCm: null, ropeAngleDeg: null,
-    sort: 0, taskId: null, notes: null, locked: false, ...over,
+    sort: 0, taskId: null, notes: null, facing: 0, locked: false, ...over,
   };
 }
 
@@ -38,6 +38,13 @@ describe('refusals', () => {
     expect(patchRefusal({ heightCm: 5 })).toMatch(/^an item height must be/);
     expect(patchRefusal({ heightCm: 2_001 })).toMatch(/^an item height must be/);
     expect(patchRefusal({ heightCm: null })).toBeNull();
+  });
+
+  it('refuse a facing that is not one of the four quarter turns', () => {
+    expect(patchRefusal({ facing: 4 })).toMatch(/^an item facing must be/);
+    expect(patchRefusal({ facing: -1 })).toMatch(/^an item facing must be/);
+    expect(patchRefusal({ facing: 1.5 })).toMatch(/^an item facing must be/);
+    for (const facing of [0, 1, 2, 3]) expect(patchRefusal({ facing })).toBeNull();
   });
 
   it('refuse a new item whose id is not a uuid', () => {
@@ -498,6 +505,9 @@ describe('a shade net’s rope angle', () => {
   it('is held by a lock, like everything that moves a footprint', () => {
     expect(LOCKED_FIELDS).toContain('ropeAngleDeg');
     expect(lockRefusal(true, { ropeAngleDeg: 45 })).toBe('that item is locked');
+    // A turn is a swap and a facing; the facing alone is still a turn.
+    expect(LOCKED_FIELDS).toContain('facing');
+    expect(lockRefusal(true, { facing: 2 })).toBe('that item is locked');
     expect(lockRefusal(true, { ropeAngleDeg: 45, locked: false })).toBeNull();
   });
 

@@ -127,6 +127,13 @@
       "when": 1790422373217,
       "tag": "0017_site_item_groups",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790426342195,
+      "tag": "0018_site_item_facing",
+      "breakpoints": true
     }
   ]
 }

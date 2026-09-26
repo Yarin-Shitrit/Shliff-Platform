@@ -48,7 +48,7 @@ const IMAGE: EditorUnderlay = {
 };
 const TENT: EditorItem = {
   id: 'tent', kind: 'tent', label: 'אוהל 1', xCm: 1150, yCm: 1050, widthCm: 300, depthCm: 300,
-  heightCm: null, insetCm: null, sort: 0, taskId: null, notes: null, locked: false, ropeAngleDeg: null,
+  heightCm: null, insetCm: null, sort: 0, taskId: null, notes: null, facing: 0, locked: false, ropeAngleDeg: null,
 };
 const DOC: EditorDoc = {
   plot: { id: PLAN, widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0 }, items: [TENT], lines: [], defaults: {}, underlay: IMAGE,

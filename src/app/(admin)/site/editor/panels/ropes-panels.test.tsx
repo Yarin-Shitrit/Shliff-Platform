@@ -27,7 +27,7 @@ import { MultiInspector } from './inspector-multi';
 function item(over: Partial<EditorItem> & { id: string }): EditorItem {
   return {
     kind: 'shade', label: 'רשת צל 1', xCm: 500, yCm: 500, widthCm: 800, depthCm: 800,
-    heightCm: null, insetCm: 50, ropeAngleDeg: null, sort: 0, taskId: null, notes: null, locked: false, ...over,
+    heightCm: null, insetCm: 50, ropeAngleDeg: null, sort: 0, taskId: null, notes: null, facing: 0, locked: false, ...over,
   };
 }
 

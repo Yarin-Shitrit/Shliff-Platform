@@ -48,11 +48,29 @@ type Point = [number, number, number];
 /**
  * What decides the geometry. Position is not in it: a move never rebuilds.
  * A net's ropes are (spec §14): a new angle, or a new height under an angle,
- * rebuilds the net.
+ * rebuilds the net. The facing is, for the one shape with a front: a sofa
+ * turned in place keeps its rectangle and still has to move its back.
  */
 export function geometryKey(item: EditorItem, heightCm: number, ropeCm = 0): string {
-  const inset = SITE_KINDS[item.kind].shape === 'net' ? item.insetCm ?? 0 : 0;
-  return `${item.kind}:${item.widthCm}x${item.depthCm}x${heightCm}:${inset}:${ropeCm}`;
+  const shape = SITE_KINDS[item.kind].shape;
+  const inset = shape === 'net' ? item.insetCm ?? 0 : 0;
+  const facing = shape === 'sofa' ? item.facing : 0;
+  return `${item.kind}:${item.widthCm}x${item.depthCm}x${heightCm}:${inset}:${ropeCm}:${facing}`;
+}
+
+/**
+ * A sofa's back: a slab along the edge its facing names — north at 0, then
+ * east, south, west, clockwise — a quarter of the way in, never thinner
+ * than 15 cm. The seat is the whole footprint at half height.
+ */
+function sofaBack(w: number, h: number, d: number, facing: number): THREE.Mesh {
+  const thick = Math.max(0.15, (facing % 2 === 0 ? d : w) * 0.26);
+  switch (facing) {
+    case 1: return box(thick, h, d, w - thick, 0);
+    case 2: return box(w, h, thick, 0, d - thick);
+    case 3: return box(thick, h, d, 0, 0);
+    default: return box(w, h, thick, 0, 0);
+  }
 }
 
 function tag<T extends THREE.Object3D>(object: T, part: Part, pick = true): T {
@@ -248,8 +266,7 @@ export function buildItemObject(item: EditorItem, heightCm: number, look: ItemLo
   switch (preset.shape) {
     case 'sofa': {
       group.add(box(w, h * 0.5, d, 0, 0));
-      // The back stands on the north edge, or the west one when the sofa is turned.
-      group.add(w >= d ? box(w, h, Math.max(0.15, d * 0.26), 0, 0) : box(Math.max(0.15, w * 0.26), h, d, 0, 0));
+      group.add(sofaBack(w, h, d, item.facing));
       break;
     }
     case 'tent':

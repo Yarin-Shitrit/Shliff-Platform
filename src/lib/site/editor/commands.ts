@@ -4,7 +4,7 @@ import { turnAboutCentre, unionRect, wholeCm, type Rect } from '../geometry';
 import { DEFAULT_SHADE_INSET_CM } from '../kinds';
 import { centreOfItem, eligibleEnds, geometricMedian, splits } from '../lines';
 import {
-  findItem, findLine, groupIdOf, groupMembers, linesAt, nextLabel, nextLineLabel, rectOf,
+  findItem, findLine, groupIdOf, groupMembers, linesAt, nextFacing, nextLabel, nextLineLabel, rectOf,
   type EditorDoc, type EditorItem, type EditorLine,
 } from './model';
 import { landingRule, nearestFreeSpot } from './placement';
@@ -58,10 +58,6 @@ export function changedUpdate(entry: EditorItem, patch: ItemPatch): UpdateOp | n
   return Object.keys(changed).length === 0 ? null : { type: 'update', id: entry.id, patch: changed };
 }
 
-function place(entry: EditorItem, rect: Rect): UpdateOp | null {
-  return changedUpdate(entry, { xCm: rect.x, yCm: rect.y, widthCm: rect.width, depthCm: rect.depth });
-}
-
 function present(ops: ReadonlyArray<SiteOp | null>): SiteOp[] {
   return ops.filter((op): op is SiteOp => op !== null);
 }
@@ -99,9 +95,19 @@ export function setRectOps(
   })]);
 }
 
-/** A quarter turn each, about each item's own middle (spec D5). A square turns into itself: no op. */
+/**
+ * A quarter turn clockwise each, about each item's own middle (spec D5): the
+ * sides swap and the facing moves on one. A square keeps its rectangle and
+ * still turns — its back is now on the next edge — so four turns bring
+ * every item, square or not, back to where it started.
+ */
 export function turnOps(doc: EditorDoc, ids: readonly string[]): SiteOp[] {
-  return present(unlockedOf(doc, ids).map((entry) => place(entry, turnAboutCentre(rectOf(entry)))));
+  return present(unlockedOf(doc, ids).map((entry) => {
+    const rect = turnAboutCentre(rectOf(entry));
+    return changedUpdate(entry, {
+      xCm: rect.x, yCm: rect.y, widthCm: rect.width, depthCm: rect.depth, facing: nextFacing(entry.facing),
+    });
+  }));
 }
 
 /**
@@ -122,7 +128,7 @@ export function addOps(
       id, kind, label: nextLabel(doc.items, kind),
       xCm: wholeCm(at.xCm), yCm: wholeCm(at.yCm), widthCm: size.widthCm, depthCm: size.depthCm,
       heightCm: null, insetCm: kind === 'shade' ? (size.insetCm ?? DEFAULT_SHADE_INSET_CM) : null, ropeAngleDeg: null,
-      sort: nextSort(doc.items), taskId: null, notes: null, locked: false,
+      facing: 0, sort: nextSort(doc.items), taskId: null, notes: null, locked: false,
     },
   }];
 }
@@ -345,7 +351,7 @@ export function splitOps(
   const splitter: EditorItem = {
     id: ids.splitter, kind: 'splitter', label: nextLabel(doc.items, 'splitter'),
     xCm: spot.xCm, yCm: spot.yCm, widthCm: size.widthCm, depthCm: size.depthCm,
-    heightCm: null, insetCm: null, ropeAngleDeg: null, sort: nextSort(doc.items), taskId: null, notes: null, locked: false,
+    heightCm: null, insetCm: null, ropeAngleDeg: null, sort: nextSort(doc.items), taskId: null, notes: null, facing: 0, locked: false,
   };
   const made: EditorLine[] = [];
   let sort = nextLineSort(doc.lines);

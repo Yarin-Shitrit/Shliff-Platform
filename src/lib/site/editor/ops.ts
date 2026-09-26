@@ -10,7 +10,7 @@ import {
 } from '../underlay-limits';
 import { isRopeAngle } from './degrees';
 import {
-  copyUnderlay, findItem, findLine, groupIdOf, sameUnderlay, underlayOf,
+  copyUnderlay, FACINGS, findItem, findLine, groupIdOf, sameUnderlay, underlayOf,
   type EditorDoc, type EditorItem, type EditorLine, type EditorUnderlay,
 } from './model';
 
@@ -36,6 +36,8 @@ export interface ItemPatch {
   insetCm?: number | null;
   /** Shade nets only (spec §13); null follows the camp's angle. */
   ropeAngleDeg?: number | null;
+  /** Quarter turns clockwise, 0–3 (`model.ts`). */
+  facing?: number;
   taskId?: string | null;
   notes?: string | null;
   locked?: boolean;
@@ -139,6 +141,9 @@ export function patchRefusal(patch: ItemPatch): string | null {
   if (patch.ropeAngleDeg !== undefined && patch.ropeAngleDeg !== null && !isRopeAngle(patch.ropeAngleDeg)) {
     return ROPE_ANGLE_REFUSAL;
   }
+  if (patch.facing !== undefined && !(FACINGS as readonly number[]).includes(patch.facing)) {
+    return 'an item facing must be a whole number of quarter turns from 0 to 3';
+  }
   if (patch.locked !== undefined && typeof patch.locked !== 'boolean') return 'a lock must be true or false';
   if (patch.groupId !== undefined && patch.groupId !== null && !UUID.test(patch.groupId)) {
     // The editor mints the id; anything else arrived from a stash or a request that was tampered with or is broken.
@@ -155,7 +160,7 @@ export function newItemRefusal(entry: EditorItem): string | null {
   return patchRefusal({
     label: entry.label, kind: entry.kind, xCm: entry.xCm, yCm: entry.yCm,
     widthCm: entry.widthCm, depthCm: entry.depthCm, heightCm: entry.heightCm,
-    insetCm: entry.insetCm, ropeAngleDeg: entry.ropeAngleDeg, locked: entry.locked, groupId: entry.groupId,
+    insetCm: entry.insetCm, ropeAngleDeg: entry.ropeAngleDeg, facing: entry.facing, locked: entry.locked, groupId: entry.groupId,
   });
 }
 
@@ -289,12 +294,13 @@ export function storedLinePatch(patch: LinePatch): LinePatch {
 }
 
 /**
- * Moving, resizing (height included), turning, re-kinding or changing a
- * net's rope angle — what a lock forbids. The angle moves the net's footprint
- * (spec §13), so it is held like a side. Renaming, notes and task links are not.
+ * Moving, resizing (height included), turning (the sides and the facing),
+ * re-kinding or changing a net's rope angle — what a lock forbids. The angle
+ * moves the net's footprint (spec §13), so it is held like a side. Renaming,
+ * notes and task links are not.
  */
 export const LOCKED_FIELDS: ReadonlyArray<keyof ItemPatch> = [
-  'xCm', 'yCm', 'widthCm', 'depthCm', 'heightCm', 'kind', 'insetCm', 'ropeAngleDeg',
+  'xCm', 'yCm', 'widthCm', 'depthCm', 'heightCm', 'kind', 'insetCm', 'ropeAngleDeg', 'facing',
 ];
 
 /** The one lock rule the client and `plan.ts`'s `applySiteOps` both run. */

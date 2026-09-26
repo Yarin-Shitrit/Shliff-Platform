@@ -9,7 +9,7 @@ import { applyOps, invertOps, type SiteOp } from './ops';
 function make(over: Partial<EditorItem> & Pick<EditorItem, 'id' | 'label'>): EditorItem {
   return {
     kind: 'tent', xCm: 0, yCm: 0, widthCm: 300, depthCm: 300, heightCm: null, insetCm: null, ropeAngleDeg: null,
-    sort: 0, taskId: null, notes: null, locked: false, ...over,
+    sort: 0, taskId: null, notes: null, facing: 0, locked: false, ...over,
   };
 }
 
@@ -85,10 +85,21 @@ describe('setting a rectangle', () => {
 });
 
 describe('turning', () => {
-  it('turns about the middle: the caravan at (100,600) 700 × 250 becomes (325,375) 250 × 700', () => {
+  it('turns about the middle: the caravan at (100,600) 700 × 250 becomes (325,375) 250 × 700; the square tent turns too, the locked one not at all', () => {
     expect(turnOps(DOC, ['c1', 't1', 'lk'])).toEqual([
-      { type: 'update', id: 'c1', patch: { xCm: 325, yCm: 375, widthCm: 250, depthCm: 700 } },
+      { type: 'update', id: 'c1', patch: { xCm: 325, yCm: 375, widthCm: 250, depthCm: 700, facing: 1 } },
+      { type: 'update', id: 't1', patch: { facing: 1 } },
     ]);
+  });
+
+  it('turns a square in place: the rectangle is its own, so only the facing moves on', () => {
+    expect(turnOps(DOC, ['f1'])).toEqual([{ type: 'update', id: 'f1', patch: { facing: 1 } }]);
+  });
+
+  it('brings every item home in four turns, square or not', () => {
+    let doc = DOC;
+    for (let quarter = 0; quarter < 4; quarter += 1) doc = applyOps(doc, turnOps(doc, ['c1', 'f1', 't1'])).doc;
+    expect(doc.items).toEqual(DOC.items);
   });
 });
 
@@ -98,7 +109,7 @@ describe('adding', () => {
       type: 'add',
       item: {
         id: 'n1', kind: 'tent', label: 'אוהל 4', xCm: 1500, yCm: 200, widthCm: 300, depthCm: 300,
-        heightCm: null, insetCm: null, ropeAngleDeg: null, sort: 6, taskId: null, notes: null, locked: false,
+        heightCm: null, insetCm: null, ropeAngleDeg: null, facing: 0, sort: 6, taskId: null, notes: null, locked: false,
       },
     }]);
   });
