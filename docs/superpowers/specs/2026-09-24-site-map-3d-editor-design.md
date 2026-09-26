@@ -304,13 +304,20 @@ updates transforms directly in the render loop, without a React render.
    selected or hovered.
 7. **Sizes:** the selected item's label adds its size ("3 × 3 מ׳").
 
+A third style, **printed** (plan `2026-09-26-site-label-modes`), draws the
+item's own name on its faces as part of the scene and takes no part in this
+layout: it never groups, never adds the size, never moves, and is in the
+exported picture. The tool row chooses between floating, none and printed; the
+choice is remembered per browser.
+
 ## 10. Panels
 
 Layout as in the mock: the admin shell, a top bar, a tool row, and the scene
 filling the rest, with floating panels over it.
 
-- **Tool row:** select / measure; undo / redo; plan / 3D; toggles for labels,
-  shade by hour, hiding nets, snapping.
+- **Tool row:** select / measure; undo / redo; plan / 3D; a three-way labels
+  control (מרחפות / בלי / מודפסות); toggles for shade by hour, hiding nets,
+  snapping.
 - **Library** (right): search; kinds grouped as in `kinds.ts`, each tile
   showing its effective default size, with a dot when the default has been
   changed. **במפה** tab: every item grouped by kind group, searchable. A row
