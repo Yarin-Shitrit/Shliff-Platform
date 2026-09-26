@@ -7,10 +7,11 @@ import type { ActionResult } from '@/lib/action-result';
 import {
   itemById, setCondition, createItem, updateItem, type ItemInput,
 } from '@/lib/logistics/warehouse';
+import { createBox, updateBox, type BoxInput } from '@/lib/logistics/boxes';
 import { CONDITION_LABELS } from '@/lib/logistics/labels';
 import type { ItemCondition } from '@/db/schema/logistics';
 import { WAREHOUSE_PATH } from '@/lib/logistics/warehouse-views';
-import { conditionFailureMessage, itemFailureMessage } from './failure-messages';
+import { boxFailureMessage, conditionFailureMessage, itemFailureMessage } from './failure-messages';
 
 /**
  * This file exports only async functions. A `'use server'` module that exports
@@ -86,5 +87,37 @@ export async function updateItemAction(
     return { ok: true };
   } catch (error) {
     return { ok: false, error: itemFailureMessage(error) };
+  }
+}
+
+/**
+ * A box by hand. Returns the new id so the screen can open the drawer over
+ * the box that was just made — the next thing a lead does with a new box is
+ * put something in it.
+ */
+export async function createBoxAction(input: BoxInput): Promise<ActionResult<string>> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+
+  try {
+    const id = await createBox(db, input, admin.email);
+    revalidatePath(WAREHOUSE_PATH);
+    return { ok: true, value: id };
+  } catch (error) {
+    return { ok: false, error: boxFailureMessage(error) };
+  }
+}
+
+/** The box drawer's save. Every field travels every time (see `BoxInput`). */
+export async function updateBoxAction(id: string, input: BoxInput): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+
+  try {
+    await updateBox(db, id, input, admin.email);
+    revalidatePath(WAREHOUSE_PATH);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: boxFailureMessage(error) };
   }
 }

@@ -8,6 +8,7 @@ import { listBudgetLines } from '@/lib/money/budget';
 import {
   listAcquisitions, acquisitionCounts, acquisitionById,
 } from '@/lib/logistics/acquisitions';
+import { everyItem } from '@/lib/logistics/warehouse-views';
 import { listWarehouse } from '@/lib/logistics/warehouse';
 import {
   parseAcquisitionQuery, acquisitionsHref, arrivalHref, newAcquisitionHref,
@@ -95,10 +96,7 @@ export default async function AcquisitionsPage(
     acquisitionCounts(db, current.id, query),
     listRoster(db, current.id),
     listBudgetLines(db, current.id),
-    listWarehouse(db, {
-      view: 'all', q: '', category: null, sort: 'name', dir: 'asc',
-      peek: null, creating: false,
-    }),
+    listWarehouse(db, everyItem()),
   ]);
 
   const peeked = query.peek === null ? null : await acquisitionById(db, query.peek);

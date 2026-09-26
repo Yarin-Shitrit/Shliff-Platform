@@ -1,5 +1,5 @@
 import { fromAgorot } from '@/lib/money';
-import type { WarehouseRow } from './warehouse';
+import { placeOf, type WarehouseRow } from './warehouse';
 import type { AcquisitionRow } from './acquisitions';
 import {
   CAMP_WIDE_LABEL, CATEGORY_LABELS, CONDITION_LABELS, SOURCE_LABELS, STATUS_LABELS,
@@ -48,12 +48,16 @@ const NONE = '';
 
 export function warehouseCsvRows(items: readonly WarehouseRow[]): string[][] {
   return [
-    ['שם הפריט', 'קטגוריה', 'כמות', 'מיקום במחסן', 'מצב', 'הערות', 'מקור הנתון', 'עודכן בידי'],
+    ['שם הפריט', 'קטגוריה', 'כמות', 'ארגז', 'מיקום במחסן', 'מצב', 'הערות', 'מקור הנתון', 'עודכן בידי'],
     ...items.map((item) => [
       item.name,
       CATEGORY_LABELS[item.category],
       String(item.quantity),
-      item.locationText ?? NONE,
+      /* The box by name, and the place as the screen says it — box, the
+         box's place, the item's own detail — so a lead reading the file in
+         the container looks for the same thing the table told them to. */
+      item.box?.name ?? NONE,
+      placeOf(item) ?? NONE,
       CONDITION_LABELS[item.condition],
       item.notes ?? NONE,
       /* R11 travels with the file. A spreadsheet that has left the app is

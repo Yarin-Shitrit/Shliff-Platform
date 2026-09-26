@@ -28,7 +28,7 @@ import { SourceChip } from '@/components/ui/source-chip';
 import { useToast } from '@/components/ui/toaster';
 import { DateText } from '@/components/format';
 import { isBlank } from '@/lib/text/normalize';
-import type { WarehouseRow } from '@/lib/logistics/warehouse';
+import type { ItemBox, WarehouseRow } from '@/lib/logistics/warehouse';
 import { CATEGORY_LABELS, CONDITION_LABELS } from '@/lib/logistics/labels';
 import type { ItemCondition, LogisticsCategory } from '@/db/schema/logistics';
 import { createItemAction, updateItemAction } from './actions';
@@ -37,6 +37,9 @@ import styles from './warehouse.module.css';
 
 /** Which box a refusal belongs to, so it is announced beside its own field. */
 type Refusal = { where: 'name' | 'location' | 'form'; message: string };
+
+/** The empty choice's text. `Select` renders it as the `""` option. */
+const NO_BOX = 'לא בארגז — מיקום חופשי';
 
 const CATEGORY_OPTIONS = (Object.keys(CATEGORY_LABELS) as LogisticsCategory[])
   .map((value) => ({ value, label: CATEGORY_LABELS[value] }));
@@ -71,9 +74,23 @@ export type ItemDrawerProps = {
    * then no chip row is drawn at all.
    */
   locations?: readonly string[];
+  /**
+   * The boxes in the warehouse, by name, offered as the first answer to
+   * "where". Empty on a warehouse with no boxes yet, and then the picker is
+   * not drawn at all — a choice with one option is not a choice.
+   */
+  boxes?: readonly ItemBox[];
+  /**
+   * The box the create drawer opens with already chosen — the link at the
+   * foot of a box's contents. Shown, not hidden: the lead sees the choice and
+   * can change it. Ignored while editing, where the item's own box wins.
+   */
+  presetBoxId?: string | null;
 };
 
-export function ItemDrawer({ item, closeHref, locations = [] }: ItemDrawerProps) {
+export function ItemDrawer({
+  item, closeHref, locations = [], boxes = [], presetBoxId = null,
+}: ItemDrawerProps) {
   const router = useRouter();
   const { show } = useToast();
 
@@ -83,6 +100,14 @@ export function ItemDrawer({ item, closeHref, locations = [] }: ItemDrawerProps)
      and coercing it on every keystroke would fight the lead while they clear
      it to type something else. */
   const [quantity, setQuantity] = useState(String(item?.quantity ?? 0));
+  /* `''` is "not in a box", which is what `Select` sends for its empty option.
+     A preset that names no box on the list is dropped rather than kept as an
+     invisible choice: the picker would show "not in a box" while the save
+     sent an id. */
+  const [boxId, setBoxId] = useState(() => {
+    const wanted = item === null ? presetBoxId : (item.box?.id ?? null);
+    return wanted !== null && boxes.some((box) => box.id === wanted) ? wanted : '';
+  });
   const [location, setLocation] = useState(item?.locationText ?? '');
   const [condition, setCondition] = useState<ItemCondition>(item?.condition ?? 'ready');
   const [notes, setNotes] = useState(item?.notes ?? '');
@@ -130,7 +155,9 @@ export function ItemDrawer({ item, closeHref, locations = [] }: ItemDrawerProps)
     // without a round trip — and in the same words, imported rather than
     // retyped.
     if (isBlank(name)) { setRefusal({ where: 'name', message: NAME_REQUIRED }); return; }
-    if (isBlank(location)) { setRefusal({ where: 'location', message: LOCATION_REQUIRED }); return; }
+    // A box is a location. Without one the text is the only answer to
+    // "where", and the library refuses a row with neither.
+    if (boxId === '' && isBlank(location)) { setRefusal({ where: 'location', message: LOCATION_REQUIRED }); return; }
 
     /* `Number('')` is 0, which is the right reading of an empty count box —
        "none", the fact. Anything unparseable stays NaN and is refused by the
@@ -141,6 +168,7 @@ export function ItemDrawer({ item, closeHref, locations = [] }: ItemDrawerProps)
       name,
       category,
       quantity: parsed,
+      boxId: boxId === '' ? null : boxId,
       locationText: location,
       condition,
       notes: isBlank(notes) ? null : notes,
@@ -178,6 +206,7 @@ export function ItemDrawer({ item, closeHref, locations = [] }: ItemDrawerProps)
   }
 
   const creating = item === null;
+  const chosenBox = boxes.find((box) => box.id === boxId) ?? null;
 
   return (
     <Drawer
@@ -259,12 +288,38 @@ export function ItemDrawer({ item, closeHref, locations = [] }: ItemDrawerProps)
           </Field>
         </div>
 
+        {boxes.length === 0 ? null : (
+          /*
+            The box first, because it is the easier answer: one tap, and the
+            item is wherever the box is. The location box under it then turns
+            from required to optional detail, and its hint says so — the
+            change of rule is on screen, not just in the validator.
+          */
+          <Field
+            id="item-box"
+            label="ארגז"
+            hint={chosenBox === null
+              ? 'פריט בארגז לא צריך מיקום משלו — הארגז כבר ממוקם.'
+              : `הארגז מונח ב־${chosenBox.locationText}.`}
+          >
+            <Select
+              id="item-box"
+              value={boxId}
+              onChange={setBoxId}
+              emptyLabel={NO_BOX}
+              options={boxes.map((box) => ({ value: box.id, label: `${box.name} · ${box.locationText}` }))}
+            />
+          </Field>
+        )}
+
         <Field
           id="item-location"
-          label="מיקום במחסן"
-          required
+          label={chosenBox === null ? 'מיקום במחסן' : 'מיקום בתוך הארגז'}
+          required={chosenBox === null}
           error={errorFor('location')}
-          hint="איפה זה מונח בפועל — ״ארגז גדול #2״, ״מאחורי המכולה״. בלי זה אי אפשר למצוא את הפריט בשנה הבאה."
+          hint={chosenBox === null
+            ? 'איפה זה מונח בפועל — ״ארגז גדול #2״, ״מאחורי המכולה״. בלי זה אי אפשר למצוא את הפריט בשנה הבאה.'
+            : 'לא חובה. פירוט בתוך הארגז — ״בתחתית״, ״בשקית הקטנה״.'}
         >
           <TextInput id="item-location" value={location} onChange={setLocation} />
         </Field>
@@ -313,7 +368,7 @@ export function ItemDrawer({ item, closeHref, locations = [] }: ItemDrawerProps)
           <div className={styles.again}>
             <Checkbox
               id="item-again"
-              label="אחרי ההוספה להישאר כאן ולהוסיף עוד פריט (הקטגוריה והמיקום נשמרים)"
+              label="אחרי ההוספה להישאר כאן ולהוסיף עוד פריט (הקטגוריה, הארגז והמיקום נשמרים)"
               checked={again}
               onChange={setAgain}
               disabled={pending}

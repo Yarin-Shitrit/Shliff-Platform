@@ -19,7 +19,7 @@ import { ConditionMenu } from './condition-menu';
 
 const ITEM: WarehouseRow = {
   id: 'item-1', name: 'משאבת מים', category: 'sanitation', quantity: 2,
-  locationText: 'משטח 2', condition: 'ready', notes: null,
+  locationText: 'משטח 2', box: null, condition: 'ready', notes: null,
   updatedBy: 'lead@shliff.camp', updatedAt: new Date('2026-09-14T10:00:00Z'),
 };
 

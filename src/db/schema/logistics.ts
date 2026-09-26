@@ -20,6 +20,31 @@ export type AcquisitionSource = 'buy_new' | 'second_hand' | 'borrow_member';
 export type AcquisitionStatus = 'to_search' | 'in_review' | 'ordered' | 'arrived';
 
 /**
+ * A box: a named container with one place in the warehouse.
+ *
+ * It exists so that an item can be located by what it is in rather than by
+ * where it is. Standing in the container, a lead fills ״ארגז כחול #1״ with
+ * twenty things and knows where the box is; typing that place twenty times
+ * is how a location column grows five spellings of one shelf. The box carries
+ * the place once, and an item inside it needs none of its own.
+ *
+ * No season, for the same reason `inventoryItems` has none: a box is owned,
+ * not needed. There is no delete either — this product does not delete — so
+ * an emptied box stays listed and says it is empty.
+ */
+export const inventoryBoxes = pgTable('inventory_boxes', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  /** Where the box itself is, free text. Required: a box nobody can find
+   *  locates nothing. */
+  locationText: text('location_text').notNull(),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: text('updated_by'),
+});
+
+/**
  * What the camp physically owns, and where it is.
  *
  * **There is deliberately no `season_id`.** A pump owned in ברן 25 is still
@@ -27,6 +52,10 @@ export type AcquisitionStatus = 'to_search' | 'in_review' | 'ordered' | 'arrived
  * every year, which nobody would do, and a stale inventory is worse than none.
  * R5 requires camp-wide data to say so on screen rather than quietly ignore
  * `?season=`, and `/logistics/warehouse` does.
+ *
+ * An item is located either by `boxId` or by `locationText`, and the library
+ * refuses a row with neither. Inside a box the text is optional detail
+ * (״בתחתית״); outside one it is the whole answer to "where".
  *
  * `sourceBlockId` / `sourceRow` are reserved and always null today: there is no
  * gear workbook, so every quantity renders `נרשם ידנית` under R11. They exist
@@ -38,6 +67,10 @@ export const inventoryItems = pgTable('inventory_items', {
   name: text('name').notNull(),
   category: text('category').$type<LogisticsCategory>().notNull().default('general'),
   quantity: integer('quantity').notNull().default(0),
+  /** The box this is in, if it is in one. `set null` rather than cascade: a
+   *  box row is never deleted by this product, and if one ever is, the items
+   *  in it are still owned — they become unlocated, which the screen shows. */
+  boxId: uuid('box_id').references(() => inventoryBoxes.id, { onDelete: 'set null' }),
   /** Free text, written the way it is written on the box itself. */
   locationText: text('location_text'),
   condition: text('condition').$type<ItemCondition>().notNull().default('ready'),

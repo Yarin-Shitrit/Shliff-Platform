@@ -3,9 +3,9 @@ import Link from 'next/link';
 import { Table, type TableColumn } from '@/components/ui/table';
 import { Pill } from '@/components/ui/pill';
 import { SourceChip } from '@/components/ui/source-chip';
-import type { WarehouseRow } from '@/lib/logistics/warehouse';
+import { placeOf, type WarehouseRow } from '@/lib/logistics/warehouse';
 import { CATEGORY_LABELS, CONDITION_LABELS, CONDITION_TONES } from '@/lib/logistics/labels';
-import { itemHref, type RawParams } from '@/lib/logistics/warehouse-views';
+import { boxHref, itemHref, type RawParams } from '@/lib/logistics/warehouse-views';
 
 /**
  * No `'use client'`. This component calls no hook and owns no state — the
@@ -68,7 +68,17 @@ export function WarehouseTable(
       key: 'location',
       header: 'מיקום במחסן',
       card: 'meta',
-      cell: (row) => row.locationText || DASH,
+      /* An item in a box is where the box is. The box's name is a link to its
+         drawer — the question behind this column is "what else is in there"
+         as often as "where is it" — and the rest is the place as `placeOf`
+         says it, so the cell and the export agree word for word. */
+      cell: (row) => row.box === null ? (row.locationText || DASH) : (
+        <>
+          <Link href={boxHref(params, row.box.id)} className="nm">{row.box.name}</Link>
+          {` · ${placeOf({ box: null, locationText: row.box.locationText })}`}
+          {row.locationText ? ` · ${row.locationText}` : ''}
+        </>
+      ),
     },
     {
       key: 'condition',
