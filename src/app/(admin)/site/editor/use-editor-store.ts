@@ -165,7 +165,7 @@ function itemPatch(item: EditorItem): ItemPatch {
   return {
     label: item.label, kind: item.kind, xCm: item.xCm, yCm: item.yCm,
     widthCm: item.widthCm, depthCm: item.depthCm, heightCm: item.heightCm,
-    insetCm: item.insetCm, ropeAngleDeg: item.ropeAngleDeg, taskId: item.taskId, notes: item.notes,
+    insetCm: item.insetCm, ropeAngleDeg: item.ropeAngleDeg, facing: item.facing, taskId: item.taskId, notes: item.notes,
     groupId: groupIdOf(item),
   };
 }

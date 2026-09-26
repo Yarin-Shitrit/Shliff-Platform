@@ -78,10 +78,16 @@ export const sitePlans = pgTable('site_plans', {
 /**
  * One thing on the map: a tent, a caravan, the kitchen, a sofa, a shade net.
  *
- * **No rotation column.** A "turn" swaps `widthCm` and `depthCm`, so every
+ * **No free rotation.** A "turn" swaps `widthCm` and `depthCm`, so every
  * rectangle stays axis-aligned and "does this overlap that" and "is this
  * inside the plot" are four comparisons each, which is what makes them
  * cheap enough to compute on every drag and simple enough to test by hand.
+ * What the swap cannot say is which way the thing faces: a sofa's back is
+ * on one of four edges, and the swap only tells the long edge from the
+ * short one. `facing` (migration `0017`) is that fourth bit — quarter turns
+ * clockwise from the kind's drawn orientation, 0 to 3 — so a turn is a swap
+ * *and* one more quarter, and four turns bring the sofa back to where it
+ * started. Never an angle: the footprint stays a plain rectangle.
  *
  * `insetCm` is for a shade net only: the strip on every side that the net
  * does *not* shade. An 8 × 8 net with 50 cm of inset shades 7 × 7. The
@@ -123,6 +129,13 @@ export const siteItems = pgTable('site_items', {
    * that is not a net, like `insetCm`.
    */
   ropeAngleDeg: integer('rope_angle_deg'),
+  /**
+   * Quarter turns clockwise from the kind's drawn orientation, 0 to 3. A
+   * sofa at 0 has its back on the north edge; at 1 on the east, 2 the south,
+   * 3 the west. Kinds with no front are drawn the same at every value, but
+   * still count, so a lead's fourth turn lands where the first began.
+   */
+  facing: integer('facing').notNull().default(0),
   /** A locked item is not dragged, nudged, resized, turned or removed until it is unlocked. */
   locked: boolean('locked').notNull().default(false),
   /**

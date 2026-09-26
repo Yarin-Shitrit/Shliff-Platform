@@ -59,6 +59,8 @@ export interface SiteItem {
   heightCm: number | null;
   /** Shade nets only; null follows the camp's angle (spec §13). */
   ropeAngleDeg: number | null;
+  /** Quarter turns clockwise, 0–3 (`site.ts`). */
+  facing: number;
   locked: boolean;
   /** Items grouped by a lead share an id (`site.ts`); null is in no group. */
   groupId: string | null;
@@ -227,6 +229,7 @@ export async function copyPlan(
       insetCm: row.insetCm,
       heightCm: row.heightCm,
       ropeAngleDeg: row.ropeAngleDeg,
+      facing: row.facing,
       groupId: copiedGroup(row.groupId),
       sort: row.sort,
       notes: row.notes,
@@ -285,6 +288,7 @@ const ITEM_COLUMNS = {
   insetCm: siteItems.insetCm,
   heightCm: siteItems.heightCm,
   ropeAngleDeg: siteItems.ropeAngleDeg,
+  facing: siteItems.facing,
   locked: siteItems.locked,
   groupId: siteItems.groupId,
   sort: siteItems.sort,
@@ -385,6 +389,7 @@ function patchSet(
   if (stored.locked !== undefined) set.locked = stored.locked;
   if (stored.insetCm !== undefined) set.insetCm = stored.insetCm;
   if (stored.ropeAngleDeg !== undefined) set.ropeAngleDeg = stored.ropeAngleDeg;
+  if (stored.facing !== undefined) set.facing = stored.facing;
   if (stored.groupId !== undefined) set.groupId = stored.groupId;
   return set;
 }
@@ -485,7 +490,7 @@ export function toEditorItem(row: SiteItem): EditorItem {
   return {
     id: row.id, kind: row.kind, label: row.label,
     xCm: row.xCm, yCm: row.yCm, widthCm: row.widthCm, depthCm: row.depthCm,
-    heightCm: row.heightCm, insetCm: row.insetCm, ropeAngleDeg: row.ropeAngleDeg, sort: row.sort,
+    heightCm: row.heightCm, insetCm: row.insetCm, ropeAngleDeg: row.ropeAngleDeg, facing: row.facing, sort: row.sort,
     taskId: row.taskId, notes: row.notes, locked: row.locked, groupId: row.groupId,
   };
 }
@@ -659,6 +664,8 @@ export async function applySiteOps(
           insetCm: entry.kind === 'shade' ? (entry.insetCm ?? DEFAULT_SHADE_INSET_CM) : null,
           // A net's own angle; none on anything else, and none from a page older than rope angles.
           ropeAngleDeg: entry.kind === 'shade' ? (entry.ropeAngleDeg ?? null) : null,
+          // A page older than facings sends none: that is the drawn orientation, not a missing field.
+          facing: entry.facing ?? 0,
           // The client owns draw order (spec §6.2): what it sent is what is drawn.
           sort: entry.sort, taskId: entry.taskId, notes: cleanNotes(entry.notes), locked: entry.locked,
           // In no group unless the op says so — an op from a page older than groups says nothing.

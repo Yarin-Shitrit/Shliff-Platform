@@ -76,7 +76,7 @@ const PLAN: SitePlan = {
 function item(over: Partial<SiteItemView> & { id: string }): SiteItemView {
   return {
     planId: 'p1', kind: 'tent', label: 'אוהל 1', xCm: 0, yCm: 0, widthCm: 300, depthCm: 300,
-    insetCm: null, ropeAngleDeg: null, heightCm: null, locked: false, groupId: null, sort: 0, taskId: null, taskTitle: null, notes: null,
+    insetCm: null, ropeAngleDeg: null, heightCm: null, facing: 0, locked: false, groupId: null, sort: 0, taskId: null, taskTitle: null, notes: null,
     updatedAt: new Date('2026-09-01T00:00:00Z'), updatedBy: 'lead@shliff.camp',
     outside: false, overlapping: false, shade: 'unshaded', ...over,
   };
@@ -102,7 +102,7 @@ function loaded(ids: string[], planId = 'p1', version = 3): { doc: EditorDoc; ve
       plot: { id: planId, widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 0 },
       items: ids.map((id, index) => ({
         id, kind: 'tent', label: `אוהל ${index + 1}`, xCm: 0, yCm: 0, widthCm: 300, depthCm: 300,
-        heightCm: null, insetCm: null, ropeAngleDeg: null, sort: index, taskId: null, notes: null, locked: false,
+        heightCm: null, insetCm: null, ropeAngleDeg: null, sort: index, taskId: null, notes: null, facing: 0, locked: false,
       })),
       lines: [],
       defaults: {},

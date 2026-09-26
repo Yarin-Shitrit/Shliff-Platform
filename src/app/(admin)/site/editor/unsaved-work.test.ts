@@ -16,7 +16,7 @@ const EVERY_OP: SiteOp[] = [
     type: 'add',
     item: {
       id: SINK_ID, kind: 'sink', label: 'כיור 1', xCm: 500, yCm: 300, widthCm: 100, depthCm: 50,
-      heightCm: null, insetCm: null, ropeAngleDeg: null, sort: 3, taskId: null, notes: null, locked: false,
+      heightCm: null, insetCm: null, ropeAngleDeg: null, sort: 3, taskId: null, notes: null, facing: 0, locked: false,
     },
   },
   { type: 'update', id: TANK_ID, patch: { xCm: 620, label: 'מי שתייה 2' } },

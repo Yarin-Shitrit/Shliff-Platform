@@ -6,7 +6,7 @@ import { isShown, SceneSync, type SyncInput } from './scene-sync';
 function item(over: Partial<EditorItem> & { id: string }): EditorItem {
   return {
     kind: 'tent', label: 'אוהל 1', xCm: 100, yCm: 200, widthCm: 300, depthCm: 300,
-    heightCm: null, insetCm: null, ropeAngleDeg: null, sort: 0, taskId: null, notes: null, locked: false, ...over,
+    heightCm: null, insetCm: null, ropeAngleDeg: null, sort: 0, taskId: null, notes: null, facing: 0, locked: false, ...over,
   };
 }
 

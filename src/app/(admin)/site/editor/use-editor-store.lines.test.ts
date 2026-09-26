@@ -26,7 +26,7 @@ const isolate = (name: string) => `${FSI}${name}${PDI}`;
 function item(over: Partial<EditorItem> & { id: string; kind: EditorItem['kind']; label: string }): EditorItem {
   return {
     xCm: 0, yCm: 0, widthCm: 100, depthCm: 100, heightCm: null, insetCm: null, ropeAngleDeg: null,
-    sort: 0, taskId: null, notes: null, locked: false, ...over,
+    sort: 0, taskId: null, notes: null, facing: 0, locked: false, ...over,
   };
 }
 const tank = item({ id: TANK, kind: 'water', label: 'מי שתייה 1' });

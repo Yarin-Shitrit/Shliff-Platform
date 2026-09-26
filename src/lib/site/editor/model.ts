@@ -29,6 +29,12 @@ export interface EditorItem {
    * a net with neither has no rope footprint (spec D16).
    */
   ropeAngleDeg: number | null;
+  /**
+   * Quarter turns clockwise from the kind's drawn orientation, 0–3
+   * (`site.ts`). A turn swaps the sides *and* adds one, so a sofa's back
+   * walks north, east, south, west and home again.
+   */
+  facing: number;
   sort: number;
   taskId: string | null;
   notes: string | null;
@@ -72,6 +78,14 @@ export function groupMembers(doc: EditorDoc, ids: readonly string[]): string[] {
     }
   }
   return out;
+}
+
+/** Whole quarter turns: the only facings there are. */
+export const FACINGS = [0, 1, 2, 3] as const;
+
+/** One quarter turn clockwise from `facing`. */
+export function nextFacing(facing: number): number {
+  return (facing + 1) % 4;
 }
 
 export interface EditorPlot {

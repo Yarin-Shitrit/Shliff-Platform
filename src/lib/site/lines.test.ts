@@ -9,7 +9,7 @@ import {
 function item(over: Partial<EditorItem> & Pick<EditorItem, 'id' | 'kind'>): EditorItem {
   return {
     label: over.id, xCm: 0, yCm: 0, widthCm: 100, depthCm: 100, heightCm: null, insetCm: null, ropeAngleDeg: null,
-    sort: 0, taskId: null, notes: null, locked: false, ...over,
+    sort: 0, taskId: null, notes: null, facing: 0, locked: false, ...over,
   };
 }
 

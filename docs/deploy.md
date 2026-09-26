@@ -451,6 +451,45 @@ Afterwards the query above prints `group_id`, and
 numbers here when it is done. Not applied to the local `shliff-pg` either
 when this was written.
 
+### Migration `0018` — not yet applied to Railway
+
+`0018_site_item_facing` is the camp map's fourth bit of a turn: one column,
+`site_items.facing integer not null default 0`, quarter turns clockwise from
+the kind's drawn orientation, 0 to 3. A turn in the editor swaps the sides
+*and* adds one, so a sofa's back walks north, east, south, west and home. The
+migration also **updates rows**: a sofa or armchair already taller than it is
+wide is set to facing 3 (back on the west edge), which is how the scene drew
+it before there was a facing — so no picture changes when the column arrives.
+Every other item takes 0. It must be on Railway **before** the code that reads
+it deploys, because every load of `/site` selects the column (`plan.ts`
+`listItems`) and every turn writes it. Applying it is the camp lead's step, by
+the same procedure as `0016`, after whichever earlier migrations are still
+pending — the order is migration first, merge second.
+
+It was generated on top of `0017_site_item_groups` and must be applied after it.
+
+Read-only check (before: nothing; after: `facing`):
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" postgres:18-alpine sh -c '
+  psql "$R" -tAc "select column_name from information_schema.columns
+    where table_name='"'"'site_items'"'"' and column_name='"'"'facing'"'"'"'
+```
+
+Then:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine sh -euc '
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0018_site_item_facing.sql
+'
+```
+
+Afterwards the query above prints `facing`, `select count(*) from site_items`
+is what it was before, and `select count(*) from site_items where facing = 3`
+is the number of sofas and armchairs standing taller than wide. Record the
+measured numbers here when it is done. Not applied to the local `shliff-pg`
+either when this was written.
+
 ### Copying the laptop's database up
 
 The local container is Postgres **16**; Railway is **18**. Dump with the
