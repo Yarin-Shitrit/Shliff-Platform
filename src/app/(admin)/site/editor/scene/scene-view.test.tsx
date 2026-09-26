@@ -28,6 +28,7 @@ vi.mock('three', async (importOriginal) => {
   const actual = await importOriginal<typeof import('three')>();
   class WebGLRenderer {
     shadowMap = { enabled: false };
+    capabilities = { getMaxAnisotropy: () => 1 };
     constructor() {
       renderer.created += 1;
       if (renderer.fails) throw new Error('Error creating WebGL context.');
@@ -508,6 +509,25 @@ describe('the 3D map with WebGL', () => {
       expect(renderer.frames).toBe(before);
     } finally {
       delete (document as { fonts?: unknown }).fonts;
+    }
+  });
+
+  it('asks the scene for printed names once the labels style says so, and rasterises nothing before', async () => {
+    const syncs = vi.spyOn(SceneSync.prototype, 'sync');
+    try {
+      const store = fakeStore();
+      const { rerenderWith } = renderScene(store, UI);
+      await frames();
+      const floating = syncs.mock.calls[syncs.mock.calls.length - 1][0];
+      expect(floating).toMatchObject({ labelMode: 'floating', prints: null, fontEpoch: 0 });
+
+      rerenderWith(store, { ...UI, labels: 'printed' });
+      await frames();
+      const printed = syncs.mock.calls[syncs.mock.calls.length - 1][0];
+      expect(printed.labelMode).toBe('printed');
+      expect(printed.prints).not.toBeNull();
+    } finally {
+      syncs.mockRestore();
     }
   });
 
