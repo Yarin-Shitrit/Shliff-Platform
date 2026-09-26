@@ -43,6 +43,16 @@ export type ButtonLinkProps = ButtonShared & {
    * downloads folder. Without it, the client router fetches a Route Handler's
    * CSV as an RSC payload and nothing is saved — which is why the export
    * action reached for `window.location.assign` and an eslint disable.
+   *
+   * A download also opens in its own browsing context (`target="_blank"`).
+   * The app is installable on the home screen (`appleWebApp.capable`,
+   * `display: standalone`), and there a same-window navigation to a file
+   * replaces the whole app with the phone's file preview — a black screen
+   * with "Open in Notes" — and no back control, because a standalone app has
+   * no browser chrome. In a new context the phone hands the file to a sheet
+   * with its own "Done", and the app is still there underneath. In a desktop
+   * browser the pair `download` + `_blank` just downloads, with no tab left
+   * behind. `rel="noopener"` because that is what every `_blank` carries.
    */
   download?: boolean;
 };
@@ -87,6 +97,8 @@ export function ButtonLink({
       href={href}
       replace={replace}
       download={download}
+      target={download ? '_blank' : undefined}
+      rel={download ? 'noopener' : undefined}
       aria-label={iconLabel}
       aria-describedby={describedBy}
     >

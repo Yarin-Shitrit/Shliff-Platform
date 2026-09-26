@@ -23,9 +23,22 @@ import { ItemDrawer } from './item-drawer';
 
 const ITEM: WarehouseRow = {
   id: 'item-1', name: 'סיר תעשייתי', category: 'kitchen', quantity: 2,
-  locationText: 'ארגז כחול #1', condition: 'ready', notes: null,
+  locationText: 'ארגז כחול #1', box: null, condition: 'ready', notes: null,
   updatedBy: 'lead@shliff.camp', updatedAt: new Date('2026-09-14T10:00:00Z'),
 };
+
+const BOXES = [
+  { id: 'b1', name: 'ארגז כחול #1', locationText: 'מדף עליון' },
+  { id: 'b2', name: 'ארגז אדום', locationText: 'מכולה' },
+];
+
+function mountWithBoxes(item: WarehouseRow | null, presetBoxId: string | null = null) {
+  return render(
+    <ToastProvider>
+      <ItemDrawer item={item} closeHref="/logistics/warehouse" boxes={BOXES} presetBoxId={presetBoxId} />
+    </ToastProvider>,
+  );
+}
 
 function mount(item: WarehouseRow | null) {
   return render(
@@ -270,5 +283,77 @@ describe('the drawer on a phone held in the container', () => {
   it('never offers to stay open while editing — there is no next item', () => {
     mount(ITEM);
     expect(screen.queryByRole('checkbox', { name: /להישאר כאן/ })).toBeNull();
+  });
+});
+
+describe('the box picker — an item located by what it is in', () => {
+  it('is not drawn while the warehouse has no boxes: one option is not a choice', () => {
+    mount(null);
+    expect(screen.queryByLabelText(/^ארגז$/)).toBeNull();
+  });
+
+  it('opens on "not in a box" and sends no box, so nothing is chosen for the lead', async () => {
+    mountWithBoxes(null);
+    expect((screen.getByLabelText(/^ארגז$/) as HTMLSelectElement).value).toBe('');
+    type(/שם הפריט/, 'מצקת');
+    type(/מיקום במחסן/, 'מכולה');
+    await submit('הוספת הפריט');
+    expect(createItemAction).toHaveBeenCalledWith(expect.objectContaining({ boxId: null, locationText: 'מכולה' }));
+  });
+
+  it('lets a boxed item go without a location of its own, and says the box is already placed', async () => {
+    mountWithBoxes(null);
+    type(/שם הפריט/, 'מצקת');
+    fireEvent.change(screen.getByLabelText(/^ארגז$/), { target: { value: 'b1' } });
+    // The rule changed on screen, not just in the validator.
+    expect(screen.getByRole('dialog').textContent).toContain('מדף עליון');
+    expect(screen.getByLabelText(/מיקום בתוך הארגז/)).toBeTruthy();
+    await submit('הוספת הפריט');
+
+    expect(createItemAction).toHaveBeenCalledWith(expect.objectContaining({ boxId: 'b1', locationText: '' }));
+  });
+
+  it('still refuses an item with neither a box nor a location', async () => {
+    mountWithBoxes(null);
+    type(/שם הפריט/, 'מצקת');
+    await submit('הוספת הפריט');
+    expect(createItemAction).not.toHaveBeenCalled();
+    expect(refusal()).toMatch(/ארגז/);
+  });
+
+  it('opens with the box the link named, still as a choice the lead can change', () => {
+    // The foot of a box's contents links here with the box chosen.
+    mountWithBoxes(null, 'b2');
+    const picker = screen.getByLabelText(/^ארגז$/) as HTMLSelectElement;
+    expect(picker.value).toBe('b2');
+    fireEvent.change(picker, { target: { value: '' } });
+    expect(picker.value).toBe('');
+  });
+
+  it('drops a preset that names no box on the list, rather than sending an invisible choice', () => {
+    mountWithBoxes(null, 'gone');
+    expect((screen.getByLabelText(/^ארגז$/) as HTMLSelectElement).value).toBe('');
+  });
+
+  it('fills the picker from the item\'s own box when editing', async () => {
+    mountWithBoxes({ ...ITEM, locationText: null, box: { id: 'b1', name: 'ארגז כחול #1', locationText: 'מדף עליון' } });
+    expect((screen.getByLabelText(/^ארגז$/) as HTMLSelectElement).value).toBe('b1');
+    await submit('שמירה');
+    expect(updateItemAction).toHaveBeenCalledWith('item-1', expect.objectContaining({ boxId: 'b1' }));
+  });
+
+  it('keeps the box for the next item in stay-open mode', async () => {
+    mountWithBoxes(null);
+    fireEvent.click(screen.getByRole('checkbox', { name: /להישאר כאן/ }));
+    fireEvent.change(screen.getByLabelText(/^ארגז$/), { target: { value: 'b1' } });
+    type(/שם הפריט/, 'מצקת');
+    await submit('הוספת הפריט');
+    expect((screen.getByLabelText(/^ארגז$/) as HTMLSelectElement).value).toBe('b1');
+    expect((screen.getByLabelText(/שם הפריט/) as HTMLInputElement).value).toBe('');
+  });
+
+  it('says nothing in English with the picker drawn', () => {
+    mountWithBoxes(null, 'b1');
+    expect(screen.getByRole('dialog').textContent ?? '').not.toMatch(/[A-Za-z]/);
   });
 });

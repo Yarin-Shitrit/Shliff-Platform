@@ -7,17 +7,17 @@ import { WarehouseTable } from './warehouse-table';
 const ROWS: WarehouseRow[] = [
   {
     id: 'a', name: 'סיר תעשייתי', category: 'kitchen', quantity: 2,
-    locationText: 'ארגז כחול #1', condition: 'ready', notes: null,
+    locationText: 'ארגז כחול #1', box: null, condition: 'ready', notes: null,
     updatedBy: 'lead@shliff.camp', updatedAt: new Date('2026-09-14T10:00:00Z'),
   },
   {
     id: 'b', name: 'משאבת מים', category: 'sanitation', quantity: 2,
-    locationText: 'משטח 2', condition: 'needs_repair', notes: null,
+    locationText: 'משטח 2', box: null, condition: 'needs_repair', notes: null,
     updatedBy: 'lead@shliff.camp', updatedAt: new Date('2026-09-14T10:00:00Z'),
   },
   {
     id: 'c', name: 'מסור עגול', category: 'build', quantity: 1,
-    locationText: null, condition: 'retired', notes: null,
+    locationText: null, box: null, condition: 'retired', notes: null,
     updatedBy: 'lead@shliff.camp', updatedAt: new Date('2026-09-14T10:00:00Z'),
   },
 ];
@@ -55,6 +55,20 @@ describe('WarehouseTable', () => {
     // location" at the same time. The dash picks one.
     render(<WarehouseTable rows={[ROWS[2]]} params={params} shownQuantity={1} empty={EMPTY} />);
     expect(screen.getByText('—')).toBeTruthy();
+  });
+
+  it('places a boxed item by its box, with the box a link to its own drawer', () => {
+    // "What else is in there" is the question behind the column as often as
+    // "where is it", and the place is worded as the export words it.
+    const boxed: WarehouseRow = {
+      ...ROWS[0], id: 'd', name: 'מצקת', locationText: 'בתחתית',
+      box: { id: 'b1', name: 'ארגז כחול #1', locationText: 'מדף עליון' },
+    };
+    render(<WarehouseTable rows={[boxed]} params={{ cat: 'kitchen' }} shownQuantity={2} empty={EMPTY} />);
+    const link = screen.getByRole('link', { name: 'ארגז כחול #1' });
+    expect(link.getAttribute('href')).toContain('box=b1');
+    expect(link.getAttribute('href')).toContain('cat=kitchen');
+    expect(link.parentElement?.textContent).toBe('ארגז כחול #1 · מדף עליון · בתחתית');
   });
 
   it('totals the quantity of the rows it was handed', () => {

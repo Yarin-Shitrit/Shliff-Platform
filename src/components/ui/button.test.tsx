@@ -40,6 +40,27 @@ describe('Button', () => {
     expect(link.getAttribute('href')).toBe('/imports');
     expect(screen.queryByRole('button', { name: 'העלאת קובץ' })).toBeNull();
   });
+
+  /* Installed on a phone's home screen, the app has no browser chrome. A
+     same-window navigation to a file replaces it with the phone's file
+     preview and leaves no way back — a lead who tapped ייצוא in the warehouse
+     saw a black "Open in Notes" screen and had to relaunch the app. A new
+     browsing context gives the file its own sheet, with its own "Done", and
+     keeps the app where it was. */
+  it('opens a download in its own browsing context, so a home-screen app is not replaced by the file', () => {
+    render(<ButtonLink href="/logistics/warehouse/export" download>ייצוא</ButtonLink>);
+    const link = screen.getByRole('link', { name: 'ייצוא' });
+    expect(link.hasAttribute('download')).toBe(true);
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener');
+  });
+
+  it('keeps a page link in the same window', () => {
+    render(<ButtonLink href="/imports">העלאת קובץ</ButtonLink>);
+    const link = screen.getByRole('link', { name: 'העלאת קובץ' });
+    expect(link.hasAttribute('target')).toBe(false);
+    expect(link.hasAttribute('rel')).toBe(false);
+  });
 });
 
 /**

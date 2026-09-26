@@ -2,9 +2,10 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { createTestDb, type TestDb } from '@/test/db';
 import { inventoryItems } from '@/db/schema/logistics';
 import {
-  listWarehouse, warehouseCounts, itemById, setCondition,
-  createItem, updateItem, addToItem, frequentLocations,
+  listWarehouse, warehouseCounts, itemById, itemsInBox, setCondition,
+  createItem, updateItem, addToItem, frequentLocations, placeOf,
 } from './warehouse';
+import { createBox } from './boxes';
 
 const LEAD = 'lead@shliff.camp';
 
@@ -23,40 +24,40 @@ describe('warehouse', () => {
   });
 
   it('lists everything the camp owns, with no season involved', async () => {
-    const rows = await listWarehouse(db, { view: 'all', q: '', category: null, sort: 'name', dir: 'asc', peek: null, creating: false });
+    const rows = await listWarehouse(db, { view: 'all', q: '', category: null, sort: 'name', dir: 'asc', peek: null, creating: false, peekBox: null, presetBox: null, creatingBox: false });
     expect(rows).toHaveLength(5);
   });
 
   it('keeps a retired item in the list rather than hiding it', async () => {
     // Hiding it would make "we own a broken saw" indistinguishable from "we
     // own no saw", which is the ambiguity the retired state exists to remove.
-    const rows = await listWarehouse(db, { view: 'all', q: '', category: null, sort: 'name', dir: 'asc', peek: null, creating: false });
+    const rows = await listWarehouse(db, { view: 'all', q: '', category: null, sort: 'name', dir: 'asc', peek: null, creating: false, peekBox: null, presetBox: null, creatingBox: false });
     expect(rows.map((r) => r.name)).toContain('מסור עגול');
   });
 
   it('narrows to one category', async () => {
-    const rows = await listWarehouse(db, { view: 'all', q: '', category: 'kitchen', sort: 'name', dir: 'asc', peek: null, creating: false });
+    const rows = await listWarehouse(db, { view: 'all', q: '', category: 'kitchen', sort: 'name', dir: 'asc', peek: null, creating: false, peekBox: null, presetBox: null, creatingBox: false });
     expect(rows).toHaveLength(2);
     expect(rows.every((r) => r.category === 'kitchen')).toBe(true);
   });
 
   it('gathers everything that needs doing into one view', async () => {
-    const rows = await listWarehouse(db, { view: 'attention', q: '', category: null, sort: 'name', dir: 'asc', peek: null, creating: false });
+    const rows = await listWarehouse(db, { view: 'attention', q: '', category: null, sort: 'name', dir: 'asc', peek: null, creating: false, peekBox: null, presetBox: null, creatingBox: false });
     expect(rows.map((r) => r.name).sort()).toEqual(['גזייה', 'משאבת מים'].sort());
   });
 
   it('searches the location as well as the name', async () => {
     // The screen's placeholder promises both, and "what is in the blue box"
     // is a question people actually ask while standing in the unit.
-    const byName = await listWarehouse(db, { view: 'all', q: 'סיר', category: null, sort: 'name', dir: 'asc', peek: null, creating: false });
+    const byName = await listWarehouse(db, { view: 'all', q: 'סיר', category: null, sort: 'name', dir: 'asc', peek: null, creating: false, peekBox: null, presetBox: null, creatingBox: false });
     expect(byName).toHaveLength(1);
 
-    const byPlace = await listWarehouse(db, { view: 'all', q: 'ארגז גדול', category: null, sort: 'name', dir: 'asc', peek: null, creating: false });
+    const byPlace = await listWarehouse(db, { view: 'all', q: 'ארגז גדול', category: null, sort: 'name', dir: 'asc', peek: null, creating: false, peekBox: null, presetBox: null, creatingBox: false });
     expect(byPlace.map((r) => r.name).sort()).toEqual(['מאריך חשמל', 'מסור עגול'].sort());
   });
 
   it('sorts by condition worst-first, because that is the actionable end', async () => {
-    const rows = await listWarehouse(db, { view: 'all', q: '', category: null, sort: 'condition', dir: 'asc', peek: null, creating: false });
+    const rows = await listWarehouse(db, { view: 'all', q: '', category: null, sort: 'condition', dir: 'asc', peek: null, creating: false, peekBox: null, presetBox: null, creatingBox: false });
     expect(rows[0].condition).toBe('needs_repair');
     expect(rows[1].condition).toBe('needs_testing');
     expect(rows[rows.length - 1].condition).toBe('retired');
@@ -65,20 +66,20 @@ describe('warehouse', () => {
   it('counts each category over everything, not over the filtered page', async () => {
     // The chip counts have to stay put while a filter is applied, or the
     // control tells you there is nothing to switch to.
-    const counts = await warehouseCounts(db, { view: 'all', q: '', category: 'kitchen', sort: 'name', dir: 'asc', peek: null, creating: false });
+    const counts = await warehouseCounts(db, { view: 'all', q: '', category: 'kitchen', sort: 'name', dir: 'asc', peek: null, creating: false, peekBox: null, presetBox: null, creatingBox: false });
     expect(counts.byCategory.kitchen).toBe(2);
     expect(counts.byCategory.build).toBe(2);
     expect(counts.byCategory.living).toBe(0);
   });
 
   it('totals the quantity of the filtered set, so the footer matches the rows', async () => {
-    const counts = await warehouseCounts(db, { view: 'all', q: '', category: 'build', sort: 'name', dir: 'asc', peek: null, creating: false });
+    const counts = await warehouseCounts(db, { view: 'all', q: '', category: 'build', sort: 'name', dir: 'asc', peek: null, creating: false, peekBox: null, presetBox: null, creatingBox: false });
     expect(counts.shownQuantity).toBe(5); // 1 + 4
     expect(counts.shownRows).toBe(2);
   });
 
   it('reports what needs attention, for the tiles that link here', async () => {
-    const counts = await warehouseCounts(db, { view: 'all', q: '', category: null, sort: 'name', dir: 'asc', peek: null, creating: false });
+    const counts = await warehouseCounts(db, { view: 'all', q: '', category: null, sort: 'name', dir: 'asc', peek: null, creating: false, peekBox: null, presetBox: null, creatingBox: false });
     expect(counts.needsTesting).toBe(1);
     expect(counts.needsRepair).toBe(1);
   });
@@ -97,7 +98,7 @@ describe('warehouse', () => {
   });
 });
 
-const ALL = { view: 'all', q: '', category: null, sort: 'name', dir: 'asc', peek: null, creating: false } as const;
+const ALL = { view: 'all', q: '', category: null, sort: 'name', dir: 'asc', peek: null, creating: false, peekBox: null, presetBox: null, creatingBox: false } as const;
 
 describe('adding to the warehouse by hand, because there is no workbook to import', () => {
   let db: TestDb;
@@ -109,7 +110,7 @@ describe('adding to the warehouse by hand, because there is no workbook to impor
   it('records who entered it, because a quantity here is a judgement', async () => {
     const id = await createItem(db, {
       name: 'אוהל צל', category: 'living', quantity: 3,
-      locationText: 'מכולה', condition: 'ready', notes: null,
+      boxId: null, locationText: 'מכולה', condition: 'ready', notes: null,
     }, LEAD);
 
     const row = await itemById(db, id);
@@ -121,7 +122,7 @@ describe('adding to the warehouse by hand, because there is no workbook to impor
   it('refuses a nameless item rather than storing a row nobody can identify', async () => {
     await expect(createItem(db, {
       name: '   ', category: 'general', quantity: 1,
-      locationText: 'מדף', condition: 'ready', notes: null,
+      boxId: null, locationText: 'מדף', condition: 'ready', notes: null,
     }, LEAD)).rejects.toThrow(/name/);
   });
 
@@ -131,14 +132,14 @@ describe('adding to the warehouse by hand, because there is no workbook to impor
     // worth less than no inventory at all.
     await expect(createItem(db, {
       name: 'מקדחה', category: 'build', quantity: 1,
-      locationText: '  ', condition: 'ready', notes: null,
+      boxId: null, locationText: '  ', condition: 'ready', notes: null,
     }, LEAD)).rejects.toThrow(/location/);
   });
 
   it('refuses a negative quantity instead of storing one', async () => {
     await expect(createItem(db, {
       name: 'מקדחה', category: 'build', quantity: -2,
-      locationText: 'ארגז', condition: 'ready', notes: null,
+      boxId: null, locationText: 'ארגז', condition: 'ready', notes: null,
     }, LEAD)).rejects.toThrow(/quantity/);
   });
 
@@ -147,7 +148,7 @@ describe('adding to the warehouse by hand, because there is no workbook to impor
     // them", and the warehouse has to be able to say the first one.
     const id = await createItem(db, {
       name: 'בלוני גז', category: 'kitchen', quantity: 0,
-      locationText: 'מכולה', condition: 'ready', notes: null,
+      boxId: null, locationText: 'מכולה', condition: 'ready', notes: null,
     }, LEAD);
     expect((await itemById(db, id))?.quantity).toBe(0);
   });
@@ -157,7 +158,7 @@ describe('adding to the warehouse by hand, because there is no workbook to impor
     // Hebrew screen, which is the failure `labels.ts` exists to prevent.
     await expect(createItem(db, {
       name: 'משהו', category: 'furniture' as never, quantity: 1,
-      locationText: 'מדף', condition: 'ready', notes: null,
+      boxId: null, locationText: 'מדף', condition: 'ready', notes: null,
     }, LEAD)).rejects.toThrow(/category/);
   });
 });
@@ -170,14 +171,14 @@ describe('editing an item that is already in the warehouse', () => {
     db = await createTestDb();
     id = await createItem(db, {
       name: 'סיר תעשייתי', category: 'kitchen', quantity: 2,
-      locationText: 'ארגז כחול #1', condition: 'ready', notes: null,
+      boxId: null, locationText: 'ארגז כחול #1', condition: 'ready', notes: null,
     }, LEAD);
   });
 
   it('saves every field the drawer offers, and stamps the editor', async () => {
     await updateItem(db, id, {
       name: 'סיר תעשייתי 50 ליטר', category: 'kitchen', quantity: 1,
-      locationText: 'מדף עליון', condition: 'needs_testing', notes: 'הידית רופפת',
+      boxId: null, locationText: 'מדף עליון', condition: 'needs_testing', notes: 'הידית רופפת',
     }, 'someone@shliff.camp');
 
     const row = await itemById(db, id);
@@ -192,7 +193,7 @@ describe('editing an item that is already in the warehouse', () => {
   it('applies the same refusals as creating one', async () => {
     await expect(updateItem(db, id, {
       name: '', category: 'kitchen', quantity: 1,
-      locationText: 'מדף', condition: 'ready', notes: null,
+      boxId: null, locationText: 'מדף', condition: 'ready', notes: null,
     }, LEAD)).rejects.toThrow(/name/);
   });
 
@@ -201,7 +202,7 @@ describe('editing an item that is already in the warehouse', () => {
     // nothing, so the screen would report a save that never happened.
     await expect(updateItem(db, '00000000-0000-0000-0000-000000000000', {
       name: 'משהו', category: 'general', quantity: 1,
-      locationText: 'מדף', condition: 'ready', notes: null,
+      boxId: null, locationText: 'מדף', condition: 'ready', notes: null,
     }, LEAD)).rejects.toThrow(/unknown inventory item/);
   });
 
@@ -232,7 +233,7 @@ describe('what the header line says about the warehouse as a whole', () => {
 
     await createItem(db, {
       name: 'אוהל צל', category: 'living', quantity: 1,
-      locationText: 'מכולה', condition: 'ready', notes: null,
+      boxId: null, locationText: 'מכולה', condition: 'ready', notes: null,
     }, LEAD);
 
     const counts = await warehouseCounts(db, ALL);
@@ -242,7 +243,7 @@ describe('what the header line says about the warehouse as a whole', () => {
   it('counts the retired rows, because the view that shows them needs a number', async () => {
     await createItem(db, {
       name: 'מסור עגול', category: 'build', quantity: 1,
-      locationText: 'ארגז', condition: 'retired', notes: null,
+      boxId: null, locationText: 'ארגז', condition: 'retired', notes: null,
     }, LEAD);
     expect((await warehouseCounts(db, ALL)).retired).toBe(1);
   });
@@ -282,5 +283,122 @@ describe('frequentLocations — the chips under the location box', () => {
   it('is empty on an empty warehouse, so the drawer draws no chip row', async () => {
     const fresh = await createTestDb();
     expect(await frequentLocations(fresh)).toEqual([]);
+  });
+});
+
+describe('boxes — an item located by what it is in', () => {
+  let db: TestDb;
+  let blue: string;
+
+  beforeEach(async () => {
+    db = await createTestDb();
+    blue = await createBox(db, { name: 'ארגז כחול #1', locationText: 'מדף עליון', notes: null }, LEAD);
+  });
+
+  it('accepts an item with a box and no location of its own', async () => {
+    // The whole point of a box: the place is the box's, once, and the twenty
+    // things inside it need none.
+    const id = await createItem(db, {
+      name: 'מצקת', category: 'kitchen', quantity: 3,
+      boxId: blue, locationText: '', condition: 'ready', notes: null,
+    }, LEAD);
+
+    const row = await itemById(db, id);
+    expect(row?.locationText).toBeNull();
+    expect(row?.box).toEqual({ id: blue, name: 'ארגז כחול #1', locationText: 'מדף עליון' });
+  });
+
+  it('still refuses an item with neither a box nor a location', async () => {
+    await expect(createItem(db, {
+      name: 'מצקת', category: 'kitchen', quantity: 1,
+      boxId: null, locationText: '', condition: 'ready', notes: null,
+    }, LEAD)).rejects.toThrow(/location/);
+  });
+
+  it('refuses a box that is not there, rather than storing a pointer to nothing', async () => {
+    // The picker was rendered before somebody else may have changed the list.
+    await expect(createItem(db, {
+      name: 'מצקת', category: 'kitchen', quantity: 1,
+      boxId: '00000000-0000-0000-0000-000000000000', locationText: '', condition: 'ready', notes: null,
+    }, LEAD)).rejects.toThrow(/unknown inventory box/);
+  });
+
+  it('says where an item is as the box, then the box’s place, then the item’s own detail', async () => {
+    const id = await createItem(db, {
+      name: 'מצקת', category: 'kitchen', quantity: 1,
+      boxId: blue, locationText: 'בתחתית', condition: 'ready', notes: null,
+    }, LEAD);
+    const row = await itemById(db, id);
+    expect(placeOf(row!)).toBe('ארגז כחול #1 · מדף עליון · בתחתית');
+    expect(placeOf({ box: null, locationText: 'מכולה' })).toBe('מכולה');
+    expect(placeOf({ box: null, locationText: null })).toBeNull();
+  });
+
+  it('finds an item by its box’s name and by the box’s place', async () => {
+    await createItem(db, {
+      name: 'מצקת', category: 'kitchen', quantity: 1,
+      boxId: blue, locationText: '', condition: 'ready', notes: null,
+    }, LEAD);
+    await createItem(db, {
+      name: 'פטיש', category: 'build', quantity: 1,
+      boxId: null, locationText: 'מכולה', condition: 'ready', notes: null,
+    }, LEAD);
+
+    const byBox = await listWarehouse(db, { ...ALL, q: 'כחול' });
+    expect(byBox.map((r) => r.name)).toEqual(['מצקת']);
+    const byPlace = await listWarehouse(db, { ...ALL, q: 'מדף עליון' });
+    expect(byPlace.map((r) => r.name)).toEqual(['מצקת']);
+  });
+
+  it('sorts by place using the box’s place for an item inside one', async () => {
+    await createItem(db, {
+      name: 'מצקת', category: 'kitchen', quantity: 1,
+      boxId: blue, locationText: '', condition: 'ready', notes: null,
+    }, LEAD);
+    await createItem(db, {
+      name: 'פטיש', category: 'build', quantity: 1,
+      boxId: null, locationText: 'אאא מכולה', condition: 'ready', notes: null,
+    }, LEAD);
+
+    const rows = await listWarehouse(db, { ...ALL, sort: 'location' });
+    expect(rows.map((r) => r.name)).toEqual(['פטיש', 'מצקת']);
+  });
+
+  it('lists what a box holds, retired rows included, and nothing from outside it', async () => {
+    await createItem(db, {
+      name: 'מצקת', category: 'kitchen', quantity: 1,
+      boxId: blue, locationText: '', condition: 'ready', notes: null,
+    }, LEAD);
+    await createItem(db, {
+      name: 'מסור', category: 'build', quantity: 1,
+      boxId: blue, locationText: '', condition: 'retired', notes: null,
+    }, LEAD);
+    await createItem(db, {
+      name: 'פטיש', category: 'build', quantity: 1,
+      boxId: null, locationText: 'מכולה', condition: 'ready', notes: null,
+    }, LEAD);
+
+    const inside = await itemsInBox(db, blue);
+    expect(inside.map((r) => r.name).sort()).toEqual(['מסור', 'מצקת'].sort());
+  });
+
+  it('moves an item out of a box on edit, and then needs a place in words', async () => {
+    const id = await createItem(db, {
+      name: 'מצקת', category: 'kitchen', quantity: 1,
+      boxId: blue, locationText: '', condition: 'ready', notes: null,
+    }, LEAD);
+
+    await expect(updateItem(db, id, {
+      name: 'מצקת', category: 'kitchen', quantity: 1,
+      boxId: null, locationText: '', condition: 'ready', notes: null,
+    }, LEAD)).rejects.toThrow(/location/);
+
+    await updateItem(db, id, {
+      name: 'מצקת', category: 'kitchen', quantity: 1,
+      boxId: null, locationText: 'מדף', condition: 'ready', notes: null,
+    }, LEAD);
+    const row = await itemById(db, id);
+    expect(row?.box).toBeNull();
+    expect(row?.locationText).toBe('מדף');
   });
 });

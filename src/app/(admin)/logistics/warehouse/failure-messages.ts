@@ -48,7 +48,12 @@ export function conditionFailureMessage(error: unknown): string {
  * where the product has one.
  */
 export const NAME_REQUIRED = 'לפריט חייב להיות שם, אחרת אי אפשר לזהות אותו ברשימה';
-export const LOCATION_REQUIRED = 'צריך לרשום מיקום במחסן, אחרת אי אפשר יהיה למצוא את הפריט בשנה הבאה';
+export const LOCATION_REQUIRED = 'צריך לבחור ארגז או לרשום מיקום במחסן, אחרת אי אפשר יהיה למצוא את הפריט בשנה הבאה';
+
+/** The box drawer's two, shared with the item drawer's box picker below. */
+export const BOX_NAME_REQUIRED = 'לארגז חייב להיות שם, אחרת אי אפשר לזהות אותו ברשימה';
+export const BOX_LOCATION_REQUIRED = 'צריך לרשום איפה הארגז מונח, אחרת הפריטים שבתוכו אבודים';
+const BOX_UNKNOWN = 'לא מצאנו את הארגז הזה במחסן';
 
 export const ITEM_ERRORS: HebrewErrors = [
   ...CONDITION_ERRORS,
@@ -57,8 +62,26 @@ export const ITEM_ERRORS: HebrewErrors = [
   ['an inventory quantity', 'הכמות חייבת להיות מספר שלם, אפס או יותר'],
   ['an arriving quantity', 'הכמות שנכנסת למחסן חייבת להיות מספר שלם, אחד או יותר'],
   ['unknown category', 'הקטגוריה הזו אינה אחת מחמש הקטגוריות האפשריות'],
+  /* The item drawer's box picker: the list it was drawn from can go stale
+     under it, and the library checks the id rather than trusting the form. */
+  ['unknown inventory box', BOX_UNKNOWN],
 ];
 
 export function itemFailureMessage(error: unknown): string {
   return toHebrewError(error, ITEM_ERRORS);
+}
+
+/**
+ * The box drawer — the one that adds a box and the one that edits it. A box
+ * has two rules, a name and a place, and both say why: a box with no place
+ * locates nothing, which is the one thing a box is for.
+ */
+export const BOX_ERRORS: HebrewErrors = [
+  ['an inventory box must have a name', BOX_NAME_REQUIRED],
+  ['an inventory box must have a location', BOX_LOCATION_REQUIRED],
+  ['unknown inventory box', BOX_UNKNOWN],
+];
+
+export function boxFailureMessage(error: unknown): string {
+  return toHebrewError(error, BOX_ERRORS);
 }

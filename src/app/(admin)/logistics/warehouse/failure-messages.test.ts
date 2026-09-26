@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { HEBREW_FALLBACK } from '@/lib/errors/hebrew';
-import { conditionFailureMessage, itemFailureMessage } from './failure-messages';
+import { boxFailureMessage, conditionFailureMessage, itemFailureMessage } from './failure-messages';
 
 /**
  * R9: no English reaches a Hebrew screen. Failures are mapped at the action
@@ -49,7 +49,7 @@ describe('the two drawers that write an item', () => {
     // The refusal repeats the reason the drawer gives, because a lead who
     // hits it may have got here without reading the hint.
     expect(itemFailureMessage(new Error('an inventory item must have a location')))
-      .toBe('צריך לרשום מיקום במחסן, אחרת אי אפשר יהיה למצוא את הפריט בשנה הבאה');
+      .toBe('צריך לבחור ארגז או לרשום מיקום במחסן, אחרת אי אפשר יהיה למצוא את הפריט בשנה הבאה');
   });
 
   it('explains what a quantity may be, including zero', () => {
@@ -79,6 +79,34 @@ describe('the two drawers that write an item', () => {
       undefined,
     ]) {
       expect(itemFailureMessage(thrown)).not.toMatch(/[A-Za-z]/);
+    }
+  });
+});
+
+describe('the box drawer', () => {
+  it('asks for a name and a place, and says what a place is for', () => {
+    expect(boxFailureMessage(new Error('an inventory box must have a name')))
+      .toBe('לארגז חייב להיות שם, אחרת אי אפשר לזהות אותו ברשימה');
+    expect(boxFailureMessage(new Error('an inventory box must have a location')))
+      .toBe('צריך לרשום איפה הארגז מונח, אחרת הפריטים שבתוכו אבודים');
+  });
+
+  it('names a box that is not there, in the same words the item drawer uses', () => {
+    // The item drawer's picker can go stale under it; both drawers then say
+    // the same sentence for the same refusal.
+    expect(boxFailureMessage(new Error('unknown inventory box 7f3a')))
+      .toBe('לא מצאנו את הארגז הזה במחסן');
+    expect(itemFailureMessage(new Error('unknown inventory box 7f3a')))
+      .toBe('לא מצאנו את הארגז הזה במחסן');
+  });
+
+  it('never returns a Latin character, whatever it is handed', () => {
+    for (const thrown of [
+      new Error('relation "inventory_boxes" does not exist'),
+      new Error(''),
+      undefined,
+    ]) {
+      expect(boxFailureMessage(thrown)).not.toMatch(/[A-Za-z]/);
     }
   });
 });

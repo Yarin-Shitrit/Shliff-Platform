@@ -31,6 +31,18 @@ export const WAREHOUSE_PATH = '/logistics/warehouse';
  */
 export const NEW_ITEM_ACT = 'item';
 
+/** The verb that opens the drawer adding a box. */
+export const NEW_BOX_ACT = 'box';
+
+/**
+ * `?box=<id>`: the drawer over one box — its name, its place and what is in
+ * it. Not `peek`, because `peek` names an item and the two drawers are
+ * different records; a URL naming both means the item, and `parseWarehouseQuery`
+ * says so. With `?act=item` beside it, the same param instead pre-fills the
+ * create drawer with the box, so "add an item to this box" is one link.
+ */
+export const BOX_PARAM = 'box';
+
 export interface WarehouseQuery {
   view: WarehouseView;
   q: string;
@@ -40,9 +52,28 @@ export interface WarehouseQuery {
   peek: string | null;
   /** `?act=item` and no `peek`: the drawer that adds an item by hand. */
   creating: boolean;
+  /** `?box=<id>` alone: the drawer over that box. */
+  peekBox: string | null;
+  /** `?act=item&box=<id>`: the create drawer, with the box already chosen. */
+  presetBox: string | null;
+  /** `?act=box` with neither record named: the drawer that adds a box. */
+  creatingBox: boolean;
 }
 
 export type RawParams = Record<string, string | string[] | undefined>;
+
+/**
+ * The whole warehouse, no filter and no drawer — what another screen asks
+ * for when it needs every item as an option (the arrival drawer's "more of
+ * something we own", the build screen's "it is in stock"). Spelled once so a
+ * field added to `WarehouseQuery` cannot leave one of those screens behind.
+ */
+export function everyItem(sort: WarehouseSort = 'name'): WarehouseQuery {
+  return {
+    view: 'all', q: '', category: null, sort, dir: 'asc',
+    peek: null, creating: false, peekBox: null, presetBox: null, creatingBox: false,
+  };
+}
 
 function one(value: string | string[] | undefined): string {
   if (Array.isArray(value)) return value[0] ?? '';
@@ -64,6 +95,17 @@ export function parseWarehouseQuery(params: RawParams): WarehouseQuery {
   const rawCat = one(params.cat) as LogisticsCategory;
 
   const peek = one(params[PEEK_PARAM]) || null;
+  const box = one(params[BOX_PARAM]) || null;
+  const act = one(params[ACT_PARAM]);
+
+  /*
+   * A `peek` wins. A URL naming both a record and the create verb means one
+   * of the two, and the record is the one a lead asked to see by id —
+   * opening a blank form over it would lose that row with nothing on screen
+   * saying so. The same rule puts an item's drawer over a box's: the item
+   * is the narrower thing asked for.
+   */
+  const creating = peek === null && act === NEW_ITEM_ACT;
 
   return {
     view: WAREHOUSE_VIEWS.includes(rawView) ? rawView : 'all',
@@ -74,27 +116,24 @@ export function parseWarehouseQuery(params: RawParams): WarehouseQuery {
     sort: WAREHOUSE_SORTS.includes(rawSort) ? rawSort : 'condition',
     dir: one(params.dir) === 'desc' ? 'desc' : 'asc',
     peek,
-    /*
-     * A `peek` wins. A URL naming both a record and the create verb means one
-     * of the two, and the record is the one a lead asked to see by id —
-     * opening a blank form over it would lose that row with nothing on screen
-     * saying so.
-     */
-    creating: peek === null && one(params[ACT_PARAM]) === NEW_ITEM_ACT,
+    creating,
+    peekBox: peek === null && !creating ? box : null,
+    presetBox: creating ? box : null,
+    creatingBox: peek === null && box === null && act === NEW_BOX_ACT,
   };
 }
 
 const KEYS = ['view', 'q', 'cat', 'sort', 'dir'] as const;
-type PatchKey = (typeof KEYS)[number] | typeof PEEK_PARAM | typeof ACT_PARAM;
+type PatchKey = (typeof KEYS)[number] | typeof PEEK_PARAM | typeof ACT_PARAM | typeof BOX_PARAM;
 
 /**
  * One param changed, the rest preserved, and any open drawer dropped.
  *
  * The drawer is dropped because the peeked row may not survive the new filter,
  * and a drawer standing over a row that is no longer in the list is a dead end
- * with no way back that a lead would guess. `act` goes with it: neither drawer
- * param is in `KEYS`, so neither is copied forward unless the patch asks for
- * it by name.
+ * with no way back that a lead would guess. `act` and `box` go with it: no
+ * drawer param is in `KEYS`, so none is copied forward unless the patch asks
+ * for it by name.
  */
 export function warehouseHref(
   params: RawParams,
@@ -133,6 +172,25 @@ export function itemHref(params: RawParams, id: string): string {
 /** The create drawer, with whatever the lead was looking at kept underneath it. */
 export function newItemHref(params: RawParams): string {
   return warehouseHref(params, { [ACT_PARAM]: NEW_ITEM_ACT });
+}
+
+/** The drawer over one box: what it is, where it is, what is in it. */
+export function boxHref(params: RawParams, id: string): string {
+  return warehouseHref(params, { [BOX_PARAM]: id });
+}
+
+/** The drawer that adds a box. */
+export function newBoxHref(params: RawParams): string {
+  return warehouseHref(params, { [ACT_PARAM]: NEW_BOX_ACT });
+}
+
+/**
+ * The create drawer with the box already chosen — the link at the foot of a
+ * box's contents. The lead still sees the choice and can change it; what the
+ * URL saves them is picking the box they were just looking at.
+ */
+export function newItemInBoxHref(params: RawParams, boxId: string): string {
+  return warehouseHref(params, { [ACT_PARAM]: NEW_ITEM_ACT, [BOX_PARAM]: boxId });
 }
 
 /**

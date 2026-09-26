@@ -6,7 +6,7 @@ import { csvCell, csvDocument, warehouseCsvRows, acquisitionsCsvRows } from './c
 function item(over: Partial<WarehouseRow> = {}): WarehouseRow {
   return {
     id: 'i1', name: 'סיר תעשייתי', category: 'kitchen', quantity: 2,
-    locationText: 'ארגז כחול #1', condition: 'ready', notes: null,
+    locationText: 'ארגז כחול #1', box: null, condition: 'ready', notes: null,
     updatedBy: 'lead@shliff.camp', updatedAt: new Date('2026-09-14T10:00:00Z'),
     ...over,
   };
@@ -79,7 +79,25 @@ describe('the warehouse export', () => {
     // The screen's `—` is a reading aid. In a spreadsheet it is a value, and
     // a column of dashes cannot be filtered or counted.
     const [, row] = warehouseCsvRows([item({ locationText: null })]);
+    expect(row[4]).toBe('');
+  });
+
+  it('names the box, and says the place the way the screen does', () => {
+    // A lead reading the file in the container looks for what the table
+    // told them to: the box, then where the box is, then the item's detail.
+    const [header, row] = warehouseCsvRows([item({
+      locationText: 'בתחתית',
+      box: { id: 'b1', name: 'ארגז כחול #1', locationText: 'מדף עליון' },
+    })]);
+    expect(header[3]).toBe('ארגז');
+    expect(row[3]).toBe('ארגז כחול #1');
+    expect(row[4]).toBe('ארגז כחול #1 · מדף עליון · בתחתית');
+  });
+
+  it('leaves the box column empty for an item located in words', () => {
+    const [, row] = warehouseCsvRows([item()]);
     expect(row[3]).toBe('');
+    expect(row[4]).toBe('ארגז כחול #1');
   });
 });
 

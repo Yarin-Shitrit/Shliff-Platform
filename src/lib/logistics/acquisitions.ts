@@ -394,6 +394,10 @@ export async function recordArrival(
         name: acquisition.name,
         category: acquisition.category,
         quantity: input.quantity,
+        /* Not in a box: the arrival drawer asks for a place in words and
+           offers no box yet. Putting an arrival straight into a box is a
+           drawer change, not a library one. */
+        boxId: null,
         locationText: input.target.locationText,
         condition: input.target.condition,
         notes: null,

@@ -1,19 +1,48 @@
-import { and, asc, desc, eq, ilike, inArray, isNotNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNotNull, or, sql, type SQL } from 'drizzle-orm';
 import type { AnyDb } from '@/lib/db-types';
 import { isBlank } from '@/lib/text/normalize';
-import { inventoryItems, type ItemCondition, type LogisticsCategory } from '@/db/schema/logistics';
+import {
+  inventoryBoxes, inventoryItems, type ItemCondition, type LogisticsCategory,
+} from '@/db/schema/logistics';
+import { boxById } from './boxes';
 import type { WarehouseQuery } from './warehouse-views';
+
+/** The box an item is in, as much of it as a row needs to say where it is. */
+export interface ItemBox {
+  id: string;
+  name: string;
+  locationText: string;
+}
 
 export interface WarehouseRow {
   id: string;
   name: string;
   category: LogisticsCategory;
   quantity: number;
+  /** The item's own place — the whole answer outside a box, optional detail
+   *  inside one. */
   locationText: string | null;
+  /** Null when the item is located by its own text rather than by a box. */
+  box: ItemBox | null;
   condition: ItemCondition;
   notes: string | null;
   updatedBy: string | null;
   updatedAt: Date;
+}
+
+/**
+ * Where an item is, in one string, the way the table and the export say it:
+ * the box first, because that is what a lead looks for on the shelf, then the
+ * box's place, then whatever the item adds. Null only for a row that has
+ * neither — which the library refuses to write, and which an older row may
+ * still be.
+ */
+export function placeOf(row: Pick<WarehouseRow, 'locationText' | 'box'>): string | null {
+  const parts = row.box === null
+    ? [row.locationText]
+    : [row.box.name, row.box.locationText, row.locationText];
+  const said = parts.filter((part): part is string => part !== null && !isBlank(part));
+  return said.length === 0 ? null : said.join(' · ');
 }
 
 /**
@@ -34,6 +63,9 @@ const CATEGORIES: readonly LogisticsCategory[] = [
   'kitchen', 'sanitation', 'living', 'build', 'general',
 ];
 
+/** The box's place when there is a box, else the item's own. */
+const PLACE = sql`coalesce(${inventoryBoxes.locationText}, ${inventoryItems.locationText})`;
+
 /**
  * Every filter in one place, so the list, the counts and the totals row can
  * never disagree about what "the current view" means. They are computed from
@@ -48,9 +80,16 @@ function predicate(query: WarehouseQuery) {
 
   if (query.q) {
     const needle = `%${query.q}%`;
-    // Name *and* location: "what is in the blue box" is a question people ask
+    // Name *and* place: "what is in the blue box" is a question people ask
     // while standing in the storage unit, and the search box promises both.
-    clauses.push(or(ilike(inventoryItems.name, needle), ilike(inventoryItems.locationText, needle)));
+    // The box's name and place count as the item's, because that is where
+    // the item is.
+    clauses.push(or(
+      ilike(inventoryItems.name, needle),
+      ilike(inventoryItems.locationText, needle),
+      ilike(inventoryBoxes.name, needle),
+      ilike(inventoryBoxes.locationText, needle),
+    ));
   }
 
   return clauses.length ? and(...clauses) : undefined;
@@ -62,7 +101,7 @@ function ordering(query: WarehouseQuery) {
     case 'name': return [dir(inventoryItems.name)];
     case 'category': return [dir(inventoryItems.category), asc(inventoryItems.name)];
     case 'quantity': return [dir(inventoryItems.quantity), asc(inventoryItems.name)];
-    case 'location': return [dir(inventoryItems.locationText), asc(inventoryItems.name)];
+    case 'location': return [dir(PLACE), asc(inventoryBoxes.name), asc(inventoryItems.name)];
     case 'condition':
     default:
       // Ordered by meaning, not alphabetically. `asc(condition)` would give
@@ -79,12 +118,56 @@ function ordering(query: WarehouseQuery) {
   }
 }
 
+/**
+ * Every read of an item goes through this one join, so a row always carries
+ * its box — the list, the drawer, the export and the box's own contents can
+ * never disagree about where a thing is.
+ */
+function rowsQuery(db: AnyDb, where: SQL | undefined) {
+  return db
+    .select({
+      id: inventoryItems.id,
+      name: inventoryItems.name,
+      category: inventoryItems.category,
+      quantity: inventoryItems.quantity,
+      locationText: inventoryItems.locationText,
+      condition: inventoryItems.condition,
+      notes: inventoryItems.notes,
+      updatedBy: inventoryItems.updatedBy,
+      updatedAt: inventoryItems.updatedAt,
+      boxId: inventoryBoxes.id,
+      boxName: inventoryBoxes.name,
+      boxLocation: inventoryBoxes.locationText,
+    })
+    .from(inventoryItems)
+    .leftJoin(inventoryBoxes, eq(inventoryItems.boxId, inventoryBoxes.id))
+    .where(where);
+}
+
+type Joined = Awaited<ReturnType<ReturnType<typeof rowsQuery>['execute']>>[number];
+
+function shaped({ boxId, boxName, boxLocation, ...item }: Joined): WarehouseRow {
+  return {
+    ...item,
+    box: boxId === null || boxName === null || boxLocation === null
+      ? null
+      : { id: boxId, name: boxName, locationText: boxLocation },
+  };
+}
+
 /** The camp's gear. No season: inventory outlives a burn (R5). */
 export async function listWarehouse(db: AnyDb, query: WarehouseQuery): Promise<WarehouseRow[]> {
-  const rows = await db.select().from(inventoryItems)
-    .where(predicate(query))
-    .orderBy(...ordering(query));
-  return rows as WarehouseRow[];
+  const rows = await rowsQuery(db, predicate(query)).orderBy(...ordering(query));
+  return rows.map(shaped);
+}
+
+/**
+ * What one box holds, by name, retired rows included — the box drawer lists
+ * its contents and a retired saw is still taking up the space.
+ */
+export async function itemsInBox(db: AnyDb, boxId: string): Promise<WarehouseRow[]> {
+  const rows = await rowsQuery(db, eq(inventoryItems.boxId, boxId)).orderBy(asc(inventoryItems.name));
+  return rows.map(shaped);
 }
 
 export interface WarehouseCounts {
@@ -138,6 +221,10 @@ export async function warehouseCounts(db: AnyDb, query: WarehouseQuery): Promise
  * reason; two spellings of one box are two chips, which is the screen telling
  * the lead about the drift rather than hiding it. Retired items count: a
  * retired saw still sits in a real box.
+ *
+ * Only the items' own text. A box's place is offered through the box itself,
+ * one row up in the drawer, and repeating it here as free text would invite
+ * exactly the drift boxes exist to end.
  */
 export async function frequentLocations(db: AnyDb, limit = 8): Promise<string[]> {
   const uses = sql<number>`count(*)`;
@@ -155,8 +242,8 @@ export async function frequentLocations(db: AnyDb, limit = 8): Promise<string[]>
 
 /** Null rather than a throw: the id comes from a URL someone may have edited. */
 export async function itemById(db: AnyDb, id: string): Promise<WarehouseRow | null> {
-  const [row] = await db.select().from(inventoryItems).where(eq(inventoryItems.id, id)).limit(1);
-  return (row as WarehouseRow | undefined) ?? null;
+  const [row] = await rowsQuery(db, eq(inventoryItems.id, id)).limit(1);
+  return row === undefined ? null : shaped(row);
 }
 
 /**
@@ -176,12 +263,15 @@ export async function setCondition(
  * What the two drawers on this screen send. Every field is present on both:
  * a create with a missing field and an edit with a missing field would mean
  * two different things — "not entered" against "leave it alone" — and one
- * shape that always carries all six removes the question.
+ * shape that always carries all seven removes the question.
  */
 export interface ItemInput {
   name: string;
   category: LogisticsCategory;
   quantity: number;
+  /** The box the item is in, or null for an item located by its own text. */
+  boxId: string | null;
+  /** Required without a box; optional detail inside one. */
   locationText: string;
   condition: ItemCondition;
   notes: string | null;
@@ -200,10 +290,11 @@ function validate(input: ItemInput): void {
   if (isBlank(input.name)) {
     throw new Error('an inventory item must have a name');
   }
-  if (isBlank(input.locationText)) {
+  if (input.boxId === null && isBlank(input.locationText)) {
     // The arrival drawer says this out loud on screen: an item nobody can
     // find next year is worth less than a row that was never written, because
-    // the row also claims the camp has one.
+    // the row also claims the camp has one. A box answers the question just
+    // as well, which is why one is enough.
     throw new Error('an inventory item must have a location');
   }
   if (!Number.isInteger(input.quantity) || input.quantity < 0) {
@@ -219,13 +310,26 @@ function validate(input: ItemInput): void {
   }
 }
 
+/**
+ * The box is checked against the table, not trusted from the form: the id
+ * arrives from a `<select>` that was rendered before somebody else may have
+ * changed the list, and a row pointing at a box that is not there would be
+ * "located" nowhere while claiming otherwise.
+ */
+async function checkBox(db: AnyDb, boxId: string | null): Promise<void> {
+  if (boxId !== null && !(await boxById(db, boxId))) {
+    throw new Error(`unknown inventory box ${boxId}`);
+  }
+}
+
 /** Trimmed, so a name that differs only by a space is not a second item. */
 function clean(input: ItemInput) {
   return {
     name: input.name.trim(),
     category: input.category,
     quantity: input.quantity,
-    locationText: input.locationText.trim(),
+    boxId: input.boxId,
+    locationText: isBlank(input.locationText) ? null : input.locationText.trim(),
     condition: input.condition,
     notes: input.notes === null || isBlank(input.notes) ? null : input.notes.trim(),
   };
@@ -236,6 +340,7 @@ export async function createItem(
   db: AnyDb, input: ItemInput, actor: string,
 ): Promise<string> {
   validate(input);
+  await checkBox(db, input.boxId);
   /* `.returning()` with no column list: `AnyDb` is a union of the Postgres
      and PGlite handles, and the projected form resolves to neither side's
      overload. Every other write in `src/lib` returns the whole row for the
@@ -257,6 +362,7 @@ export async function updateItem(
 ): Promise<void> {
   validate(input);
   if (!(await itemById(db, id))) throw new Error(`unknown inventory item ${id}`);
+  await checkBox(db, input.boxId);
 
   await db.update(inventoryItems)
     .set({ ...clean(input), updatedBy: actor, updatedAt: new Date() })

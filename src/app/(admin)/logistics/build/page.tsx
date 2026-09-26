@@ -4,6 +4,7 @@ import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import { resolveSeason } from '@/lib/seasons/current';
 import { listBuildTasks, buildCounts } from '@/lib/logistics/build';
+import { everyItem } from '@/lib/logistics/warehouse-views';
 import { listWarehouse } from '@/lib/logistics/warehouse';
 import { listAcquisitions } from '@/lib/logistics/acquisitions';
 import {
@@ -71,10 +72,7 @@ export default async function BuildPage(
      needs the whole warehouse and the whole רכש list, and this page is read
      far more often than it is written to. */
   const [stock, orders] = peeked === null && !query.adding ? [[], []] : await Promise.all([
-    listWarehouse(db, {
-      view: 'all', q: '', category: null, sort: 'name', dir: 'asc',
-      peek: null, creating: false,
-    }),
+    listWarehouse(db, everyItem()),
     listAcquisitions(db, current.id, {
       season: current.id, view: 'all', q: '', category: null,
       sort: 'name', dir: 'asc', peek: null, creating: false, arriving: false,

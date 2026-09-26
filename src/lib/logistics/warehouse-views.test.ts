@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseWarehouseQuery, warehouseHref, categoryHref, newItemHref, sortHref,
-  warehouseExportHref, WAREHOUSE_PATH, NEW_ITEM_ACT,
+  warehouseExportHref, boxHref, newBoxHref, newItemInBoxHref, everyItem,
+  WAREHOUSE_PATH, NEW_ITEM_ACT, NEW_BOX_ACT,
 } from './warehouse-views';
 
 /**
@@ -134,5 +135,64 @@ describe('the export, which is the same list as a file', () => {
 
   it('is the bare path when nothing is filtered', () => {
     expect(warehouseExportHref({})).toBe(`${WAREHOUSE_PATH}/export`);
+  });
+});
+
+describe('the box drawers, which share the item drawers\' URL', () => {
+  it('opens the drawer over a box on ?box= alone', () => {
+    const q = parseWarehouseQuery({ box: 'b1' });
+    expect(q.peekBox).toBe('b1');
+    expect(q.presetBox).toBeNull();
+    expect(q.creating).toBe(false);
+    expect(q.creatingBox).toBe(false);
+  });
+
+  it('pre-fills the create drawer with the box when ?act=item stands beside it', () => {
+    // "Add an item to this box" is one link from the foot of the box's
+    // contents; the drawer still shows the choice.
+    const q = parseWarehouseQuery({ box: 'b1', act: NEW_ITEM_ACT });
+    expect(q.creating).toBe(true);
+    expect(q.presetBox).toBe('b1');
+    expect(q.peekBox).toBeNull();
+  });
+
+  it('lets an item drawer win over a box drawer, because the item is the narrower ask', () => {
+    const q = parseWarehouseQuery({ box: 'b1', peek: 'i1' });
+    expect(q.peek).toBe('i1');
+    expect(q.peekBox).toBeNull();
+    expect(q.presetBox).toBeNull();
+  });
+
+  it('opens the drawer that adds a box on ?act=box, and on nothing else', () => {
+    expect(parseWarehouseQuery({ act: NEW_BOX_ACT }).creatingBox).toBe(true);
+    expect(parseWarehouseQuery({ act: NEW_BOX_ACT, box: 'b1' }).creatingBox).toBe(false);
+    expect(parseWarehouseQuery({ act: NEW_BOX_ACT, peek: 'i1' }).creatingBox).toBe(false);
+    expect(parseWarehouseQuery({}).creatingBox).toBe(false);
+  });
+
+  it('builds the three links, keeping the filters underneath', () => {
+    expect(boxHref({ cat: 'kitchen' }, 'b1')).toContain('box=b1');
+    expect(boxHref({ cat: 'kitchen' }, 'b1')).toContain('cat=kitchen');
+    expect(newBoxHref({ view: 'attention' })).toContain(`act=${NEW_BOX_ACT}`);
+    expect(newBoxHref({ view: 'attention' })).toContain('view=attention');
+    const add = newItemInBoxHref({ q: 'סיר' }, 'b1');
+    expect(add).toContain(`act=${NEW_ITEM_ACT}`);
+    expect(add).toContain('box=b1');
+    expect(add).toContain(encodeURIComponent('סיר'));
+  });
+
+  it('drops an open box drawer when the filter changes, exactly as the item drawer does', () => {
+    expect(warehouseHref({ box: 'b1' }, { cat: 'living' })).not.toContain('box=');
+    expect(warehouseExportHref({ box: 'b1' })).not.toContain('box=');
+  });
+
+  it('spells the whole warehouse once, for the screens that need every item', () => {
+    const q = everyItem();
+    expect(q.q).toBe('');
+    expect(q.category).toBeNull();
+    expect(q.view).toBe('all');
+    expect(q.sort).toBe('name');
+    expect(q.peek).toBeNull();
+    expect(q.peekBox).toBeNull();
   });
 });

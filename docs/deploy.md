@@ -384,6 +384,40 @@ Afterwards the query above prints `site_underlays`. The parity check at the
 top of this section must come back empty against a local database that also
 carries `0015`.
 
+### Migration `0016` — not yet applied to Railway
+
+`0016_warehouse_boxes` is the warehouse's boxes: a new, empty table
+`inventory_boxes` (a name, a place, a note) and one nullable column
+`inventory_items.box_id` pointing at it, `set null` on delete. Additive:
+every existing item takes null, which means "located by its own text", so no
+row changes meaning. It must be on Railway **before** the code that reads it
+deploys, because every `/logistics/warehouse` load joins the new table and
+the acquisitions and build pages read the items through the same join.
+Applying it is the camp lead's step, by the same procedure as the site
+migrations, after whichever of `0014`/`0015` are still pending — the order is
+migration first, merge second.
+
+Read-only check (before: nothing; after: `inventory_boxes`):
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" postgres:18-alpine sh -c '
+  psql "$R" -tAc "select table_name from information_schema.tables
+    where table_schema='"'"'public'"'"' and table_name='"'"'inventory_boxes'"'"'"'
+```
+
+Then:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine sh -euc '
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0016_warehouse_boxes.sql
+'
+```
+
+Afterwards the query above prints `inventory_boxes`, and
+`select count(*) from inventory_items` is what it was before. Record the
+measured numbers here when it is done. Not applied to the local `shliff-pg`
+either when this was written.
+
 ### Copying the laptop's database up
 
 The local container is Postgres **16**; Railway is **18**. Dump with the
