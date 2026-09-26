@@ -33,6 +33,8 @@ export interface ScenePalette {
   ember: string;
   /** The soft patch under a solid while shade by hour is off. */
   contact: string;
+  /** A name printed on an item's face (plan 2026-09-26-site-label-modes, D5): dark ink on the light theme, light ink on the dark. */
+  ink: string;
   groups: Record<SiteKindGroup, string>;
   /** The pipes and cables on the ground: water blue, power amber — apart from every group colour, in both themes. */
   lines: Record<SiteLineKind, string>;
@@ -56,6 +58,7 @@ export const SCENE_PALETTE: Record<SceneTheme, ScenePalette> = {
     guide: '#2458C6',
     ember: '#E8743B',
     contact: '#46321E',
+    ink: '#2B2622',
     groups: { sleep: '#E6D0A6', living: '#EDBF98', sanitation: '#B4CDEE', utility: '#B7D9C3', other: '#D5C4EA' },
     lines: { water: '#2F6FD6', power: '#D9861A' },
   },
@@ -76,6 +79,7 @@ export const SCENE_PALETTE: Record<SceneTheme, ScenePalette> = {
     guide: '#7FA8F5',
     ember: '#C8612B',
     contact: '#000000',
+    ink: '#ECEEF2',
     groups: { sleep: '#7C6948', living: '#83593D', sanitation: '#44607F', utility: '#42685A', other: '#5D4D78' },
     lines: { water: '#6FA3F0', power: '#F0B453' },
   },
