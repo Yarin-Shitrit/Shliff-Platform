@@ -9,11 +9,16 @@ import { LabelsLayer, type LabelsLayerHandle } from './labels-layer';
 
 const TENT: PlacedLabel = {
   key: 'a', ids: ['a'], text: 'אוהל 1', rect: { l: 10, t: 20, r: 90, b: 42 },
-  anchor: [50, 31], leader: false, group: false, slot: 'in',
+  anchor: [50, 31], leader: false, group: false, slot: 'in', tier: 'regular', issue: false,
 };
 const TOILETS: PlacedLabel = {
   key: 'group:toilet', ids: ['w1', 'w2', 'w3', 'w4'], text: '4 תאי שירותים', rect: { l: 200, t: 100, r: 310, b: 122 },
-  anchor: [255, 150], leader: true, group: true, slot: 'n',
+  anchor: [255, 150], leader: true, group: true, slot: 'n', tier: 'regular', issue: false,
+};
+/** A caravan outside the plot: named large, in the problem colour (spec §9.8). */
+const CARAVAN_OUT: PlacedLabel = {
+  key: 'c', ids: ['c'], text: 'קראוון 1', rect: { l: 400, t: 20, r: 520, b: 44 },
+  anchor: [460, 32], leader: false, group: false, slot: 'in', tier: 'large', issue: true,
 };
 
 function setup() {
@@ -39,6 +44,15 @@ describe('the labels layer', () => {
     const group = screen.getByText('4 תאי שירותים');
     expect(group.dataset.group).toBe('true');
     expect(group.dataset.selected).toBe('false');
+  });
+
+  /* The stylesheet draws the size and the colour from these two attributes;
+     without them every name is regular and ink-coloured. */
+  it('marks each label with its size tier and whether its item has a problem', () => {
+    const { update } = setup();
+    update([TENT, CARAVAN_OUT]);
+    expect(screen.getByText('אוהל 1').dataset).toMatchObject({ tier: 'regular', issue: 'false' });
+    expect(screen.getByText('קראוון 1').dataset).toMatchObject({ tier: 'large', issue: 'true' });
   });
 
   it('draws a leader from the item to the nearest edge of a label that sits outside it', () => {

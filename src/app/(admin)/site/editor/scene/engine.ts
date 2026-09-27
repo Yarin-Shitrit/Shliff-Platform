@@ -7,7 +7,7 @@ import {
   type CameraState, type ScreenBox, type Vec3, type ViewMode, type Viewport,
 } from '@/lib/site/editor/camera';
 import { moveOps, setRectOps } from '@/lib/site/editor/commands';
-import { layoutLabels, type LabelInput, type PlacedLabel } from '@/lib/site/editor/label-layout';
+import { layoutLabels, type LabelInput, type LabelTier, type PlacedLabel } from '@/lib/site/editor/label-layout';
 import { findItem, findLine, groupMembers, rectOf, underlayOf, type EditorItem } from '@/lib/site/editor/model';
 import { landingRule, type Landing } from '@/lib/site/editor/placement';
 import { placeOps } from '@/lib/site/editor/underlay-commands';
@@ -73,10 +73,22 @@ export class NoWebGLError extends Error {
 /** What a drag does once it is past the click threshold: from then until it settles, the view is moving. */
 const MOTION: ReadonlySet<GestureIntent['type']> = new Set(['panBy', 'orbitBy', 'movePreview', 'resizePreview', 'marquee']);
 
-/** Measured at the label's CSS size and weight (`scene.module.css` `.label`). */
-const LABEL_FONT_PX = 12.5;
-const LABEL_PAD_PX = 18;
-const LABEL_HEIGHT = 22;
+/**
+ * The three label sizes, measured at the CSS size and weight of each
+ * (`scene.module.css` `.label` and its `data-tier` rules). A label's height is
+ * its line plus room for the halo; the padding is the CSS inline padding plus
+ * the halo's reach on both sides.
+ */
+const LABEL_TIERS: Record<LabelTier, { px: number; height: number }> = {
+  small: { px: 11.5, height: 18 },
+  regular: { px: 13, height: 20 },
+  large: { px: 15.5, height: 24 },
+};
+const LABEL_WEIGHT = 700;
+const LABEL_PAD_PX = 12;
+/** Under this footprint (m²) a name is small; from `LARGE_M2` on it is large (spec §9.8). */
+const SMALL_M2 = 1.5;
+const LARGE_M2 = 12;
 /** How long the view must be still before it counts as settled. */
 const SETTLE_MS = 160;
 /** ViewInfo at most ten times a second while moving. */
@@ -97,6 +109,12 @@ function ease(t: number): number {
 
 function baseLabel(label: string): string {
   return label.replace(/\s*\d+$/, '').trim();
+}
+
+/** How large an item's name is drawn, from its footprint in m² (spec §9.8): a caravan's carries further than a chair's. */
+export function labelTier(areaM2: number): LabelTier {
+  if (areaM2 < SMALL_M2) return 'small';
+  return areaM2 >= LARGE_M2 ? 'large' : 'regular';
 }
 
 function toRect(r: RectCm): Rect {
@@ -122,7 +140,8 @@ export class SceneEngine {
   private pixelRatio = 0;
   private ratioQuery: MediaQueryList | null = null;
   private readonly text: CanvasRenderingContext2D | null;
-  private readonly font: string;
+  /** One CSS font string per label size, so a label is measured in the font it is drawn in. */
+  private readonly fonts: Record<LabelTier, string>;
   /** The stage's font family — the labels' and the prints' — read once; the web font, when it arrives, resolves to the same name. */
   private readonly fontFamily: string;
   /**
@@ -242,9 +261,12 @@ export class SceneEngine {
       this.mode = props.ui.mode;
       this.drawMode = props.ui.mode;
       this.fontFamily = getComputedStyle(stage).fontFamily || 'system-ui, sans-serif';
-      this.font = `500 ${LABEL_FONT_PX}px ${this.fontFamily}`;
+      this.fonts = {
+        small: `${LABEL_WEIGHT} ${LABEL_TIERS.small.px}px ${this.fontFamily}`,
+        regular: `${LABEL_WEIGHT} ${LABEL_TIERS.regular.px}px ${this.fontFamily}`,
+        large: `${LABEL_WEIGHT} ${LABEL_TIERS.large.px}px ${this.fontFamily}`,
+      };
       this.text = document.createElement('canvas').getContext('2d');
-      if (this.text !== null) this.text.font = this.font;
 
       const world: GestureWorld = {
         // The picture's tools have their own pointer machine; to this one, they are the selection tool.
@@ -408,7 +430,7 @@ export class SceneEngine {
   /** The web font has arrived: labels are measured in it from now on, and laid out again; prints are drawn again, once. */
   private remeasure(): void {
     if (!this.alive) return;
-    if (this.text !== null) this.text.font = this.font;
+    // Each measurement sets its own font (`labelWidth`), and the family name now resolves to the arrived font.
     this.labelsDirty = true;
     if (this.prints !== null) {
       // A print drawn in the fallback font is the wrong shape: forget them all, and let the next sync draw each one afresh.
@@ -1049,8 +1071,9 @@ export class SceneEngine {
 
   /* ── labels ─────────────────────────────────────────────────────────── */
 
-  private labelWidth(text: string): number {
-    const measured = this.text?.measureText(text).width ?? text.length * 7;
+  private labelWidth(text: string, tier: LabelTier): number {
+    if (this.text !== null) this.text.font = this.fonts[tier];
+    const measured = this.text?.measureText(text).width ?? text.length * (LABEL_TIERS[tier].px * 0.56);
     return Math.ceil(measured) + LABEL_PAD_PX;
   }
 
@@ -1089,17 +1112,24 @@ export class SceneEngine {
         ? this.screen(rect.xCm + rect.widthCm / 2, rect.yCm, height)
         : this.screen(rect.xCm + rect.widthCm / 2, rect.yCm + rect.depthCm / 2, height);
       if (anchor === null) continue;
-      const issue = flags.outside.has(item.id) || flags.overlapping.has(item.id) || flags.partly.has(item.id);
+      // Outside the plot or overlapping is a problem, drawn in the problem colour; an item at the shade net's edge is
+      // only remarked on (the pill, the inspector), and its name stays in ink — twenty red names would cry wolf.
+      const problem = flags.outside.has(item.id) || flags.overlapping.has(item.id);
+      const issue = problem || flags.partly.has(item.id);
       const text = selected && selection.size === 1 ? `${item.label} · ${formatSize(rect.widthCm, rect.depthCm)}` : item.label;
       // Selected, hovered and flagged items, and nets, are always labelled on their own (spec §9.4).
       const groupable = !isNet && !selected && !hovered && !issue;
       const area = (rect.widthCm * rect.depthCm) / 100;
+      // The selected item's label is a card with its size on it, drawn at the regular size whatever the item (§9.7).
+      const tier = selected && selection.size === 1 ? 'regular' : labelTier(area / 100);
       inputs.push({
-        id: item.id, text, width: this.labelWidth(text), height: LABEL_HEIGHT, anchor, box,
+        id: item.id, text, width: this.labelWidth(text, tier), height: LABEL_TIERS[tier].height, anchor, box,
         priority: (selected ? 4e9 : 0) + (hovered ? 2e9 : 0) + (issue ? 1e9 : 0) + (isNet ? 0 : 1e8) + area,
         groupKey: groupable ? `${item.kind}|${baseLabel(item.label)}` : null,
         groupNoun: groupable ? SITE_KINDS[item.kind].plural : null,
         isNet,
+        tier,
+        issue: problem,
       });
       this.anchors.set(item.id, anchor);
     }
@@ -1107,8 +1137,8 @@ export class SceneEngine {
       bounds: this.safe(),
       obstacles: this.handles.map((h) => ({ l: h.x - HANDLE_HIT_PX, t: h.y - HANDLE_HIT_PX, r: h.x + HANDLE_HIT_PX, b: h.y + HANDLE_HIT_PX })),
       previous: this.slots,
-      measure: (text) => this.labelWidth(text),
-      labelHeight: LABEL_HEIGHT,
+      measure: (text) => this.labelWidth(text, 'regular'),
+      labelHeight: LABEL_TIERS.regular.height,
     });
     this.slots = new Map(this.placed.map((label) => [label.key, label.slot]));
     layer?.update(this.placed, selection);

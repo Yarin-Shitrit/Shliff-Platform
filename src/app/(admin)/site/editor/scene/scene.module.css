@@ -73,7 +73,14 @@
 .pillBad { background: var(--bad); }
 
 /* One label. Its box is the one label-layout.ts placed; the engine measures
-   text at this size and weight (`engine.ts`, LABEL_FONT_PX, LABEL_PAD_PX). */
+   text at these sizes and this weight (`engine.ts`, LABEL_TIERS, LABEL_PAD_PX).
+
+   A name is bold ink with a halo in the canvas colour and no box (spec §9.8,
+   after the label-modes mock): the map shows through around the letters, and
+   forty names read as writing on the ground, not as forty cards laid over it.
+   The halo is a stroke painted under the fill, so it only ever widens the
+   letters outward by half its width. Three sizes by footprint: a caravan's
+   name carries further than a chair's. */
 .label {
   position: absolute;
   left: 0;
@@ -82,17 +89,35 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding-inline: var(--space-2);
-  border: 1px solid var(--line);
+  padding-inline: var(--space-1);
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--panel) 94%, transparent);
   color: var(--ink);
-  font-size: var(--text-meta);
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 700;
   line-height: 1;
+  letter-spacing: 0.01em;
   white-space: nowrap;
+  paint-order: stroke fill;
+  -webkit-text-stroke: 3px var(--canvas);
+  text-shadow: 0 0 3px var(--canvas);
 }
-.label[data-selected='true'] { border-color: var(--focus); background: var(--brand-soft); }
+.label[data-tier='small'] { font-size: var(--text-label); }
+.label[data-tier='large'] { font-size: 15.5px; }
+/* A problem reads in the problem colour, like its pill. */
+.label[data-issue='true'] { color: var(--bad); }
+/* The selection and a count of neighbours are cards, not names: they say
+   something about the map rather than naming a thing on it. */
+.label[data-selected='true'],
+.label[data-group='true'] {
+  padding-inline: var(--space-2);
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  font-weight: 600;
+  -webkit-text-stroke: 0;
+  text-shadow: none;
+}
+.label[data-selected='true'] { border-color: var(--focus); background: var(--brand-soft); color: var(--ink); }
 .label[data-group='true'] { border-style: dashed; }
 
 .leader { stroke: var(--ink-4); stroke-width: 1; }

@@ -16,7 +16,7 @@ function label(id: string, anchor: [number, number], over: Partial<LabelInput> =
   return {
     id, text: id, width: 60, height: 20, anchor,
     box: { l: anchor[0] - size / 2, t: anchor[1] - size / 2, r: anchor[0] + size / 2, b: anchor[1] + size / 2 },
-    priority: 1, groupKey: null, groupNoun: null, isNet: false, ...over,
+    priority: 1, groupKey: null, groupNoun: null, isNet: false, tier: 'regular', issue: false, ...over,
   };
 }
 
@@ -84,7 +84,7 @@ describe('placing one label', () => {
     const roomy = { ...label('a', [200, 150]), box: { l: 100, t: 100, r: 300, b: 200 } };
     expect(layoutLabels([roomy], options())).toEqual([{
       key: 'a', ids: ['a'], text: 'a', rect: { l: 170, t: 140, r: 230, b: 160 }, anchor: [200, 150],
-      leader: false, group: false, slot: 'in',
+      leader: false, group: false, slot: 'in', tier: 'regular', issue: false,
     }]);
   });
 
@@ -92,7 +92,7 @@ describe('placing one label', () => {
     // Box 195–205 × 145–155: the label's bottom sits 7 px above the box.
     expect(layoutLabels([label('a', [200, 150])], options())).toEqual([{
       key: 'a', ids: ['a'], text: 'a', rect: { l: 170, t: 118, r: 230, b: 138 }, anchor: [200, 150],
-      leader: true, group: false, slot: 'n',
+      leader: true, group: false, slot: 'n', tier: 'regular', issue: false,
     }]);
   });
 
@@ -165,7 +165,23 @@ describe('same-kind neighbours', () => {
     expect(placed).toEqual([{
       key: 'group:t1,t2,t3', ids: ['t1', 't2', 't3'], text: '3 תאי שירותים',
       rect: { l: 276.5, t: 271, r: 383.5, b: 291 }, anchor: [330, 300], leader: true, group: true, slot: 'n',
+      tier: 'regular', issue: false,
     }]);
+  });
+
+  /* The layout decides where; the caller decides how large and in which
+     colour (§9.8). Both must come out where they went in, or the layer draws
+     every label the same. */
+  it('carry each label’s size tier and problem flag through unchanged, and a group takes the regular size', () => {
+    const placed = layoutLabels([
+      label('caravan', [300, 300], { tier: 'large' }, 120),
+      label('chair', [600, 300], { tier: 'small', issue: true }),
+      toilet('t1', [300, 600]), toilet('t2', [330, 600]), toilet('t3', [360, 600]),
+    ], options());
+    const byKey = Object.fromEntries(placed.map((entry) => [entry.key, entry]));
+    expect(byKey.caravan).toMatchObject({ tier: 'large', issue: false });
+    expect(byKey.chair).toMatchObject({ tier: 'small', issue: true });
+    expect(byKey['group:t1,t2,t3']).toMatchObject({ tier: 'regular', issue: false });
   });
 
   it('split again when zoomed in far enough for their labels to stand apart', () => {
