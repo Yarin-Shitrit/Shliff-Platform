@@ -126,6 +126,13 @@
   opacity: 1;
 }
 
+/* `rowActionsVisible`: the slot holds the row's repair, not a secondary verb,
+   so it is not hidden behind a hover. Two classes so this outranks the
+   single-class rule above whatever order the modules load in. */
+.actions.visible > * {
+  opacity: 1;
+}
+
 .table tfoot td {
   background: var(--sunken);
   font-weight: 600;
