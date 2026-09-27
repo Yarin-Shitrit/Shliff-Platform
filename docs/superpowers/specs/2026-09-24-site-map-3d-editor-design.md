@@ -303,6 +303,13 @@ updates transforms directly in the render loop, without a React render.
 6. **Too small:** an item under 3 px on screen is not labelled unless it is
    selected or hovered.
 7. **Sizes:** the selected item's label adds its size ("3 × 3 מ׳").
+8. **The look (after the label-modes mock):** a name is bold ink with a halo in
+   the canvas colour and no box, so the map shows through around the letters.
+   Three sizes by footprint — under 1.5 m² small, from 12 m² large, regular
+   between — so a caravan's name carries further than a chair's. An item with a
+   problem is named in the problem colour. The selected item's label and a
+   group's count are cards (a border and a panel background), because they say
+   something about the map rather than naming a thing on it.
 
 A third style, **printed** (plan `2026-09-26-site-label-modes`), draws the
 item's own name on its faces as part of the scene and takes no part in this

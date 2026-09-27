@@ -697,11 +697,13 @@ describe('the 3D map with WebGL', () => {
   });
 
   describe('moving an item', () => {
-    /* On the tent, clear of its label (470–530 × 339–361). Dragged 100 px
-       east and 30 px south: 342.86 × 102.86 cm. */
+    /* On the tent, clear of its label (472–521 × 340–360: "אוהל 1" is five
+       characters at the regular tier's estimate, 37 px, plus 12 px of padding,
+       20 px tall, centred on the tent). Dragged 100 px east and 30 px south:
+       342.86 × 102.86 cm. */
     const ON_TENT: [number, number] = [500, 320];
     const THERE: [number, number] = [600, 350];
-    const RESTING = 'translate(470px, 339px)';
+    const RESTING = 'translate(472px, 340px)';
 
     it('moves a preview only, then saves one step on the drop, snapped to the grid', async () => {
       const { container, onView, store } = renderScene(fakeStore(), PLAN);
@@ -804,7 +806,7 @@ describe('the 3D map with WebGL', () => {
     const PEN = { button: 0, pointerId: 3, isPrimary: true, pointerType: 'pen' };
     const TOUCH = { button: 0, pointerId: 7, isPrimary: true, pointerType: 'touch' };
     /** The tent's label while its preview is at THERE. */
-    const MOVED = 'translate(572px, 368px)';
+    const MOVED = 'translate(574px, 369px)';
 
     it('is not steered by a pen passing over the map while the mouse drags', async () => {
       const { container, onView, store } = renderScene(fakeStore(), PLAN);
@@ -934,7 +936,7 @@ describe('the 3D map with WebGL', () => {
     });
 
     it('single out the item under the pointer — again after the pointer has left and come back', async () => {
-      // On the second toilet, just below the group's label (339–361).
+      // On the second toilet, just below the group's label (340–360).
       const OVER_W2: [number, number] = [456, 363];
       const { container, onView } = renderScene(fakeStore({ doc: docOf(ROW) }), PLAN);
       await waitFor(() => { expect(onView).toHaveBeenCalled(); });

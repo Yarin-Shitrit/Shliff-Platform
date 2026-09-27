@@ -51,6 +51,8 @@ export const LabelsLayer = forwardRef<LabelsLayerHandle>(function LabelsLayer(_p
         const selected = label.ids.some((id) => selection.has(id));
         node.dataset.selected = String(selected);
         node.dataset.group = String(label.group);
+        node.dataset.tier = label.tier;
+        node.dataset.issue = String(label.issue);
         node.style.width = `${Math.round(label.rect.r - label.rect.l)}px`;
         node.style.height = `${Math.round(label.rect.b - label.rect.t)}px`;
         node.style.transform = `translate(${Math.round(label.rect.l)}px, ${Math.round(label.rect.t)}px)`;

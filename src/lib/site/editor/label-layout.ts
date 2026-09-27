@@ -24,6 +24,13 @@ import type { ScreenBox } from './camera';
  * works, which is tried first so labels do not jump while the view turns.
  */
 
+/**
+ * How large a label is drawn: the caller decides from the item's footprint,
+ * so a caravan's name reads from further away than a chair's (§9.8). The
+ * layout only carries it through — it is why two labels can differ in height.
+ */
+export type LabelTier = 'small' | 'regular' | 'large';
+
 export interface LabelInput {
   id: string;
   text: string;
@@ -35,6 +42,9 @@ export interface LabelInput {
   groupKey: string | null;
   groupNoun: string | null;
   isNet: boolean;
+  tier: LabelTier;
+  /** The item has a problem (outside the plot, overlapping); its label is drawn in the problem colour. */
+  issue: boolean;
 }
 
 export interface PlacedLabel {
@@ -46,6 +56,8 @@ export interface PlacedLabel {
   leader: boolean;
   group: boolean;
   slot: string;
+  tier: LabelTier;
+  issue: boolean;
 }
 
 export interface LayoutOptions {
@@ -82,6 +94,8 @@ interface Unit {
   box: ScreenBox;
   isNet: boolean;
   group: boolean;
+  tier: LabelTier;
+  issue: boolean;
 }
 
 function rectAround(cx: number, cy: number, width: number, height: number): ScreenBox {
@@ -143,7 +157,7 @@ class Board {
       if (rect === null || !this.free(rect)) continue;
       this.placed.push({
         key: unit.key, ids: unit.ids, text: unit.text, rect, anchor: unit.anchor,
-        leader: slot !== 'in', group: unit.group, slot,
+        leader: slot !== 'in', group: unit.group, slot, tier: unit.tier, issue: unit.issue,
       });
       return true;
     }
@@ -159,7 +173,7 @@ class Board {
 function unitOf(input: LabelInput): Unit {
   return {
     key: input.id, ids: [input.id], text: input.text, width: input.width, height: input.height,
-    anchor: input.anchor, box: input.box, isNet: input.isNet, group: false,
+    anchor: input.anchor, box: input.box, isNet: input.isNet, group: false, tier: input.tier, issue: input.issue,
   };
 }
 
@@ -220,6 +234,9 @@ function groupUnit(members: readonly LabelInput[], options: LayoutOptions): Unit
     },
     isNet: false,
     group: true,
+    // A group is a count, not a name: it is drawn at the regular size, and grouped items never carry a problem (§9.4).
+    tier: 'regular',
+    issue: false,
   };
 }
 
