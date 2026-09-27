@@ -72,23 +72,32 @@ const BURN_25_EVENTS = ['House of trance 270925', 'Halloween Underground 311025'
 const BURN_26_EVENTS = ['מסיבת פקאנים', 'SuperNature 18.7', 'SuperNature 3.10'];
 
 /**
- * The ברן 25 `מיקום` block, with its stated balances as opening balances.
+ * The ברן 25 `מיקום` block, with its stated balances as counted balances.
  *
- * They are openings rather than derived totals because the sheet's ledger rows
+ * They are counts rather than derived totals because the sheet's ledger rows
  * carry no account at all — it never says which קופה any movement touched. So
  * the honest reading is: these three figures are what the camp counted, and
- * every seeded movement below is unattributed until someone says otherwise.
+ * every promoted movement is unattributed until someone says otherwise.
+ *
+ * `openingOn` is the day the count stands for, and it is NOT the date the
+ * sheet prints beside each account (1,584 at 2025-10-10, the other two at
+ * 2025-05-20). The three sum to 44,183.55, which is the sheet's closing line
+ * after its last movement on 2025-10-30 — a figure that includes
+ * `חצי שני למייצג נטלי` (2025-10-16) and `מסיבת האלווין` (2025-10-30) cannot
+ * have been counted in May. Dating the count 2025-05-20 would let those
+ * movements, once attributed, be taken off a balance they were already taken
+ * off. `COUNTED_ON` is the last movement day of the ברן 25 book, so every
+ * ברן 25 movement is history to the count and every ברן 26 one moves it.
  *
  * `עו״ש אופק` is a member's personal current account holding camp money.
- * Their dates differ in the sheet (1,584 at 2025-10-10, the other two at
- * 2025-05-20); `openingOn` records each as given rather than flattening them.
  */
+const COUNTED_ON = '2025-10-30';
 const ACCOUNTS: Array<{
   name: string; kind: AccountKind; holder?: string; opening: number; openingOn: string;
 }> = [
-  { name: 'קופת מזומן', kind: 'cash', opening: 1584, openingOn: '2025-10-10' },
-  { name: 'עו״ש אופק', kind: 'personal', holder: 'אופק', opening: 14079.55, openingOn: '2025-05-20' },
-  { name: 'וייבז קלוז פרינדס', kind: 'event_float', opening: 28520, openingOn: '2025-05-20' },
+  { name: 'קופת מזומן', kind: 'cash', opening: 1584, openingOn: COUNTED_ON },
+  { name: 'עו״ש אופק', kind: 'personal', holder: 'אופק', opening: 14079.55, openingOn: COUNTED_ON },
+  { name: 'וייבז קלוז פרינדס', kind: 'event_float', opening: 28520, openingOn: COUNTED_ON },
 ];
 
 /**

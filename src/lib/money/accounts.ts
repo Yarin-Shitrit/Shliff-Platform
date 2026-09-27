@@ -5,6 +5,7 @@ import type { AccountKind, LedgerDirection } from '@/db/schema/money';
 import { persons, payments, dues } from '@/db/schema/camp';
 import { toAgorot, fromAgorot } from '@/lib/money';
 import { isBlank } from '@/lib/text/normalize';
+import { insideCount } from './counted';
 
 export type Account = typeof accounts.$inferSelect;
 
@@ -25,6 +26,10 @@ export interface AccountBalance {
   holderPersonId: string | null;
   holderName: string | null;
   balanceAgorot: number;
+  /** The day `opening_balance` was counted. Movements up to and including
+   *  it are inside the figure already and do not move it; null means the
+   *  balance is a true opening and every movement counts. */
+  countedOn: Date | null;
 }
 
 export async function createAccount(db: AnyDb, input: NewAccount): Promise<Account> {
@@ -54,9 +59,14 @@ export async function listOpenAccounts(db: AnyDb): Promise<Account[]> {
 }
 
 /**
- * Opening balance, plus every movement in, minus every movement out — from
- * both `ledger_entries` and `payments`, because a dues payment is money that
- * physically arrived somewhere.
+ * The counted balance, plus every movement in, minus every movement out,
+ * **after the day it was counted** — from both `ledger_entries` and
+ * `payments`, because a dues payment is money that physically arrived
+ * somewhere.
+ *
+ * A movement on or before `opening_on` is history the count already holds:
+ * giving it an account files it under that קופה without moving the figure.
+ * `insideCount` says why, and why the cut is by camp calendar day.
  */
 export async function accountBalances(db: AnyDb): Promise<AccountBalance[]> {
   const rows = await db
@@ -67,28 +77,32 @@ export async function accountBalances(db: AnyDb): Promise<AccountBalance[]> {
       holderPersonId: accounts.holderPersonId,
       holderName: persons.displayName,
       openingBalance: accounts.openingBalance,
+      countedOn: accounts.openingOn,
     })
     .from(accounts)
     .leftJoin(persons, eq(persons.id, accounts.holderPersonId))
     .orderBy(accounts.name);
+  const countedOnById = new Map(rows.map((row) => [row.accountId, row.countedOn]));
 
   const entries = await db
     .select({ accountId: ledgerEntries.accountId, direction: ledgerEntries.direction,
-              amount: ledgerEntries.amount })
+              amount: ledgerEntries.amount, occurredOn: ledgerEntries.occurredOn })
     .from(ledgerEntries);
 
   const paid = await db
-    .select({ accountId: payments.accountId, amount: payments.amount })
+    .select({ accountId: payments.accountId, amount: payments.amount, paidOn: payments.paidOn })
     .from(payments);
 
   const delta = new Map<string, number>();
   for (const row of entries) {
     if (!row.accountId) continue;
+    if (insideCount(row.occurredOn, countedOnById.get(row.accountId) ?? null)) continue;
     const signed = row.direction === 'in' ? toAgorot(row.amount) : -toAgorot(row.amount);
     delta.set(row.accountId, (delta.get(row.accountId) ?? 0) + signed);
   }
   for (const row of paid) {
     if (!row.accountId) continue;
+    if (insideCount(row.paidOn, countedOnById.get(row.accountId) ?? null)) continue;
     delta.set(row.accountId, (delta.get(row.accountId) ?? 0) + toAgorot(row.amount));
   }
 
@@ -99,6 +113,7 @@ export async function accountBalances(db: AnyDb): Promise<AccountBalance[]> {
     holderPersonId: row.holderPersonId,
     holderName: row.holderName ?? null,
     balanceAgorot: toAgorot(row.openingBalance) + (delta.get(row.accountId) ?? 0),
+    countedOn: row.countedOn,
   }));
 }
 

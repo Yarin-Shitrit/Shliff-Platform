@@ -27,9 +27,14 @@ export const accounts = pgTable('accounts', {
   kind: text('kind').$type<AccountKind>().notNull(),
   holderPersonId: uuid('holder_person_id')
     .references(() => persons.id, { onDelete: 'set null' }),
-  /** What the ledger cannot derive, because the earlier book is not loaded. */
+  /** What the ledger cannot derive, because the earlier book is not loaded.
+   *  A figure the camp counted, as of `openingOn`. */
   openingBalance: numeric('opening_balance', { precision: 12, scale: 2 })
     .notNull().default('0.00'),
+  /** The day `openingBalance` was counted. Movements up to and including
+   *  that day are already inside the figure and do not move the balance
+   *  (`insideCount` in src/lib/money/counted.ts). Null means a true opening:
+   *  every movement counts. */
   openingOn: timestamp('opening_on', { withTimezone: true }),
   closedAt: timestamp('closed_at', { withTimezone: true }),
 });

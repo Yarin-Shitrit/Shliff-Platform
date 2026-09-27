@@ -5,6 +5,7 @@ import { toAgorot } from '@/lib/money';
 import { accounts, budgetLines, ledgerEntries } from '@/db/schema/money';
 import type { LedgerDirection } from '@/db/schema/money';
 import { dues, payments, persons } from '@/db/schema/camp';
+import { insideCount } from './counted';
 import { listMovements } from './ledger';
 import { sourceIndexFor, sourceKey } from './overview';
 import type { SourceCell } from './trace';
@@ -232,7 +233,17 @@ export function groupByMonth(rows: LedgerRow[], sort: LedgerSort): MonthGroup[] 
 }
 
 export type RunningBalance =
-  | { shown: true; openingAgorot: number; balancesAgorot: number[] }
+  | {
+      shown: true;
+      /** The counted balance (`opening_balance`). */
+      openingAgorot: number;
+      /** The day it was counted, or null for a true opening. */
+      countedOn: Date | null;
+      /** How many of `rows` fall inside the count — the leading run, since
+       *  the rows are in date order. Zero when nothing was counted. */
+      insideCount: number;
+      balancesAgorot: number[];
+    }
   | { shown: false; reason: string };
 
 /**
@@ -274,12 +285,19 @@ export function runningBalanceAvailable(
 }
 
 /**
- * Opening balance plus every movement, in order — the same arithmetic
- * `accountBalances` does, arrived at row by row. Starting from
- * `opening_balance` rather than from zero is what makes the last value equal
- * the figure on the account card: the opening is the carry-forward the ledger
- * cannot derive, and dropping it made every balance on the old page short by
- * `44,647`.
+ * The same arithmetic `accountBalances` does, arrived at row by row, so the
+ * last value equals the figure on the account card. Starting from
+ * `opening_balance` rather than from zero is what makes that true: the
+ * opening is the carry-forward the ledger cannot derive, and dropping it made
+ * every balance on the old page short by `44,647`.
+ *
+ * With a count date the walk is anchored in the middle rather than at the
+ * start. The counted figure is what the account held *after* the last
+ * movement inside the count, so every balance is `counted + (running sum
+ * here − running sum at the anchor)`: rows after the anchor add to it, and
+ * rows before it are read backwards from it — the balance after the first
+ * counted row is the count less everything that happened between. With no
+ * count date the anchor sum is zero and this is the plain forward walk.
  */
 export async function runningBalanceFor(
   db: AnyDb, rows: LedgerRow[], scope: LedgerScope, query: LedgerQuery,
@@ -288,15 +306,20 @@ export async function runningBalanceFor(
   if (!available.ok) return { shown: false, reason: available.reason };
 
   const [account] = await db
-    .select({ openingBalance: accounts.openingBalance })
+    .select({ openingBalance: accounts.openingBalance, countedOn: accounts.openingOn })
     .from(accounts)
     .where(eq(accounts.id, scope.accountId!));
   const openingAgorot = account ? toAgorot(account.openingBalance) : 0;
+  const countedOn = account?.countedOn ?? null;
 
-  let balance = openingAgorot;
-  const balancesAgorot = rows.map((row) => {
-    balance += row.direction === 'in' ? row.amountAgorot : -row.amountAgorot;
-    return balance;
+  let running = 0;
+  let atAnchor = 0;
+  let inside = 0;
+  const sums = rows.map((row) => {
+    running += row.direction === 'in' ? row.amountAgorot : -row.amountAgorot;
+    if (insideCount(row.occurredOn, countedOn)) { atAnchor = running; inside += 1; }
+    return running;
   });
-  return { shown: true, openingAgorot, balancesAgorot };
+  const balancesAgorot = sums.map((sum) => openingAgorot + sum - atAnchor);
+  return { shown: true, openingAgorot, countedOn, insideCount: inside, balancesAgorot };
 }

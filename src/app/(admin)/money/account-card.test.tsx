@@ -9,7 +9,7 @@ import { AccountCard } from './account-card';
 function account(overrides: Partial<AccountBalance> = {}): AccountBalance {
   return {
     accountId: 'a1', name: 'קופת מזומן', kind: 'cash',
-    holderPersonId: null, holderName: null, balanceAgorot: 412000,
+    holderPersonId: null, holderName: null, balanceAgorot: 412000, countedOn: null,
     ...overrides,
   };
 }

@@ -370,7 +370,11 @@ describe('money with no account', () => {
     expect(screen.getAllByRole('status')).toHaveLength(1);
     const banner = screen.getByRole('status');
     expect(within(banner).getByText(/2 תנועות נרשמו בלי לציין חשבון/)).toBeTruthy();
-    expect(within(banner).getByText(/עד שישויכו הן לא נספרות ביתרה של אף קופה/)).toBeTruthy();
+    expect(within(banner).getByText(/עד שישויכו הן לא רשומות על אף קופה/)).toBeTruthy();
+    // The old sentence said they were not counted in any balance. Since the
+    // count rule, a movement from before an account's count day already is
+    // in that balance — so the banner says what attribution does instead.
+    expect(within(banner).getByText(/תנועה מלפני יום הספירה של החשבון נכנסת להיסטוריה שלו בלי לשנות את היתרה/)).toBeTruthy();
     expect(within(banner).getByText(/נרשמו בלי לציין לאיזה חשבון נכנסו/)).toBeTruthy();
     expect(within(banner).getByText(/נרשמו בלי לציין מאיזה חשבון יצאו/)).toBeTruthy();
     // 1,200 in and 1,200 out are not 2,400 of anything. Summing money that

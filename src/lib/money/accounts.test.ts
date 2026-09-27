@@ -41,6 +41,44 @@ describe('accounts', () => {
     expect(balance.balanceAgorot).toBe(1407955);
   });
 
+  /**
+   * The ברן 25 מיקום figures are the sheet's closing line: they already hold
+   * every movement up to 2025-10-30. Attributing one of those movements
+   * files it under its קופה and must leave the figure where it was — the
+   * money left once. A movement after the count is new to it and moves it.
+   */
+  it('leaves a counted balance alone for a movement on or before the count day, and moves it for one after', async () => {
+    const account = await createAccount(db, {
+      name: 'עו״ש אופק', kind: 'personal', openingBalance: 14079.55,
+      openingOn: new Date('2025-10-30T00:00:00Z'),
+    });
+    await db.insert(ledgerEntries).values([
+      { occurredOn: new Date('2025-10-16T00:00:00Z'), direction: 'out', amount: '20660.00',
+        description: 'חצי שני למייצג נטלי', accountId: account.id, recordedBy: 'lead' },
+      // The count day itself, stored at Israel midnight — 21:00Z the evening
+      // before in UTC. Still the count day in the camp's calendar.
+      { occurredOn: new Date('2025-10-29T21:00:00Z'), direction: 'in', amount: '15660.00',
+        description: 'מסיבת האלווין 30/10', accountId: account.id, recordedBy: 'lead' },
+      { occurredOn: new Date('2026-06-01T00:00:00Z'), direction: 'out', amount: '14000.00',
+        description: 'חוב לירון סלע על ברן 25', accountId: account.id, recordedBy: 'lead' },
+    ]);
+
+    const [balance] = await accountBalances(db);
+    expect(balance.countedOn?.toISOString()).toBe('2025-10-30T00:00:00.000Z');
+    expect(balance.balanceAgorot).toBe(1407955 - 1400000);
+  });
+
+  it('counts every movement when the balance has no count day', async () => {
+    const account = await createAccount(db, { name: 'קופת מזומן', kind: 'cash', openingBalance: 0 });
+    await db.insert(ledgerEntries).values([
+      { occurredOn: new Date('2025-06-10T00:00:00Z'), direction: 'out', amount: '200.00',
+        description: 'תרומה אבישי פרץ', accountId: account.id, recordedBy: 'lead' },
+    ]);
+    const [balance] = await accountBalances(db);
+    expect(balance.countedOn).toBeNull();
+    expect(balance.balanceAgorot).toBe(-20000);
+  });
+
   it('refuses a blank account name', async () => {
     await expect(createAccount(db, { name: '  ‏ ', kind: 'cash' }))
       .rejects.toThrow(/שם/);

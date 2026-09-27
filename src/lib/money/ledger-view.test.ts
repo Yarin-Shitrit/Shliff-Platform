@@ -292,6 +292,40 @@ describe('the running balance', () => {
     expect(balance.balancesAgorot.at(-1)).toBe(derived.balanceAgorot);
   });
 
+  /**
+   * The anchor is in the middle. 44,183.55 is what the sheet says the camp
+   * held after 30/10/2025; the walk reads backwards from it through the two
+   * counted rows and forwards from it through the one that came later, and
+   * the last value is still what the account card says.
+   */
+  it('reads backwards from a counted balance through the movements inside the count', async () => {
+    const account = await createAccount(db, {
+      name: 'עו״ש אופק', kind: 'personal', openingBalance: 14079.55,
+      openingOn: new Date('2025-10-30T00:00:00Z'),
+    });
+    for (const [direction, amount, on] of [
+      ['out', 20660, '2025-10-16'], ['in', 15660, '2025-10-30'], ['out', 14000, '2026-06-01'],
+    ] as const) {
+      await recordEntry(db, {
+        occurredOn: new Date(`${on}T00:00:00Z`), direction, amount,
+        description: 'תנועה', accountId: account.id, recordedBy: LEAD,
+      });
+    }
+    const scope = { accountId: account.id };
+    const query = { view: 'all', sort: 'date-asc' } as const;
+    const rows = applyLedgerView(await listLedgerRows(db, scope), query);
+    const balance = await runningBalanceFor(db, rows, scope, query);
+    if (!balance.shown) throw new Error('unreachable');
+    expect(balance.countedOn?.toISOString()).toBe('2025-10-30T00:00:00.000Z');
+    expect(balance.insideCount).toBe(2);
+    // after 16/10: the count less the 15,660 that arrived on 30/10.
+    // after 30/10: the count itself. after 01/06/26: the count less 14,000.
+    expect(balance.balancesAgorot).toEqual([1407955 - 1566000, 1407955, 1407955 - 1400000]);
+
+    const derived = (await accountBalances(db)).find((row) => row.accountId === account.id)!;
+    expect(balance.balancesAgorot.at(-1)).toBe(derived.balanceAgorot);
+  });
+
   it('is hidden across several accounts, and says so', () => {
     const result = runningBalanceAvailable({}, { view: 'all', sort: 'date-asc' });
     expect(result).toEqual({
