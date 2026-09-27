@@ -327,6 +327,9 @@ describe('inboxItems — blocks, debts, refusals and flags', () => {
     expect(item.blocking).toBe(true);
     expect(blocksPromotion(item)).toBe(false);
     expect(item.actions.map((a) => a.kind)).toEqual(['name-debt', 'open-source']);
+    // The debts drawer's own verb: a bare `?peek=` once led to a drawer that
+    // only repeated the refusal, and `act=name` is what opens the form.
+    expect(item.actions[0].href).toBe('/money/debts?peek=o1&act=name');
     expect(item.detail).toBe('אי אפשר לסגור עד שיירשם למי');
   });
 

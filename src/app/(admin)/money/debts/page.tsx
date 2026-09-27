@@ -21,8 +21,10 @@ import { Drawer } from '@/components/ui/drawer';
 import { openPeekHref, closePeekHref } from '@/components/ui/drawer-url';
 import { Meter } from '@/components/charts/meter';
 import { listAccounts } from '@/lib/money/accounts';
+import { listPersonChoices } from '@/lib/members/dossier';
 import { chipSource } from '../chip-source';
 import { SettleForm } from './settle-form';
+import { NameForm } from './name-form';
 import styles from './debts.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -57,6 +59,12 @@ const VIEWS = Object.keys(VIEW_LABELS) as DebtView[];
  * meets this sentence there has met it here first.
  */
 const NAMELESS_REFUSAL = 'אי אפשר לסגור חוב בלי שם — לא ידוע למי מגיע הכסף';
+
+/** The inbox action's label, verbatim, so the row and the inbox say the same
+ *  thing. Spelled here rather than imported from `name-form.tsx`: a string
+ *  exported from a `'use client'` module reaches a Server Component as a
+ *  client reference, not as text. */
+const NAME_ACTION_LABEL = 'רישום למי החוב';
 
 /** Verbatim from the promoter's note for a debt whose workbook row carried no
  *  date, so the register and this screen say the same thing about it. */
@@ -123,9 +131,10 @@ export default async function DebtsPage(
   const season = seasons.find((one) => one.id === params.season) ?? seasons[0];
   const view = parseView(params.view);
 
-  const [rows, accounts] = await Promise.all([
+  const [rows, accounts, people] = await Promise.all([
     listDebts(db, { seasonId: season.id }),
     listAccounts(db),
+    listPersonChoices(db),
   ]);
   const totals = debtTotals(rows);
   const shown = applyDebtView(rows, view);
@@ -133,8 +142,15 @@ export default async function DebtsPage(
 
   /* An id that names no row on this page opens no drawer and throws nothing:
    * a stale link, or a debt that has since been settled in another tab, is
-   * not an error a lead should be shown a crash for. */
-  const settling = params.act === 'settle' && params.peek !== undefined
+   * not an error a lead should be shown a crash for.
+   *
+   * The drawer opens on the record, whatever verb came with it: `settle`
+   * from this page's rows, `name` from the inbox, and none at all from the
+   * `/money` overview, whose description links are `?peek=<id>` alone. What
+   * the drawer offers is decided by the debt — a named one can be settled,
+   * a nameless one can be named — not by which link the lead came through,
+   * because the verb in the URL cannot know more than the row does. */
+  const peeked = params.peek !== undefined
     ? rows.find((row) => row.id === params.peek)
     : undefined;
 
@@ -319,10 +335,10 @@ export default async function DebtsPage(
         ))}
       </nav>
 
-      {settling === undefined ? null : (
+      {peeked === undefined ? null : (
         <Drawer
-          title={settling.unnamed ? 'חוב בלי שם' : `סגירת חוב — ${settling.displayParty}`}
-          subtitle={settling.description}
+          title={peeked.unnamed ? 'חוב בלי שם' : `סגירת חוב — ${peeked.displayParty}`}
+          subtitle={peeked.description}
           closeHref={closePeekHref(PATH, asParams(params))}
         >
           {/* The description is the drawer's subtitle and is not repeated
@@ -330,39 +346,47 @@ export default async function DebtsPage(
           <dl className={styles.drawerFacts}>
             <dt>מתי נפתח</dt>
             <dd>
-              {settling.openedOn === null
+              {peeked.openedOn === null
                 ? <span className={styles.dateless}>{DATELESS_NOTE}</span>
-                : <DateText at={settling.openedOn} />}
+                : <DateText at={peeked.openedOn} />}
             </dd>
             <dt>נותר</dt>
-            <dd><Money agorot={settling.outstandingAgorot} /></dd>
+            <dd><Money agorot={peeked.outstandingAgorot} /></dd>
             <dt>מקור</dt>
-            <dd><SourceChip source={chipSource(settling.source ?? undefined)} /></dd>
+            <dd><SourceChip source={chipSource(peeked.source ?? undefined)} /></dd>
           </dl>
 
-          {settling.settledAgorot === 0 ? null : (
+          {peeked.settledAgorot === 0 ? null : (
             <p className={styles.progress}>
               <Meter
-                label={`נסגר מתוך ${settling.description}`}
-                valueAgorot={settling.settledAgorot}
-                totalAgorot={settling.amountAgorot}
+                label={`נסגר מתוך ${peeked.description}`}
+                valueAgorot={peeked.settledAgorot}
+                totalAgorot={peeked.amountAgorot}
               />
               <bdi className={styles.progressText}>
-                {`${formatILS(settling.settledAgorot)} מתוך ${formatILS(settling.amountAgorot)}`}
+                {`${formatILS(peeked.settledAgorot)} מתוך ${formatILS(peeked.amountAgorot)}`}
               </bdi>
             </p>
           )}
 
-          {settling.unnamed || settling.displayParty === null ? (
-            /* No form at all, not a disabled one. `settleObligation` would
-             * refuse this and the drawer says so in its own words. */
-            <p className={styles.refusal}>{NAMELESS_REFUSAL}</p>
+          {peeked.unnamed || peeked.displayParty === null ? (
+            /* No settle form at all, not a disabled one. `settleObligation`
+             * would refuse this and the drawer says so in its own words —
+             * and then offers the one thing that can change it. */
+            <>
+              <p className={styles.refusal}>{NAMELESS_REFUSAL}</p>
+              <NameForm
+                obligationId={peeked.id}
+                people={people}
+                closeHref={closePeekHref(PATH, asParams(params))}
+              />
+            </>
           ) : (
             <SettleForm
-              obligationId={settling.id}
-              direction={settling.direction}
-              displayParty={settling.displayParty}
-              outstandingAgorot={settling.outstandingAgorot}
+              obligationId={peeked.id}
+              direction={peeked.direction}
+              displayParty={peeked.displayParty}
+              outstandingAgorot={peeked.outstandingAgorot}
               accounts={accounts.map((one) => ({ id: one.id, name: one.name }))}
               closeHref={closePeekHref(PATH, asParams(params))}
             />
@@ -395,7 +419,10 @@ export default async function DebtsPage(
 }
 
 /**
- * Settle, or the reason it cannot be settled.
+ * Settle, or the reason it cannot be settled — and, for a nameless debt, the
+ * way out: the only thing that can make it settleable is recording whose it
+ * is, so that link stands beside the dead control rather than three screens
+ * away in the inbox.
  *
  * A native `<button>` rather than the kit's `Button`: a disabled control has
  * to point at the sentence explaining itself, and `ButtonProps` accepts no
@@ -408,6 +435,9 @@ function SettleControl({ row, params }: { row: DebtRow; params: DebtsSearchParam
     const describedBy = `settle-refusal-${row.id}`;
     return (
       <span className={styles.settle}>
+        <Link className={styles.settleButton} href={openPeekHref(PATH, asParams(params), row.id, 'name')}>
+          {NAME_ACTION_LABEL}
+        </Link>
         <button type="button" className={styles.settleButton} disabled aria-describedby={describedBy}>
           סגירה
         </button>

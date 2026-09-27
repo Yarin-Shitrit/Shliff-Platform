@@ -6,8 +6,11 @@ import { render, screen, within } from '@testing-library/react';
 import type { DebtRow } from '@/lib/money/debts-view';
 import type { SourceCell } from '@/lib/money/trace';
 
-const { requireAdmin, listSeasons, listAccounts, listDebts } = vi.hoisted(() => ({
+const {
+  requireAdmin, listSeasons, listAccounts, listDebts, listPersonChoices,
+} = vi.hoisted(() => ({
   requireAdmin: vi.fn(), listSeasons: vi.fn(), listAccounts: vi.fn(), listDebts: vi.fn(),
+  listPersonChoices: vi.fn(),
 }));
 /**
  * The kit's `Drawer` is a client component: it traps focus, closes on `esc`
@@ -23,6 +26,7 @@ vi.mock('@/db', () => ({ db: {} }));
 vi.mock('@/lib/auth/guard', () => ({ requireAdmin }));
 vi.mock('@/lib/members/roster', () => ({ listSeasons }));
 vi.mock('@/lib/money/accounts', () => ({ listAccounts }));
+vi.mock('@/lib/members/dossier', () => ({ listPersonChoices }));
 /**
  * Only the reader is replaced. `debtTotals` and `applyDebtView` stay real —
  * they are the arithmetic this screen displays, and a stubbed total would let
@@ -64,6 +68,7 @@ beforeEach(() => {
   listSeasons.mockResolvedValue([SEASON]);
   listAccounts.mockResolvedValue([]);
   listDebts.mockResolvedValue([]);
+  listPersonChoices.mockResolvedValue([{ id: 'p1', displayName: 'רוני אדלר' }]);
 });
 
 async function renderPage(params: Record<string, string> = {}) {
@@ -257,5 +262,58 @@ describe('the settlement drawer', () => {
     await renderPage();
     expect(screen.getByRole('link', { name: 'סגירה' }).getAttribute('href'))
       .toBe('/money/debts?season=s1&peek=o1&act=settle');
+  });
+
+  /**
+   * The `/money` overview links a debt's description to `?peek=<id>` with no
+   * verb, and the inbox links a nameless one to `?peek=<id>&act=name`. Both
+   * must open the drawer: the record is what is being looked at, and what
+   * the drawer offers is decided by the debt, not by the link.
+   */
+  it('opens on the record alone, with no verb in the URL', async () => {
+    listDebts.mockResolvedValue([debt({ id: 'o1', description: 'מקדמה לגנרטור' })]);
+    await renderPage({ peek: 'o1' });
+    const drawer = screen.getByRole('dialog');
+    expect(within(drawer).getByText('מקדמה לגנרטור')).toBeTruthy();
+    expect(within(drawer).getByRole('button', { name: 'סגירת החוב' })).toBeTruthy();
+  });
+});
+
+describe('naming a nameless debt', () => {
+  const NAMELESS = {
+    id: 'o1', unnamed: true, displayParty: null, partyName: null,
+    description: 'שולם 500 — מקפיא באיחסון נוסף',
+    amountAgorot: 50000, outstandingAgorot: 50000,
+  } as const;
+
+  it('offers a link to record whose it is, beside the dead settle control', async () => {
+    listDebts.mockResolvedValue([debt(NAMELESS)]);
+    await renderPage();
+    expect(screen.getByRole('link', { name: 'רישום למי החוב' }).getAttribute('href'))
+      .toBe('/money/debts?season=s1&peek=o1&act=name');
+    expect(screen.getByRole('button', { name: 'סגירה' }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('opens the naming form in the drawer, with the roster to choose from and the refusal above it', async () => {
+    listDebts.mockResolvedValue([debt(NAMELESS)]);
+    await renderPage({ peek: 'o1', act: 'name' });
+    const drawer = screen.getByRole('dialog');
+    expect(within(drawer).getByText('אי אפשר לסגור חוב בלי שם — לא ידוע למי מגיע הכסף')).toBeTruthy();
+    expect(within(drawer).queryByRole('button', { name: 'סגירת החוב' })).toBeNull();
+    expect(within(drawer).getByRole('button', { name: 'רישום למי החוב' })).toBeTruthy();
+    expect(within(drawer).getByRole('option', { name: 'רוני אדלר' })).toBeTruthy();
+  });
+
+  it('offers the same form when the inbox’s older link arrives without a verb', async () => {
+    listDebts.mockResolvedValue([debt(NAMELESS)]);
+    await renderPage({ peek: 'o1' });
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: 'רישום למי החוב' })).toBeTruthy();
+  });
+
+  it('still offers no way to dismiss the debt', async () => {
+    listDebts.mockResolvedValue([debt(NAMELESS)]);
+    await renderPage({ peek: 'o1', act: 'name' });
+    expect(screen.queryByRole('button', { name: /התעלמות|הסרה|מחיקה/ })).toBeNull();
+    expect(screen.queryByRole('link', { name: /התעלמות|הסרה|מחיקה/ })).toBeNull();
   });
 });

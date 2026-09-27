@@ -5,7 +5,9 @@ import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import type { ActionResult } from '@/lib/action-result';
 import { toHebrewError, HebrewRefusal } from '@/lib/errors/hebrew';
-import { listObligations, checkSettlement, settleObligation } from '@/lib/money/obligations';
+import {
+  listObligations, checkSettlement, settleObligation, nameObligation,
+} from '@/lib/money/obligations';
 import { recordEntry } from '@/lib/money/ledger';
 import { MONEY_ERRORS } from '../error-messages';
 
@@ -110,5 +112,41 @@ export async function settleObligationAction(input: SettleInput): Promise<Action
   revalidatePath('/money/debts');
   revalidatePath('/money/ledger');
   revalidatePath('/money');
+  return { ok: true };
+}
+
+export interface NameInput {
+  obligationId: string;
+  /** Exactly one of the two — `nameObligation` refuses both and neither. */
+  personId?: string;
+  partyName?: string;
+}
+
+/**
+ * Records who a debt belongs to, so it can leave the nameless queue and be
+ * settled. Every refusal is the library's own sentence; the action adds none.
+ *
+ * The person's page is revalidated too: a debt that has just been linked to
+ * them is now one of their facts, and their dossier must not keep showing a
+ * roster with no debts on it.
+ */
+export async function nameObligationAction(input: NameInput): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+
+  try {
+    await nameObligation(db, {
+      obligationId: input.obligationId,
+      partyPersonId: input.personId,
+      partyName: input.partyName,
+    });
+  } catch (error) {
+    return failed(error);
+  }
+
+  revalidatePath('/money/debts');
+  revalidatePath('/money');
+  revalidatePath('/inbox');
+  if (input.personId) revalidatePath(`/members/${input.personId}`);
   return { ok: true };
 }
