@@ -436,7 +436,13 @@ export default async function LedgerPage(
         <Banner
           tone="warn"
           live
-          action={{ href: ledgerHref(params, { view: 'no-account' }), label: 'שיוך לחשבון' }}
+          /* The action takes a lead to the בלי חשבון view. On that view it
+           * would reload the same URL, and a button that does nothing when
+           * pressed is the thing this banner was reported for. The rows
+           * beneath carry the repair; the banner keeps only the count. */
+          action={query.view === 'no-account'
+            ? undefined
+            : { href: ledgerHref(params, { view: 'no-account' }), label: 'שיוך לחשבון' }}
           headline={<bdi>{unplacedStrip.count} תנועות נרשמו בלי לציין חשבון.</bdi>}
           detail={(
             <>
@@ -477,6 +483,11 @@ export default async function LedgerPage(
         columns={columns}
         rows={tableRows}
         totals={tableRows.length === 0 ? undefined : totals}
+        /* Always visible, never hover-revealed: the control is the reason a
+         * lead followed `שיוך לחשבון` here, and on a laptop a slot that only
+         * shows under a pointer reads as a button that led nowhere. */
+        rowActionsVisible
+        rowActionsHeader="שיוך לחשבון"
         rowActions={(one) => (one.accountId === null ? (
           <AttributeAccount
             origin={one.origin}

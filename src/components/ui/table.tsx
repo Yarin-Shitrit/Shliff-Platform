@@ -81,6 +81,18 @@ export type TableProps<Row> = {
   /** Appends a `w0` cell revealed on row hover, focus-within and selection. */
   rowActions?: (row: Row) => ReactNode;
   /**
+   * Keeps the action slot visible at every width instead of revealing it on
+   * hover. The reveal is right for a secondary verb — a column of `אפשרויות`
+   * buttons would be noise — and wrong for a control that *is* the row: the
+   * ledger's בלי חשבון view exists to place money, and its banner sends a
+   * lead there with `שיוך לחשבון`. They arrived at a table with nothing to
+   * press and reported the button as broken, because on a laptop the repair
+   * only appeared under a pointer that had no reason to go looking for it.
+   * A phone already shows the slot for the same reason; this makes the
+   * laptop agree. Omitted, the slot is revealed on hover as before.
+   */
+  rowActionsVisible?: boolean;
+  /**
    * `srHeader` for the column `Table` generates itself. An ordinary column
    * whose `header` renders empty can already name itself that way; the action
    * column had no such escape, so it read as a blank column header. Always
@@ -139,6 +151,7 @@ export function Table<Row>({
   rows,
   selection,
   rowActions,
+  rowActionsVisible,
   rowActionsHeader,
   totals,
   totalsLabel,
@@ -259,7 +272,7 @@ export function Table<Row>({
                       role="cell"
                       data-card="action"
                       data-label={rowActionsHeader}
-                      className={cx(styles.w0, styles.actions)}
+                      className={cx(styles.w0, styles.actions, rowActionsVisible && styles.visible)}
                     >
                       {rowActions(row.data)}
                     </td>

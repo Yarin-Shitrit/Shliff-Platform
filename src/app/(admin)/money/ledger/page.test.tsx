@@ -392,6 +392,32 @@ describe('money with no account', () => {
     expect(screen.getByRole('combobox', { name: 'שיוך מים וקרח לחשבון' })).toBeTruthy();
   });
 
+  /**
+   * The bug as reported: "the שיוך לחשבון button is not working". The banner
+   * navigated correctly, but the row's select and button sat in the kit's
+   * hover-revealed action column at opacity 0, so a lead who followed the
+   * banner on a laptop saw the same rows and nothing to press. Asserted
+   * through the kit's marker class, which is what its stylesheet keys on.
+   */
+  it('shows the fix without waiting for a hover, on every unplaced row', async () => {
+    listAccounts.mockResolvedValue([{ id: 'a1', name: 'קופה מזומן', kind: 'cash' }]);
+    listLedgerRows.mockResolvedValue(unplaced);
+    await renderPage({ view: 'no-account' });
+    const cells = document.querySelectorAll('td[data-card="action"]');
+    expect(cells.length).toBe(2);
+    cells.forEach((cell) => { expect(cell.className).toMatch(/visible/); });
+    expect(screen.getByRole('columnheader', { name: 'שיוך לחשבון' })).toBeTruthy();
+  });
+
+  it('drops the banner link on the view it would lead to, so it never reloads the same page', async () => {
+    listAccounts.mockResolvedValue([{ id: 'a1', name: 'קופה מזומן', kind: 'cash' }]);
+    listLedgerRows.mockResolvedValue(unplaced);
+    await renderPage({ view: 'no-account' });
+    const banner = screen.getByRole('status');
+    expect(within(banner).getByText(/2 תנועות נרשמו בלי לציין חשבון/)).toBeTruthy();
+    expect(within(banner).queryByRole('link', { name: 'שיוך לחשבון' })).toBeNull();
+  });
+
   it('offers no such control on a row that already names its account', async () => {
     listAccounts.mockResolvedValue([{ id: 'a1', name: 'קופה מזומן', kind: 'cash' }]);
     listLedgerRows.mockResolvedValue([row({ id: '1', description: 'מים וקרח' })]);

@@ -228,6 +228,34 @@ describe('Table — the action column has a name too', () => {
 });
 
 /**
+ * jsdom applies no CSS Module, so what this asserts is the marker the
+ * stylesheet keys its `opacity: 1` on — the same contract the card-reflow
+ * tests below settle for. The visible result was checked by hand in a real
+ * browser: before the marker, the ledger's repair control measured
+ * `opacity: 0` on a row nobody was hovering.
+ */
+describe('Table — an action slot that is not hidden behind a hover', () => {
+  const rowActions = (p: Person) => <button type="button">{`שיוך ${p.name}`}</button>;
+
+  it('marks every action cell visible when asked to', () => {
+    const { container } = render(
+      <Table caption="רשימת אנשים" columns={columns} rows={rows} rowActions={rowActions} rowActionsVisible />,
+    );
+    const cells = container.querySelectorAll('td[data-card="action"]');
+    expect(cells.length).toBe(rows.length);
+    cells.forEach((cell) => { expect(cell.className).toMatch(/visible/); });
+  });
+
+  it('leaves the slot hover-revealed by default', () => {
+    const { container } = render(
+      <Table caption="רשימת אנשים" columns={columns} rows={rows} rowActions={rowActions} />,
+    );
+    const cell = container.querySelector('td[data-card="action"]')!;
+    expect(cell.className).not.toMatch(/visible/);
+  });
+});
+
+/**
  * The card reflow (plan 12, Task 2). Below 767.98px the same `<table>` becomes
  * a list of cards: every column keeps its cell and the card role only decides
  * where in the card it lands. There is no `'hidden'` role, deliberately — the
