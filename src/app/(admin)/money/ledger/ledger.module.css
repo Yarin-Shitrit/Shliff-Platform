@@ -125,6 +125,48 @@
   font-size: var(--text-meta);
 }
 
+/* The שיוך לחשבון drawer: one unplaced movement per row, its facts above its
+   control, so the select never has to fight the description for width. */
+.attributeList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.attributeRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-block: var(--space-3);
+  border-block-end: 1px solid var(--line);
+}
+
+.attributeRow:last-child {
+  border-block-end: 0;
+}
+
+.attributeFacts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.attributeDesc {
+  font-weight: 600;
+}
+
+.attributeMeta {
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.attributeDone {
+  margin: 0;
+  color: var(--ink-3);
+}
+
 /* The new-movement drawer's form. */
 .form {
   display: flex;

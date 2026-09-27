@@ -163,6 +163,7 @@ export default async function LedgerPage(
   };
 
   const creating = params.act === 'movement';
+  const attributing = params.act === 'attribute';
 
   const [all, accounts, budgetLines] = await Promise.all([
     listLedgerRows(db, scope),
@@ -436,13 +437,12 @@ export default async function LedgerPage(
         <Banner
           tone="warn"
           live
-          /* The action takes a lead to the בלי חשבון view. On that view it
-           * would reload the same URL, and a button that does nothing when
-           * pressed is the thing this banner was reported for. The rows
-           * beneath carry the repair; the banner keeps only the count. */
-          action={query.view === 'no-account'
-            ? undefined
-            : { href: ledgerHref(params, { view: 'no-account' }), label: 'שיוך לחשבון' }}
+          /* Opens the drawer below, on every view. It used to switch to the
+           * בלי חשבון view and stop there: the repair sat in the table's
+           * hover-revealed action column, so on a laptop the lead saw the
+           * same rows and reported the button as broken. A banner that names
+           * a problem and offers a verb should be where the verb happens. */
+          action={{ href: openActHref(PATH, asParams(params), 'attribute'), label: 'שיוך לחשבון' }}
           headline={<bdi>{unplacedStrip.count} תנועות נרשמו בלי לציין חשבון.</bdi>}
           detail={(
             <>
@@ -475,6 +475,51 @@ export default async function LedgerPage(
             budgetLines={budgetLines.map((one) => ({ id: one.id, label: one.label }))}
             closeHref={closePeekHref(PATH, asParams(params))}
           />
+        </Drawer>
+      )}
+
+      {!attributing ? null : (
+        <Drawer
+          title="שיוך לחשבון"
+          subtitle={unplacedStrip.count === 0
+            ? 'כל התנועות משויכות לחשבון'
+            : <bdi>{unplacedStrip.count} תנועות ממתינות לשיוך</bdi>}
+          closeHref={closePeekHref(PATH, asParams(params))}
+        >
+          {/* Every unplaced movement in the page's scope, not only the ones
+            * the active view shows: a lead who opened this from the נכנס
+            * view still has the יצא side to place, and the banner counted
+            * both. Each row carries its own control, so a refusal lands on
+            * the movement it is about (the reason `AttributeAccount` exists),
+            * and a placed row leaves the list on the refresh that follows. */}
+          {unplacedStrip.count === 0 ? (
+            <p className={styles.attributeDone}>
+              אין תנועות שממתינות לשיוך. אפשר לסגור.
+            </p>
+          ) : (
+            <ul className={styles.attributeList} aria-label="תנועות בלי חשבון">
+              {unplaced.map((one) => (
+                <li key={one.id} className={styles.attributeRow}>
+                  <span className={styles.attributeFacts}>
+                    <span className={styles.attributeDesc}>{one.description}</span>
+                    <span className={styles.attributeMeta}>
+                      <DateText at={one.occurredOn} />
+                      {' · '}
+                      {one.direction === 'in' ? 'נכנס' : 'יצא'}
+                      {' '}
+                      <Money agorot={one.amountAgorot} />
+                    </span>
+                  </span>
+                  <AttributeAccount
+                    origin={one.origin}
+                    movementId={one.id}
+                    description={one.description}
+                    accounts={accounts.map((account) => ({ id: account.id, name: account.name }))}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
         </Drawer>
       )}
 

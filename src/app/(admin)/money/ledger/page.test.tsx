@@ -380,7 +380,7 @@ describe('money with no account', () => {
     expect(within(banner).queryByText('2,400 ₪')).toBeNull();
     expect(within(banner).getAllByText('1,200 ₪')).toHaveLength(2);
     expect(within(banner).getByRole('link', { name: 'שיוך לחשבון' }).getAttribute('href'))
-      .toBe('/money/ledger?season=s1&view=no-account');
+      .toBe('/money/ledger?season=s1&act=attribute');
   });
 
   it('offers the fix on the row itself', async () => {
@@ -409,13 +409,43 @@ describe('money with no account', () => {
     expect(screen.getByRole('columnheader', { name: 'שיוך לחשבון' })).toBeTruthy();
   });
 
-  it('drops the banner link on the view it would lead to, so it never reloads the same page', async () => {
+  /**
+   * The banner's verb opens a drawer rather than switching views. It once
+   * switched to בלי חשבון and stopped, which on that view reloaded the same
+   * page — the second half of "the button is not working".
+   */
+  it('keeps the button on every view, and it opens the drawer rather than the same page', async () => {
     listAccounts.mockResolvedValue([{ id: 'a1', name: 'קופה מזומן', kind: 'cash' }]);
     listLedgerRows.mockResolvedValue(unplaced);
     await renderPage({ view: 'no-account' });
     const banner = screen.getByRole('status');
-    expect(within(banner).getByText(/2 תנועות נרשמו בלי לציין חשבון/)).toBeTruthy();
-    expect(within(banner).queryByRole('link', { name: 'שיוך לחשבון' })).toBeNull();
+    expect(within(banner).getByRole('link', { name: 'שיוך לחשבון' }).getAttribute('href'))
+      .toBe('/money/ledger?season=s1&view=no-account&act=attribute');
+  });
+
+  it('the drawer lists every unplaced movement in scope with its own control, whatever the view', async () => {
+    listAccounts.mockResolvedValue([{ id: 'a1', name: 'קופה מזומן', kind: 'cash' }]);
+    listLedgerRows.mockResolvedValue([...unplaced, row({ id: '3', description: 'השכרת משאית' })]);
+    // The נכנס view shows only one of the two unplaced rows; the drawer shows both.
+    await renderPage({ view: 'in', act: 'attribute' });
+    const drawer = screen.getByRole('dialog', { name: 'שיוך לחשבון' });
+    expect(within(drawer).getByText('2 תנועות ממתינות לשיוך')).toBeTruthy();
+    const list = within(drawer).getByRole('list', { name: 'תנועות בלי חשבון' });
+    expect(within(list).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(list).getByRole('combobox', { name: 'שיוך תרומה לחשבון' })).toBeTruthy();
+    expect(within(list).getByRole('combobox', { name: 'שיוך מים וקרח לחשבון' })).toBeTruthy();
+    expect(within(list).queryByText('השכרת משאית')).toBeNull();
+    expect(within(drawer).getByRole('link', { name: 'סגירה' }).getAttribute('href'))
+      .toBe('/money/ledger?season=s1&view=in');
+  });
+
+  it('says so when the drawer is open and nothing is left to place', async () => {
+    listAccounts.mockResolvedValue([{ id: 'a1', name: 'קופה מזומן', kind: 'cash' }]);
+    listLedgerRows.mockResolvedValue([row({ id: '1' })]);
+    await renderPage({ act: 'attribute' });
+    const drawer = screen.getByRole('dialog', { name: 'שיוך לחשבון' });
+    expect(within(drawer).getByText(/אין תנועות שממתינות לשיוך/)).toBeTruthy();
+    expect(within(drawer).queryByRole('combobox')).toBeNull();
   });
 
   it('offers no such control on a row that already names its account', async () => {
