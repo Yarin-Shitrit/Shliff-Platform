@@ -3,24 +3,26 @@ import { HEBREW_FALLBACK } from '@/lib/errors/hebrew';
 import type { ObligationRow } from '@/lib/money/obligations';
 
 const {
-  requireAdmin, listObligations, checkSettlement, settleObligation, recordEntry, revalidatePath,
+  requireAdmin, listObligations, checkSettlement, settleObligation, nameObligation,
+  recordEntry, revalidatePath,
 } = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   listObligations: vi.fn(),
   checkSettlement: vi.fn(),
   settleObligation: vi.fn(),
+  nameObligation: vi.fn(),
   recordEntry: vi.fn(),
   revalidatePath: vi.fn(),
 }));
 vi.mock('@/db', () => ({ db: {} }));
 vi.mock('@/lib/auth/guard', () => ({ requireAdmin }));
 vi.mock('@/lib/money/obligations', () => ({
-  listObligations, checkSettlement, settleObligation,
+  listObligations, checkSettlement, settleObligation, nameObligation,
 }));
 vi.mock('@/lib/money/ledger', () => ({ recordEntry }));
 vi.mock('next/cache', () => ({ revalidatePath }));
 
-import { settleObligationAction } from './actions';
+import { settleObligationAction, nameObligationAction } from './actions';
 
 function debt(over: Partial<ObligationRow> = {}): ObligationRow {
   return {
@@ -148,5 +150,54 @@ describe('settleObligationAction', () => {
     expect(paths).toContain('/money/debts');
     expect(paths).toContain('/money/ledger');
     expect(paths).toContain('/money');
+  });
+});
+
+describe('nameObligationAction', () => {
+  beforeEach(() => { nameObligation.mockResolvedValue(undefined); });
+
+  it('refuses a caller who is not an admin, and writes nothing', async () => {
+    requireAdmin.mockResolvedValue({ ok: false });
+    expect(await nameObligationAction({ obligationId: 'o1', personId: 'p1' }))
+      .toEqual({ ok: false, error: 'אין הרשאה' });
+    expect(nameObligation).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('hands the library the person, and refreshes the debts, the inbox and that person’s page', async () => {
+    expect(await nameObligationAction({ obligationId: 'o1', personId: 'p1' })).toEqual({ ok: true });
+    expect(nameObligation).toHaveBeenCalledWith({}, {
+      obligationId: 'o1', partyPersonId: 'p1', partyName: undefined,
+    });
+    const paths = revalidatePath.mock.calls.map(([path]) => path);
+    expect(paths).toContain('/money/debts');
+    expect(paths).toContain('/money');
+    expect(paths).toContain('/inbox');
+    expect(paths).toContain('/members/p1');
+  });
+
+  it('hands the library a bare name, and refreshes no person page', async () => {
+    expect(await nameObligationAction({ obligationId: 'o1', partyName: 'חנות הקרח' })).toEqual({ ok: true });
+    expect(nameObligation).toHaveBeenCalledWith({}, {
+      obligationId: 'o1', partyPersonId: undefined, partyName: 'חנות הקרח',
+    });
+    const paths = revalidatePath.mock.calls.map(([path]) => path);
+    expect(paths.some((path) => String(path).startsWith('/members/'))).toBe(false);
+  });
+
+  it('carries the library’s own refusal to the screen unchanged', async () => {
+    const { HebrewRefusal } = await import('@/lib/errors/hebrew');
+    nameObligation.mockRejectedValue(new HebrewRefusal('לחוב הזה כבר רשום אדם'));
+    expect(await nameObligationAction({ obligationId: 'o1', personId: 'p1' }))
+      .toEqual({ ok: false, error: 'לחוב הזה כבר רשום אדם' });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('never lets English through when the database fails', async () => {
+    const logged = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    nameObligation.mockRejectedValue(new Error('insert or update violates foreign key'));
+    expect(await nameObligationAction({ obligationId: 'o1', personId: 'p1' }))
+      .toEqual({ ok: false, error: HEBREW_FALLBACK });
+    logged.mockRestore();
   });
 });

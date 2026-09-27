@@ -3,8 +3,10 @@ import { eq } from 'drizzle-orm';
 import type { TestDb } from '@/test/db';
 import { createTestDb } from '@/test/db';
 import { obligations } from '@/db/schema/money';
+import { createPerson, mergePersons } from '@/lib/members/link';
 import {
   createObligation, listObligations, settleObligation, unnamedObligations, checkSettlement,
+  nameObligation, PARTY_REFUSALS,
 } from './obligations';
 
 let db: TestDb;
@@ -254,5 +256,106 @@ describe('checkSettlement', () => {
     await expect(checkSettlement(db, {
       obligationId: missing, amount: 100, kind: 'cash', settledOn: WHEN, recordedBy: LEAD,
     })).rejects.toThrow(`חוב לא קיים: ${missing}`);
+  });
+});
+
+/**
+ * The way out of the nameless queue. `שולם 500 — מקפיא באיחסון נוסף` can be
+ * neither settled nor dismissed; the day a lead learns who fronted it, this
+ * is what records that, and the debt becomes settleable by the same rules as
+ * every other.
+ */
+describe('nameObligation', () => {
+  async function nameless(): Promise<string> {
+    return createObligation(db, {
+      direction: 'camp_owes', description: 'מקפיא באיחסון נוסף', amount: 500, openedOn: WHEN,
+    });
+  }
+
+  it('links a nameless debt to a person, and it can then be settled', async () => {
+    const id = await nameless();
+    const roni = await createPerson(db, 'רוני אדלר', LEAD);
+
+    await nameObligation(db, { obligationId: id, partyPersonId: roni });
+
+    const [row] = await listObligations(db);
+    expect(row.unnamed).toBe(false);
+    expect(row.partyPersonId).toBe(roni);
+    expect(row.displayParty).toBe('רוני אדלר');
+    expect(await unnamedObligations(db)).toEqual([]);
+
+    await settleObligation(db, {
+      obligationId: id, amount: 500, kind: 'cash', settledOn: WHEN, recordedBy: LEAD,
+    });
+    expect((await listObligations(db))[0].settled).toBe(true);
+  });
+
+  it('records a bare name for someone the roster does not know', async () => {
+    const id = await nameless();
+    await nameObligation(db, { obligationId: id, partyName: 'חנות הקרח בבאר שבע' });
+
+    const [row] = await listObligations(db);
+    expect(row.unnamed).toBe(false);
+    expect(row.partyPersonId).toBeNull();
+    expect(row.displayParty).toBe('חנות הקרח בבאר שבע');
+  });
+
+  it('links a person to a debt that so far carried only a raw name, and keeps the spelling', async () => {
+    const id = await createObligation(db, {
+      direction: 'camp_owes', partyName: 'יוסף', description: 'חוב יוסף', amount: 15240, openedOn: WHEN,
+    });
+    const yosef = await createPerson(db, 'יוסף כהן', LEAD);
+
+    await nameObligation(db, { obligationId: id, partyPersonId: yosef });
+
+    const [row] = await listObligations(db);
+    expect(row.partyPersonId).toBe(yosef);
+    expect(row.partyName).toBe('יוסף');
+    expect(row.displayParty).toBe('יוסף כהן');
+  });
+
+  it('refuses neither, both, and a name of only an invisible mark', async () => {
+    const id = await nameless();
+    await expect(nameObligation(db, { obligationId: id }))
+      .rejects.toThrow(PARTY_REFUSALS.neither);
+    await expect(nameObligation(db, { obligationId: id, partyName: '‏' }))
+      .rejects.toThrow(PARTY_REFUSALS.neither);
+    const roni = await createPerson(db, 'רוני אדלר', LEAD);
+    await expect(nameObligation(db, { obligationId: id, partyPersonId: roni, partyName: 'רוני' }))
+      .rejects.toThrow(PARTY_REFUSALS.both);
+    expect((await unnamedObligations(db)).map((row) => row.id)).toEqual([id]);
+  });
+
+  it('refuses to re-point a debt that already has a person', async () => {
+    const roni = await createPerson(db, 'רוני אדלר', LEAD);
+    const maya = await createPerson(db, 'מאיה פרץ', LEAD);
+    const id = await createObligation(db, {
+      direction: 'camp_owes', partyPersonId: roni, description: 'מקדמה', amount: 100, openedOn: WHEN,
+    });
+    await expect(nameObligation(db, { obligationId: id, partyPersonId: maya }))
+      .rejects.toThrow(PARTY_REFUSALS.alreadyLinked);
+    await expect(nameObligation(db, { obligationId: id, partyName: 'מישהו אחר' }))
+      .rejects.toThrow(PARTY_REFUSALS.alreadyLinked);
+    expect((await listObligations(db))[0].partyPersonId).toBe(roni);
+  });
+
+  it('refuses a person who is not there, or was merged away', async () => {
+    const id = await nameless();
+    await expect(nameObligation(db, {
+      obligationId: id, partyPersonId: '00000000-0000-0000-0000-00000000000f',
+    })).rejects.toThrow(PARTY_REFUSALS.noSuchPerson);
+
+    const target = await createPerson(db, 'אופק', LEAD);
+    const source = await createPerson(db, 'אופק כהן', LEAD);
+    await mergePersons(db, source, target, LEAD);
+    await expect(nameObligation(db, { obligationId: id, partyPersonId: source }))
+      .rejects.toThrow(PARTY_REFUSALS.noSuchPerson);
+    expect((await unnamedObligations(db)).map((row) => row.id)).toEqual([id]);
+  });
+
+  it('refuses a debt that does not exist, in the register’s own words', async () => {
+    const missing = '00000000-0000-0000-0000-00000000000f';
+    await expect(nameObligation(db, { obligationId: missing, partyName: 'רוני' }))
+      .rejects.toThrow(`חוב לא קיים: ${missing}`);
   });
 });

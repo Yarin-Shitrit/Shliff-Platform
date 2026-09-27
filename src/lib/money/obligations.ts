@@ -235,3 +235,69 @@ export async function settleObligation(db: AnyDb, input: NewSettlement): Promise
 export async function unnamedObligations(db: AnyDb): Promise<ObligationRow[]> {
   return (await listObligations(db)).filter((row) => row.unnamed);
 }
+
+export interface ObligationParty {
+  obligationId: string;
+  /** Someone the roster knows. */
+  partyPersonId?: string;
+  /** Someone it does not — a supplier, or a person nobody has recorded yet. */
+  partyName?: string;
+}
+
+/** Verbatim on the screen that offers the form, so both say the same thing. */
+export const PARTY_REFUSALS = {
+  neither: 'רישום למי החוב חייב לציין אדם מהרשימה או שם',
+  both: 'רשמו או אדם מהרשימה או שם — לא את שניהם',
+  alreadyLinked: 'לחוב הזה כבר רשום אדם. כדי לשנות, פנו למנהל הקאמפ',
+  noSuchPerson: 'האדם שנבחר לא נמצא ברשימת האנשים',
+} as const;
+
+/**
+ * Records who a debt belongs to.
+ *
+ * This is the only way a nameless obligation ever leaves the "nobody knows
+ * who to pay" queue: it cannot be settled and cannot be dismissed, so a lead
+ * who finally learns that `שולם 500 — מקפיא באיחסון נוסף` was fronted by רוני
+ * needs somewhere to write that down. Linking a person is preferred, because
+ * it puts the debt on their page; a bare name is allowed for a supplier or
+ * for someone the roster has not met yet, and it is stored exactly as the
+ * promoter stores an unattributed name, so `unnamed` clears the same way.
+ *
+ * A debt that already points at a person is refused rather than re-pointed.
+ * Re-linking is a correction to a fact somebody else recorded, and the ledger
+ * entries written for its settlements already carry the old name in their
+ * description; that is a decision for a lead, not a form field. A debt that
+ * carries only a raw name may be linked, since the raw spelling is kept
+ * alongside the link the way the promoter keeps it.
+ */
+export async function nameObligation(db: AnyDb, input: ObligationParty): Promise<void> {
+  const hasPerson = input.partyPersonId !== undefined && input.partyPersonId !== '';
+  const hasName = !isBlank(input.partyName);
+  if (!hasPerson && !hasName) throw new HebrewRefusal(PARTY_REFUSALS.neither);
+  if (hasPerson && hasName) throw new HebrewRefusal(PARTY_REFUSALS.both);
+
+  const [current] = await db.select({
+    id: obligations.id, partyPersonId: obligations.partyPersonId,
+  }).from(obligations).where(eq(obligations.id, input.obligationId));
+  if (!current) throw new HebrewRefusal(`חוב לא קיים: ${input.obligationId}`);
+  if (current.partyPersonId !== null) throw new HebrewRefusal(PARTY_REFUSALS.alreadyLinked);
+
+  if (hasPerson) {
+    const [person] = await db.select({
+      id: persons.id, mergedIntoId: persons.mergedIntoId,
+    }).from(persons).where(eq(persons.id, input.partyPersonId!));
+    // A merged-away row is kept so the merge can be undone, but nothing new
+    // may point at it: the debt would show on nobody's page.
+    if (!person || person.mergedIntoId !== null) {
+      throw new HebrewRefusal(PARTY_REFUSALS.noSuchPerson);
+    }
+    await db.update(obligations)
+      .set({ partyPersonId: person.id })
+      .where(eq(obligations.id, current.id));
+    return;
+  }
+
+  await db.update(obligations)
+    .set({ partyName: input.partyName! })
+    .where(eq(obligations.id, current.id));
+}

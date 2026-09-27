@@ -499,7 +499,10 @@ export async function inboxItems(db: AnyDb, input: InboxInput): Promise<InboxIte
       source, blocking: true, snoozedUntil: null,
       obligation: debt,
       actions: withDigits([
-        { kind: 'name-debt', label: 'רישום למי החוב', control: 'link', href: `/money/debts?peek=${debt.id}`, arg: debt.id, writes: false, undoable: false },
+        // `act=name`, through the debts drawer's own vocabulary: the drawer
+        // there opens on the record and offers the naming form for a
+        // nameless one, which is the whole reason this link exists.
+        { kind: 'name-debt', label: 'רישום למי החוב', control: 'link', href: `/money/debts?peek=${debt.id}&act=name`, arg: debt.id, writes: false, undoable: false },
         { kind: 'open-source', label: 'פתיחת התא בקובץ', control: 'link', href: source ? `/imports/${source.sheetId}#row-${source.sheetRow}` : '/imports', arg: null, writes: false, undoable: false },
       ]),
     });

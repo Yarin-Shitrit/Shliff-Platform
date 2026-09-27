@@ -8,7 +8,7 @@ import { issueFlatDues, listDues, setException } from '@/lib/fees/dues';
 import { recordPayment } from '@/lib/fees/payments';
 import { createTask, listTasks } from '@/lib/work/tasks';
 import { assignPerson, setAssignmentStatus } from '@/lib/work/coverage';
-import { personDossier, listPeople } from '@/lib/members/dossier';
+import { personDossier, listPeople, listPersonChoices } from '@/lib/members/dossier';
 
 const LEAD = 'lead@shliff.camp';
 const WHEN = new Date('2026-07-01T00:00:00Z');
@@ -115,5 +115,23 @@ describe('listPeople', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].personId).toBe(target);
     expect(rows[0].aliasCount).toBe(2);
+  });
+});
+
+describe('listPersonChoices', () => {
+  let db: TestDb;
+  beforeEach(async () => { db = await createTestDb(); });
+
+  it('lists names in display order, without merged-away rows', async () => {
+    const { mergePersons } = await import('@/lib/members/link');
+    const roni = await createPerson(db, 'רוני אדלר', LEAD);
+    const ofek = await createPerson(db, 'אופק', LEAD);
+    const gone = await createPerson(db, 'אופק כהן', LEAD);
+    await mergePersons(db, gone, ofek, LEAD);
+
+    expect(await listPersonChoices(db)).toEqual([
+      { id: ofek, displayName: 'אופק' },
+      { id: roni, displayName: 'רוני אדלר' },
+    ]);
   });
 });

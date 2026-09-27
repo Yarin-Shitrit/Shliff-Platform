@@ -106,6 +106,25 @@ export async function personDossier(
   };
 }
 
+export interface PersonChoice {
+  id: string;
+  displayName: string;
+}
+
+/**
+ * Every person a form may point at, by name, in display order — one query.
+ * `listPeople` answers the same question with four queries per person, which
+ * is right for the roster index and wrong for a `<select>` inside a drawer.
+ * Merged-away rows are left out for the same reason they are hidden from the
+ * index: nothing new should be attached to a person who no longer exists.
+ */
+export async function listPersonChoices(db: AnyDb): Promise<PersonChoice[]> {
+  return db.select({ id: persons.id, displayName: persons.displayName })
+    .from(persons)
+    .where(isNull(persons.mergedIntoId))
+    .orderBy(asc(persons.displayName));
+}
+
 /** The roster index. Merged-away rows are hidden; their aliases live on the
  *  person they were merged into. */
 export async function listPeople(db: AnyDb): Promise<PersonSummary[]> {
