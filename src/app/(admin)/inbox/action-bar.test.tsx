@@ -7,18 +7,19 @@ import type { InboxAction } from '@/lib/inbox/items';
 const {
   push, refresh, linkNameAction, ignoreNameAction, unignoreNameAction,
   snoozeItemAction, unsnoozeItemAction, promoteNameAction, splitNameAction,
-  unlinkAliasAction,
+  unlinkAliasAction, setSeasonAction, setAuthorityAction,
 } = vi.hoisted(() => ({
   push: vi.fn(), refresh: vi.fn(),
   linkNameAction: vi.fn(), ignoreNameAction: vi.fn(), unignoreNameAction: vi.fn(),
   snoozeItemAction: vi.fn(), unsnoozeItemAction: vi.fn(),
   promoteNameAction: vi.fn(), splitNameAction: vi.fn(), unlinkAliasAction: vi.fn(),
+  setSeasonAction: vi.fn(), setAuthorityAction: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push, refresh, replace: push }) }));
 vi.mock('./actions', () => ({
   ignoreNameAction, unignoreNameAction, snoozeItemAction, unsnoozeItemAction,
-  splitNameAction,
+  splitNameAction, setSeasonAction, setAuthorityAction,
 }));
 vi.mock('../members/actions', () => ({
   linkNameAction, promoteNameAction, unlinkAliasAction,
@@ -33,11 +34,15 @@ function action(over: Partial<InboxAction> = {}): InboxAction {
   };
 }
 
-function show(actions: InboxAction[], nextHref: string | null = '/inbox?item=b') {
+function show(
+  actions: InboxAction[], nextHref: string | null = '/inbox?item=b',
+  seasons: Array<{ id: string; name: string }> = [],
+) {
   return render(
     <ToastProvider>
       <ActionBar
         itemId="name:a1" itemKind="unlinked-name" actions={actions} nextHref={nextHref}
+        seasons={seasons}
       />
     </ToastProvider>,
   );
@@ -58,6 +63,7 @@ beforeEach(() => {
   for (const fn of [
     linkNameAction, ignoreNameAction, unignoreNameAction, snoozeItemAction,
     unsnoozeItemAction, promoteNameAction, splitNameAction, unlinkAliasAction,
+    setSeasonAction, setAuthorityAction,
   ]) {
     fn.mockResolvedValue({ ok: true });
   }
@@ -196,5 +202,64 @@ describe('ActionBar', () => {
     })], null);
     const link = screen.getByRole('link', { name: /פתיחת השורה בקובץ/ });
     expect(link.getAttribute('href')).toBe('/imports/u1#row-18');
+  });
+
+  // On production the two colliding budget sheets were "decided" twice and
+  // stayed undecided: the bar answered `set-authority` with a made-up
+  // `{ ok: true }`, toasted נשמר and moved on. The press has to reach the
+  // domain, and its undo has to clear the choice rather than pick the other copy.
+  it('chooses the authoritative copy through the domain, and undo clears the choice', async () => {
+    show([action({
+      kind: 'set-authority', label: 'בחירת budget-v2.xlsx כמוסמך', arg: 'sheet-2',
+    })], null);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /בחירת budget-v2.xlsx כמוסמך/ }));
+    });
+    expect(setAuthorityAction).toHaveBeenCalledWith('sheet-2', true);
+    expect(results().textContent).toContain('נבחר budget-v2.xlsx כעותק הקובע');
+
+    await act(async () => {
+      fireEvent.click(within(results()).getByRole('button', { name: 'ביטול' }));
+    });
+    expect(setAuthorityAction).toHaveBeenLastCalledWith('sheet-2', null);
+  });
+
+  it('a season is chosen in a select and saved, never a bare button that saves nothing', async () => {
+    const seasons = [{ id: 'season-25', name: 'ברן 25' }, { id: 'season-26', name: 'ברן 26' }];
+    show([action({
+      kind: 'set-season', label: 'בחירת עונה', control: 'select', arg: 'sheet-1', digit: null,
+    })], null, seasons);
+
+    // Saving with nothing chosen is refused on the spot, in Hebrew.
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'שמירה' }));
+    });
+    expect(setSeasonAction).not.toHaveBeenCalled();
+    expect(failures().textContent).toContain('צריך לבחור שנה');
+
+    fireEvent.change(screen.getByLabelText('בחירת עונה'), { target: { value: 'season-26' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'שמירה' }));
+    });
+    expect(setSeasonAction).toHaveBeenCalledWith('sheet-1', 'season-26');
+    expect(results().textContent).toContain('השנה של הגיליון נשמרה');
+  });
+
+  it('refuses a writing control nothing is wired to, instead of saying נשמר', async () => {
+    show([action({ kind: 'confirm-block', label: 'אישור', arg: 'b1', writes: true, undoable: false })]);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /אישור/ }));
+    });
+    expect(failures().textContent).toContain('שום דבר לא נשמר');
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('a skip moves on without claiming anything was saved', async () => {
+    show([action({ kind: 'skip', label: 'דילוג', arg: null, writes: false, undoable: false })]);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /דילוג/ }));
+    });
+    expect(push).toHaveBeenCalledWith('/inbox?item=b');
+    expect(screen.queryByRole('status')?.textContent ?? '').not.toContain('נשמר');
   });
 });

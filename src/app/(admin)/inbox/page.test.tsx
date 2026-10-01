@@ -31,6 +31,11 @@ vi.mock('next/navigation', () => ({
   notFound, useRouter: () => ({ push, refresh: vi.fn(), replace: vi.fn() }),
 }));
 vi.mock('@/lib/inbox/promotion', () => ({ promotionPreview }));
+// The page reads the season choices for an open sheet-season item; the db
+// here is `{}`, so the read is a mock like every other one above.
+vi.mock('@/lib/members/roster', () => ({
+  listSeasons: async () => [{ id: 'season-26', name: 'ברן 26' }],
+}));
 vi.mock('@/lib/data/evidence', async (original) => ({
   ...(await original<typeof import('@/lib/data/evidence')>()),
   blockEvidence,

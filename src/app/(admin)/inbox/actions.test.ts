@@ -40,8 +40,8 @@ describe('the guard', () => {
     expect(await actions.splitNameAction('a1', ['א', 'ב'])).toEqual({ ok: false, error: 'אין הרשאה' });
     expect(await actions.snoozeItemAction('name:a1')).toEqual({ ok: false, error: 'אין הרשאה' });
     expect(await actions.unsnoozeItemAction('name:a1')).toEqual({ ok: false, error: 'אין הרשאה' });
-    await expect(actions.setSeasonAction('s1', 'x')).rejects.toThrow('unauthorized');
-    await expect(actions.setAuthorityAction('s1', true)).rejects.toThrow('unauthorized');
+    await expect(actions.setSeasonAction('s1', 'x')).resolves.toEqual({ ok: false, error: 'אין הרשאה' });
+    await expect(actions.setAuthorityAction('s1', true)).resolves.toEqual({ ok: false, error: 'אין הרשאה' });
 
     expect(ignoreName).not.toHaveBeenCalled();
     expect(unignoreName).not.toHaveBeenCalled();
@@ -166,7 +166,19 @@ describe('setAuthorityAction', () => {
       'אי אפשר לסמן גיליון כסמכותי בלי עונה — בלי עונה אי אפשר להבחין בין גרסה כפולה של אותה שנה לגיליון של שנה אחרת',
     ));
     const { setAuthorityAction } = await import('./actions');
-    await expect(setAuthorityAction('s1', true)).rejects.toThrow('אי אפשר לסמן גיליון כסמכותי בלי עונה');
+    const result = await setAuthorityAction('s1', true);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain('אי אפשר לסמן גיליון כסמכותי בלי עונה');
+  });
+
+  // The action bar reads `result.ok`; a thrown error was a success it could
+  // not see and a refusal it could not show.
+  it('answers with a result the action bar can read, never by throwing', async () => {
+    const { setAuthorityAction, setSeasonAction } = await import('./actions');
+    await expect(setAuthorityAction('s1', true)).resolves.toEqual({ ok: true });
+    await expect(setSeasonAction('s1', 'season-1')).resolves.toEqual({ ok: true });
+    expect(setSheetSeason).toHaveBeenCalledWith({}, 's1', 'season-1');
+    expect(revalidatePath).toHaveBeenCalledWith('/imports');
   });
 
   it('refreshes the register rather than the page it came from', async () => {

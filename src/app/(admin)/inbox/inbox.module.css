@@ -414,6 +414,14 @@
   border-block-start: 1px solid var(--line);
 }
 
+/* A select control is a choice beside its save button, on one line. */
+.selectAction {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .action {
   display: inline-flex;
   align-items: center;

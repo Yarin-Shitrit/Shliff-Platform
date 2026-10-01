@@ -7,6 +7,7 @@ import {
   type InboxGroup,
 } from '@/lib/inbox/items';
 import { resolvedItems, clearedToday } from '@/lib/inbox/resolved';
+import { listSeasons } from '@/lib/members/roster';
 import { EmptyState } from '@/components/ui/empty-state';
 import { readSnoozes } from './snooze';
 import { ItemRail } from './item-rail';
@@ -106,6 +107,11 @@ export default async function InboxPage({
   // awaited its own read rendered as nothing outside a Server Component tree,
   // and the panel was simply absent with no test able to see it.
   const evidence = active === null ? null : await evidenceFor(db, active);
+  // A sheet with no season is decided by choosing one, so the choices are
+  // read here, like the evidence, and handed down as data.
+  const seasonChoices = active?.kind === 'sheet-season'
+    ? (await listSeasons(db)).map((season) => ({ id: season.id, name: season.name }))
+    : [];
 
   const groups = GROUP_LABELS
     .map((g) => ({ ...g, count: inTab.filter((i) => groupOf(i) === g.group).length }))
@@ -224,6 +230,7 @@ export default async function InboxPage({
                 nextId={filtered[activeIndex + 1]?.id ?? null}
                 prevId={activeIndex > 0 ? filtered[activeIndex - 1]?.id ?? null : null}
                 tab={tab} kind={kind}
+                seasons={seasonChoices}
               />
             </>
           )}
