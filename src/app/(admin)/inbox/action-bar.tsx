@@ -11,10 +11,11 @@ import type { ActionResult } from '@/lib/action-result';
 import { useToast } from '@/components/ui/toaster';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ButtonLink } from '@/components/ui/button';
-import { Field, TextInput } from '@/components/ui/field';
+import { Field, TextInput, Select } from '@/components/ui/field';
 import {
   ignoreNameAction, unignoreNameAction,
   snoozeItemAction, unsnoozeItemAction, splitNameAction,
+  setSeasonAction, setAuthorityAction,
 } from './actions';
 import {
   linkNameAction, promoteNameAction, unlinkAliasAction,
@@ -45,9 +46,23 @@ function receipt(action: InboxAction): string {
     case 'ignore-name': return 'השם סומן כלא-אדם';
     case 'split-name': return 'השם פוצל לשני שמות שממתינים לשיוך';
     case 'snooze': return 'הפריט נדחה לשבוע';
+    case 'set-authority': return action.label.replace('בחירת ', 'נבחר ').replace(' כמוסמך', ' כעותק הקובע');
+    case 'set-season': return 'השנה של הגיליון נשמרה';
     default: return 'נשמר';
   }
 }
+
+/**
+ * What a writing control says when nothing on this screen is wired to it.
+ *
+ * Before this existed the bar answered every unknown kind with `{ ok: true }`,
+ * toasted «נשמר» and opened the next item — the lead "decided" the two
+ * colliding budget sheets twice and the database never heard of it. A
+ * control that writes nothing must say so; a control that writes nothing
+ * *and* claims success is the silent default the product forbids.
+ */
+const NOT_WIRED = 'הפעולה הזאת עדיין לא מחוברת למסך — שום דבר לא נשמר';
+const NO_SEASON_CHOSEN = 'צריך לבחור שנה לפני השמירה';
 
 /**
  * A first guess at how a two-name cell splits, offered for the lead to edit.
@@ -66,7 +81,7 @@ export function guessParts(alias: string): [string, string] {
 }
 
 export function ActionBar({
-  itemId, actions, nextHref, alias = '',
+  itemId, actions, nextHref, alias = '', seasons = [],
 }: {
   itemId: string;
   itemKind: InboxKind;
@@ -74,12 +89,15 @@ export function ActionBar({
   nextHref: string | null;
   /** The raw workbook spelling, so a split can offer a first guess. */
   alias?: string;
+  /** Every season the camp has, for a `set-season` control's select. */
+  seasons?: ReadonlyArray<{ id: string; name: string }>;
 }): ReactElement {
   const router = useRouter();
   const { show } = useToast();
   const [pending, startTransition] = useTransition();
   const [confirming, setConfirming] = useState<InboxAction | null>(null);
   const [parts, setParts] = useState<[string, string]>(['', '']);
+  const [season, setSeason] = useState('');
 
   const aliasId = itemId.startsWith('name:') ? itemId.slice('name:'.length) : itemId;
 
@@ -90,7 +108,17 @@ export function ActionBar({
       case 'ignore-name': return ignoreNameAction(aliasId);
       case 'split-name': return splitNameAction(aliasId, [split[0], split[1]]);
       case 'snooze': return snoozeItemAction(action.arg ?? itemId);
-      default: return Promise.resolve({ ok: true });
+      // W13: the pressed copy becomes the one authoritative one; `arg` is its
+      // sheet id. The domain refuses a copy with no season, in Hebrew.
+      case 'set-authority': return setAuthorityAction(action.arg ?? '', true);
+      // W10: the season is the one chosen in the select, never inferred.
+      case 'set-season':
+        if (season === '') return Promise.resolve({ ok: false, error: NO_SEASON_CHOSEN });
+        return setSeasonAction(action.arg ?? '', season);
+      default:
+        // `skip` and its kin write nothing and only move on. Anything that
+        // claims to write and reaches here is a control nobody wired up.
+        return Promise.resolve(action.writes ? { ok: false, error: NOT_WIRED } : { ok: true });
     }
   }
 
@@ -124,6 +152,21 @@ export function ActionBar({
           router.refresh();
           return result;
         };
+      // The inverse of choosing a copy is clearing the choice, not choosing
+      // the other one; the inverse of giving a sheet its season is taking it
+      // back, which also clears its authority (`setSheetSeason`).
+      case 'set-authority':
+        return async () => {
+          const result = await setAuthorityAction(action.arg ?? '', null);
+          router.refresh();
+          return result;
+        };
+      case 'set-season':
+        return async () => {
+          const result = await setSeasonAction(action.arg ?? '', null);
+          router.refresh();
+          return result;
+        };
       default: return undefined;
     }
   }
@@ -139,12 +182,16 @@ export function ActionBar({
         show({ message: result.error, tone: 'bad' });
         return;
       }
-      const undo = reverse(action);
-      show({
-        message: receipt(action),
-        tone: 'ok',
-        ...(undo ? { undo: { label: 'ביטול', run: undo } } : {}),
-      });
+      // A control that writes nothing has nothing to report (E2 names what
+      // happened, and «נשמר» after a skip names something that did not).
+      if (action.writes) {
+        const undo = reverse(action);
+        show({
+          message: receipt(action),
+          tone: 'ok',
+          ...(undo ? { undo: { label: 'ביטול', run: undo } } : {}),
+        });
+      }
       // After each decision the next item opens by itself (D2).
       if (nextHref) router.push(nextHref);
       else router.refresh();
@@ -174,6 +221,29 @@ export function ActionBar({
           >
             {action.label}
           </ButtonLink>
+        ) : action.control === 'select' ? (
+          // A select is a choice plus a save: the choice alone writes nothing,
+          // and a bare button labelled «בחירת עונה» chose nothing at all.
+          <span key={`${action.kind}-${index}`} className={styles.selectAction}>
+            <Field id={`inbox-select-${index}`} label={action.label}>
+              <Select
+                id={`inbox-select-${index}`}
+                emptyLabel={action.label}
+                options={seasons.map((s) => ({ value: s.id, label: s.name }))}
+                value={season}
+                onChange={setSeason}
+                disabled={pending}
+              />
+            </Field>
+            <button
+              type="button"
+              className={styles.action}
+              disabled={pending}
+              onClick={() => press(action)}
+            >
+              שמירה
+            </button>
+          </span>
         ) : (
           <button
             key={`${action.kind}-${index}`}

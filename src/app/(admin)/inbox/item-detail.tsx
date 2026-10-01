@@ -171,11 +171,13 @@ function Panels(
 }
 
 export function ItemDetail({
-  item, evidence, position, total, nextId, prevId, tab, kind,
+  item, evidence, position, total, nextId, prevId, tab, kind, seasons = [],
 }: {
   item: InboxItem | null;
   /** Read by the page, which is the one thing in this tree that may await. */
   evidence: Evidence | null;
+  /** Read by the page as well: the choices a `set-season` control offers. */
+  seasons?: ReadonlyArray<{ id: string; name: string }>;
   position: number;
   total: number;
   nextId: string | null;
@@ -216,6 +218,7 @@ export function ItemDetail({
         actions={item.actions}
         nextHref={nextHref}
         alias={item.kind === 'unlinked-name' ? item.alias : ''}
+        seasons={seasons}
       />
 
       <InboxKeyboard digits={digitMap(item)} prevHref={prevHref} nextHref={nextHref} />

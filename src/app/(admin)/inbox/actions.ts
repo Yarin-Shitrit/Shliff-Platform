@@ -41,24 +41,44 @@ import { snoozeItem, unsnoozeItem } from './snooze';
  * Authorization happens here, server-side, on every call. A hidden or
  * disabled control in the UI is never the enforcement mechanism.
  *
- * Moved from `src/app/(admin)/data/actions.ts` with their bodies untouched —
- * Wave 2 lane A wrote them and this plan relocates rather than reviews them.
- * Only the revalidation target changed, `/data` having become `/inbox`.
+ * Moved from `src/app/(admin)/data/actions.ts` by Wave 2 lane A. They used to
+ * return void and throw, which the action bar could not read: for two days
+ * the register's «בחירת עונה» and «בחירת … כמוסמך» controls were wired to
+ * nothing, toasted «נשמר» and moved on, and the two colliding budget sheets
+ * on production stayed undecided after the lead had "decided" them twice.
+ * Now they return the same `ActionResult` every other action here does, so a
+ * domain refusal (R53, R54) reaches the screen in its own Hebrew and a
+ * success is one that actually wrote. Both screens that show a sheet's label
+ * are revalidated: the imports page renders the same two facts.
  */
-export async function setSeasonAction(sheetId: string, seasonId: string | null): Promise<void> {
+export async function setSeasonAction(
+  sheetId: string, seasonId: string | null,
+): Promise<ActionResult> {
   const admin = await requireAdmin();
-  if (!admin.ok) throw new Error('unauthorized');
-  await setSheetSeason(db, sheetId, seasonId);
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+  try {
+    await setSheetSeason(db, sheetId, seasonId);
+  } catch (error) {
+    return failure(error);
+  }
   revalidatePath('/inbox');
+  revalidatePath('/imports');
+  return { ok: true };
 }
 
 export async function setAuthorityAction(
   sheetId: string, authoritative: boolean | null,
-): Promise<void> {
+): Promise<ActionResult> {
   const admin = await requireAdmin();
-  if (!admin.ok) throw new Error('unauthorized');
-  await setSheetAuthority(db, sheetId, authoritative);
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+  try {
+    await setSheetAuthority(db, sheetId, authoritative);
+  } catch (error) {
+    return failure(error);
+  }
   revalidatePath('/inbox');
+  revalidatePath('/imports');
+  return { ok: true };
 }
 
 /**
