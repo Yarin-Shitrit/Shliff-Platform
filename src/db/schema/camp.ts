@@ -120,8 +120,8 @@ export const payments = pgTable('payments', {
   accountId: uuid('account_id'),
 });
 
-/** A fundraising party, or the burn itself. Deliberately minimal this phase:
- *  it exists so tasks (and later, revenue) have something to hang off. */
+/** A fundraising party, or the burn itself. Tasks hang off it, and so does
+ *  the money a party brought in and cost (`ledger_entries.event_id`). */
 export const campEvents = pgTable('camp_events', {
   id: uuid('id').defaultRandom().primaryKey(),
   seasonId: uuid('season_id').notNull()
@@ -129,6 +129,9 @@ export const campEvents = pgTable('camp_events', {
   name: text('name').notNull(),
   kind: text('kind').$type<EventKind>().notNull(),
   heldOn: timestamp('held_on', { withTimezone: true }),
+  /** The other camp a party was made with. Null means the camp made it alone
+   *  — a fact a lead states, never one inferred from the movements. */
+  partnerName: text('partner_name'),
 });
 
 /**

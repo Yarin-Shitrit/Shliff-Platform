@@ -11,6 +11,9 @@ export type LedgerDirection = 'in' | 'out';
 export type ObligationDirection = 'camp_owes' | 'owed_to_camp';
 export type SettlementKind = 'cash' | 'offset';
 export type BudgetCategory = 'camp' | 'dancefloor';
+/** What a party's movement was: ticket money, bar money, a cost, or money
+ *  that passed between the camp and the camp it made the party with. */
+export type PartyPart = 'tickets' | 'bar' | 'cost' | 'partner';
 
 /**
  * Where money physically sits. `עו״ש אופק` is a member's *personal* current
@@ -51,6 +54,10 @@ export const ledgerEntries = pgTable('ledger_entries', {
   description: text('description').notNull(),
   seasonId: uuid('season_id').references(() => seasons.id, { onDelete: 'set null' }),
   eventId: uuid('event_id').references(() => campEvents.id, { onDelete: 'set null' }),
+  /** Set with `eventId` when a lead records a party's money from its page.
+   *  Null on every other row, and on an event row nobody has sorted — shown
+   *  as unsorted, never assigned a part by guessing from the description. */
+  partyPart: text('party_part').$type<PartyPart>(),
   budgetLineId: uuid('budget_line_id')
     .references(() => budgetLines.id, { onDelete: 'set null' }),
   /** Two entries sharing this id are one transfer between accounts. */

@@ -66,6 +66,9 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { id: 'money', label: 'סקירה כספית', href: '/money', icon: 'wallet' },
       { id: 'ledger', label: 'תנועות', href: '/money/ledger', icon: 'ledger' },
+      /* Parties are where the camp's money comes from, so their history sits
+         with the money rather than with the camp's tasks. */
+      { id: 'events', label: 'מסיבות', href: '/money/events', icon: 'calendar' },
       { id: 'budget', label: 'תקציב', href: '/money#budget', icon: 'pie' },
       { id: 'debts', label: 'חובות', href: '/money/debts', icon: 'scale' },
     ],

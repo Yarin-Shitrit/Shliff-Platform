@@ -4,7 +4,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { AnyDb } from '@/lib/db-types';
 import { accounts, ledgerEntries } from '@/db/schema/money';
-import type { LedgerDirection } from '@/db/schema/money';
+import type { LedgerDirection, PartyPart } from '@/db/schema/money';
 import { payments, dues, persons } from '@/db/schema/camp';
 import { toAgorot, fromAgorot } from '@/lib/money';
 import { isBlank } from '@/lib/text/normalize';
@@ -18,6 +18,8 @@ export interface NewEntry {
   accountId?: string;
   seasonId?: string;
   eventId?: string;
+  /** Only with `eventId`. `recordPartyMovement` is the caller that sets it. */
+  partyPart?: PartyPart;
   budgetLineId?: string;
   transferGroupId?: string;
   recordedBy: string;
@@ -85,6 +87,7 @@ export async function recordEntry(db: AnyDb, input: NewEntry): Promise<string> {
     accountId: input.accountId ?? null,
     seasonId: input.seasonId ?? null,
     eventId: input.eventId ?? null,
+    partyPart: input.partyPart ?? null,
     budgetLineId: input.budgetLineId ?? null,
     transferGroupId: input.transferGroupId ?? null,
     recordedBy: input.recordedBy,

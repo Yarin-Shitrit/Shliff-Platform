@@ -1,0 +1,174 @@
+/* A10: logical properties throughout. Numeric columns take their alignment
+ * from the global `.num` utility that `Table` composes. The form rules mirror
+ * `ledger.module.css`, against the same tokens, for the same reason: there is
+ * no kit date or number input (§5 A28). */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.titleRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.title {
+  margin-block: 0;
+  font-size: var(--text-title);
+  line-height: var(--leading-title);
+}
+
+.lead {
+  margin-block: 0;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+  max-inline-size: 48rem;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.newLink {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--control-h);
+  padding-inline: var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--brand);
+  color: var(--brand-ink);
+  text-decoration: none;
+  font-size: var(--text-dense);
+  font-weight: 600;
+}
+
+.editLink {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--control-h);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  text-decoration: none;
+  font-size: var(--text-dense);
+}
+
+.strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--space-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.nameLink {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.nameLink:hover {
+  text-decoration: underline;
+}
+
+.partner {
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.gain { color: var(--ok); font-weight: 600; }
+.loss { color: var(--bad); font-weight: 600; }
+
+/* An absent value: drawn, never announced. */
+.none {
+  color: var(--ink-4);
+}
+
+.back {
+  font-size: var(--text-dense);
+}
+
+.rowAction {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.kinds {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-3);
+  margin-inline: 0;
+}
+
+.kindsLegend {
+  padding-inline: var(--space-1);
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.kind {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: var(--tap-min);
+}
+
+.input {
+  inline-size: 100%;
+  min-block-size: var(--control-h);
+  padding-inline: var(--space-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.formError {
+  margin-block: 0;
+  color: var(--bad);
+  font-size: var(--text-meta);
+}
+
+.formSaved {
+  margin-block: 0;
+  color: var(--ok);
+  font-size: var(--text-meta);
+}

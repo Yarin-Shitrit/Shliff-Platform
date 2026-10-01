@@ -10,7 +10,7 @@ describe('nav data', () => {
     expect(NAV_ITEMS.map((item) => item.label)).toEqual([
       'בית', 'לטיפול',
       'אנשים', 'דמי קאמפ', 'משימות', 'מפת הקאמפ',
-      'סקירה כספית', 'תנועות', 'תקציב', 'חובות',
+      'סקירה כספית', 'תנועות', 'מסיבות', 'תקציב', 'חובות',
       'מחסן', 'רכש', 'הקמה',
       'קבצים וייבוא', 'העלאת קובץ',
     ]);
@@ -48,6 +48,7 @@ describe('nav data', () => {
     expect(activeItemId('/money')).toBe('money');
     expect(activeItemId('/money/ledger')).toBe('ledger');
     expect(activeItemId('/money/debts')).toBe('debts');
+    expect(activeItemId('/money/events/6f1c0e0e-0000-4000-8000-000000000000')).toBe('events');
   });
 
   it('matches home exactly, so every path does not light it up', () => {
@@ -86,6 +87,7 @@ describe('nav data', () => {
       site: '/site',
       money: '/money',
       ledger: '/money/ledger',
+      events: '/money/events',
       budget: '/money#budget',
       debts: '/money/debts',
       warehouse: '/logistics/warehouse',
