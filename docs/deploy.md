@@ -585,6 +585,52 @@ Expected now: `2, 1, 1, 1, 1, 1`. The Postgres password was pasted into a
 Claude Code session to do this; rotating it in Railway, and the `DATABASE_URL`
 on Vercel with it, is still to do.
 
+### Migration `0020` — applied to Railway on 2026-10-01
+
+`0020_party_money` is the parties page (מסיבות, `/money/events`, #55): two
+nullable text columns and nothing else — `camp_events.partner_name` (the other
+camp a party was made with) and `ledger_entries.party_part` (tickets, bar,
+cost or partner). No row is touched; an existing row reads as a party made
+alone whose movements are unsorted, which is what the page shows for it.
+
+**This one broke production.** #55 merged and deployed on 2026-10-01 with the
+migration not on Railway, and the page selects both columns on every load, so
+`/money/events` answered the error screen (digest `1774633478`) until the
+column existed. The rule in §2 — migration first, merge second — was broken
+again; the `0016`–`0019` batch below got away with it only because CI was down
+that day. Every other page kept working: nothing else reads the two columns.
+
+Read-only check, before: `1, 0, 0`; after: `1, 1, 1`. The row counts are the
+oracle that the apply changed nothing but the schema:
+
+```sh
+docker run --rm postgres:18-alpine psql "$RAILWAY_URL" -tAc "
+select '0019', count(*) from information_schema.tables where table_name='site_plan_snapshots'
+union all select '0020 partner_name', count(*) from information_schema.columns where table_name='camp_events' and column_name='partner_name'
+union all select '0020 party_part', count(*) from information_schema.columns where table_name='ledger_entries' and column_name='party_part'
+union all select 'rows camp_events', count(*) from camp_events
+union all select 'rows ledger_entries', count(*) from ledger_entries"
+```
+
+Then, from a clean checkout of `main`:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine sh -euc '
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0020_party_money.sql
+'
+```
+
+Applied on 2026-10-01: `ALTER TABLE`, `ALTER TABLE`, one transaction. Measured
+before and after:
+
+| Table | Before | After |
+|---|---|---|
+| `camp_events` | 5 | 5 |
+| `ledger_entries` | 19 | 19 |
+
+The local `shliff-pg` was brought up to `0020` the same day, from the same
+SQL, with the §6 container command.
+
 ### Copying the laptop's database up
 
 The local container is Postgres **16**; Railway is **18**. Dump with the
