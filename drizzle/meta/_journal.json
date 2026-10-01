@@ -141,6 +141,13 @@
       "when": 1790429852753,
       "tag": "0019_site_plan_snapshots",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790841155849,
+      "tag": "0020_party_money",
+      "breakpoints": true
     }
   ]
 }
