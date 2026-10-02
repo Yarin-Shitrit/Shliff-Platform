@@ -26,7 +26,7 @@ import { roleLabel } from '@/lib/members/labels';
 import type { PersonListRow } from '@/lib/members/people-list';
 import { responsibilitiesOf } from '@/lib/work/coverage';
 import { personChangeLog, type ChangeEntry } from '@/lib/members/change-log';
-import { DUES_STATE_LABELS } from './people-table';
+import { DUES_STATE_LABELS } from '@/lib/members/labels';
 import styles from './people.module.css';
 
 export interface PeekDrawerProps {

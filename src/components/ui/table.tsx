@@ -51,6 +51,13 @@ export type TableRowModel<Row> = {
    * Rows arrive already ordered; Table never re-groups them.
    */
   group?: string;
+  /**
+   * A DOM id for the `<tr>`, so a link elsewhere can land on this row
+   * (`/money#budget-<id>` from the palette and the task rows). Optional and
+   * off by default: a row id is a record id, and two tables on one page may
+   * legitimately show the same record.
+   */
+  anchor?: string;
 };
 
 export type TableSelection = {
@@ -236,6 +243,7 @@ export function Table<Row>({
               nodes.push(
                 <tr
                   key={row.id}
+                  id={row.anchor}
                   role="row"
                   data-tone={row.tone ?? 'default'}
                   className={cx(selected && styles.selected)}

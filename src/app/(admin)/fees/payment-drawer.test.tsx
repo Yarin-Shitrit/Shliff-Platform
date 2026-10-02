@@ -242,6 +242,18 @@ describe('PaymentDrawer', () => {
   });
 
   /**
+   * `payablePosition` answers `index: 0` for a person outside this view's run —
+   * a paid member opened from the people drawer's רישום תשלום. The drawer used
+   * to print `0 מתוך 0` with both arrows disabled: a run that does not exist.
+   */
+  it('shows no stepper at all for a member who is not in the run', () => {
+    renderDrawer({ position: { index: 0, total: 0 }, nextPersonId: null });
+    expect(screen.queryByText(/מתוך/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'הבא' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'הקודם' })).toBeNull();
+  });
+
+  /**
    * Scoped to the list: `פייבוקס` is also one of the six channel radios, so an
    * unscoped `getByText` matches two nodes and fails on ambiguity.
    */

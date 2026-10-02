@@ -299,7 +299,9 @@ export default async function MoneyPage(
         ) : null}
       </section>
 
-      <section>
+      {/* `id="budget"` is where the nav's תקציב entry (`/money#budget`) lands;
+          each line below carries `budget-<id>` for the palette and the task rows. */}
+      <section id="budget">
         <div className={styles.sectionTitle}>
           <h2 className={styles.sectionHeading}>התקציב</h2>
           <span className={styles.sectionNote}>

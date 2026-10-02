@@ -27,7 +27,8 @@ vi.mock('next/navigation', () => ({
 
 import { ToastProvider } from '@/components/ui/toaster';
 import { parsePeopleQuery } from '@/lib/members/people-views';
-import { PeopleTable, DUES_STATE_LABELS } from './people-table';
+import { DUES_STATE_LABELS } from '@/lib/members/labels';
+import { PeopleTable } from './people-table';
 
 function dues(overrides: Partial<PersonDues> = {}): PersonDues {
   return {

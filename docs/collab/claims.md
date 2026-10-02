@@ -1,6 +1,6 @@
 # What is in flight
 
-**updated: 2026-10-02** · if that date is more than a day or two old, **this file
+**updated: 2026-10-03** · if that date is more than a day or two old, **this file
 is fiction**. Read §1 before you act on §3.
 
 This is the only document in `docs/collab/` that goes stale, and it goes stale
@@ -55,6 +55,7 @@ touching `docs/reference-data/`, and pushing or force-pushing shared branches.
 |---|---|---|---|---|
 | @josefcohen96 | Money — the ledger’s שיוך לחשבון drawer | `fix/ledger-attribute-visible` | **unmerged** — commit `1e6ceec` (the placing happens in a drawer, on every view) was pushed after #51 had merged at `4a83f97`, so it sits on the branch and not on `main`. Three files under `src/app/(admin)/money/ledger/`, no migration, no shared surface. Needs its own PR, or deleting | 2026-10-02 |
 | @josefcohen96 | Money — a balance is a count as of a day | `feat/counted-balance-history` | **PR #52 closed unmerged** by its author on 2026-09-27, unreviewed. Production was recounted that evening (19,042 in וייבז קלוז פרינדס, `opening_on` 2026-09-27) with every movement left unplaced, which holds under `main`’s plain opening-plus-movements rule; placing any movement again needs this branch’s rule or it moves the figure. Decision pending: reopen, or leave the 19 rows unplaced | 2026-10-02 |
+| @josefcohen96 | UI audit fixes — people dues labels, budget anchors, payment stepper | `fix/ui-audit-labels-budget-stepper` | **ready for review** — three findings from a browser walk of every page on a production build (2026-10-02): `DUES_STATE_LABELS` moved out of the `'use client'` people table into `src/lib/members/labels.ts` (its Server-Component readers got a client reference, so the peek pill, the סינון menu and the dues chip were blank); `/money#budget` and `/money#budget-<id>` now exist (the nav, the palette and the task rows pointed at ids that were never rendered; the task row pointed at `/money/budget`, a 404); the payment drawer drops its stepper instead of printing `0 מתוך 0`. Plus a guard test for the client-boundary class. Touches shared surfaces: `src/components/ui/table.tsx` (optional `anchor` on a row), this file. Everything else is Phase 4 — review goes to @Yarin-Shitrit | 2026-10-03 |
 | @Yarin-Shitrit | Phase 4 UI redesign | merged to `main` | **done** — all twelve plans landed; CI green on `main` at 2640 tests in 203 files, 17m21s | 2026-09-19 |
 | @Yarin-Shitrit | Promotion gate + sheet retirement | merged to `main`; migration `0008` pending | **active** | 2026-09-19 |
 | @Yarin-Shitrit | Collaboration harness + CI | merged to `main` | done | 2026-09-19 |
