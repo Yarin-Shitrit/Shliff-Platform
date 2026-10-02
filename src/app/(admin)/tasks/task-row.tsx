@@ -144,7 +144,7 @@ function BudgetCell({ row }: { row: TaskCoverage }) {
         <Money agorot={row.budgetLineTotalAgorot} />
         {/* Every figure links to the page that can change it. */}
         <span className={styles.sub}>
-          <Link className="link" href={`/money/budget#line-${row.budgetLineId}`}>
+          <Link className="link" href={`/money#budget-${row.budgetLineId}`}>
             <bdi>{row.budgetLineLabel}</bdi>
           </Link>
         </span>

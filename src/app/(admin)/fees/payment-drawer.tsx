@@ -265,7 +265,11 @@ export function PaymentDrawer({
         </>
       )}
       closeHref={closeHref}
-      stepper={{
+      /* `payablePosition` answers `index: 0` for a person who is not in this
+         view's run — a paid person opened from the people drawer's רישום תשלום,
+         say. A stepper then read `0 מתוך 0` with both arrows dead, which is a
+         promise of a run that does not exist; no stepper is the honest shape. */
+      stepper={position.index === 0 ? undefined : {
         position: position.index,
         total: position.total,
         previousHref: prevPersonId

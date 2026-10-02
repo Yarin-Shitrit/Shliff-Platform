@@ -131,7 +131,7 @@ describe('TaskRow', () => {
     });
     expect(screen.getByText('41,300 ₪')).toBeDefined();
     expect(screen.getByRole('link', { name: 'גנרטור וחשמל' }).getAttribute('href'))
-      .toBe('/money/budget#line-b1');
+      .toBe('/money#budget-b1');
   });
 
   it('marks a legacy per-task amount as unlinked rather than hiding it', () => {

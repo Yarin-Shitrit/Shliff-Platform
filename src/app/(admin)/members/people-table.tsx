@@ -19,26 +19,11 @@ import { Pill, type PillTone } from '@/components/ui/pill';
 import { Icon } from '@/components/ui/icon';
 import { Money, DateText } from '@/components/format';
 import { formatShekels } from '@/lib/money';
-import { roleLabel } from '@/lib/members/labels';
+import { roleLabel, DUES_STATE_LABELS } from '@/lib/members/labels';
 import type { DuesState, PersonListRow } from '@/lib/members/people-list';
 import { peekHref, type RawParams } from '@/lib/members/people-views';
 import { PeopleBulkBar } from './people-bulk-bar';
 import styles from './people.module.css';
-
-/**
- * Ungendered, every one of them. The mock writes `טרם שילמה` / `שילמה חלקית` /
- * `פטורה`; the schema records no gender and the roster is mixed, so those
- * forms cannot be produced from the data at all. These are passive and say the
- * same thing about the due rather than about the person.
- */
-export const DUES_STATE_LABELS: Record<DuesState, string> = {
-  paid: 'שולם',
-  offset: 'שולם בקיזוז',
-  partial: 'שולם חלקית',
-  unpaid: 'טרם שולם',
-  exempt: 'פטור',
-  none: 'אין חיוב',
-};
 
 const DUES_STATE_TONE: Record<DuesState, PillTone> = {
   paid: 'ok',

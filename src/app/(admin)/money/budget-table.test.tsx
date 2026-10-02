@@ -26,6 +26,13 @@ function tableFor(lines: BudgetLineActuals[], sources = new Map<string, SourceCe
 }
 
 describe('BudgetTable', () => {
+  it('gives every line a DOM anchor, so /money#budget-<id> lands on it', () => {
+    const { container } = tableFor([line({ id: 'b1' })]);
+    const row = container.querySelector('#budget-b1');
+    expect(row).not.toBeNull();
+    expect(row?.tagName).toBe('TR');
+  });
+
   it('heads the planned column בתקציב, because the row now carries three amounts', () => {
     tableFor([line()]);
     expect(screen.getByRole('columnheader', { name: 'בתקציב' })).toBeTruthy();

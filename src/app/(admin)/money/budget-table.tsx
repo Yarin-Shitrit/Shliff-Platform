@@ -138,6 +138,7 @@ export function BudgetTable({ groups, totals, sources, seasonName }: {
       columns={columns}
       rows={groups.flatMap((group) => group.lines.map((line) => ({
         id: line.id,
+        anchor: `budget-${line.id}`,
         data: line,
         group: groupLabel(group),
         tone: line.arithmeticOff ? ('warn' as const) : undefined,
