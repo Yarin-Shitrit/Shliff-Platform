@@ -5,6 +5,29 @@
 
 .page { display: block; }
 
+/* `אנשים › רוני אדלר` — the way back, above the name. The chevron points
+   the way the writing runs: `left` in RTL is "deeper". */
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-block-end: var(--space-3);
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.crumbs a {
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.crumbs a:hover { color: var(--ink); text-decoration: underline; }
+
+.crumbs span[aria-current] {
+  color: var(--ink);
+  font-weight: 500;
+}
+
 .head {
   display: flex;
   align-items: flex-start;
@@ -52,7 +75,10 @@
  */
 .tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  /* 9rem is the narrowest a tile can be and still carry `דמי קאמפ · ברן 26`
+     on one line; below that `auto-fit` wraps the row rather than squeezing
+     four tiles into a phone's width one word per line. */
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
   gap: var(--space-3);
   margin-block-end: var(--space-5);
 }
@@ -71,6 +97,22 @@
   border-block-end: 1px solid var(--line);
   margin-block-end: var(--space-4);
   flex-wrap: wrap;
+}
+
+/* 767.98px — a phone. Six tabs scroll on one line, as the list's saved
+   views do, rather than wrapping into two rows of unequal length. */
+@media (max-width: 767.98px) {
+  .tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    contain: inline-size;
+  }
+
+  .tabs::-webkit-scrollbar { display: none; }
+
+  .tab,
+  .tabCurrent { white-space: nowrap; flex-shrink: 0; }
 }
 
 .tab,
@@ -112,11 +154,70 @@
   .body { grid-template-columns: minmax(0, 1fr); }
 }
 
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-inline-size: 0;
+}
+
 .main h2,
 .side h2 {
   margin: 0 0 var(--space-2);
   font-size: var(--text-label);
   color: var(--ink-2);
+}
+
+.block { min-inline-size: 0; }
+
+/* A heading with the one verb that belongs beside it. */
+.blockHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.blockHead h2 { margin: 0; }
+
+.blockHead + * { margin-block-start: var(--space-2); }
+
+.seasonCell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.duesCell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.cellNote {
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+/* A cell that holds a sentence — a payment's note, a task's title — wraps
+   where the kit's cells do not, so one long note cannot push the whole table
+   into a sideways scroll. */
+.wrapCell {
+  display: inline-block;
+  white-space: normal;
+  max-inline-size: 28ch;
+  line-height: var(--leading-cell);
+}
+
+/* A shift's window is two lines in a cell, not one long one. */
+.timing {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--text-meta);
+  line-height: 1.3;
 }
 
 .side {
@@ -127,15 +228,6 @@
   border-radius: var(--radius-panel);
   padding: var(--space-4);
   background: var(--panel);
-}
-
-.plainList {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
 }
 
 .facts {

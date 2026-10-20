@@ -180,7 +180,16 @@ export function PeopleTable({
         <SeasonChips years={seasonYears} own={row.seasons.map((s) => s.year)} />
       ),
     },
-    { key: 'dues', card: 'meta', header: 'דמי קאמפ', cell: (row) => <DuesCell row={row} /> },
+    {
+      key: 'dues',
+      card: 'meta',
+      /* The column is the scope season's due and nobody else's, so the header
+         says which season — the mock draws `דמי קאמפ · ברן 26`, and a lead
+         reading `טרם שולם` beside a name should not have to remember which
+         year's bill that is. */
+      header: seasonName === null ? 'דמי קאמפ' : `דמי קאמפ · ${seasonName}`,
+      cell: (row) => <DuesCell row={row} />,
+    },
     {
       key: 'balance',
       card: 'figure',
@@ -236,6 +245,8 @@ export function PeopleTable({
         /* Omitted for an empty list: a row of zeroes under an empty state is
            noise, and the empty state is already saying the useful thing. */
         totals={rows.length === 0 ? undefined : totalsFor(rows, viewLabel)}
+        totalsLabel="סיכום"
+        rowActionsHeader="פעולות"
         rowActions={(row) => (
           <Link
             className={styles.rowact}

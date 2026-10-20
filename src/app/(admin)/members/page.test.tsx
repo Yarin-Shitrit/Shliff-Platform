@@ -278,6 +278,55 @@ describe('/members — the names waiting to be attributed', () => {
   });
 });
 
+describe('/members — the header and the create drawer', () => {
+  it('offers אדם חדש as a link that puts the create drawer in the URL', async () => {
+    listPeopleForSeason.mockResolvedValue([row()]);
+    const { container } = await renderPage({ season: 's26' });
+    const add = screen.getByRole('link', { name: /אדם חדש/ });
+    expect(add.getAttribute('href')).toBe('/members?season=s26&act=new');
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('opens the create drawer on ?act=new with the scope season chosen, and cancels back to the list', async () => {
+    listPeopleForSeason.mockResolvedValue([row()]);
+    await renderPage({ season: 's26', view: 'leads', act: 'new' });
+    const dialog = screen.getByRole('dialog', { name: 'אדם חדש' });
+    const season = within(dialog).getByLabelText('שיוך לשנה') as HTMLSelectElement;
+    expect(season.value).toBe('s26');
+    expect(within(dialog).getByRole('button', { name: 'הוסף אדם' })).toBeTruthy();
+    expect(within(dialog).getByRole('link', { name: 'ביטול' }).getAttribute('href'))
+      .toBe('/members?season=s26&view=leads');
+  });
+
+  /* The season used to be implicit, so a lead exporting for one season
+     silently got a different one's roster. The button names the season and
+     carries `download`, so the browser saves the file instead of the client
+     router fetching it as a payload. */
+  it('exports the scope season by name, as a download', async () => {
+    listPeopleForSeason.mockResolvedValue([row()]);
+    await renderPage({ season: 's25' });
+    const link = screen.getByRole('link', { name: /ייצוא ברן 25/ });
+    expect(link.getAttribute('href')).toBe('/members/export?season=s25');
+    expect(link.hasAttribute('download')).toBe(true);
+  });
+
+  it('sends an empty camp into the create drawer rather than to the bottom of the page', async () => {
+    listPeopleForSeason.mockResolvedValue([]);
+    await renderPage({ view: 'all' });
+    expect(screen.getByRole('link', { name: 'הוספת אדם' }).getAttribute('href')).toContain('act=new');
+  });
+
+  /* A decision banner under a 38-row table is a banner nobody sees. */
+  it('puts the unattributed-names banner above the table', async () => {
+    listUnlinkedNames.mockResolvedValue([{ aliasId: 'al1', alias: 'רוני' }]);
+    listPeopleForSeason.mockResolvedValue([row()]);
+    await renderPage();
+    const banner = screen.getByRole('region', { name: 'שמות שלא שויכו' });
+    const table = screen.getByRole('table', { name: 'אנשים' });
+    expect(banner.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
 describe('/members — the drawers', () => {
   it('renders no drawer when the URL names none', async () => {
     listPeopleForSeason.mockResolvedValue([row()]);

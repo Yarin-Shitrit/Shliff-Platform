@@ -33,14 +33,12 @@
   align-items: center;
   gap: var(--space-2);
   flex-wrap: wrap;
+  /* Sits on the title's line, not the subline's. */
+  padding-block-start: var(--space-1);
 }
 
 .toolbar {
   margin-block: var(--space-3);
-}
-
-.section {
-  margin-block-start: var(--space-5);
 }
 
 /* ── The name cell ───────────────────────────────────────────── */
@@ -143,47 +141,44 @@
   font-weight: 400;
 }
 
+/* ── The forms ───────────────────────────────────────────────── */
+
 /*
- * Carried over from members.module.css, rewritten against plan 01's tokens.
- * `add-member.tsx` is the only consumer of the two form rules.
+ * `add-member.tsx`'s two forms. The controls themselves are the kit's
+ * (`Field`, `TextInput`, `Select`, `Button`), so nothing here draws a box or
+ * a focus ring — these rules only lay the fields out: stacked inside the
+ * אדם חדש drawer, in a row under דף אדם's seasons table.
  */
 
-.addMember,
-.addToSeason {
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.inlineForm {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--space-3);
-  margin-block: var(--space-3);
 }
 
-.addMember label,
-.addToSeason label {
+.inlineForm > * {
+  flex: 1 1 10rem;
+}
+
+.formActions {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  font-size: var(--text-label);
-  color: var(--ink-2);
+  align-items: center;
+  gap: var(--space-2);
+  flex: 0 0 auto;
 }
 
-.addMember input,
-.addMember select,
-.addToSeason select {
-  block-size: var(--control-h);
-  padding-inline: var(--space-3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-control);
-  background: var(--panel);
-  color: var(--ink);
-  font: inherit;
-  font-size: var(--text-body);
-}
-
-.addMember input:focus-visible,
-.addMember select:focus-visible,
-.addToSeason select:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 1px;
+.formError {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--bad);
+  font-size: var(--text-meta);
 }
 
 /* ── The peek drawer ─────────────────────────────────────────── */

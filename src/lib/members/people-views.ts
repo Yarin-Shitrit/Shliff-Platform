@@ -1,6 +1,6 @@
 import { normalizeHebrew } from '@/lib/text/normalize';
 import {
-  ACT_PARAM, PEEK_PARAM, closePeekHref, openPeekHref,
+  ACT_PARAM, PEEK_PARAM, closePeekHref, openActHref, openPeekHref,
 } from '@/components/ui/drawer-url';
 import type { DuesState, PersonListRow } from './people-list';
 
@@ -27,6 +27,13 @@ export const PEOPLE_PATH = '/members';
  * functions at the bottom of this file so that no component spells any of them.
  */
 export const MERGE_WITH_PARAM = 'with';
+
+/**
+ * The create drawer's verb. A new person has no record to peek at, so it is
+ * `?act=new` with no `peek` — the kit's `openActHref` shape, the same one
+ * `/tasks` uses for `?act=task`.
+ */
+export const ADD_ACT = 'new';
 
 export interface PeopleQuery {
   view: PeopleView;
@@ -172,6 +179,11 @@ function carried(params: RawParams): URLSearchParams {
 /** `?peek=<id>` over whatever the list is currently showing. */
 export function peekHref(params: RawParams, personId: string): string {
   return openPeekHref(PEOPLE_PATH, carried(params), personId);
+}
+
+/** `?act=new` over whatever the list is currently showing: the create drawer. */
+export function addPersonHref(params: RawParams): string {
+  return openActHref(PEOPLE_PATH, carried(params), ADD_ACT);
 }
 
 /** `?peek=<absorbed>&act=merge&with=<survivor>` — A3's two-record action drawer. */

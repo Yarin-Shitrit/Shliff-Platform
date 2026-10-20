@@ -128,14 +128,17 @@ describe('PeekDrawer — what it refuses to be', () => {
     expect(container.querySelector('button[type="submit"]')).toBeNull();
   });
 
+  /* /fees opens its payment drawer from `?peek=<personId>&act=pay`, so the
+     hand-off lands with that drawer open on this person — a `person` param
+     nobody read used to leave a lead on the fees list, hunting for the row. */
   it('offers exactly three ways out, all of them links', async () => {
     await renderDrawer();
     expect(screen.getByRole('link', { name: 'פתיחת הרשומה המלאה' }).getAttribute('href'))
       .toBe('/members/p1');
     expect(screen.getByRole('link', { name: 'רישום תשלום' }).getAttribute('href'))
-      .toBe('/fees?season=s26&person=p1');
+      .toBe('/fees?season=s26&peek=p1&act=pay');
     expect(screen.getByRole('link', { name: 'שיבוץ למשימה' }).getAttribute('href'))
-      .toBe('/tasks?season=s26&person=p1');
+      .toBe('/tasks?season=s26');
   });
 
   it('closes back to the list it was opened from, filters and all', async () => {

@@ -201,6 +201,84 @@ describe('/members/[id] — the tiles', () => {
   });
 });
 
+describe('/members/[id] — the header hand-offs', () => {
+  it('leads back to the list on the same season', async () => {
+    await renderPage({ season: 's26' });
+    const crumbs = screen.getByRole('navigation', { name: 'מיקום' });
+    expect(within(crumbs).getByRole('link', { name: 'אנשים' }).getAttribute('href'))
+      .toBe('/members?season=s26');
+  });
+
+  /* /fees opens its payment drawer from `?peek=<personId>&act=pay`; /tasks has
+     no per-person drawer and lands on the board. */
+  it('hands off to the fees drawer and the task board on the scope season', async () => {
+    await renderPage();
+    expect(screen.getByRole('link', { name: /רישום תשלום/ }).getAttribute('href'))
+      .toBe('/fees?season=s26&peek=p1&act=pay');
+    expect(screen.getByRole('link', { name: /שיבוץ למשימה/ }).getAttribute('href'))
+      .toBe('/tasks?season=s26');
+  });
+
+  it('withholds רישום תשלום for a person who is not on the scope season', async () => {
+    personDossier.mockResolvedValue(dossier({ seasons: [] }));
+    await renderPage();
+    expect(screen.queryByRole('link', { name: /רישום תשלום/ })).toBeNull();
+  });
+});
+
+describe('/members/[id] — the overview', () => {
+  it('draws one row per season with that season\'s due beside the membership', async () => {
+    personDossier.mockResolvedValue(dossier({ dues: [due({ paidAgorot: 50000, outstandingAgorot: 70000 })] }));
+    await renderPage();
+    const table = screen.getByRole('table', { name: 'השנים בקאמפ' });
+    expect(within(table).getByText('נוכחית')).toBeTruthy();
+    expect(within(table).getByText('חבר/ה')).toBeTruthy();
+    expect(within(table).getByText('שולם חלקית')).toBeTruthy();
+    expect(within(table).getByText('1,200 ₪')).toBeTruthy();
+    expect(within(table).getByText('500 ₪')).toBeTruthy();
+    expect(within(table).getByText('700 ₪')).toBeTruthy();
+  });
+
+  it('says in words when a season has no due, rather than leaving the cell blank', async () => {
+    await renderPage();
+    const table = screen.getByRole('table', { name: 'השנים בקאמפ' });
+    expect(within(table).getByText('לא הונפק חיוב')).toBeTruthy();
+  });
+});
+
+describe('/members/[id] — the payments tab', () => {
+  const PAYMENT = {
+    id: 'pay1', amountAgorot: 50000, channel: 'ביט', paidOn: new Date('2026-07-01'),
+    note: 'חלק ראשון', recordedBy: 'lead@shliff.camp', accountId: null,
+  };
+
+  it('lists the payments themselves, not the dues again', async () => {
+    personDossier.mockResolvedValue(dossier({ dues: [due()] }));
+    listPayments.mockResolvedValue([PAYMENT]);
+    await renderPage({ tab: 'payments' });
+    const table = screen.getByRole('table', { name: 'תשלומים שנרשמו' });
+    expect(within(table).getByText('ביט')).toBeTruthy();
+    expect(within(table).getByText('500 ₪')).toBeTruthy();
+    expect(within(table).getByText('חלק ראשון')).toBeTruthy();
+    expect(within(table).getByText('01/07/26')).toBeTruthy();
+    expect(listPayments).toHaveBeenCalledWith(expect.anything(), 'd1');
+  });
+
+  it('counts the payments on the tab', async () => {
+    personDossier.mockResolvedValue(dossier({ dues: [due()] }));
+    listPayments.mockResolvedValue([PAYMENT, { ...PAYMENT, id: 'pay2' }]);
+    await renderPage();
+    const tab = screen.getAllByRole('tab').find((t) => t.textContent?.includes('תשלומים'))!;
+    expect(tab.textContent).toContain('2');
+  });
+
+  it('says so when nothing was ever paid', async () => {
+    personDossier.mockResolvedValue(dossier({ dues: [due()] }));
+    await renderPage({ tab: 'payments' });
+    expect(screen.getByText('כאן יופיעו תשלומים. עדיין לא נוספו.')).toBeTruthy();
+  });
+});
+
 describe('/members/[id] — the tabs', () => {
   it('is six links and never a button, so a tab can be sent to someone', async () => {
     await renderPage();

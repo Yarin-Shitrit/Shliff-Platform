@@ -5,6 +5,8 @@ import type { FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { isBlank } from '@/lib/text/normalize';
 import { ROLE_LABELS } from '@/lib/members/labels';
+import { Field, Select, TextInput } from '@/components/ui/field';
+import { Button, ButtonLink } from '@/components/ui/button';
 import { addMemberAction, createPersonAction } from './actions';
 import styles from './people.module.css';
 
@@ -23,11 +25,29 @@ const ROLES = Object.keys(ROLE_LABELS);
  * Blankness is checked client-side before the action is ever called, and a
  * name that resolves to an existing person is refused server-side — this
  * form only surfaces that refusal, it never decides identity itself.
+ *
+ * Both refusals land on the name field: the blank one is about the name, and
+ * the server's `כבר קיים אדם בשם …` names the spelling that collided, so the
+ * field it sits under is the one a lead has to change.
+ *
+ * The form lives in a drawer the list opens from `?act=new` (R6), so it takes
+ * the list's own URL as `doneHref` and goes back there once the person
+ * exists — the list re-renders with the new row and the drawer is gone.
+ * Without `doneHref` it refreshes in place, which is what a bare form
+ * rendered on a page wants.
  */
-export function AddMember({ seasons }: { seasons: SeasonOption[] }) {
+export function AddMember({
+  seasons, defaultSeasonId, doneHref,
+}: {
+  seasons: SeasonOption[];
+  /** The season the list is scoped to — chosen in the box, never silently. */
+  defaultSeasonId?: string;
+  /** Where to go once the person exists; also the cancel link. */
+  doneHref?: string;
+}) {
   const router = useRouter();
   const [name, setName] = useState('');
-  const [seasonId, setSeasonId] = useState('');
+  const [seasonId, setSeasonId] = useState(defaultSeasonId ?? '');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,8 +65,13 @@ export function AddMember({ seasons }: { seasons: SeasonOption[] }) {
       const result = await createPersonAction(name, seasonId || undefined);
       if (result.ok) {
         setName('');
-        setSeasonId('');
-        router.refresh();
+        setSeasonId(defaultSeasonId ?? '');
+        if (doneHref === undefined) {
+          router.refresh();
+        } else {
+          router.replace(doneHref);
+          router.refresh();
+        }
       } else {
         setError(result.error);
       }
@@ -56,27 +81,39 @@ export function AddMember({ seasons }: { seasons: SeasonOption[] }) {
   }
 
   return (
-    <form onSubmit={submit} className={styles.addMember}>
-      <label>
-        שם
-        <input
-          type="text"
+    <form onSubmit={submit} className={styles.form} noValidate>
+      <Field
+        id="add-person-name"
+        label="שם"
+        hint="כפי שהשם מופיע בקבצים, כדי שהייבוא ימצא את האדם."
+        error={error ?? undefined}
+      >
+        <TextInput
+          id="add-person-name"
           value={name}
-          onChange={(event) => setName(event.target.value)}
+          onChange={setName}
           placeholder="שם מלא"
         />
-      </label>
-      <label>
-        שיוך לשנה
-        <select value={seasonId} onChange={(event) => setSeasonId(event.target.value)}>
-          <option value="">— ללא שנה כרגע —</option>
-          {seasons.map((season) => (
-            <option key={season.id} value={season.id}>{season.name}</option>
-          ))}
-        </select>
-      </label>
-      <button type="submit" disabled={pending}>הוסף אדם</button>
-      {error && <p className="badge-warn" role="alert">{error}</p>}
+      </Field>
+      <Field
+        id="add-person-season"
+        label="שיוך לשנה"
+        hint="אפשר גם בלי שנה, ולשייך אחר כך מדף האדם."
+      >
+        <Select
+          id="add-person-season"
+          value={seasonId}
+          onChange={setSeasonId}
+          emptyLabel="ללא שנה כרגע"
+          options={seasons.map((season) => ({ value: season.id, label: season.name }))}
+        />
+      </Field>
+      <div className={styles.formActions}>
+        <Button tone="primary" type="submit" disabled={pending}>הוסף אדם</Button>
+        {doneHref === undefined ? null : (
+          <ButtonLink tone="ghost" href={doneHref} replace>ביטול</ButtonLink>
+        )}
+      </div>
     </form>
   );
 }
@@ -127,25 +164,29 @@ export function AddToSeason({
   }
 
   return (
-    <form onSubmit={submit} className={styles.addToSeason}>
-      <label>
-        שנה
-        <select value={seasonId} onChange={(event) => setSeasonId(event.target.value)}>
-          {available.map((season) => (
-            <option key={season.id} value={season.id}>{season.name}</option>
-          ))}
-        </select>
-      </label>
-      <label>
-        תפקיד
-        <select value={role} onChange={(event) => setRole(event.target.value)}>
-          {ROLES.map((value) => (
-            <option key={value} value={value}>{ROLE_LABELS[value]}</option>
-          ))}
-        </select>
-      </label>
-      <button type="submit" disabled={pending}>שייך לשנה</button>
-      {error && <p className="badge-warn" role="alert">{error}</p>}
+    <form onSubmit={submit} className={styles.inlineForm} noValidate>
+      <Field id="add-to-season-season" label="שנה">
+        <Select
+          id="add-to-season-season"
+          value={seasonId}
+          onChange={setSeasonId}
+          options={available.map((season) => ({ value: season.id, label: season.name }))}
+        />
+      </Field>
+      <Field id="add-to-season-role" label="תפקיד">
+        <Select
+          id="add-to-season-role"
+          value={role}
+          onChange={setRole}
+          options={ROLES.map((value) => ({ value, label: ROLE_LABELS[value] }))}
+        />
+      </Field>
+      <div className={styles.formActions}>
+        <Button tone="primary" type="submit" disabled={pending}>שייך לשנה</Button>
+      </div>
+      {/* Not a field's own refusal: `אין הרשאה` is about the lead, not the
+          season or the role, so it sits under the whole form. */}
+      {error === null ? null : <p className={styles.formError} role="alert">{error}</p>}
     </form>
   );
 }
