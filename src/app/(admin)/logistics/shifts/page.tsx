@@ -8,7 +8,7 @@ import {
   listSchedule, listShiftTypes, shiftTypeById, buildBoard, personLoad, summarizeSchedule,
   shiftRoster, windowFor,
 } from '@/lib/logistics/shifts';
-import { EVENT_CLOSES, EVENT_OPENS, formatMinutes } from '@/lib/logistics/shift-time';
+import { EVENT_CLOSES, EVENT_OPENS, campDayOf, formatMinutes } from '@/lib/logistics/shift-time';
 import {
   parseShiftsQuery, shiftsHref, typeHref, newTypeHref, scheduleHref, printHref,
   type RawParams,
@@ -77,6 +77,9 @@ export default async function ShiftsPage(
      printed sheet name the year on screen even when the URL named none. */
   const here: RawParams = { ...params, season: current.id };
   const window = windowFor(current.startsOn);
+  /* The camp's civil day now, so the board can mark today while the event
+     is on. The page is dynamic, so this is read on every request. */
+  const today = campDayOf(new Date());
 
   const [slots, types] = await Promise.all([listSchedule(db, current.id), listShiftTypes(db)]);
   const roster = await shiftRoster(db, current.id, slots);
@@ -109,6 +112,9 @@ export default async function ShiftsPage(
         crumbs={[{ label: 'לוגיסטיקה', href: '/logistics' }, { label: 'משמרות' }]}
         chip={<SeasonChip seasonName={current.name} />}
         actions={(
+          /* Laptop only (`.topActions`): on a phone these move to the fixed
+             bar at the end of this page, because the top bar has no room for
+             them there — see `shifts.module.css`. */
           <span className={styles.topActions}>
             {/*
               A plain anchor, not the kit's `ButtonLink`: the sheet is a
@@ -232,7 +238,7 @@ export default async function ShiftsPage(
               : { label: 'שיבוץ ללוח', href: scheduleHref(here) }}
           />
         ) : (
-          <ScheduleGrid board={board} days={window.days} params={here} currentTaskId={query.peek} />
+          <ScheduleGrid board={board} days={window.days} params={here} currentTaskId={query.peek} today={today} />
         )
       ) : null}
 
@@ -277,6 +283,43 @@ export default async function ShiftsPage(
           empty={<EmptyState kind="nothing-this-season" noun="חברים" seasonName={current.name} action={{ label: 'מעבר לאנשים', href: '/members' }} />}
         />
       </section>
+
+      {/*
+        Phone only (`.phoneActions`): the same verbs as the top bar's, fixed
+        above the tab bar where a thumb reaches them from anywhere on the
+        board. Scheduling is the wide one — putting people on tonight's shift
+        is what this screen is for on a phone; the new type and the sheet are
+        its icon neighbours. Without a gate date there is nothing to schedule
+        yet, and adding a type is the one verb left. The same URLs as the top
+        bar's, so there is one way to open each drawer and one sheet to print.
+      */}
+      <div className={styles.phoneActions}>
+        {window === null ? (
+          <ButtonLink tone="primary" href={newTypeHref(here)}>
+            <Icon name="plus" size={16} />
+            סוג משמרת
+          </ButtonLink>
+        ) : (
+          <>
+            <ButtonLink tone="primary" href={scheduleHref(here)}>
+              <Icon name="plus" size={16} />
+              שיבוץ ללוח
+            </ButtonLink>
+            <ButtonLink href={newTypeHref(here)} iconLabel="סוג משמרת חדש">
+              <Icon name="clock" size={16} />
+            </ButtonLink>
+            <a
+              className={cx(buttonStyles.btn, buttonStyles.icon)}
+              href={printHref(here)}
+              target="_blank"
+              rel="noopener"
+              aria-label="הדפסה"
+            >
+              <Icon name="download" size={16} />
+            </a>
+          </>
+        )}
+      </div>
 
       {peekedType !== null ? <TypeDrawer type={peekedType} closeHref={closeHref} /> : null}
       {query.creatingType ? <TypeDrawer type={null} closeHref={closeHref} /> : null}
