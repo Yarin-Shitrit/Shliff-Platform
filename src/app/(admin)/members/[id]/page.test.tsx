@@ -42,6 +42,7 @@ vi.mock('../actions', () => ({
   /* A38: the page binds the wrapper, not the raw action, and reads the param
      name from the same module the action writes it with. */
   unlinkAliasAndReturn: vi.fn(),
+  renamePersonAndReturn: vi.fn(),
   UNLINK_ERROR_PARAM: 'unlinkError',
 }));
 
@@ -370,5 +371,51 @@ describe('/members/[id] — a refused unlink says so', () => {
   it('says nothing when nothing was refused', async () => {
     await renderPage({ tab: 'aliases' });
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+/**
+ * The rename form is URL-driven, like the unlink dialog: the screen's
+ * client-component budget (R7) is spent, and a Server Component with a bound
+ * Server Action needs none. So the control is a link, the form appears on
+ * `?rename=1`, and both ways out go to the same page without the param.
+ */
+describe('/members/[id] — renaming', () => {
+  it('offers a link to the rename form that keeps the season and the tab', async () => {
+    await renderPage({ season: 's26', tab: 'aliases' });
+    const link = screen.getByRole('link', { name: 'שינוי שם' });
+    const href = link.getAttribute('href') ?? '';
+    expect(href.startsWith('/members/p1?')).toBe(true);
+    const query = new URLSearchParams(href.split('?')[1]);
+    expect(query.get('rename')).toBe('1');
+    expect(query.get('season')).toBe('s26');
+    expect(query.get('tab')).toBe('aliases');
+    expect(screen.queryByRole('textbox', { name: /שם חדש/ })).toBeNull();
+  });
+
+  it('opens a form prefilled with the current name, posting the bound action', async () => {
+    const { container } = await renderPage({ rename: '1', tab: 'aliases' });
+    const input = screen.getByRole('textbox', { name: /שם חדש/ }) as HTMLInputElement;
+    expect(input.value).toBe('רוני אדלר');
+    expect(input.name).toBe('displayName');
+    expect(input.required).toBe(true);
+    expect(screen.getByRole('button', { name: 'שמירת השם' })).toBeTruthy();
+    expect(container.querySelector('form')).toBeTruthy();
+    // The heading stays: the form edits the name, it does not replace it.
+    expect(screen.getByRole('heading', { level: 1, name: 'רוני אדלר' })).toBeTruthy();
+    // The control that opened the form is gone while it is open.
+    expect(screen.queryByRole('link', { name: 'שינוי שם' })).toBeNull();
+  });
+
+  it('cancels back to the same page without the param', async () => {
+    await renderPage({ rename: '1', tab: 'aliases' });
+    expect(screen.getByRole('link', { name: 'ביטול' }).getAttribute('href'))
+      .toBe('/members/p1?tab=aliases');
+  });
+
+  it('renders the refusal the action handed back in the URL', async () => {
+    await renderPage({ renameError: 'כבר קיים אדם בשם עמירם דהן — לא ניתן לתת לשניים את אותו השם.' });
+    expect(screen.getByRole('alert').textContent)
+      .toBe('כבר קיים אדם בשם עמירם דהן — לא ניתן לתת לשניים את אותו השם.');
   });
 });

@@ -10,7 +10,7 @@ import {
 import {
   createPerson, createPersonFromAlias, linkAlias, unlinkAlias,
   mergePersons, unmergePerson, mergeConflicts, previewMerge, aliasUnlinkTarget,
-  splitAlias,
+  splitAlias, renamePerson,
 } from '@/lib/members/link';
 
 const LEAD = 'lead@shliff.camp';
@@ -445,5 +445,95 @@ describe('splitAlias', () => {
     const aliasId = await recordUnlinkedName(db, 'רוני ו-גיל', 'import');
     await splitAlias(db, aliasId, ['רוני', 'גיל'], 'lead@shliff.test');
     expect(await db.select().from(persons)).toEqual([]);
+  });
+});
+
+describe('renamePerson', () => {
+  let db: TestDb;
+  beforeEach(async () => { db = await createTestDb(); });
+
+  /**
+   * The whole reason the old name is kept: `resolveName` matches on aliases
+   * and nothing else, so a rename that dropped the old spelling would make
+   * every workbook that still uses it come back as an unlinked name — next
+   * to the record it belongs to.
+   */
+  it('changes the display name and keeps both spellings reaching the person', async () => {
+    const id = await createPerson(db, 'אופק', LEAD);
+    const result = await renamePerson(db, id, 'אופק כהן', LEAD);
+    expect(result).toEqual({ aliasAdded: true });
+
+    const [person] = await db.select().from(persons).where(eq(persons.id, id));
+    expect(person.displayName).toBe('אופק כהן');
+    expect((await resolveName(db, 'אופק')).personId).toBe(id);
+    expect((await resolveName(db, 'אופק כהן')).personId).toBe(id);
+
+    const added = (await db.select().from(personAliases)
+      .where(eq(personAliases.personId, id)))
+      .find((alias) => alias.alias === 'אופק כהן');
+    expect(added?.source).toBe('manual');
+    expect(added?.confirmedBy).toBe(LEAD);
+  });
+
+  it('does not write a second alias when the new name is already one of theirs', async () => {
+    const id = await createPerson(db, 'אופק', LEAD);
+    const aliasId = await recordUnlinkedName(db, 'אופק כהן', 'import');
+    await linkAlias(db, aliasId, id, LEAD);
+
+    expect(await renamePerson(db, id, 'אופק כהן', LEAD)).toEqual({ aliasAdded: false });
+    const aliases = await db.select().from(personAliases).where(eq(personAliases.personId, id));
+    expect(aliases).toHaveLength(2);
+    const [person] = await db.select().from(persons).where(eq(persons.id, id));
+    expect(person.displayName).toBe('אופק כהן');
+  });
+
+  /* `createPerson`'s rule: the geresh is evidence, the ASCII apostrophe is
+     only the lookup key. */
+  it('stores the spelling as typed and normalizes only the alias key', async () => {
+    const id = await createPerson(db, 'רנצו', LEAD);
+    await renamePerson(db, id, '  ראנצ׳ו ', LEAD);
+
+    const [person] = await db.select().from(persons).where(eq(persons.id, id));
+    expect(person.displayName).toBe('ראנצ׳ו');
+    expect((await resolveName(db, "ראנצ'ו")).personId).toBe(id);
+  });
+
+  it('refuses a name that already belongs to somebody else, and names them', async () => {
+    const ofek = await createPerson(db, 'אופק', LEAD);
+    await createPerson(db, 'עמירם דהן', LEAD);
+
+    await expect(renamePerson(db, ofek, 'עמירם דהן', LEAD))
+      .rejects.toThrow('כבר קיים אדם בשם עמירם דהן — לא ניתן לתת לשניים את אותו השם.');
+    const [person] = await db.select().from(persons).where(eq(persons.id, ofek));
+    expect(person.displayName).toBe('אופק');
+  });
+
+  /* A partial match is two different people who share a first name, which
+     the roster really has; refusing it would be guessing they are one. */
+  it('allows a name that only partially matches somebody else', async () => {
+    const ofek = await createPerson(db, 'אופק', LEAD);
+    await createPerson(db, 'דניאל פינטו', LEAD);
+    await expect(renamePerson(db, ofek, 'דניאל ענבר', LEAD)).resolves.toEqual({ aliasAdded: true });
+  });
+
+  it('refuses a blank name, a directional mark included', async () => {
+    const id = await createPerson(db, 'אופק', LEAD);
+    await expect(renamePerson(db, id, '  ', LEAD)).rejects.toThrow('שם לא יכול להיות ריק');
+    await expect(renamePerson(db, id, '‏', LEAD)).rejects.toThrow('שם לא יכול להיות ריק');
+  });
+
+  it('refuses an id that names nobody, malformed id included, in Hebrew', async () => {
+    await expect(renamePerson(db, 'not-a-uuid', 'אופק', LEAD)).rejects.toThrow('האדם לא נמצא.');
+    await expect(renamePerson(db, '00000000-0000-4000-8000-000000000000', 'אופק', LEAD))
+      .rejects.toThrow('האדם לא נמצא.');
+  });
+
+  it('refuses a record that was merged away, and points at where the name lives', async () => {
+    const target = await createPerson(db, 'אופק', LEAD);
+    const source = await createPerson(db, 'אופק כהן', LEAD);
+    await mergePersons(db, source, target, LEAD);
+
+    await expect(renamePerson(db, source, 'מישהו', LEAD))
+      .rejects.toThrow('הרשומה הזו מוזגה לתוך אדם אחר — השם נערך שם.');
   });
 });

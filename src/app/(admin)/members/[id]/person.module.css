@@ -226,3 +226,25 @@
   background: var(--bad-soft);
   color: var(--ink);
 }
+
+/*
+ * The rename form, under the name it replaces. `align-items: flex-end` puts
+ * the verbs on the input's baseline rather than the label's; the hint under
+ * the field is what pushes them down, and that is where a reader's eye is.
+ */
+.renameForm {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-block-start: var(--space-3);
+}
+
+.renameForm > :first-child { flex: 1 1 16rem; }
+
+.renameActions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  padding-block-end: var(--space-1);
+}

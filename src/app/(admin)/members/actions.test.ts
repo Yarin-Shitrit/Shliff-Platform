@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  */
 const {
   requireAdmin, addMember, issueFlatDueFor, revalidatePath,
-  unlinkAlias, aliasUnlinkTarget, redirect,
+  unlinkAlias, aliasUnlinkTarget, redirect, renamePerson,
 } = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   addMember: vi.fn(),
@@ -16,6 +16,7 @@ const {
   revalidatePath: vi.fn(),
   unlinkAlias: vi.fn(),
   aliasUnlinkTarget: vi.fn(),
+  renamePerson: vi.fn(),
   redirect: vi.fn((to: string) => { throw new Error(`NEXT_REDIRECT:${to}`); }),
 }));
 vi.mock('@/db', () => ({ db: {} }));
@@ -28,16 +29,18 @@ vi.mock('next/navigation', () => ({ redirect }));
 vi.mock('@/lib/members/roster', () => ({ addMember }));
 vi.mock('@/lib/fees/dues', () => ({ issueFlatDueFor }));
 vi.mock('@/lib/members/link', () => ({
-  unlinkAlias, aliasUnlinkTarget,
+  unlinkAlias, aliasUnlinkTarget, renamePerson,
   createPerson: vi.fn(), createPersonFromAlias: vi.fn(),
   linkAlias: vi.fn(), mergePersons: vi.fn(),
 }));
 
 import {
   addToSeasonBulkAction, issueDuesBulkAction, unlinkAliasAction,
-  unlinkAliasAndReturn,
+  unlinkAliasAndReturn, renamePersonAction, renamePersonAndReturn,
 } from './actions';
 import { UNLINK_ERROR_PARAM } from './unlink-error';
+import { RENAME_ERROR_PARAM } from './rename-params';
+import { HebrewRefusal, HEBREW_FALLBACK } from '@/lib/errors/hebrew';
 
 const LAST_ALIAS_REFUSAL =
   'לא ניתן לבטל את הכינוי האחרון של אדם — בלעדיו אי אפשר יהיה לזהות אותו בקבצים.';
@@ -216,5 +219,75 @@ describe('unlinkAliasAndReturn — A38', () => {
     await expect(unlinkAliasAndReturn('al1', BACK)).rejects.toThrow(/NEXT_REDIRECT/);
     expect(redirectedTo()).toBe(BACK);
     expect(unlinkAlias).toHaveBeenCalledWith({}, 'al1');
+  });
+});
+
+describe('renamePersonAction', () => {
+  it('refuses without admin and touches nothing', async () => {
+    requireAdmin.mockResolvedValue({ ok: false });
+    expect(await renamePersonAction('p1', 'אופק כהן')).toEqual({ ok: false, error: 'אין הרשאה' });
+    expect(renamePerson).not.toHaveBeenCalled();
+  });
+
+  it('renames as the signed-in lead and revalidates the record, the roster and the inbox', async () => {
+    renamePerson.mockResolvedValue({ aliasAdded: true });
+    expect(await renamePersonAction('p1', 'אופק כהן')).toEqual({ ok: true });
+    expect(renamePerson).toHaveBeenCalledWith({}, 'p1', 'אופק כהן', 'lead@shliff.camp');
+    expect(revalidatePath).toHaveBeenCalledWith('/members/p1');
+    expect(revalidatePath).toHaveBeenCalledWith('/members');
+    expect(revalidatePath).toHaveBeenCalledWith('/inbox');
+  });
+
+  /* The library's refusal is the sentence on screen — written once, there. */
+  it('hands the library refusal back verbatim', async () => {
+    renamePerson.mockRejectedValue(new HebrewRefusal('שם לא יכול להיות ריק'));
+    expect(await renamePersonAction('p1', '  ')).toEqual({ ok: false, error: 'שם לא יכול להיות ריק' });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  /* R9: a driver fault must never reach a Hebrew screen as the English it threw. */
+  it('replaces anything else with the Hebrew fallback', async () => {
+    renamePerson.mockRejectedValue(new Error('connection refused'));
+    expect(await renamePersonAction('p1', 'אופק')).toEqual({ ok: false, error: HEBREW_FALLBACK });
+  });
+});
+
+/** A38 again: the person page posts a plain form, so a refusal rides the URL. */
+describe('renamePersonAndReturn — A38', () => {
+  const BACK = '/members/p1?season=s26&tab=aliases';
+
+  function redirectedTo(): string {
+    const call = redirect.mock.calls.at(-1);
+    return (call?.[0] ?? '') as string;
+  }
+
+  function form(name: string | null): FormData {
+    const data = new FormData();
+    if (name !== null) data.set('displayName', name);
+    return data;
+  }
+
+  it('reads the name from the form and goes back clean when it went through', async () => {
+    renamePerson.mockResolvedValue({ aliasAdded: true });
+    await expect(renamePersonAndReturn('p1', BACK, form('אופק כהן'))).rejects.toThrow(/NEXT_REDIRECT/);
+    expect(renamePerson).toHaveBeenCalledWith({}, 'p1', 'אופק כהן', 'lead@shliff.camp');
+    expect(redirectedTo()).toBe(BACK);
+  });
+
+  it('hands a refusal back in the URL rather than dropping it', async () => {
+    renamePerson.mockRejectedValue(new HebrewRefusal('כבר קיים אדם בשם עמירם דהן — לא ניתן לתת לשניים את אותו השם.'));
+    await expect(renamePersonAndReturn('p1', BACK, form('עמירם דהן'))).rejects.toThrow(/NEXT_REDIRECT/);
+
+    const target = redirectedTo();
+    expect(target.startsWith(`${BACK}&${RENAME_ERROR_PARAM}=`)).toBe(true);
+    expect(decodeURIComponent(target.split(`${RENAME_ERROR_PARAM}=`)[1]))
+      .toBe('כבר קיים אדם בשם עמירם דהן — לא ניתן לתת לשניים את אותו השם.');
+  });
+
+  it('treats a form with no name field as a blank name, and still answers in Hebrew', async () => {
+    renamePerson.mockRejectedValue(new HebrewRefusal('שם לא יכול להיות ריק'));
+    await expect(renamePersonAndReturn('p1', '/members/p1', form(null))).rejects.toThrow(/NEXT_REDIRECT/);
+    expect(renamePerson).toHaveBeenCalledWith({}, 'p1', '', 'lead@shliff.camp');
+    expect(redirectedTo().startsWith(`/members/p1?${RENAME_ERROR_PARAM}=`)).toBe(true);
   });
 });
