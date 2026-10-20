@@ -115,7 +115,9 @@ export function TypeDrawer({ type, closeHref }: { type: ShiftType | null; closeH
       closeHref={closeHref}
       phone="full"
       footer={(
-        <>
+        /* `.footActions`: one row on a laptop; on a phone the primary verb
+           takes a row of its own and the rest share the next. */
+        <span className={styles.footActions}>
           <Button tone="primary" onClick={() => { void save(); }} disabled={pending}>
             {creating ? 'הוספת הסוג' : 'שמירה'}
           </Button>
@@ -129,7 +131,7 @@ export function TypeDrawer({ type, closeHref }: { type: ShiftType | null; closeH
               הוצאה משימוש
             </Button>
           )}
-        </>
+        </span>
       )}
     >
       <form className={styles.form} onSubmit={save}>

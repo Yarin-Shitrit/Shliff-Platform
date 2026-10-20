@@ -130,6 +130,16 @@ export function scheduleHref(
 }
 
 /**
+ * The id of one event day's heading on the board, and so the target of the
+ * phone's day strip: `#shift-day-2` lands on the third day. One spelling,
+ * because a link to an id that is spelled differently scrolls nowhere and
+ * says nothing.
+ */
+export function dayAnchorId(index: number): string {
+  return `shift-day-${index}`;
+}
+
+/**
  * The printable sheet: the same season, as a page of its own. Built from
  * `shiftsHref` so the sheet and the screen cannot name different seasons.
  */

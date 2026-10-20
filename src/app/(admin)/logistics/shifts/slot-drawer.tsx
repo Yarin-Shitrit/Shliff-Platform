@@ -230,7 +230,9 @@ export function SlotDrawer({
       width={500}
       phone="full"
       footer={(
-        <>
+        /* `.footActions`: one row on a laptop; on a phone the primary verb
+           takes a row of its own and the rest share the next. */
+        <span className={styles.footActions}>
           <Button tone="primary" onClick={() => { void save(); }} disabled={pending}>
             {creating ? 'הוספה ללוח' : 'שמירת השעות והכמות'}
           </Button>
@@ -242,7 +244,7 @@ export function SlotDrawer({
               ביטול המשמרת
             </Button>
           )}
-        </>
+        </span>
       )}
     >
       <form className={styles.form} onSubmit={save}>
