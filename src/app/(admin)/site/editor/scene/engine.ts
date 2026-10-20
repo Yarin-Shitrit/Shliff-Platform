@@ -854,7 +854,9 @@ export class SceneEngine {
   private syncScene(): void {
     const { store, ui } = this.options.props();
     const plot = store.doc.plot;
-    const key = `${plot.widthCm}x${plot.depthCm}:${plot.gridCm}:${ui.theme}`;
+    const sides = plot.sides ?? null;
+    const sidesKey = sides === null ? '' : [sides.northCm, sides.southCm, sides.westCm, sides.eastCm].join(',');
+    const key = `${plot.widthCm}x${plot.depthCm}:${sidesKey}:${plot.gridCm}:${ui.theme}`;
     if (key !== this.groundKey) {
       if (this.ground !== null) {
         this.scene.remove(this.ground);

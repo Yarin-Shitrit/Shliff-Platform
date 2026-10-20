@@ -22,7 +22,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cx } from '@/components/ui/cx';
 import { Icon } from '@/components/ui/icon';
 import { formatDateFull, formatTime } from '@/lib/dates';
-import { formatSize } from '@/lib/site/geometry';
+import { formatPlot } from '@/lib/site/geometry';
 import type { EditorPlot } from '@/lib/site/editor/model';
 import { samePlot, snapshotNameRefusal, type SnapshotSummary } from '@/lib/site/snapshots';
 import { isolate } from '../notices';
@@ -177,8 +177,8 @@ export function PlansCard(props: PlansCardProps): ReactElement {
                 {otherPlot ? (
                   <p className={styles.plotNote}>
                     {'נשמרה על מגרש '}
-                    <Link href={plotHref}>{formatSize(plan.plot.widthCm, plan.plot.depthCm)}</Link>
-                    {`; המגרש עכשיו ${formatSize(plot.widthCm, plot.depthCm)}. הפריטים ייטענו למקומם, וסימון ״מחוץ למגרש״ יגיד מה חורג.`}
+                    <Link href={plotHref}>{formatPlot(plan.plot)}</Link>
+                    {`; המגרש עכשיו ${formatPlot(plot)}. הפריטים ייטענו למקומם, וסימון ״מחוץ למגרש״ יגיד מה חורג.`}
                   </p>
                 ) : null}
               </li>

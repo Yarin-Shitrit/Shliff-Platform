@@ -4,6 +4,7 @@ import { isBlank } from '@/lib/text/normalize';
 import { sitePlanSnapshots } from '@/db/schema/site';
 import type { EditorItem, EditorLine, EditorPlot } from './editor/model';
 import { groupIdOf } from './editor/model';
+import type { PlotSides } from './geometry';
 import { lineEndsRefusal, newItemRefusal, newLineRefusal } from './editor/ops';
 import { planById } from './plan';
 
@@ -40,6 +41,8 @@ export interface SnapshotPlot {
   depthCm: number;
   gridCm: number;
   northDeg: number;
+  /** The plot's four sides when it was not a rectangle; absent in a plan saved before plots had sides, which is the rectangle. */
+  sides?: PlotSides | null;
 }
 
 /** What one saved plan holds: the map's arrangement, and the plot it was drawn on. */
@@ -70,13 +73,37 @@ function isWhole(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value);
 }
 
-/** The plot's four figures as the editor holds them — the same shape `EditorPlot` carries, less its id. */
+/** A copy of four sides, or null for a rectangle; nothing else from the request comes along. */
+function sidesOf(sides: PlotSides | null | undefined): PlotSides | null {
+  return sides === undefined || sides === null
+    ? null
+    : { northCm: sides.northCm, southCm: sides.southCm, westCm: sides.westCm, eastCm: sides.eastCm };
+}
+
+/** Four whole sides, or none; anything else is not a plot a plan can be saved on. */
+function validSides(sides: unknown): boolean {
+  if (sides === undefined || sides === null) return true;
+  if (typeof sides !== 'object') return false;
+  const { northCm, southCm, westCm, eastCm } = sides as Record<string, unknown>;
+  return isWhole(northCm) && isWhole(southCm) && isWhole(westCm) && isWhole(eastCm);
+}
+
+function sameSides(a: PlotSides | null | undefined, b: PlotSides | null | undefined): boolean {
+  const left = sidesOf(a);
+  const right = sidesOf(b);
+  if (left === null || right === null) return left === right;
+  return left.northCm === right.northCm && left.southCm === right.southCm
+    && left.westCm === right.westCm && left.eastCm === right.eastCm;
+}
+
+/** The plot's figures as the editor holds them — the same shape `EditorPlot` carries, less its id. */
 export function snapshotPlotOf(plot: EditorPlot): SnapshotPlot {
-  return { widthCm: plot.widthCm, depthCm: plot.depthCm, gridCm: plot.gridCm, northDeg: plot.northDeg };
+  return { widthCm: plot.widthCm, depthCm: plot.depthCm, gridCm: plot.gridCm, northDeg: plot.northDeg, sides: sidesOf(plot.sides) };
 }
 
 export function samePlot(a: SnapshotPlot, b: SnapshotPlot): boolean {
-  return a.widthCm === b.widthCm && a.depthCm === b.depthCm && a.gridCm === b.gridCm && a.northDeg === b.northDeg;
+  return a.widthCm === b.widthCm && a.depthCm === b.depthCm && a.gridCm === b.gridCm && a.northDeg === b.northDeg
+    && sameSides(a.sides, b.sides);
 }
 
 /**
@@ -101,8 +128,8 @@ export function snapshotContentRefusal(content: unknown): string | null {
   if (typeof content !== 'object' || content === null) return 'a saved plan must hold a plot, its items and its lines';
   const { plot, items, lines } = content as { plot?: unknown; items?: unknown; lines?: unknown };
   if (typeof plot !== 'object' || plot === null) return 'a saved plan must hold a plot, its items and its lines';
-  const { widthCm, depthCm, gridCm, northDeg } = plot as Record<string, unknown>;
-  if (!isWhole(widthCm) || !isWhole(depthCm) || !isWhole(gridCm) || !isWhole(northDeg)) {
+  const { widthCm, depthCm, gridCm, northDeg, sides } = plot as Record<string, unknown>;
+  if (!isWhole(widthCm) || !isWhole(depthCm) || !isWhole(gridCm) || !isWhole(northDeg) || !validSides(sides)) {
     return 'a saved plan must hold a plot, its items and its lines';
   }
   if (!Array.isArray(items) || !Array.isArray(lines)) return 'a saved plan must hold a plot, its items and its lines';
@@ -137,6 +164,7 @@ function storedContent(content: SnapshotContent): SnapshotContent {
     plot: {
       widthCm: content.plot.widthCm, depthCm: content.plot.depthCm,
       gridCm: content.plot.gridCm, northDeg: content.plot.northDeg,
+      sides: sidesOf(content.plot.sides),
     },
     items: content.items.map((entry) => ({
       id: entry.id, kind: entry.kind, label: entry.label.trim(),

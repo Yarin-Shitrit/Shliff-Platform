@@ -2,7 +2,7 @@ import type { SiteItemKind } from '@/db/schema/site';
 import { itemHeight, type KindDefaults } from './defaults';
 import {
   areaM2, groundRect, outsideIds, overlap, overlapPairs, ropeBandPairs, ropeOffsetCm, shadeCounts, shadeState,
-  unionAreaM2, type PlacedItem, type Plot, type Rect, type ShadeCounts, type ShadeState,
+  unionAreaM2, type PlacedItem, type Plot, type PlotSides, type Rect, type ShadeCounts, type ShadeState,
 } from './geometry';
 
 /**
@@ -23,6 +23,8 @@ export interface PlotShape {
   widthCm: number;
   depthCm: number;
   gridCm: number;
+  /** Four fence lengths when the plot is not a rectangle (`geometry.ts`); absent or null is the rectangle. */
+  sides?: PlotSides | null;
 }
 
 /** What an item needs to carry for the flags to be computed. */
@@ -123,7 +125,7 @@ export function derive<Item extends ItemShape>(
   plot: PlotShape, items: readonly Item[], defaults: KindDefaults = {},
 ): Derived<Item> {
   const placed = items.map((item) => toPlaced(item, defaults));
-  const bounds: Plot = { widthCm: plot.widthCm, depthCm: plot.depthCm };
+  const bounds: Plot = { widthCm: plot.widthCm, depthCm: plot.depthCm, sides: plot.sides ?? null };
   // By footprint: a net whose ropes cross the fence is outside (D8).
   const outside = new Set(outsideIds(placed, bounds));
   const pairs = overlapPairs(placed);

@@ -1,6 +1,6 @@
 import type { SiteItemKind, SiteLineKind, SiteLinePoint } from '@/db/schema/site';
 import type { KindDefaults } from '../defaults';
-import type { Rect } from '../geometry';
+import type { PlotSides, Rect } from '../geometry';
 import { SITE_KINDS } from '../kinds';
 import { LINE_KINDS } from '../lines';
 import type { UnderlayCalibration, UnderlayPlacement } from '../underlay';
@@ -90,8 +90,16 @@ export function nextFacing(facing: number): number {
 
 export interface EditorPlot {
   id: string;
+  /** The plot's box — the plot itself unless it has `sides`. */
   widthCm: number;
   depthCm: number;
+  /**
+   * The four fence lengths of a plot that is not a rectangle
+   * (`geometry.ts`'s `PlotSides`). Absent and null both mean the rectangle:
+   * optional so a doc built before plots had sides (every test fixture) is
+   * still a doc; `loadDoc` always sets it.
+   */
+  sides?: PlotSides | null;
   gridCm: number;
   /** The compass bearing of the map's "up"; 0 is north. */
   northDeg: number;

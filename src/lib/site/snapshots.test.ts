@@ -7,8 +7,8 @@ import type { EditorItem, EditorLine } from './editor/model';
 import { applySiteOps, createPlan, loadDoc } from './plan';
 import { restoreOps } from './editor/restore';
 import {
-  deleteSnapshot, listSnapshots, MAX_SNAPSHOTS_PER_PLAN, readSnapshot, snapshotContentRefusal, snapshotNameRefusal,
-  takeSnapshot, type SnapshotContent,
+  deleteSnapshot, listSnapshots, MAX_SNAPSHOTS_PER_PLAN, readSnapshot, samePlot, snapshotContentRefusal, snapshotNameRefusal,
+  snapshotPlotOf, takeSnapshot, type SnapshotContent,
 } from './snapshots';
 
 const LEAD = 'lead@shliff.camp';
@@ -163,5 +163,41 @@ describe('saved plans', () => {
     const back = (await loadDoc(db, planId))!;
     expect(back.doc.items).toEqual(kept.doc.items);
     expect(back.doc.lines).toEqual(kept.doc.lines);
+  });
+});
+
+describe('a saved plan on a four-sided plot', () => {
+  const CAMP = { northCm: 3300, southCm: 3500, westCm: 2500, eastCm: 2500 };
+  const FOUR = { ...PLAN_PLOT, widthCm: 3500, depthCm: 2498, sides: CAMP };
+
+  it('tells a plan saved on four sides from one saved on a box, and a plan from before sides from a rectangle not at all', () => {
+    expect(samePlot(FOUR, { ...FOUR, sides: { ...CAMP } })).toBe(true);
+    expect(samePlot(FOUR, { ...FOUR, sides: null })).toBe(false);
+    expect(samePlot(FOUR, { ...FOUR, sides: { ...CAMP, southCm: 3400 } })).toBe(false);
+    expect(samePlot(PLAN_PLOT, { ...PLAN_PLOT, sides: null })).toBe(true);
+  });
+
+  it('keeps the four figures of the sides and nothing else, or null for a rectangle', () => {
+    expect(snapshotPlotOf({ id: 'p1', ...FOUR, sides: { ...CAMP, extra: 1 } as typeof CAMP }))
+      .toEqual({ widthCm: 3500, depthCm: 2498, gridCm: 50, northDeg: 0, sides: CAMP });
+    expect(snapshotPlotOf({ id: 'p1', ...PLAN_PLOT })).toEqual({ ...PLAN_PLOT, sides: null });
+  });
+
+  it('refuses sides that are not four whole numbers, and takes four or none', () => {
+    const bad = 'a saved plan must hold a plot, its items and its lines';
+    expect(snapshotContentRefusal({ plot: { ...PLAN_PLOT, sides: { northCm: 3300 } }, items: [], lines: [] })).toBe(bad);
+    expect(snapshotContentRefusal({ plot: { ...PLAN_PLOT, sides: 'wide' }, items: [], lines: [] })).toBe(bad);
+    expect(snapshotContentRefusal({ plot: { ...PLAN_PLOT, sides: { ...CAMP, westCm: 25.5 } }, items: [], lines: [] })).toBe(bad);
+    expect(snapshotContentRefusal({ plot: FOUR, items: [], lines: [] })).toBeNull();
+    expect(snapshotContentRefusal({ plot: { ...PLAN_PLOT, sides: null }, items: [], lines: [] })).toBeNull();
+  });
+
+  it('lists the sides a plan was saved on', async () => {
+    const db = await createTestDb();
+    const [season] = await db.insert(seasons).values({ name: 'ברן 26', year: 2026, flatRate: '1200.00' }).returning();
+    const planId = await createPlan(db, season.id, { ...PLOT, sides: CAMP }, LEAD);
+    await takeSnapshot(db, planId, 'על המגרש האמיתי', { plot: FOUR, items: [], lines: [] }, LEAD);
+    const [listed] = await listSnapshots(db, planId);
+    expect(listed.plot).toEqual({ widthCm: 3500, depthCm: 2498, gridCm: 50, northDeg: 0, sides: CAMP });
   });
 });

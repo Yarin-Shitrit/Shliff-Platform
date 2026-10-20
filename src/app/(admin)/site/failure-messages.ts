@@ -18,6 +18,7 @@ export const SITE_ERRORS: HebrewErrors = [
   ['this season already has a map', 'לשנה הזו כבר יש מפה. אפשר לערוך אותה, לא ליצור שנייה'],
   ['that season has no map to copy', 'לשנה שנבחרה אין מפה להעתיק ממנה'],
   ['a plot side must be', 'צלע המגרש צריכה להיות בין מטר אחד ל־500 מטר, במספר שלם של סנטימטרים'],
+  ['a plot\'s four sides must close', 'ארבע הצלעות האלה לא נסגרות לגדר אחת. צפון ודרום מקבילים, ומערב ומזרח צריכים להגיע מהאחד לשני — צלע קצרה מדי, או צפון ודרום שווים עם מערב ומזרח שונים, לא עושים מגרש'],
   ['a grid step must be', 'צעד הרשת צריך להיות בין 10 ל־200 סנטימטר'],
   ['unknown item kind', 'הסוג הזה אינו אחד מסוגי הפריטים שהמפה מכירה'],
   ['an item must have a label', 'לפריט חייב להיות שם, אחרת אי אפשר לזהות אותו במפה'],
@@ -75,5 +76,6 @@ export function siteFailureMessage(error: unknown): string {
 export const LABEL_REQUIRED = SITE_ERRORS.find(([prefix]) => prefix === 'an item must have a label')![1];
 export const LINE_LABEL_REQUIRED = SITE_ERRORS.find(([prefix]) => prefix === 'a line must have a label')![1];
 export const PLOT_SIDE_INVALID = SITE_ERRORS.find(([prefix]) => prefix === 'a plot side must be')![1];
+export const PLOT_SIDES_OPEN = SITE_ERRORS.find(([prefix]) => prefix === 'a plot\'s four sides must close')![1];
 export const ITEM_SIDE_INVALID = SITE_ERRORS.find(([prefix]) => prefix === 'an item side must be')![1];
 export const NORTH_INVALID = SITE_ERRORS.find(([prefix]) => prefix === 'north must be')![1];

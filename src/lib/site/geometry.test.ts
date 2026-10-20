@@ -4,6 +4,7 @@ import {
   overlap, overlapPairs, resize, shadeCounts, shadeState, shadedRect, snap,
   turnAboutCentre, unionRect, wholeCm, type PlacedItem, type Rect,
   gapObstacles, groundRect, inRopeBand, ropeBandPairs, ropeOffsetCm, unionAreaM2,
+  fenceSpan, formatPlot, fourSidedPlot, isRectangle, plotCorners,
 } from './geometry';
 
 const PLOT = { widthCm: 2600, depthCm: 2400 };
@@ -343,5 +344,95 @@ describe('the gaps while dragging, with ropes — the "walkway"', () => {
     expect(gapObstacles([{ ...NET, ropeCm: 0 }], moving)).toEqual([]);
     const sofa = item({ id: 's', kind: 'sofa', x: 700, y: 1800, width: 200, depth: 90 });
     expect(gapObstacles([sofa], moving)).toEqual([{ x: 700, y: 1800, width: 200, depth: 90 }]);
+  });
+});
+
+describe('a four-sided plot', () => {
+  /** The camp's ground: 33 m along the north, 35 along the south, 25 down each side. */
+  const CAMP_SIDES = { northCm: 3300, southCm: 3500, westCm: 2500, eastCm: 2500 };
+  const CAMP = { widthCm: 3500, depthCm: 2498, sides: CAMP_SIDES };
+
+  it('stands the camp’s 33 / 35 × 25 / 25 fence in a 35 × 24.98 m box, the short row set in a metre on each side', () => {
+    expect(fourSidedPlot(CAMP_SIDES)).toEqual({
+      widthCm: 3500, depthCm: 2498, corners: [[100, 0], [3400, 0], [3500, 2498], [0, 2498]],
+    });
+  });
+
+  it('leans only the side that must: a straight west side and a longer east one push the south row east', () => {
+    // east = √(20² + 2²) m ≈ 20.1: the run comes out a quarter of a centimetre, rounded away.
+    expect(fourSidedPlot({ northCm: 3000, southCm: 3200, westCm: 2000, eastCm: 2010 })).toEqual({
+      widthCm: 3200, depthCm: 2000, corners: [[0, 0], [3000, 0], [3200, 2000], [0, 2000]],
+    });
+  });
+
+  it('is the rectangle when opposite sides are equal', () => {
+    expect(fourSidedPlot({ northCm: 3000, southCm: 3000, westCm: 2000, eastCm: 2000 })).toEqual({
+      widthCm: 3000, depthCm: 2000, corners: [[0, 0], [3000, 0], [3000, 2000], [0, 2000]],
+    });
+    expect(isRectangle({ widthCm: 3000, depthCm: 2000, sides: { northCm: 3000, southCm: 3000, westCm: 2000, eastCm: 2000 } })).toBe(true);
+    expect(isRectangle({ widthCm: 2600, depthCm: 2400 })).toBe(true);
+    expect(isRectangle(CAMP)).toBe(false);
+  });
+
+  it('refuses four sides that do not close, rather than guessing a shape', () => {
+    // A parallelogram: any lean would do.
+    expect(fourSidedPlot({ northCm: 3000, southCm: 3000, westCm: 2000, eastCm: 2100 })).toBeNull();
+    // A side too short for the other three to reach.
+    expect(fourSidedPlot({ northCm: 100, southCm: 5000, westCm: 100, eastCm: 100 })).toBeNull();
+    expect(fourSidedPlot({ northCm: 0, southCm: 3500, westCm: 2500, eastCm: 2500 })).toBeNull();
+    expect(fourSidedPlot({ northCm: 3300.5, southCm: 3500, westCm: 2500, eastCm: 2500 })).toBeNull();
+    // Sides that do not close fall back to the box, so nothing downstream divides by nothing.
+    expect(plotCorners({ widthCm: 3000, depthCm: 2000, sides: { northCm: 3000, southCm: 3000, westCm: 2000, eastCm: 2100 } }))
+      .toEqual([[0, 0], [3000, 0], [3000, 2000], [0, 2000]]);
+  });
+
+  it('calls a tent inside the box but past the leaning fence outside, and one flush with the fence inside', () => {
+    // The box's north-west corner is outside the fence: the north row starts a metre in.
+    expect(contains(CAMP, { x: 0, y: 0, width: 300, depth: 300 })).toBe(false);
+    expect(contains(CAMP, { x: 100, y: 0, width: 300, depth: 300 })).toBe(true);
+    expect(contains(CAMP, { x: 99, y: 0, width: 300, depth: 300 })).toBe(false);
+    // Down at the south row the fence has reached the box's edge.
+    expect(contains(CAMP, { x: 0, y: 2198, width: 300, depth: 300 })).toBe(false);
+    expect(contains(CAMP, { x: 50, y: 2198, width: 300, depth: 300 })).toBe(true);
+    // The east side leans the same way: three metres up from the south-east corner it is 12 cm in from the box.
+    expect(contains(CAMP, { x: 3200, y: 2198, width: 300, depth: 300 })).toBe(false);
+    expect(contains(CAMP, { x: 3187, y: 2198, width: 300, depth: 300 })).toBe(true);
+    expect(contains(CAMP, { x: 3188, y: 2198, width: 300, depth: 300 })).toBe(false);
+    expect(contains(CAMP, { x: 3200, y: 0, width: 300, depth: 300 })).toBe(false);
+    expect(outsideIds([item({ id: 'nw' }), item({ id: 'in', x: 100 })], CAMP)).toEqual(['nw']);
+  });
+
+  it('measures the trapezium’s area, not its box’s', () => {
+    // (33 + 35) ÷ 2 × 24.98 = 849.3.
+    expect(areaM2(CAMP)).toBe(849.3);
+    expect(areaM2({ widthCm: 3500, depthCm: 2498 })).toBe(874.3);
+  });
+
+  it('finds where a grid line meets the fence', () => {
+    const corners = plotCorners(CAMP);
+    expect(fenceSpan(corners, 'y', 0)).toEqual([100, 3400]);
+    expect(fenceSpan(corners, 'y', 1249)).toEqual([50, 3450]);
+    expect(fenceSpan(corners, 'y', 2498)).toEqual([0, 3500]);
+    // Half a metre in from the box's west edge, the fence is only there for the lower half.
+    expect(fenceSpan(corners, 'x', 50)).toEqual([1249, 2498]);
+    expect(fenceSpan(corners, 'x', 3450)).toEqual([1249, 2498]);
+    expect(fenceSpan(corners, 'x', 1750)).toEqual([0, 2498]);
+    expect(fenceSpan(corners, 'x', 3600)).toBeNull();
+    expect(fenceSpan(corners, 'y', -1)).toBeNull();
+    // On a rectangle every line runs the whole box.
+    expect(fenceSpan(plotCorners(PLOT), 'x', 0)).toEqual([0, 2400]);
+    expect(fenceSpan(plotCorners(PLOT), 'y', 2400)).toEqual([0, 2600]);
+  });
+
+  it('measures the gap to the fence along the readout’s own row, where the side leans', () => {
+    const tent: Rect = { x: 300, y: 1099, width: 300, depth: 300 };
+    // Halfway down the fence is 50 cm in from the box; everything else is too far to show.
+    expect(gapsAround(tent, [], CAMP)).toEqual([{ from: [50, 1249], to: [300, 1249], lengthCm: 250 }]);
+  });
+
+  it('says the four sides the way the camp says them, and a rectangle as before', () => {
+    expect(formatPlot(CAMP)).toBe('33 / 35 × 25 / 25 מ׳');
+    expect(formatPlot({ widthCm: 2600, depthCm: 2400 })).toBe('26 × 24 מ׳');
+    expect(formatPlot({ widthCm: 2600, depthCm: 2400, sides: null })).toBe('26 × 24 מ׳');
   });
 });

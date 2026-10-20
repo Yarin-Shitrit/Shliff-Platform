@@ -155,3 +155,21 @@ describe('the minimap', () => {
     expect(minimapPoint({ ...rect, width: 0 }, box, 10, 70)).toBeNull();
   });
 });
+
+describe('a four-sided plot on the minimap', () => {
+  it('draws the fence through its four corners', () => {
+    const map: EditorDoc = {
+      ...doc([]),
+      plot: { id: 'p1', widthCm: 3500, depthCm: 2498, sides: { northCm: 3300, southCm: 3500, westCm: 2500, eastCm: 2500 }, gridCm: 50, northDeg: 0 },
+    };
+    const { container } = render(
+      <Minimap doc={map} flags={flagsOf(map)} selection={[]} info={STILL} onJump={vi.fn()} />,
+    );
+    expect(container.querySelector('path[data-plot]')?.getAttribute('d')).toBe('M100,0 L3400,0 L3500,2498 L0,2498 Z');
+  });
+
+  it('draws a rectangle’s fence as its box', () => {
+    const { container } = renderMap([]);
+    expect(container.querySelector('path[data-plot]')?.getAttribute('d')).toBe('M0,0 L2600,0 L2600,2400 L0,2400 Z');
+  });
+});

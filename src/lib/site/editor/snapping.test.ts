@@ -60,3 +60,23 @@ describe('snapping a resize', () => {
     expect(snapResize(TENT, 'nw', 500, 0, 50, false)).toEqual({ x: 390, y: 100, width: 10, depth: 300 });
   });
 });
+
+describe('snapping on a four-sided plot', () => {
+  const CAMP = { widthCm: 3500, depthCm: 2498, sides: { northCm: 3300, southCm: 3500, westCm: 2500, eastCm: 2500 } };
+
+  it('offers no column for a leaning side: the box’s west edge is one point of the fence', () => {
+    const moving = { x: 100, y: 1000, width: 300, depth: 300 };
+    // 100 − 90 = 10 → 0 on the grid, and no line at x = 0 to take or to draw.
+    expect(snapMove(input({ plot: CAMP, moving, dxCm: -90 }))).toEqual({ dxCm: -100, dyCm: 0, guides: [] });
+    // On the box alone the same drag takes the west edge and draws it.
+    expect(snapMove(input({ plot: { widthCm: 3500, depthCm: 2498 }, moving, dxCm: -90 })).guides).toHaveLength(1);
+  });
+
+  it('offers the rows where the fence runs, and the guide spans the fence’s row', () => {
+    const moving = { x: 1000, y: 100, width: 300, depth: 300 };
+    // 100 − 85 = 15 → 0 on the grid, which is the north row: it runs from x = 100 to 3400.
+    expect(snapMove(input({ plot: CAMP, moving, dyCm: -85 }))).toEqual({
+      dxCm: 0, dyCm: -100, guides: [{ from: [40, 0], to: [3460, 0] }],
+    });
+  });
+});

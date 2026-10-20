@@ -121,7 +121,7 @@ describe('saved plans, through the editor', () => {
     const [planId, name, content] = actions.takeSnapshotAction.mock.lastCall as [string, string, { plot: unknown; items: EditorItem[]; lines: unknown[] }];
     expect(planId).toBe('p1');
     expect(name).toBe('תוכנית 1');
-    expect(content.plot).toEqual(PLAN_PLOT);
+    expect(content.plot).toEqual({ ...PLAN_PLOT, sides: null });
     expect(content.items.map((item) => [item.id, item.widthCm, item.depthCm])).toEqual([['a', 200, 300]]);
     expect(await screen.findByText('התוכנית ⁨תוכנית 1⁩ נשמרה', undefined, WAIT)).toBeTruthy();
     expect(within(card).getAllByRole('listitem').length).toBe(1);

@@ -6,6 +6,7 @@ import { seasons, tasks } from '@/db/schema/camp';
 import {
   siteItems, siteKindDefaults, siteLines, sitePlans, siteUnderlays, type SiteItemKind, type SiteLineKind, type SiteLinePoint,
 } from '@/db/schema/site';
+import { fourSidedPlot, type PlotSides } from './geometry';
 import { DEFAULT_SHADE_INSET_CM, isSiteItemKind } from './kinds';
 import { derive, type ItemFlags, type SiteCounts } from './derive';
 import type { KindDefaults } from './defaults';
@@ -34,8 +35,11 @@ const MAX_GRID_CM = 200;
 export interface SitePlan {
   id: string;
   seasonId: string;
+  /** The plot's box: the plot itself, or what a four-sided fence fits in (`site.ts`). */
   widthCm: number;
   depthCm: number;
+  /** The four fence lengths of a plot that is not a rectangle; null is the rectangle. */
+  sides: PlotSides | null;
   gridCm: number;
   /** Bumped by every saved batch; the editor's guard against overwriting (spec §6.4). */
   version: number;
@@ -94,14 +98,40 @@ export interface PlotInput {
   /** Whole degrees, 0–359. Left out, a new plan gets 0 and an existing one keeps its own. */
   northDeg?: number;
   notes?: string | null;
+  /**
+   * The four fence lengths of a plot that is not a rectangle. Null or left
+   * out is the rectangle `widthCm` × `depthCm`. Given, they are the plot, and
+   * `widthCm` and `depthCm` are replaced by the box the fence fits in
+   * (`plotShape`), so a stale pair from the form can never disagree with it.
+   */
+  sides?: PlotSides | null;
+}
+
+/** The plot as it is stored: its box, and its sides when it has them. */
+function plotShape(input: PlotInput): { widthCm: number; depthCm: number; sides: PlotSides | null } {
+  const sides = input.sides ?? null;
+  if (sides === null) return { widthCm: input.widthCm, depthCm: input.depthCm, sides: null };
+  const four = fourSidedPlot(sides);
+  if (four === null) throw new Error('a plot\'s four sides must close into one fence');
+  return {
+    widthCm: four.widthCm,
+    depthCm: four.depthCm,
+    sides: { northCm: sides.northCm, southCm: sides.southCm, westCm: sides.westCm, eastCm: sides.eastCm },
+  };
 }
 
 function validatePlot(input: PlotInput): void {
-  for (const side of [input.widthCm, input.depthCm]) {
+  const sides = input.sides ?? null;
+  const lengths = sides === null
+    ? [input.widthCm, input.depthCm]
+    : [sides.northCm, sides.southCm, sides.westCm, sides.eastCm];
+  for (const side of lengths) {
     if (!Number.isInteger(side) || side < MIN_PLOT_CM || side > MAX_PLOT_CM) {
       throw new Error('a plot side must be a whole number of centimetres between 100 and 50000');
     }
   }
+  // Four sides that cannot meet are refused before anything is written.
+  plotShape(input);
   if (!Number.isInteger(input.gridCm) || input.gridCm < MIN_GRID_CM || input.gridCm > MAX_GRID_CM) {
     throw new Error('a grid step must be a whole number of centimetres between 10 and 200');
   }
@@ -145,8 +175,7 @@ export async function createPlan(
   const [row] = await db.insert(sitePlans)
     .values({
       seasonId,
-      widthCm: input.widthCm,
-      depthCm: input.depthCm,
+      ...plotShape(input),
       gridCm: input.gridCm,
       northDeg: input.northDeg ?? 0,
       notes: cleanNotes(input.notes),
@@ -171,8 +200,7 @@ export async function setPlot(
 
   const [row] = await db.update(sitePlans)
     .set({
-      widthCm: input.widthCm,
-      depthCm: input.depthCm,
+      ...plotShape(input),
       gridCm: input.gridCm,
       ...(input.northDeg === undefined ? {} : { northDeg: input.northDeg }),
       notes: cleanNotes(input.notes),
@@ -201,7 +229,7 @@ export async function copyPlan(
   if (await planForSeason(db, toSeasonId)) throw new Error('this season already has a map');
 
   const planId = await createPlan(db, toSeasonId, {
-    widthCm: source.widthCm, depthCm: source.depthCm, gridCm: source.gridCm,
+    widthCm: source.widthCm, depthCm: source.depthCm, sides: source.sides, gridCm: source.gridCm,
     northDeg: source.northDeg, notes: source.notes,
   }, actor);
 
@@ -436,7 +464,7 @@ export function deriveView(
   plan: SitePlan, items: readonly SiteItem[], lines: readonly SiteLine[] = [], defaults: KindDefaults = {},
 ): SiteView {
   const doc: EditorDoc = {
-    plot: { id: plan.id, widthCm: plan.widthCm, depthCm: plan.depthCm, gridCm: plan.gridCm, northDeg: plan.northDeg },
+    plot: { id: plan.id, widthCm: plan.widthCm, depthCm: plan.depthCm, sides: plan.sides ?? null, gridCm: plan.gridCm, northDeg: plan.northDeg },
     items: items.map(toEditorItem),
     lines: lines.map(toEditorLine),
     defaults,
@@ -508,7 +536,7 @@ export async function loadDoc(
   return {
     version: plan.version,
     doc: {
-      plot: { id: plan.id, widthCm: plan.widthCm, depthCm: plan.depthCm, gridCm: plan.gridCm, northDeg: plan.northDeg },
+      plot: { id: plan.id, widthCm: plan.widthCm, depthCm: plan.depthCm, sides: plan.sides ?? null, gridCm: plan.gridCm, northDeg: plan.northDeg },
       items: items.map(toEditorItem),
       lines: lines.map(toEditorLine),
       defaults,

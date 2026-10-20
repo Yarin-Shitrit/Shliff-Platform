@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { SiteLineKind, SiteLinePoint } from '@/db/schema/site';
 import type { EditorItem, EditorPlot } from '@/lib/site/editor/model';
+import { fenceSpan, plotCorners, type Corners } from '@/lib/site/geometry';
 import { SITE_KINDS, type SiteKindGroup } from '@/lib/site/kinds';
 import { SCENE_ALPHA, SCENE_PALETTE, type SceneTheme } from './palette';
 
@@ -175,6 +176,30 @@ function outline(x0: number, z0: number, x1: number, z1: number, y: number): THR
   geometry.setAttribute('position', new THREE.Float32BufferAttribute([
     x0, y, z0, x1, y, z0, x1, y, z0, x1, y, z1, x1, y, z1, x0, y, z1, x0, y, z1, x0, y, z0,
   ], 3));
+  return geometry;
+}
+
+/** The ground inside the fence, flat: four corners in map centimetres, as `flat` lays a plane. */
+function fenced(corners: Corners, material: THREE.Material): THREE.Mesh {
+  /* Counter-clockwise in three's XY, so the face looks up once it is turned
+     flat the way `flat`'s plane is: a map point (x, y) goes to (x, −y) and
+     the clockwise walk round the fence is reversed. */
+  const shape = new THREE.Shape([...corners].reverse().map(([x, y]) => new THREE.Vector2(x * CM, -y * CM)));
+  const geometry = new THREE.ShapeGeometry(shape);
+  geometry.rotateX(-Math.PI / 2);
+  return new THREE.Mesh(geometry, material);
+}
+
+/** The fence as four segments, corner to corner, at height `y`. */
+function fenceOutline(corners: Corners, y: number): THREE.BufferGeometry {
+  const points: number[] = [];
+  for (let i = 0; i < 4; i += 1) {
+    const [x0, z0] = corners[i];
+    const [x1, z1] = corners[(i + 1) % 4];
+    points.push(x0 * CM, y, z0 * CM, x1 * CM, y, z1 * CM);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
   return geometry;
 }
 
@@ -444,11 +469,17 @@ export function restyleLineObject(object: THREE.Group, look: LineLook): void {
   });
 }
 
-/** The plot, the ground around it, the grid (minor and every five metres) and the dashed fence. */
+/**
+ * The plot, the ground around it, the grid (minor and every five metres) and
+ * the dashed fence. On a four-sided plot the fence is its four corners, the
+ * ground is what they enclose, and every grid line stops at the fence —
+ * the outside is the box's margin as before.
+ */
 export function buildGround(plot: EditorPlot, theme: SceneTheme): THREE.Group {
   const palette = SCENE_PALETTE[theme];
   const w = plot.widthCm * CM;
   const d = plot.depthCm * CM;
+  const corners = plotCorners(plot);
   const ground = new THREE.Group();
   ground.name = 'ground';
 
@@ -465,12 +496,18 @@ export function buildGround(plot: EditorPlot, theme: SceneTheme): THREE.Group {
 
   const margin = 200;
   layer(flat(w + margin, d + margin, w / 2, 0, d / 2, surface(palette.outside)), 'outside', -5).receiveShadow = true;
-  layer(flat(w, d, w / 2, 0, d / 2, surface(palette.plot)), 'plot', -4).receiveShadow = true;
+  layer(fenced(corners, surface(palette.plot)), 'plot', -4).receiveShadow = true;
 
   const lines = (stepCm: number): THREE.BufferGeometry => {
     const points: number[] = [];
-    for (let x = 0; x <= plot.widthCm; x += stepCm) points.push(x * CM, 0, 0, x * CM, 0, d);
-    for (let y = 0; y <= plot.depthCm; y += stepCm) points.push(0, 0, y * CM, w, 0, y * CM);
+    for (let x = 0; x <= plot.widthCm; x += stepCm) {
+      const span = fenceSpan(corners, 'x', x);
+      if (span !== null && span[1] > span[0]) points.push(x * CM, 0, span[0] * CM, x * CM, 0, span[1] * CM);
+    }
+    for (let y = 0; y <= plot.depthCm; y += stepCm) {
+      const span = fenceSpan(corners, 'y', y);
+      if (span !== null && span[1] > span[0]) points.push(span[0] * CM, 0, y * CM, span[1] * CM, 0, y * CM);
+    }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
     return geometry;
@@ -480,7 +517,7 @@ export function buildGround(plot: EditorPlot, theme: SceneTheme): THREE.Group {
   if (minorCount <= 2000) layer(new THREE.LineSegments(lines(plot.gridCm), lineMaterial(palette.gridMinor)), 'gridMinor', -2);
   layer(new THREE.LineSegments(lines(500), lineMaterial(palette.gridMajor)), 'gridMajor', -1.5);
 
-  const fence = layer(new THREE.LineSegments(outline(0, 0, w, d, 0), new THREE.LineDashedMaterial({
+  const fence = layer(new THREE.LineSegments(fenceOutline(corners, 0), new THREE.LineDashedMaterial({
     color: palette.fence, dashSize: 0.35, gapSize: 0.25, depthWrite: false,
   })), 'fence', -1);
   fence.computeLineDistances();

@@ -423,7 +423,7 @@ describe('the camp map', () => {
       const loaded = await loadDoc(db, planId);
       // The batch that put the sofa there moved the version on.
       expect(loaded?.version).toBe(1);
-      expect(loaded?.doc.plot).toEqual({ id: planId, widthCm: 2600, depthCm: 2400, gridCm: 50, northDeg: 10 });
+      expect(loaded?.doc.plot).toEqual({ id: planId, widthCm: 2600, depthCm: 2400, sides: null, gridCm: 50, northDeg: 10 });
       expect(loaded?.doc.items).toEqual([expect.objectContaining({
         id, kind: 'sofa', label: 'ספה 1', heightCm: null, locked: false, taskId: null, notes: null,
       })]);
@@ -887,5 +887,69 @@ describe('the camp map’s rope angles', () => {
     expect(after?.counts.outside).toBe(1);
     // 14 × 14 m of footprint, of which 11 × 14 m lie inside the fence.
     expect(after?.counts.takenAreaM2).toBe(154);
+  });
+});
+
+describe('the camp map’s four-sided plot', () => {
+  let db: TestDb;
+  let s26: string;
+  let s27: string;
+  /** The camp's ground: 33 m along the north, 35 along the south, 25 down each side. */
+  const CAMP = { northCm: 3300, southCm: 3500, westCm: 2500, eastCm: 2500 };
+
+  beforeEach(async () => {
+    db = await createTestDb();
+    const rows = await db.insert(seasons).values([
+      { name: 'ברן 26', year: 2026, flatRate: '1200.00' },
+      { name: 'ברן 27', year: 2027, flatRate: '1200.00' },
+    ]).returning();
+    s26 = rows.find((row) => row.year === 2026)!.id;
+    s27 = rows.find((row) => row.year === 2027)!.id;
+  });
+
+  it('stores the four sides and the box they fit in, whatever width and depth the form sent', async () => {
+    const id = await createPlan(db, s26, { widthCm: 100, depthCm: 100, gridCm: 50, sides: CAMP }, LEAD);
+    const plan = await planById(db, id);
+    expect(plan).toMatchObject({ widthCm: 3500, depthCm: 2498, sides: CAMP });
+    const loaded = await loadDoc(db, id);
+    expect(loaded?.doc.plot).toEqual({ id, widthCm: 3500, depthCm: 2498, sides: CAMP, gridCm: 50, northDeg: 0 });
+    // Nothing a request smuggled in beside the four lengths is stored.
+    await setPlot(db, id, { widthCm: 1, depthCm: 1, gridCm: 50, sides: { ...CAMP, extra: 1 } as typeof CAMP }, LEAD);
+    expect((await planById(db, id))?.sides).toEqual(CAMP);
+  });
+
+  it('refuses four sides that do not close, and a side that is a typo, before anything is written', async () => {
+    await expect(createPlan(db, s26, { ...PLOT, sides: { northCm: 3000, southCm: 3000, westCm: 2000, eastCm: 2100 } }, LEAD))
+      .rejects.toThrow('a plot\'s four sides must close');
+    await expect(createPlan(db, s26, { ...PLOT, sides: { ...CAMP, northCm: 50 } }, LEAD))
+      .rejects.toThrow('a plot side must be');
+    await expect(createPlan(db, s26, { ...PLOT, sides: { ...CAMP, eastCm: 2500.5 } }, LEAD))
+      .rejects.toThrow('a plot side must be');
+    expect(await planForSeason(db, s26)).toBeNull();
+  });
+
+  it('flags a tent in the box but past the leaning fence as outside, and counts the trapezium’s area', async () => {
+    const id = await createPlan(db, s26, { ...PLOT, sides: CAMP }, LEAD);
+    const plan = (await planById(db, id))!;
+    const inside = tentOf({ xCm: 100, yCm: 0 });
+    // Drawn after the first (sort 1): `listItems` orders by sort, then by id, and the ids are random.
+    const past = tentOf({ xCm: 0, yCm: 0, label: 'אוהל 2', sort: 1 });
+    const saved = await applySiteOps(db, id, plan.version, [{ type: 'add', item: inside }, { type: 'add', item: past }], LEAD);
+    expect(saved.status).toBe('saved');
+    const view = (await siteView(db, s26))!;
+    expect(view.items.map((item) => [item.label, item.outside])).toEqual([['אוהל 1', false], ['אוהל 2', true]]);
+    expect(view.counts.outside).toBe(1);
+    expect(view.counts.plotAreaM2).toBe(849.3);
+  });
+
+  it('is a rectangle again once the sides are cleared, and carries its sides to next year’s copy', async () => {
+    const id = await createPlan(db, s26, { ...PLOT, sides: CAMP }, LEAD);
+    const copyId = await copyPlan(db, s26, s27, LEAD);
+    expect((await planById(db, copyId))).toMatchObject({ widthCm: 3500, depthCm: 2498, sides: CAMP });
+    await setPlot(db, id, { widthCm: 2600, depthCm: 2400, gridCm: 50, sides: null }, LEAD);
+    expect(await planById(db, id)).toMatchObject({ widthCm: 2600, depthCm: 2400, sides: null });
+    // Left out altogether reads as a rectangle too — a form from before plots had sides.
+    await setPlot(db, id, { widthCm: 2700, depthCm: 2400, gridCm: 50 }, LEAD);
+    expect(await planById(db, id)).toMatchObject({ widthCm: 2700, depthCm: 2400, sides: null });
   });
 });
