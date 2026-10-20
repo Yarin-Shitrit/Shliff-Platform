@@ -932,7 +932,8 @@ describe('the camp map’s four-sided plot', () => {
     const id = await createPlan(db, s26, { ...PLOT, sides: CAMP }, LEAD);
     const plan = (await planById(db, id))!;
     const inside = tentOf({ xCm: 100, yCm: 0 });
-    const past = tentOf({ xCm: 0, yCm: 0, label: 'אוהל 2' });
+    // Drawn after the first (sort 1): `listItems` orders by sort, then by id, and the ids are random.
+    const past = tentOf({ xCm: 0, yCm: 0, label: 'אוהל 2', sort: 1 });
     const saved = await applySiteOps(db, id, plan.version, [{ type: 'add', item: inside }, { type: 'add', item: past }], LEAD);
     expect(saved.status).toBe('saved');
     const view = (await siteView(db, s26))!;
