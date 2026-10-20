@@ -676,6 +676,46 @@ Docker on the laptop that day: the apply ran through the project's own
 The local `shliff-pg` still needs the same SQL with the §6 container command
 once Docker is running.
 
+### Migration `0022` — applied to Railway on 2026-10-20
+
+`0022_shift_types` is the shift schedule (#63): two new tables,
+`shift_types` and `shift_slots`, with their foreign keys, and nothing
+else. Purely additive — no `ALTER`, no row touched.
+
+**It is read on every load of `/logistics/shifts` and its print route.**
+The screen joins `shift_slots` to the season's shift tasks, so a deploy that
+lands before the tables exist answers the error screen there. Migration
+first, merge second (§2) — this one went the other way round by a few
+minutes: #63 merged, CI and the deploy ran green, and the apply landed
+before anyone opened the page.
+
+Read-only check, before: neither table; after: both. The oracle is
+`information_schema.tables`:
+
+```sh
+docker run --rm postgres:18-alpine psql "$RAILWAY_URL" -tAc "
+select table_name from information_schema.tables
+ where table_schema='public' and table_name in ('shift_types','shift_slots')"
+```
+
+Then, from a clean checkout of `main`:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine sh -euc '
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0022_shift_types.sql
+'
+```
+
+Applied on 2026-10-20 the way `0021` was: no `psql` and no Docker on the
+laptop, so a scratchpad script using the project's `postgres` driver read
+`RAILWAY_URL` from `.env.railway`, refused unless both tables were absent,
+and ran the four statements in one transaction. Measured: `present before:
+(none)`, `present after: shift_slots, shift_types`. No existing table was
+touched, so there is no row count to compare.
+
+The local `shliff-pg` still needs `0021` and `0022` with the §6 container
+command once Docker is running.
+
 ### Copying the laptop's database up
 
 The local container is Postgres **16**; Railway is **18**. Dump with the
