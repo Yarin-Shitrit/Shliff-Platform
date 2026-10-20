@@ -68,7 +68,7 @@ const S26 = { id: 's26', name: 'ברן 26', year: 2026, flatRate: '1200.00', pla
 const S25 = { id: 's25', name: 'ברן 25', year: 2025, flatRate: '1500.00', plannedSize: 43, startsOn: null };
 
 const PLAN: SitePlan = {
-  id: 'p1', seasonId: 's26', widthCm: 2600, depthCm: 2400, gridCm: 50, notes: null,
+  id: 'p1', seasonId: 's26', widthCm: 2600, depthCm: 2400, sides: null, gridCm: 50, notes: null,
   version: 3, northDeg: 0,
   updatedAt: new Date('2026-09-01T00:00:00Z'), updatedBy: 'lead@shliff.camp',
 };

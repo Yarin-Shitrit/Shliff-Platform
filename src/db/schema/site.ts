@@ -50,8 +50,23 @@ export const sitePlans = pgTable('site_plans', {
   id: uuid('id').defaultRandom().primaryKey(),
   seasonId: uuid('season_id').notNull()
     .references(() => seasons.id, { onDelete: 'cascade' }),
+  /**
+   * The plot's bounding box. For a rectangle it is the plot; for a four-sided
+   * plot (`sides` below) it is the box the fence fits in, worked out by
+   * `plan.ts` from the sides and stored so every reader that frames, grids
+   * or centres on the plot keeps reading two integers.
+   */
   widthCm: integer('width_cm').notNull(),
   depthCm: integer('depth_cm').notNull(),
+  /**
+   * The four fence lengths of a plot that is not a rectangle (migration
+   * `0021`): the camp's ground is 33 m along the north, 35 along the south
+   * and 25 down each side. Null is a rectangle of `widthCm` × `depthCm`.
+   * North and south are taken as parallel — the map's rows — and the sides
+   * close them; `geometry.ts`'s `fourSidedPlot` turns the four lengths into
+   * corners, and refuses four that do not close rather than guessing.
+   */
+  sides: jsonb('sides').$type<{ northCm: number; southCm: number; westCm: number; eastCm: number }>(),
   gridCm: integer('grid_cm').notNull().default(50),
   /**
    * Bumped by every saved batch of edits (`applySiteOps`). The editor sends

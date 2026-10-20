@@ -162,7 +162,7 @@ export default async function SitePage(
         <PlotDrawer
           seasonId={current.id}
           seasonName={current.name}
-          plan={{ id: plan.id, widthCm: plan.widthCm, depthCm: plan.depthCm, gridCm: plan.gridCm, northDeg: plan.northDeg, notes: plan.notes }}
+          plan={{ id: plan.id, widthCm: plan.widthCm, depthCm: plan.depthCm, sides: plan.sides ?? null, gridCm: plan.gridCm, northDeg: plan.northDeg, notes: plan.notes }}
           items={items}
           defaults={loaded.doc.defaults}
           closeHref={closeHref}

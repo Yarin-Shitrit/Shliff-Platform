@@ -1,4 +1,4 @@
-import { resize, snap, wholeCm, type Handle, type Plot, type Rect } from '../geometry';
+import { fenceSpan, plotCorners, resize, snap, wholeCm, type Handle, type Plot, type Rect } from '../geometry';
 
 /**
  * Where a dragged selection lands (spec §8). The selection's box snaps to
@@ -63,8 +63,16 @@ export function snapMove(input: SnapInput): SnapResult {
   let x = snap(moving.x + dxCm, gridCm);
   let y = snap(moving.y + dyCm, gridCm);
 
-  const columns: Line[] = [0, plot.widthCm / 2, plot.widthCm].map((at) => ({ at, from: 0, to: plot.depthCm }));
-  const rows: Line[] = [0, plot.depthCm / 2, plot.depthCm].map((at) => ({ at, from: 0, to: plot.widthCm }));
+  /* The plot's edges and middles, each over the stretch the fence actually
+     has there: on a four-sided plot a leaning side is no line to snap to,
+     and the box's edge there is a point, which is left out. */
+  const corners = plotCorners(plot);
+  const fenceLine = (axis: 'x' | 'y', at: number): Line[] => {
+    const span = fenceSpan(corners, axis, at);
+    return span === null || span[1] <= span[0] ? [] : [{ at, from: span[0], to: span[1] }];
+  };
+  const columns: Line[] = [0, plot.widthCm / 2, plot.widthCm].flatMap((at) => fenceLine('x', at));
+  const rows: Line[] = [0, plot.depthCm / 2, plot.depthCm].flatMap((at) => fenceLine('y', at));
   for (const other of others) {
     for (const at of [other.x, other.x + other.width / 2, other.x + other.width]) {
       columns.push({ at, from: other.y, to: other.y + other.depth });

@@ -21,9 +21,137 @@ export interface Rect {
   depth: number;
 }
 
+/**
+ * The four fence lengths of a plot that is not a rectangle, whole
+ * centimetres, named by the map's compass: north and south are the rows the
+ * map's "up" and "down" run along, west and east the sides that close them.
+ */
+export interface PlotSides {
+  northCm: number;
+  southCm: number;
+  westCm: number;
+  eastCm: number;
+}
+
+/**
+ * The plot. `widthCm` × `depthCm` is its bounding box, and the whole of it
+ * when `sides` is absent or null. With `sides` the fence is the four-sided
+ * figure `fourSidedPlot` makes of them, drawn inside that box.
+ */
 export interface Plot {
   widthCm: number;
   depthCm: number;
+  sides?: PlotSides | null;
+}
+
+/** A point on the map, whole centimetres: x east, y south. */
+export type Corner = [number, number];
+
+/** A plot's four corners walked clockwise from the north-west: NW, NE, SE, SW. */
+export type Corners = [Corner, Corner, Corner, Corner];
+
+export interface FourSidedPlot {
+  /** The box the fence fits in. */
+  widthCm: number;
+  depthCm: number;
+  corners: Corners;
+}
+
+/**
+ * A fence a lead measured as four lengths, as corners on the map. North and
+ * south are taken as parallel, which is what fixes the shape: with
+ * Δ = south − north, the south-west corner stands p = (east² − west² − Δ²) ÷ 2Δ
+ * east of the north-west one (negative is west of it), and the fence is
+ * √(west² − p²) deep. The longer of north and south spans the box's width;
+ * the shorter sits in from the box's edge by what the sides demand.
+ *
+ * Null when no such fence closes: a side too short for the other three to
+ * meet it, or north equal to south with west not equal to east — a
+ * parallelogram, where any lean would do and the system does not pick one.
+ * Four lengths with equal opposites are the rectangle, p = 0. Whole
+ * centimetres throughout: the corners are rounded once, so the drawn sides
+ * may differ from the typed ones by under a centimetre.
+ */
+export function fourSidedPlot(sides: PlotSides): FourSidedPlot | null {
+  const { northCm: north, southCm: south, westCm: west, eastCm: east } = sides;
+  if (![north, south, west, east].every((side) => Number.isInteger(side) && side > 0)) return null;
+  const delta = south - north;
+  let run: number;
+  if (delta === 0) {
+    if (west !== east) return null;
+    run = 0;
+  } else {
+    run = (east * east - west * west - delta * delta) / (2 * delta);
+  }
+  const depthSquared = west * west - run * run;
+  if (depthSquared <= 0) return null;
+  const depthCm = Math.round(Math.sqrt(depthSquared));
+  if (depthCm < 1) return null;
+  const southWestX = Math.max(Math.round(run), 0);
+  const northWestX = Math.max(Math.round(-run), 0);
+  return {
+    widthCm: Math.max(northWestX + north, southWestX + south),
+    depthCm,
+    corners: [
+      [northWestX, 0], [northWestX + north, 0],
+      [southWestX + south, depthCm], [southWestX, depthCm],
+    ],
+  };
+}
+
+/** The plot's fence as corners: the four-sided figure of its sides, else its box. Sides that do not close fall back to the box — `plan.ts` never stores such sides. */
+export function plotCorners(plot: Plot): Corners {
+  const four = plot.sides === undefined || plot.sides === null ? null : fourSidedPlot(plot.sides);
+  if (four !== null) return four.corners;
+  return [[0, 0], [plot.widthCm, 0], [plot.widthCm, plot.depthCm], [0, plot.depthCm]];
+}
+
+/** Whether a plot's fence is its box: no sides, or sides that make a rectangle. */
+export function isRectangle(plot: Plot): boolean {
+  const corners = plotCorners(plot);
+  return corners[0][0] === corners[3][0] && corners[1][0] === corners[2][0];
+}
+
+/**
+ * Where `point` stands against the edge `from` → `to`: positive inside a
+ * clockwise fence, zero on the edge. The sign of the cross product.
+ */
+function side(from: Corner, to: Corner, point: Corner): number {
+  return (to[0] - from[0]) * (point[1] - from[1]) - (to[1] - from[1]) * (point[0] - from[0]);
+}
+
+/** A point on the fence or inside it. The fence is convex, so one side test per edge is the whole answer. */
+export function insideFence(corners: Corners, point: Corner): boolean {
+  for (let i = 0; i < 4; i += 1) {
+    if (side(corners[i], corners[(i + 1) % 4], point) < 0) return false;
+  }
+  return true;
+}
+
+/**
+ * The stretch of the line `x = at` (`axis` 'x') or `y = at` (`axis` 'y')
+ * that lies inside the fence, as `[from, to]` along the other axis in whole
+ * centimetres; null when the line misses the fence. Each edge's "inside"
+ * half-plane is linear along the line, so each one either bounds the stretch
+ * from one end or rules the whole line out. The grid is drawn with this, and
+ * the gap readouts measure to the fence with it.
+ */
+export function fenceSpan(corners: Corners, axis: 'x' | 'y', at: number): [number, number] | null {
+  let low = -Infinity;
+  let high = Infinity;
+  for (let i = 0; i < 4; i += 1) {
+    const [px, py] = corners[i];
+    const [qx, qy] = corners[(i + 1) % 4];
+    /* side(P, Q, R) ≥ 0 with one coordinate of R fixed is A·t ≥ B in the other. */
+    const [a, b] = axis === 'x'
+      ? [qx - px, (qy - py) * (at - px) + (qx - px) * py]
+      : [-(qy - py), -((qx - px) * (at - py) + (qy - py) * px)];
+    if (a > 0) low = Math.max(low, b / a);
+    else if (a < 0) high = Math.min(high, b / a);
+    else if (b > 0) return null;
+  }
+  if (low > high) return null;
+  return [wholeCm(low), wholeCm(high)];
 }
 
 /** What the geometry needs to know about an item; the rest is the screen's. */
@@ -53,12 +181,22 @@ export function snap(cm: number, step: number): number {
   return Math.round(cm / step) * step;
 }
 
-/** Fully inside, edges included: a tent flush against the fence is on the plot. */
+/**
+ * Fully inside, edges included: a tent flush against the fence is on the
+ * plot. Inside the box first; then, on a four-sided plot, each of the
+ * rectangle's corners inside the fence — enough, because the fence is convex.
+ */
 export function contains(plot: Plot, rect: Rect): boolean {
-  return rect.x >= 0
+  const inBox = rect.x >= 0
     && rect.y >= 0
     && rect.x + rect.width <= plot.widthCm
     && rect.y + rect.depth <= plot.depthCm;
+  if (!inBox || plot.sides === undefined || plot.sides === null) return inBox;
+  const corners = plotCorners(plot);
+  return insideFence(corners, [rect.x, rect.y])
+    && insideFence(corners, [rect.x + rect.width, rect.y])
+    && insideFence(corners, [rect.x + rect.width, rect.y + rect.depth])
+    && insideFence(corners, [rect.x, rect.y + rect.depth]);
 }
 
 /**
@@ -198,8 +336,18 @@ export function shadeCounts(items: readonly PlacedItem[]): ShadeCounts {
   return counts;
 }
 
-/** Square metres, to one decimal: 2600 × 2400 cm is 624. */
+/**
+ * Square metres, to one decimal: 2600 × 2400 cm is 624. A four-sided plot's
+ * is its trapezium's — the mean of north and south, times its depth — not
+ * its box's.
+ */
 export function areaM2(size: { width: number; depth: number } | Plot): number {
+  if ('widthCm' in size && size.sides !== undefined && size.sides !== null) {
+    const four = fourSidedPlot(size.sides);
+    if (four !== null) {
+      return Math.round(((size.sides.northCm + size.sides.southCm) * four.depthCm) / 2 / 1000) / 10;
+    }
+  }
   const width = 'width' in size ? size.width : size.widthCm;
   const depth = 'depth' in size ? size.depth : size.depthCm;
   return Math.round((width * depth) / 1000) / 10;
@@ -218,6 +366,17 @@ export function formatMetres(cm: number): string {
 /** `3 × 3 מ׳` */
 export function formatSize(widthCm: number, depthCm: number): string {
   return `${metres(widthCm)} × ${metres(depthCm)} מ׳`;
+}
+
+/**
+ * A plot's size in words: `26 × 24 מ׳` for a rectangle; for four sides, the
+ * two rows then the two sides, `33 / 35 × 25 / 25 מ׳` — north / south ×
+ * west / east, the way the camp says its ground.
+ */
+export function formatPlot(plot: Plot): string {
+  if (plot.sides === undefined || plot.sides === null) return formatSize(plot.widthCm, plot.depthCm);
+  const { northCm, southCm, westCm, eastCm } = plot.sides;
+  return `${metres(northCm)} / ${metres(southCm)} × ${metres(westCm)} / ${metres(eastCm)} מ׳`;
 }
 
 /** `624 מ״ר` */
@@ -274,8 +433,11 @@ export function gapsAround(rect: Rect, others: readonly Rect[], plot: Plot, maxC
   const midY = Math.round(rect.y + rect.depth / 2);
   const sharesRows = (o: Rect) => o.y < rect.y + rect.depth && o.y + o.depth > rect.y;
   const sharesColumns = (o: Rect) => o.x < rect.x + rect.width && o.x + o.width > rect.x;
-  let east = plot.widthCm - (rect.x + rect.width);
-  let west = rect.x;
+  /* East and west are measured to the fence along the readout's own row —
+     on a four-sided plot the sides lean, and the figure is the line drawn. */
+  const [fenceWest, fenceEast] = fenceSpan(plotCorners(plot), 'y', midY) ?? [0, plot.widthCm];
+  let east = fenceEast - (rect.x + rect.width);
+  let west = rect.x - fenceWest;
   let south = plot.depthCm - (rect.y + rect.depth);
   let north = rect.y;
   for (const o of others) {

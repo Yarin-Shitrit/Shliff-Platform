@@ -13,7 +13,7 @@ import type { ReactElement } from 'react';
 import { cx } from '@/components/ui/cx';
 import { SourceChip } from '@/components/ui/source-chip';
 import { toPlaced } from '@/lib/site/derive';
-import { areaM2, formatArea, formatMetres, formatSize, shadeCounts } from '@/lib/site/geometry';
+import { areaM2, formatArea, formatMetres, formatPlot, formatSize, isRectangle, shadeCounts } from '@/lib/site/geometry';
 import { KIND_GROUP_LABELS, KIND_GROUP_ORDER, SITE_KINDS, type SiteKindGroup } from '@/lib/site/kinds';
 import { LINE_KIND_ORDER, LINE_KINDS, lineTotals, unconnected } from '@/lib/site/lines';
 import { underlayOf, type EditorDoc, type EditorUnderlay } from '@/lib/site/editor/model';
@@ -111,7 +111,14 @@ export function PlotInspector({ doc, flags, plotHref, onPickIds, onUnderlay }: {
       <div className={chrome.body}>
         <dl className={styles.kv}>
           <dt>גודל</dt>
-          <dd><Link href={plotHref} className={chrome.link}><bdi>{formatSize(plot.widthCm, plot.depthCm)}</bdi></Link></dd>
+          <dd><Link href={plotHref} className={chrome.link}><bdi>{formatPlot(plot)}</bdi></Link></dd>
+          {/* A four-sided plot: the box its fence fits in, which is what the grid and the minimap frame. */}
+          {isRectangle(plot) ? null : (
+            <>
+              <dt>נכנס בתוך</dt>
+              <dd><Link href={plotHref} className={chrome.link}><bdi>{formatSize(plot.widthCm, plot.depthCm)}</bdi></Link></dd>
+            </>
+          )}
           <dt>שטח</dt>
           <dd><Link href={plotHref} className={chrome.link}><bdi>{formatArea(areaM2(plot))}</bdi></Link></dd>
           <PlotTaken doc={doc} onPickIds={onPickIds} />

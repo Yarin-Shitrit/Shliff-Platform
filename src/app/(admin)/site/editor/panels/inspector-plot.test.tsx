@@ -123,3 +123,22 @@ describe('the plot, when nothing is selected', () => {
     expect(screen.getByRole('link', { name: 'למעלה במפה פונה למזרח (90°)' }).getAttribute('href')).toBe(HREF);
   });
 });
+
+describe('the plot with four sides', () => {
+  it('says the four sides, the trapezium’s area and the box they fit in, each a link to the drawer', () => {
+    const map: EditorDoc = {
+      ...doc([]),
+      plot: { id: 'p1', widthCm: 3500, depthCm: 2498, sides: { northCm: 3300, southCm: 3500, westCm: 2500, eastCm: 2500 }, gridCm: 50, northDeg: 0 },
+    };
+    renderPlot(map);
+    expect(screen.getByRole('link', { name: '33 / 35 × 25 / 25 מ׳' }).getAttribute('href')).toBe(HREF);
+    expect(screen.getByRole('link', { name: '849.3 מ״ר' }).getAttribute('href')).toBe(HREF);
+    expect(screen.getByText('נכנס בתוך')).toBeTruthy();
+    expect(screen.getByRole('link', { name: '35 × 24.98 מ׳' }).getAttribute('href')).toBe(HREF);
+  });
+
+  it('has no box row for a rectangle', () => {
+    renderPlot(doc([]));
+    expect(screen.queryByText('נכנס בתוך')).toBeNull();
+  });
+});

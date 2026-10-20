@@ -631,6 +631,41 @@ before and after:
 The local `shliff-pg` was brought up to `0020` the same day, from the same
 SQL, with the §6 container command.
 
+### Migration `0021` — **not yet applied to Railway**
+
+`0021_site_plot_sides` is the camp map's four-sided plot (the real ground is
+33 m along the north, 35 along the south and 25 down each side): one nullable
+jsonb column, `site_plans.sides`, and nothing else. No row is touched; a null
+reads as the rectangle `width_cm` × `depth_cm` the row always was.
+
+**It is read on every load of `/site`.** `planForSeason` and `planById` select
+the whole row, so a deploy that lands before the column exists answers the
+error screen on the map page — the `0020` failure above, again. Migration
+first, merge second (§2).
+
+Read-only check, before: `1, 0`; after: `1, 1`. The row count is the oracle
+that the apply changed nothing but the schema:
+
+```sh
+docker run --rm postgres:18-alpine psql "$RAILWAY_URL" -tAc "
+select '0020 party_part', count(*) from information_schema.columns where table_name='ledger_entries' and column_name='party_part'
+union all select '0021 sides', count(*) from information_schema.columns where table_name='site_plans' and column_name='sides'
+union all select 'rows site_plans', count(*) from site_plans"
+```
+
+Then, from a clean checkout of `main`:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine sh -euc '
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0021_site_plot_sides.sql
+'
+```
+
+Expected: `ALTER TABLE`, one transaction, and the same `site_plans` count
+before and after. Record the date and the counts here when it is done. The
+local `shliff-pg` needs the same SQL with the §6 container command; it was
+stopped when this was written, so it has not had it either.
+
 ### Copying the laptop's database up
 
 The local container is Postgres **16**; Railway is **18**. Dump with the

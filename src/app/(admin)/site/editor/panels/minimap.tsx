@@ -11,7 +11,7 @@
 import { useRef, type PointerEvent, type ReactElement } from 'react';
 import { cx } from '@/components/ui/cx';
 import { toPlaced } from '@/lib/site/derive';
-import { groundRect, unionRect } from '@/lib/site/geometry';
+import { groundRect, plotCorners, unionRect } from '@/lib/site/geometry';
 import { SITE_KINDS } from '@/lib/site/kinds';
 import { pathOf } from '@/lib/site/lines';
 import type { EditorDoc } from '@/lib/site/editor/model';
@@ -103,7 +103,8 @@ export function Minimap({ doc, flags, selection, info, onJump }: {
         onPointerCancel={release}
         onLostPointerCapture={release}
       >
-        <rect className={styles.mmPlot} x={0} y={0} width={doc.plot.widthCm} height={doc.plot.depthCm} />
+        {/* The fence: the box, or the four corners of a four-sided plot. A path, so the one polygon here stays the view's outline. */}
+        <path className={styles.mmPlot} data-plot="true" d={`M${plotCorners(doc.plot).map(([x, y]) => `${x},${y}`).join(' L')} Z`} />
         {doc.items.map((item) => (
           <rect
             key={item.id}
