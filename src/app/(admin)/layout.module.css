@@ -39,6 +39,22 @@
  * padding is the bar's own rendered block-size, the same calc tab-bar
  * .module.css uses for its sheet, so the two never drift apart.
  */
+/*
+ * Below 1024px the rail folds away and `sidebar.module.css`'s `.menubutton`
+ * floats fixed in the panel's top inline-start corner, `--tap-min` square at
+ * 14px from each edge. A page's title starts 32px down (`main`'s own
+ * `padding-block`), which is inside that square: on a phone the button sat
+ * over the top of דמי קאמפ and over most of אנשים. `top-bar.module.css`
+ * reserves the button's footprint for pages that render a TopBar; this
+ * reserves it for the panel itself, so a page with no bar — most of them —
+ * starts below the button too. The button's own height is the reservation:
+ * on top of the page's 32px it clears the button's bottom edge at 58px.
+ */
+@media (max-width: 1023.98px) {
+  .main {
+    padding-block-start: var(--tap-min);
+  }
+}
 @media (max-width: 767.98px) {
   .main {
     margin: 0;
