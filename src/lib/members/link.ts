@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { AnyDb } from '@/lib/db-types';
 import {
   persons, personAliases, memberships, dues, payments, seasons, taskAssignments,
@@ -6,7 +6,7 @@ import {
 import { normalizeHebrew, isBlank } from '@/lib/text/normalize';
 import { toAgorot } from '@/lib/money';
 import { HebrewRefusal } from '@/lib/errors/hebrew';
-import { recordUnlinkedName, ignoreName } from './identity';
+import { recordUnlinkedName, ignoreName, resolveName } from './identity';
 
 /**
  * Every id in this schema is a uuid column, so a malformed one does not come
@@ -385,4 +385,75 @@ export async function splitAlias(
   }
   await ignoreName(db, aliasId, email);
   return { aliasIds };
+}
+
+export interface RenameResult {
+  /** True when the new spelling was not yet one of the person's aliases and
+   *  was written as a manual one. */
+  aliasAdded: boolean;
+}
+
+/**
+ * Gives a person a new display name.
+ *
+ * The old name is not touched: it is already an alias — `createPerson` wrote
+ * it as the first one, and a promoted name *is* its alias — so the workbook
+ * spellings that found this person yesterday still find them tomorrow. The
+ * new name becomes a manual alias too, unless the person already carries
+ * that spelling, because `resolveName` matches on aliases and nothing else:
+ * a display name with no alias behind it is one an import can never reach.
+ *
+ * Refuses a name that already resolves exactly to somebody else. Two records
+ * with one name is the duplicate identity `createPersonAction` exists to
+ * prevent, and renaming is the second door into it. A partial match is not
+ * refused, for the same reason it is not refused there: `דניאל פינטו` and
+ * `דניאל ענבר` are both real members.
+ *
+ * Every refusal is a `HebrewRefusal`, so the action boundary can hand it to
+ * the screen verbatim.
+ */
+export async function renamePerson(
+  db: AnyDb, personId: string, displayName: string, email: string,
+): Promise<RenameResult> {
+  if (isBlank(displayName)) throw new HebrewRefusal('שם לא יכול להיות ריק');
+  if (!UUID.test(personId)) throw new HebrewRefusal('האדם לא נמצא.');
+
+  const [person] = await db.select({
+    id: persons.id, displayName: persons.displayName, mergedIntoId: persons.mergedIntoId,
+  }).from(persons).where(eq(persons.id, personId));
+  if (!person) throw new HebrewRefusal('האדם לא נמצא.');
+  if (person.mergedIntoId !== null) {
+    throw new HebrewRefusal('הרשומה הזו מוזגה לתוך אדם אחר — השם נערך שם.');
+  }
+
+  // Stored as typed, compared normalized — `createPerson`'s rule, for the
+  // same reason: the geresh in `ראנצ׳ו` is evidence, not noise.
+  const name = displayName.trim();
+  const normalized = normalizeHebrew(name);
+
+  const taken = (await resolveName(db, name)).candidates
+    .find((candidate) => candidate.exact && candidate.personId !== personId);
+  if (taken) {
+    throw new HebrewRefusal(
+      `כבר קיים אדם בשם ${taken.displayName} — לא ניתן לתת לשניים את אותו השם.`,
+    );
+  }
+
+  if (name !== person.displayName) {
+    await db.update(persons).set({ displayName: name }).where(eq(persons.id, personId));
+  }
+
+  const [existing] = await db.select({ id: personAliases.id }).from(personAliases)
+    .where(and(eq(personAliases.personId, personId), eq(personAliases.normalized, normalized)));
+  if (existing) return { aliasAdded: false };
+
+  await db.insert(personAliases).values({
+    personId,
+    alias: name,
+    normalized,
+    source: 'manual',
+    confirmedBy: email,
+    confirmedAt: new Date(),
+  });
+  return { aliasAdded: true };
 }

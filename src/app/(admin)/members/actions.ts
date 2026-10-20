@@ -7,7 +7,7 @@ import { requireAdmin } from '@/lib/auth/guard';
 import type { ActionResult } from '@/lib/action-result';
 import {
   aliasUnlinkTarget, createPerson, createPersonFromAlias, linkAlias, mergePersons,
-  unlinkAlias,
+  renamePerson, unlinkAlias,
 } from '@/lib/members/link';
 import { resolveName } from '@/lib/members/identity';
 import { addMember } from '@/lib/members/roster';
@@ -15,6 +15,7 @@ import { issueFlatDueFor } from '@/lib/fees/dues';
 import { toHebrewError, type HebrewErrors } from '@/lib/errors/hebrew';
 import { isBlank } from '@/lib/text/normalize';
 import { UNLINK_ERROR_PARAM } from './unlink-error';
+import { RENAME_ERROR_PARAM } from './rename-params';
 
 export async function linkNameAction(
   aliasId: string, personId: string,
@@ -260,3 +261,49 @@ export async function unlinkAliasAndReturn(
   const separator = backHref.includes('?') ? '&' : '?';
   redirect(`${backHref}${separator}${UNLINK_ERROR_PARAM}=${encodeURIComponent(result.error)}`);
 }
+
+/**
+ * Gives a person a new display name. The refusals — blank, taken by somebody
+ * else, a merged record, an id that names nobody — are all `renamePerson`'s
+ * own, thrown as `HebrewRefusal`, so the sentence on screen is the one the
+ * library wrote. Anything else goes through `toHebrewError` and comes back as
+ * the fallback rather than as the driver's English.
+ */
+export async function renamePersonAction(
+  personId: string, displayName: string,
+): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+
+  try {
+    await renamePerson(db, personId, displayName, admin.email);
+  } catch (error) {
+    return { ok: false, error: toHebrewError(error, []) };
+  }
+  revalidatePath(`/members/${personId}`);
+  // The name is on the roster and in the inbox's candidate lists as well.
+  revalidatePath('/members');
+  revalidatePath('/inbox');
+  return { ok: true };
+}
+
+/**
+ * The rename form's submit. Same shape as `unlinkAliasAndReturn`, for the
+ * same A38 reason: the person page is a Server Component whose form posts
+ * through a plain `<form action>`, which has nowhere to put an
+ * `ActionResult`. A refusal rides back in the URL and the page renders it;
+ * success goes back to `backHref`, which the page builds without `?rename=`
+ * so the form closes.
+ *
+ * Bound as `.bind(null, personId, backHref)`; Next appends the `FormData`.
+ */
+export async function renamePersonAndReturn(
+  personId: string, backHref: string, formData: FormData,
+): Promise<void> {
+  const raw = formData.get('displayName');
+  const result = await renamePersonAction(personId, typeof raw === 'string' ? raw : '');
+  if (result.ok) redirect(backHref);
+  const separator = backHref.includes('?') ? '&' : '?';
+  redirect(`${backHref}${separator}${RENAME_ERROR_PARAM}=${encodeURIComponent(result.error)}`);
+}
+

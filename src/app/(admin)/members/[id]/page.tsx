@@ -25,11 +25,14 @@ import { SourceChip } from '@/components/ui/source-chip';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Icon } from '@/components/ui/icon';
+import { Button, ButtonLink } from '@/components/ui/button';
+import { Field, TextInput } from '@/components/ui/field';
 import { Money, DateText } from '@/components/format';
 import { formatShekels } from '@/lib/money';
 import { AddToSeason } from '../add-member';
-import { unlinkAliasAndReturn } from '../actions';
+import { renamePersonAndReturn, unlinkAliasAndReturn } from '../actions';
 import { UNLINK_ERROR_PARAM } from '../unlink-error';
+import { RENAME_ERROR_PARAM, RENAME_PARAM } from '../rename-params';
 import styles from './person.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -237,6 +240,27 @@ export default async function PersonPage(
   const unlinkingId = unlinking?.aliasId ?? '';
   const unlinkError = one(search[UNLINK_ERROR_PARAM]);
 
+  /*
+   * The rename form, URL-driven like the unlink dialog and for the same
+   * reason: this screen's client-component budget (R7) is spent, and a form
+   * a Server Component renders with a bound Server Action needs none. It
+   * opens on `?rename=1`, posts to `renamePersonAndReturn`, and both the
+   * cancel link and the success redirect go to `tabHref(tab)` — the same
+   * page without the param — so it closes either way. A refusal comes back
+   * in `?renameError=` and lands in the banner above the header (A38).
+   */
+  const renaming = one(search[RENAME_PARAM]) === '1';
+  const renameError = one(search[RENAME_ERROR_PARAM]);
+  const renameFieldId = 'person-rename';
+
+  function renameHref(): string {
+    const query = new URLSearchParams();
+    if (requested !== '') query.set('season', requested);
+    if (tab !== 'overview') query.set('tab', tab);
+    query.set(RENAME_PARAM, '1');
+    return `/members/${dossier!.personId}?${query.toString()}`;
+  }
+
   const counts: Record<PersonTab, number | undefined> = {
     overview: undefined,
     payments: dossier.dues.length,
@@ -258,10 +282,37 @@ export default async function PersonPage(
       {unlinkError === '' ? null : (
         <p className={styles.unlinkError} role="alert">{unlinkError}</p>
       )}
+      {renameError === '' ? null : (
+        <p className={styles.unlinkError} role="alert">{renameError}</p>
+      )}
       <header className={styles.head}>
         <Avatar name={dossier.displayName} size="lg" />
         <div className={styles.headText}>
           <h1>{dossier.displayName}</h1>
+          {renaming ? (
+            <form
+              className={styles.renameForm}
+              action={renamePersonAndReturn.bind(null, dossier.personId, tabHref(tab))}
+            >
+              <Field
+                id={renameFieldId}
+                label="שם חדש"
+                hint="השם הנוכחי נשאר כינוי, כך שהקבצים ימשיכו למצוא את האדם."
+                required
+              >
+                <TextInput
+                  id={renameFieldId}
+                  name="displayName"
+                  defaultValue={dossier.displayName}
+                  required
+                />
+              </Field>
+              <div className={styles.renameActions}>
+                <Button tone="primary" type="submit">שמירת השם</Button>
+                <ButtonLink tone="ghost" href={tabHref(tab)} replace>ביטול</ButtonLink>
+              </div>
+            </form>
+          ) : null}
           {/*
             The mock draws `050-1234567 · roni@example.com` here. `persons`
             carries display_name, notes, merged_into_id and created_at — no
@@ -277,6 +328,14 @@ export default async function PersonPage(
         <div className={styles.headActions}>
           {role === null ? null : (
             <Pill tone={role === 'lead' ? 'brand' : 'neutral'}>{roleLabel(role)}</Pill>
+          )}
+          {/* A link, not a button: the form it opens lives in the URL, so a
+              half-finished rename survives a refresh like every other drawer
+              here, and the control disappears while the form is open. */}
+          {renaming ? null : (
+            <ButtonLink tone="ghost" size="sm" href={renameHref()} replace>
+              <Icon name="pencil" size={14} /> שינוי שם
+            </ButtonLink>
           )}
           {/*
             D4's merge entry point: a link per candidate, never a form. The
