@@ -631,7 +631,7 @@ before and after:
 The local `shliff-pg` was brought up to `0020` the same day, from the same
 SQL, with the §6 container command.
 
-### Migration `0021` — **not yet applied to Railway**
+### Migration `0021` — applied to Railway on 2026-10-20
 
 `0021_site_plot_sides` is the camp map's four-sided plot (the real ground is
 33 m along the north, 35 along the south and 25 down each side): one nullable
@@ -661,10 +661,20 @@ docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine s
 '
 ```
 
-Expected: `ALTER TABLE`, one transaction, and the same `site_plans` count
-before and after. Record the date and the counts here when it is done. The
-local `shliff-pg` needs the same SQL with the §6 container command; it was
-stopped when this was written, so it has not had it either.
+Applied on 2026-10-20, after #60 had merged and before any deploy of it
+reached Vercel (the deploy that fired on the merge failed at `vercel pull`,
+an expired token, so production kept the old build). No `psql` and no
+Docker on the laptop that day: the apply ran through the project's own
+`postgres` driver from a script in the session scratchpad, one transaction,
+`ALTER TABLE`. Measured before and after:
+
+| Table | Before | After |
+|---|---|---|
+| `site_plans` | 1 | 1 |
+| `site_items` | 73 | 73 |
+
+The local `shliff-pg` still needs the same SQL with the §6 container command
+once Docker is running.
 
 ### Copying the laptop's database up
 
