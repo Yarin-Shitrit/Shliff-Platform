@@ -296,6 +296,13 @@
     padding-inline: var(--space-3);
   }
 
+  /* A totals cell with nothing in it pads out the action column on a laptop.
+     Stacked, it is a blank grey block at the end of the list — drawn padding
+     around no figure. It stays in the DOM and is simply not laid out. */
+  .table tfoot td:empty {
+    display: none;
+  }
+
   .emptyCell {
     display: block;
   }

@@ -1,11 +1,13 @@
 /*
- * `contain: inline-size`: the strip takes the width it is given and never
- * asks for more. Without it the six nowrap tabs hand their full width up as
- * the strip's min-content, and `main` — sized by fit-content because of its
- * auto inline margins — grows to 667px on a 390px phone; the whole screen
- * then overflows to the inline-end, clipping the heading's actions and the
- * banner's text on /members and /tasks. The scroll this rule already
- * declares only works once the strip is narrower than its tabs.
+ * `contain: inline-size` is what makes `overflow-x: auto` true on a phone.
+ * Every tab is `nowrap`, so the strip's min-content width is the sum of its
+ * tabs — 667px for the six דמי קאמפ views. A scroll container still reports
+ * that as its intrinsic size, and the shell's `main` is a flex item sized to
+ * its content, so the strip did not scroll: it widened the whole page to
+ * 699px on a 390px phone, and the layout clipped the page on the left — the
+ * title, the lead sentence and every tile lost their first third. With its
+ * intrinsic inline size contained, the strip is as wide as the page and the
+ * tabs scroll inside it, which is what the `overflow-x` always meant.
  */
 .strip {
   display: flex; gap: 2px; border-block-end: 1px solid var(--line);
@@ -14,11 +16,16 @@
 }
 .strip::-webkit-scrollbar { display: none; }
 
+/*
+ * `flex-shrink: 0` goes with the containment above. Once the strip is only
+ * as wide as the page, its tabs are flex items asked to fit a narrower row,
+ * and `globals.css` gives every `[role='tab']` an explicit 44px
+ * `min-inline-size` on a phone — which replaces the min-content floor a
+ * flex item would otherwise keep. Six `nowrap` labels then shrank onto each
+ * other and overprinted. A tab keeps its width; the strip scrolls.
+ */
 .tab {
-  display: inline-flex; align-items: center; gap: 6px;
-  /* A tab never gives up width: when the strip is narrower than its tabs
-     the strip scrolls, it does not squeeze six names into one another. */
-  flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
   block-size: 38px; padding-inline: 10px; margin-block-end: -1px;
   color: var(--ink-3); font-weight: 500; white-space: nowrap; text-decoration: none;
   border-block-end: 2px solid transparent;
