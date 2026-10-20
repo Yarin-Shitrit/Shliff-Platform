@@ -89,8 +89,9 @@
  * is a list of records with one row each; this is a grid of lists, and
  * forcing it through that component would lose the day headers.
  *
- * It scrolls sideways on a phone rather than reflowing: six days side by
- * side is the shape a lead recognises from the wall of the camp kitchen.
+ * A narrow laptop window scrolls it sideways rather than clipping a day off
+ * the edge of the panel. A phone does neither: the phone block at the end of
+ * this file regroups the same table by day.
  */
 .boardWrap {
   overflow-x: auto;
@@ -118,16 +119,24 @@
 .board th:last-child,
 .board td:last-child { border-inline-end: 0; }
 
+/* `--sunken`, the kit table's own header surface. (`--row-head` is the
+   header's height, not a colour; drawn as one it is invalid and ignored.) */
 .board thead th {
-  background: var(--row-head);
+  background: var(--sunken);
   font-size: 13px;
   font-weight: 600;
   color: var(--ink-2);
 }
 
+/* Today's column, when the event is on: the one a lead opens the page for. */
+.board thead th[aria-current] {
+  background: var(--brand-soft);
+  color: var(--brand-text);
+}
+
 .board tbody th {
   inline-size: 140px;
-  background: var(--row-head);
+  background: var(--sunken);
   font-size: 14px;
   font-weight: 600;
 }
@@ -147,6 +156,10 @@
   color: var(--ink-3);
   font-variant-numeric: tabular-nums;
 }
+
+/* The phone's day strip. Not drawn on a laptop, where the columns are the
+   days and there is nothing to jump to. */
+.dayNav { display: none; }
 
 .rowRetired { color: var(--ink-3); }
 
@@ -177,6 +190,11 @@
 }
 
 .slotShort { border-color: var(--warn-line); }
+
+.slotHead { display: block; }
+
+/* The row header already names the kind on a laptop. */
+.slotTitle { display: none; }
 
 .when {
   display: block;
@@ -211,6 +229,9 @@
 
 .addSlot:hover { background: var(--hover); color: var(--ink); }
 
+/* The kind is the row header on a laptop; the link says it only on a phone. */
+.addType { display: none; }
+
 /* Shifts the board cannot place: listed, never hidden. */
 .outside {
   margin: 0;
@@ -231,6 +252,7 @@
 .sectionHead {
   display: flex;
   align-items: baseline;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -355,15 +377,273 @@
 }
 
 /*
+ * A drawer's footer buttons. The kit's footer lays its children in one row;
+ * on a laptop this wrapper is invisible to it (`display: contents`), and on a
+ * phone it becomes the row that wraps — see the phone block.
+ */
+.footActions { display: contents; }
+
+/*
+ * The page's verbs on a phone. On a laptop they sit in the top bar's action
+ * slot. On a phone the top bar has no room for three buttons beside the
+ * crumbs and the season chip, so they move to a bar fixed just above the
+ * shell's tab bar, where a thumb reaches them from anywhere on the board —
+ * the same bar the warehouse screen uses, for the same reason.
+ *
+ * `--z-bulk`: the same rung as the kit's floating bulk bar, which is the same
+ * kind of chrome — above the list and the tab bar, under every scrim, drawer
+ * and dialog, so a drawer covers it while it is open.
+ *
+ * The block-end inset is the tab bar's rendered height (`--tap-min` plus its
+ * two `--space-2` paddings, the same calc `layout.module.css` and
+ * `tab-bar.module.css` use) plus a gap, plus whatever the home indicator adds
+ * to the bar beyond its own 8px.
+ */
+.phoneActions { display: none; }
+
+/*
  * 767.98px — a phone. The fractional value closes the gap a fractional
  * viewport width opens; every module in the redesign that changes at this
  * width repeats this comment block.
  */
 @media (max-width: 767.98px) {
-  .tiles { gap: 8px; }
+  /* Room under the page for the fixed action bar, on top of the room the
+     shell already leaves for the tab bar. */
+  .page { padding-block-end: 72px; }
+
+  /* Three tiles across a phone wrap their figures; "12 מתוך 40" does not fit
+     a third of the width at the tile's size. The first tile — the one with
+     the long figure — takes the row, and the two counts share the next. */
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .tiles > :first-child { grid-column: 1 / -1; }
+
   .chip { block-size: 44px; }
+
+  .topActions { display: none; }
+  .phoneActions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    position: fixed;
+    z-index: var(--z-bulk);
+    inset-inline: var(--space-3);
+    inset-block-end: calc(
+      var(--tap-min) + var(--space-2) * 2 + var(--space-3)
+      + max(0px, env(safe-area-inset-bottom) - var(--space-2))
+    );
+  }
+  /* The scheduling button takes the width; the others are its 44px icon
+     neighbours. */
+  .phoneActions > :first-child { flex: 1; }
+
+  /*
+   * The board, regrouped by day.
+   *
+   * The table's parts become `display: contents`, so every day header and
+   * every cell is an item of one single-column grid, and `order` — read off
+   * the `data-day` each of them carries — puts a day's header first and the
+   * cells of that day, one per kind, after it. Row order inside a day is DOM
+   * order, which is the laptop's row order. The day count is the event's
+   * (`EVENT_DAY_COUNT`, six); `shifts-styles.test.ts` pins that every index
+   * has its two rules, so a seventh day could not silently land nowhere.
+   *
+   * The corner header and the row headers (the kinds) are clipped, not
+   * hidden: every cell keeps its row header for a reader, and the card and
+   * the link name the kind themselves for the eye. `display: contents` drops
+   * the implicit table roles in every engine, which is why `schedule-grid.tsx`
+   * writes them out.
+   */
+  .boardWrap {
+    position: relative;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  /* Two columns: a card takes both, and a day's empty kinds pair up. */
+  .board {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+    min-inline-size: 0;
+  }
+
+  .board thead,
+  .board tbody,
+  .board tr { display: contents; }
+
+  .board thead th:first-child,
+  .board tbody th {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    padding: 0;
+    border: 0;
+  }
+
+  .board thead th[data-day] {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding: var(--space-3) 0 var(--space-1);
+    border: 0;
+    background: transparent;
+    color: var(--ink);
+    font-size: var(--text-lead);
+    font-weight: 600;
+    /* A jump from the day strip lands with the heading clear of the edge. */
+    scroll-margin-block-start: var(--space-3);
+  }
+  .board thead th[data-day]:not([data-day='0']) {
+    margin-block-start: var(--space-3);
+    padding-block-start: var(--space-4);
+    border-block-start: 1px solid var(--line);
+  }
+  .board thead th[aria-current] { color: var(--brand-text); }
+  .board thead th[data-day] .weekday,
+  .board thead th[data-day] .dayMonth { display: inline; }
+  .board thead th[data-day] .dayMonth { font-size: var(--text-dense); }
+
+  .board thead th[data-day='0'] { order: 0; }
+  .board thead th[data-day='1'] { order: 10; }
+  .board thead th[data-day='2'] { order: 20; }
+  .board thead th[data-day='3'] { order: 30; }
+  .board thead th[data-day='4'] { order: 40; }
+  .board thead th[data-day='5'] { order: 50; }
+
+  .board td[data-day] {
+    display: block;
+    padding: 0;
+    border: 0;
+  }
+  .board td[data-day='0'] { order: 1; }
+  .board td[data-day='1'] { order: 11; }
+  .board td[data-day='2'] { order: 21; }
+  .board td[data-day='3'] { order: 31; }
+  .board td[data-day='4'] { order: 41; }
+  .board td[data-day='5'] { order: 51; }
+
+  /* A day reads as its shifts first, at full width, then the kinds that
+     have none that day, two to a row — not the row order, which would put
+     "שיבוץ בר" above the kitchen's card because the bar's row comes first. */
+  .board td:has(.slot) { grid-column: 1 / -1; }
+  .board td[data-day='0']:not(:has(.slot)) { order: 5; }
+  .board td[data-day='1']:not(:has(.slot)) { order: 15; }
+  .board td[data-day='2']:not(:has(.slot)) { order: 25; }
+  .board td[data-day='3']:not(:has(.slot)) { order: 35; }
+  .board td[data-day='4']:not(:has(.slot)) { order: 45; }
+  .board td[data-day='5']:not(:has(.slot)) { order: 55; }
+
+  /* A retired kind with nothing that day, or the untyped row's empty days,
+     would be a blank item between two cards. */
+  .board td:has(.cell:empty) { display: none; }
+
+  .cell { gap: var(--space-2); }
+
+  /* The card, thumb-sized: the kind and the window on its first line. */
+  .slot {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-block-size: var(--tap-min);
+    padding: 10px 12px;
+    background: var(--panel);
+    font-size: var(--text-cell);
+  }
+  .slotShort { border-inline-start: 3px solid var(--warn); }
+  .slotHead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+  .slotTitle {
+    display: inline;
+    font-weight: 600;
+  }
+  .when {
+    display: inline;
+    font-weight: 500;
+    color: var(--ink-2);
+  }
+
+  /* An empty day for a kind is a dashed invitation the width of a card,
+     naming the kind. A kind that already has a shift that day keeps its
+     card alone: a second shift of one kind on one day is the top button's
+     drawer, where the hours are chosen anyway. */
+  .addSlot {
+    align-self: stretch;
+    justify-content: center;
+    min-block-size: var(--tap-min);
+    padding-inline: var(--space-3);
+    border: 1px dashed var(--line-strong);
+    font-size: var(--text-dense);
+  }
+  .addType { display: inline; }
+  .cell:has(.slot) .addSlot { display: none; }
+
+  /* The day strip: six chips, a jump each, today marked. */
+  .dayNav {
+    display: flex;
+    gap: var(--space-1);
+    overflow-x: auto;
+    padding-block-end: var(--space-1);
+  }
+  .dayLink {
+    flex: 1 0 auto;
+    min-inline-size: 52px;
+    min-block-size: var(--tap-min);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    padding-inline: var(--space-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control);
+    background: var(--panel);
+    color: var(--ink-2);
+    font-size: var(--text-dense);
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .dayLink .dayMonth { font-size: var(--text-label); }
+  .dayLink[aria-current] {
+    background: var(--brand-soft);
+    border-color: var(--brand);
+    color: var(--brand-text);
+  }
+
+  /* The drawers. */
   .pair { grid-template-columns: 1fr; }
   .plainInput { min-block-size: 44px; }
   .person, .candidate { min-block-size: 44px; }
-  .topActions { flex-wrap: wrap; }
+  .days > * { min-block-size: var(--tap-min); }
+  /* Taller than on a laptop, so a search that leaves a dozen names shows
+     most of them without a second scroll inside the sheet. */
+  .candidates { max-block-size: min(320px, 45dvh); }
+
+  /* Three buttons do not fit one row of a phone's footer: the primary verb
+     takes the first row at full width, and the rest share the next. */
+  .footActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    inline-size: 100%;
+  }
+  .footActions > :first-child { flex-basis: 100%; }
+  .footActions > :not(:first-child) { flex: 1; }
 }

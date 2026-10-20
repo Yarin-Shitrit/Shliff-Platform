@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseShiftsQuery, shiftsHref, slotHref, typeHref, newTypeHref, scheduleHref, printHref,
+  dayAnchorId,
 } from './shifts-views';
 
 describe('the shifts URL', () => {
@@ -37,6 +38,11 @@ describe('the shifts URL', () => {
     expect(scheduleHref(params, { typeId: 'y', day: '2026-06-09' }))
       .toBe('/logistics/shifts?season=s1&act=slot&type=y&day=2026-06-09');
     expect(shiftsHref({}, {})).toBe('/logistics/shifts');
+  });
+
+  it('spells a day heading\'s id once, for the heading and for the strip that jumps to it', () => {
+    expect(dayAnchorId(0)).toBe('shift-day-0');
+    expect(dayAnchorId(5)).toBe('shift-day-5');
   });
 
   it('prints the same season the screen shows', () => {
