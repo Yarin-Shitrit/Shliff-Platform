@@ -157,3 +157,56 @@ export const taskMaterials = pgTable('task_materials', {
     .references(() => acquisitionItems.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * A kind of shift the camp staffs during the burn — `בר`, `מטבח`, `שער` —
+ * with the window and the head-count it usually takes. A type is a template:
+ * what gets scheduled is a `tasks` row of kind `shift`, which carries its own
+ * copy of the times and the count, so one slot can run longer than the others
+ * of its kind without the type changing under them.
+ *
+ * **No `season_id`**, for the warehouse's reason: the bar is the bar in ברן 26
+ * as it was in ברן 25, and a lead should not re-type six shift types every
+ * year. The schedule itself is season-scoped, because the tasks are.
+ *
+ * The clocks are `HH:MM` text, not timestamps: a type has no date. The
+ * instant is made when a slot is scheduled, on a day of that season's event,
+ * in the camp's time zone (`src/lib/logistics/shift-time.ts`).
+ *
+ * No delete. A type the camp stopped running is `retired_at`, stays on the
+ * slots that used it, and leaves the picker.
+ */
+export const shiftTypes = pgTable('shift_types', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  /** `16:00` — when a shift of this kind usually starts. */
+  startsClock: text('starts_clock').notNull(),
+  /** `20:00`. Earlier than `startsClock` means it ends the next day. */
+  endsClock: text('ends_clock').notNull(),
+  peopleNeeded: integer('people_needed').notNull().default(1),
+  notes: text('notes'),
+  retiredAt: timestamp('retired_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: text('updated_by'),
+});
+
+/**
+ * Which type a scheduled shift was made from. A join row rather than a column
+ * on `tasks`: the shift's times, head-count and people already live on the
+ * task and its assignments, which is what the משימות board, the coverage
+ * report and a person's page read, so the schedule and those screens cannot
+ * disagree. What the task does not know is its kind of shift, and this row
+ * says it.
+ *
+ * `task_id` cascades: a task that is gone has no slot. The type does not: a
+ * retired type still names the slots that used it.
+ */
+export const shiftSlots = pgTable('shift_slots', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  taskId: uuid('task_id').notNull().unique()
+    .references(() => tasks.id, { onDelete: 'cascade' }),
+  shiftTypeId: uuid('shift_type_id').notNull()
+    .references(() => shiftTypes.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});

@@ -87,6 +87,11 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: 'warehouse', label: 'מחסן', href: '/logistics/warehouse', icon: 'layers' },
       { id: 'acquisitions', label: 'רכש', href: '/logistics/acquisitions', icon: 'list' },
       { id: 'build', label: 'הקמה', href: '/logistics/build', icon: 'board' },
+      /* The shift schedule: types of shift and one season's board of them.
+         Under לוגיסטיקה rather than beside משימות because it is the camp's
+         operations during the event, and because every slot on it is also a
+         task the משימות board already shows. */
+      { id: 'shifts', label: 'משמרות', href: '/logistics/shifts', icon: 'clock' },
     ],
   },
   {
