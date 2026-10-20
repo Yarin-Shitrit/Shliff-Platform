@@ -45,10 +45,23 @@
 
 /* ——— the rollup band ——— */
 
+/*
+ * Four tiles, four columns — the count is written out, as the home's
+ * `.figures` and money's `.tiles` write theirs. `repeat(auto-fit,
+ * minmax(12rem, 1fr))` left the count to the browser, and at the width this
+ * page actually gets (the shell sizes `main` to its content; 754px here) it
+ * chose three: three tiles on one row and נגבה בקיזוז alone beneath them,
+ * reading as an afterthought. `minmax(0, 1fr)` lets a tile be narrower than
+ * its longest word rather than push its neighbours out.
+ */
 .rollup {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-3);
+}
+
+@media (max-width: 1023.98px) {
+  .rollup { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* A banner and the button that acts on it. C9 caps a Banner at one action and
