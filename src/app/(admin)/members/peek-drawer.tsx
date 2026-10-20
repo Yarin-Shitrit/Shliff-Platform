@@ -165,14 +165,26 @@ export async function PeekDrawer({
         <ButtonLink tone="primary" size="sm" href={`/members/${row.personId}`}>
           פתיחת הרשומה המלאה
         </ButtonLink>
-        {/* These two hand off to screens other plans own. If their `person`
-            param is not read yet the link still lands on the right screen. */}
-        <ButtonLink size="sm" href={`/fees?season=${seasonId ?? ''}&person=${row.personId}`}>
-          רישום תשלום
-        </ButtonLink>
-        <ButtonLink size="sm" href={`/tasks?season=${seasonId ?? ''}&person=${row.personId}`}>
-          שיבוץ למשימה
-        </ButtonLink>
+        {/*
+          Two hand-offs to screens other plans own. /fees opens its payment
+          drawer from `?peek=<personId>&act=pay` — A3's shape, the same two
+          params this list uses — so the link lands with the drawer already
+          open on this person rather than on the fees list with a `person`
+          param nobody reads. /tasks has no per-person drawer; the link lands
+          on the season's board. Both are withheld with no season in scope:
+          a payment and an assignment are both season-scoped, and a link that
+          could only land on the wrong year is worse than none.
+        */}
+        {seasonId === null ? null : (
+          <>
+            <ButtonLink size="sm" href={`/fees?season=${seasonId}&peek=${row.personId}&act=pay`}>
+              רישום תשלום
+            </ButtonLink>
+            <ButtonLink size="sm" href={`/tasks?season=${seasonId}`}>
+              שיבוץ למשימה
+            </ButtonLink>
+          </>
+        )}
       </footer>
     </Drawer>
   );

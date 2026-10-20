@@ -7,14 +7,17 @@ import { listSeasons } from '@/lib/members/roster';
 import { listPeopleForSeason } from '@/lib/members/people-list';
 import { previewMerge } from '@/lib/members/link';
 import {
-  PEOPLE_PATH, PEOPLE_SORTS, applyPeopleQuery, closeDrawerHref, mergeHref,
-  parsePeopleQuery, viewCounts,
+  ADD_ACT, PEOPLE_PATH, PEOPLE_SORTS, addPersonHref, applyPeopleQuery, closeDrawerHref,
+  mergeHref, parsePeopleQuery, viewCounts,
   type PeopleSort, type PeopleView, type RawParams,
 } from '@/lib/members/people-views';
 import { SavedViews, type SavedView } from '@/components/ui/saved-views';
 import { FilterBar, type FilterOption } from '@/components/ui/filter-bar';
 import { EmptyState, type EmptyStateProps } from '@/components/ui/empty-state';
 import { Banner } from '@/components/ui/banner';
+import { Drawer } from '@/components/ui/drawer';
+import { ButtonLink } from '@/components/ui/button';
+import { Icon } from '@/components/ui/icon';
 import { AddMember } from './add-member';
 import { DUES_STATE_LABELS } from '@/lib/members/labels';
 import { PeopleTable } from './people-table';
@@ -94,6 +97,15 @@ export default async function MembersPage(
   const unlinked = await listUnlinkedNames(db);
 
   /*
+   * The create drawer is a URL like every other drawer here (R6): `?act=new`
+   * with no `peek`, so a half-filled form survives a refresh and the empty
+   * state's invitation is a link rather than a scroll to the bottom of the
+   * page, where the form used to live under the whole table.
+   */
+  const addHref = addPersonHref(params);
+  const adding = query.act === ADD_ACT && query.peek === null;
+
+  /*
    * C10/E1's five kinds, chosen from the data rather than from the view alone.
    * "Nothing at all" and "nothing this year" and "nothing matching what you
    * typed" send a lead to three different places, and getting it wrong sends
@@ -103,7 +115,7 @@ export default async function MembersPage(
   const filtered = query.q !== '' || query.dues !== null;
   let empty: EmptyStateProps;
   if (rows.length === 0) {
-    empty = { kind: 'nothing-yet', noun: 'אנשים', action: { label: 'הוספת אדם', href: '#add-person' } };
+    empty = { kind: 'nothing-yet', noun: 'אנשים', action: { label: 'הוספת אדם', href: addHref } };
   } else if (query.view === 'unpaid' && !filtered) {
     empty = { kind: 'all-clear' };
   } else if (query.view === 'roster' && !filtered && scope !== null) {
@@ -111,7 +123,7 @@ export default async function MembersPage(
       kind: 'nothing-this-season',
       noun: 'אנשים',
       seasonName: scope.name,
-      action: { label: 'הוספת אדם', href: '#add-person' },
+      action: { label: 'הוספת אדם', href: addHref },
     };
   } else {
     empty = {
@@ -148,12 +160,20 @@ export default async function MembersPage(
       cancelHref={closeDrawerHref(params)}
       swapHref={mergeHref(params, merge.target.personId, merge.source.personId)}
     />
-  ) : peeked === null ? null : await PeekDrawer({
+  ) : peeked !== null ? await PeekDrawer({
     row: peeked,
     seasonId: scope?.id ?? null,
     seasonName: scope?.name ?? null,
     closeHref: closeDrawerHref(params),
-  });
+  }) : adding ? (
+    <Drawer title="אדם חדש" subtitle={scope?.name} closeHref={closeDrawerHref(params)}>
+      <AddMember
+        seasons={seasons.map((season) => ({ id: season.id, name: season.name }))}
+        defaultSeasonId={scope?.id}
+        doneHref={closeDrawerHref(params)}
+      />
+    </Drawer>
+  ) : null;
 
   const duesOptions: FilterOption[] = (Object.keys(DUES_STATE_LABELS) as Array<keyof typeof DUES_STATE_LABELS>)
     .map((state) => ({
@@ -172,34 +192,49 @@ export default async function MembersPage(
 
   return (
     <main>
-      <div className={styles.head}>
+      <header className={styles.head}>
         <div className={styles.headText}>
           <h1>אנשים</h1>
+          {/* One isolate per phrase (A17). The third clause is withheld at
+              zero: `0 חדשים` is not a fact worth a sentence. */}
           <p className={styles.subline}>
-            <bdi>{`${counts.all} אנשים בקאמפ · ${counts.roster} ב${viewLabels.roster}`}</bdi>
+            <bdi>{`${counts.all} אנשים בקאמפ`}</bdi>
+            {scope === null ? null : (
+              <>
+                {' · '}
+                <bdi>{`${counts.roster} ב${viewLabels.roster}`}</bdi>
+                {counts.new === 0 ? null : (
+                  <>
+                    {' · '}
+                    <bdi>{`${counts.new} חדשים השנה`}</bdi>
+                  </>
+                )}
+              </>
+            )}
           </p>
         </div>
-        {/*
-          One plain anchor per season, deliberately: this is a file download
-          from a Route Handler, not a page to navigate to client-side — `Link`
-          would prefetch the CSV response on hover/viewport for nothing. The
-          season used to be implicit (whichever the route defaulted to), so a
-          lead exporting for one season silently got a different one's roster
-          with nothing saying so — naming every season here and carrying it
-          through the query string is the fix.
-        */}
-        {seasons.length === 0 ? null : (
-          <span className={styles.headActions}>
-            ייצוא לקובץ CSV:{' '}
-            {seasons.map((season, index) => (
-              <span key={season.id}>
-                {index > 0 && ' · '}
-                <a href={`/members/export?season=${season.id}`}>{season.name}</a>
-              </span>
-            ))}
-          </span>
-        )}
-      </div>
+        <div className={styles.headActions}>
+          {/*
+            A file download from a Route Handler, so the link carries
+            `download` and the kit lets the browser navigate rather than
+            handing a CSV to the client router. The button names the season
+            it exports: the season used to be implicit (whichever the route
+            defaulted to), so a lead exporting for one season silently got a
+            different one's roster with nothing saying so. Another season's
+            roster is one scope switch away, and its button will say so too.
+          */}
+          {scope === null ? null : (
+            <ButtonLink size="sm" download href={`/members/export?season=${scope.id}`}>
+              <Icon name="download" size={14} />
+              {`ייצוא ${scope.name} ל־CSV`}
+            </ButtonLink>
+          )}
+          <ButtonLink tone="primary" size="sm" href={addHref}>
+            <Icon name="userplus" size={14} />
+            אדם חדש
+          </ButtonLink>
+        </div>
+      </header>
 
       <SavedViews label="תצוגות שמורות" views={views} currentId={query.view} />
 
@@ -221,16 +256,6 @@ export default async function MembersPage(
         />
       </div>
 
-      <PeopleTable
-        rows={shown}
-        seasonYears={seasons.map((season) => season.year).sort((a, b) => a - b)}
-        params={params}
-        seasonId={scope?.id ?? null}
-        seasonName={scope?.name ?? null}
-        viewLabel={viewLabels[query.view]}
-        empty={<EmptyState {...empty} />}
-      />
-
       {/*
         D3's destination exists now, so the queue itself has moved: /inbox
         shows each unattributed name beside the workbook rows it came from and
@@ -249,6 +274,16 @@ export default async function MembersPage(
         />
       )}
 
+      <PeopleTable
+        rows={shown}
+        seasonYears={seasons.map((season) => season.year).sort((a, b) => a - b)}
+        params={params}
+        seasonId={scope?.id ?? null}
+        seasonName={scope?.name ?? null}
+        viewLabel={viewLabels[query.view]}
+        empty={<EmptyState {...empty} />}
+      />
+
       {/*
         Resolved against the unfiltered roster, never against `shown`. A peek
         link is meant to be pasted, and the person who opens it has whatever
@@ -257,11 +292,6 @@ export default async function MembersPage(
         404, it is just a list.
       */}
       {drawer}
-
-      <section className={styles.section} id="add-person">
-        <h2>הוספת אדם</h2>
-        <AddMember seasons={seasons.map((season) => ({ id: season.id, name: season.name }))} />
-      </section>
     </main>
   );
 }

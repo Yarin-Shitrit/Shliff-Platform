@@ -1,11 +1,24 @@
+/*
+ * `contain: inline-size`: the strip takes the width it is given and never
+ * asks for more. Without it the six nowrap tabs hand their full width up as
+ * the strip's min-content, and `main` — sized by fit-content because of its
+ * auto inline margins — grows to 667px on a 390px phone; the whole screen
+ * then overflows to the inline-end, clipping the heading's actions and the
+ * banner's text on /members and /tasks. The scroll this rule already
+ * declares only works once the strip is narrower than its tabs.
+ */
 .strip {
   display: flex; gap: 2px; border-block-end: 1px solid var(--line);
   overflow-x: auto; scrollbar-width: none;
+  contain: inline-size;
 }
 .strip::-webkit-scrollbar { display: none; }
 
 .tab {
   display: inline-flex; align-items: center; gap: 6px;
+  /* A tab never gives up width: when the strip is narrower than its tabs
+     the strip scrolls, it does not squeeze six names into one another. */
+  flex-shrink: 0;
   block-size: 38px; padding-inline: 10px; margin-block-end: -1px;
   color: var(--ink-3); font-weight: 500; white-space: nowrap; text-decoration: none;
   border-block-end: 2px solid transparent;
