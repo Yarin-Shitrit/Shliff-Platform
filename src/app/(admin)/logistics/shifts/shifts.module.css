@@ -1,0 +1,369 @@
+/* Structure is drawn with 1px borders and tokens only; shadows are reserved
+   for overlays (A7). Logical properties throughout (A10). */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.sub {
+  margin-block-start: 2px;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.topActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The types strip: every kind of shift as one chip — name, usual window,
+   head-count. A chip opens the type's drawer; the last chip adds one. */
+.strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.stripLabel {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.stripEmpty {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-inline: 10px;
+  block-size: 30px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-2);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.chip:hover { background: var(--hover); }
+
+.chip[aria-current] {
+  background: var(--brand-soft);
+  border-color: var(--brand);
+  color: var(--brand-text);
+}
+
+.chipRetired {
+  border-style: dashed;
+  color: var(--ink-3);
+}
+
+.chipMeta {
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The board: one row per type, one column per day. A real table, because
+ * it is read like one — down a column is a day, along a row is a kind of
+ * shift — and a screen reader gets the headers for free. The kit's Table
+ * is a list of records with one row each; this is a grid of lists, and
+ * forcing it through that component would lose the day headers.
+ *
+ * It scrolls sideways on a phone rather than reflowing: six days side by
+ * side is the shape a lead recognises from the wall of the camp kitchen.
+ */
+.boardWrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+}
+
+.board {
+  inline-size: 100%;
+  min-inline-size: 760px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.board th,
+.board td {
+  border-block-end: 1px solid var(--line);
+  border-inline-end: 1px solid var(--line);
+  padding: 8px;
+  vertical-align: top;
+  text-align: start;
+}
+
+.board th:last-child,
+.board td:last-child { border-inline-end: 0; }
+
+.board thead th {
+  background: var(--row-head);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.board tbody th {
+  inline-size: 140px;
+  background: var(--row-head);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.board tbody th a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.board tbody th a:hover { text-decoration: underline; }
+
+.weekday { display: block; }
+
+.dayMonth {
+  display: block;
+  font-weight: 400;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.rowRetired { color: var(--ink-3); }
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* One scheduled shift in a cell: the window, then the people, then how many
+   places are still open. The whole card is the link to its drawer. */
+.slot {
+  display: block;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--canvas);
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.slot:hover { border-color: var(--line-strong); background: var(--hover); }
+
+.slot[aria-current] {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.slotShort { border-color: var(--warn-line); }
+
+.when {
+  display: block;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.names {
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-2);
+}
+
+.open {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.addSlot {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-block-size: 28px;
+  padding-inline: 6px;
+  border-radius: var(--radius-sm);
+  color: var(--ink-3);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.addSlot:hover { background: var(--hover); color: var(--ink); }
+
+/* Shifts the board cannot place: listed, never hidden. */
+.outside {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.sectionHead h2 {
+  margin: 0;
+  font-size: var(--text-title);
+}
+
+.sectionHint {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+/* The drawers' forms. */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+/* The kit ships no `time` or `number` control (its TextInput hard-codes
+   type="text"), so these are plain inputs drawn to match, inside the kit's
+   Field for the label, hint and aria wiring. R1 forbids a component library. */
+.plainInput {
+  inline-size: 100%;
+  min-block-size: 36px;
+  padding-inline: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.formError {
+  margin: 0;
+  color: var(--bad);
+  font-size: 13px;
+}
+
+/* The six days, one checkbox each, two per row. */
+.days {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+}
+
+/* Who is on the shift, and who can be added. */
+.people {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 36px;
+  border-block-end: 1px solid var(--line);
+}
+
+.person > :first-child { flex: 1; min-inline-size: 0; }
+
+.personLoad {
+  color: var(--ink-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.candidates {
+  max-block-size: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding-inline: 8px;
+}
+
+.candidate {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 36px;
+}
+
+.candidate > :first-child { flex: 1; min-inline-size: 0; }
+
+.divider {
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--line);
+}
+
+.subhead {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.empty {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/*
+ * 767.98px — a phone. The fractional value closes the gap a fractional
+ * viewport width opens; every module in the redesign that changes at this
+ * width repeats this comment block.
+ */
+@media (max-width: 767.98px) {
+  .tiles { gap: 8px; }
+  .chip { block-size: 44px; }
+  .pair { grid-template-columns: 1fr; }
+  .plainInput { min-block-size: 44px; }
+  .person, .candidate { min-block-size: 44px; }
+  .topActions { flex-wrap: wrap; }
+}
