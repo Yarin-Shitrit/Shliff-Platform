@@ -1,0 +1,446 @@
+/* Structure is drawn with 1px borders and tokens only; shadows are reserved
+   for overlays (A7). Logical properties throughout (A10). */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.sub {
+  margin-block-start: 2px;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.topActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sectionHead h2 {
+  margin: 0;
+  font-size: var(--text-title);
+}
+
+.sectionHint {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+/* One topic: its heading is a link to its drawer, and the verb beside it
+   adds an item straight under it. */
+.topicHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block-start: 8px;
+}
+
+.topicHead h3 {
+  margin: 0;
+  font-size: var(--text-lead);
+}
+
+.topicHead h3 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.topicHead h3 a:hover { text-decoration: underline; }
+
+.topicMeta {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.topicArchived h3 { color: var(--ink-3); }
+
+/* A topic with nothing under it yet: a sentence and the link, not a table
+   with no rows and nothing to say. */
+.topicEmpty {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-card);
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+/* The indent is what says "this belongs to the item above it" —
+   `padding-inline-start`, so under RTL it reads from the text's edge. */
+.subTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-inline-start: 22px;
+  color: var(--ink-2);
+}
+
+.itemTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.itemTitle a,
+.subTitle a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.itemTitle a:hover,
+.subTitle a:hover { text-decoration: underline; }
+
+.muted { color: var(--ink-3); }
+
+.when {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.unscheduled {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.unscheduled a { color: inherit; }
+
+.waits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  font-size: 13px;
+}
+
+.waitsConflict { color: var(--warn); font-weight: 600; }
+
+.rowActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rowAction { white-space: nowrap; }
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 180px;
+}
+
+.menu > * { justify-content: flex-start; }
+
+/*
+ * The timeline. A CSS grid of days, the first column at the inline start —
+ * so under RTL the earliest day sits at the right, the way a Hebrew calendar
+ * reads. A narrow laptop scrolls it sideways rather than clipping a week.
+ *
+ * `--days` is set inline by the component; `--day-w` is the one width every
+ * column shares, header and bars alike, so a bar lands under its day.
+ */
+.timelineWrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+}
+
+.timeline {
+  --day-w: 28px;
+  --label-w: 150px;
+  min-inline-size: calc(var(--label-w) + var(--days) * var(--day-w));
+  display: flex;
+  flex-direction: column;
+}
+
+.timelineHead,
+.lane {
+  display: grid;
+  grid-template-columns: var(--label-w) 1fr;
+  border-block-end: 1px solid var(--line);
+}
+
+.lane:last-child { border-block-end: 0; }
+
+.laneLabel {
+  padding: 8px 10px;
+  background: var(--sunken);
+  border-inline-end: 1px solid var(--line);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.laneLabel a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.laneLabel a:hover { text-decoration: underline; }
+
+.days,
+.barRow {
+  display: grid;
+  grid-template-columns: repeat(var(--days), var(--day-w));
+  /* Friday and Saturday, the sixth and seventh columns of every week,
+     shaded. Drawn from the inline start, so the stripe follows the grid
+     under RTL. */
+  background: repeating-linear-gradient(
+    to left,
+    transparent 0 calc(5 * var(--day-w)),
+    var(--sunken) calc(5 * var(--day-w)) calc(7 * var(--day-w))
+  );
+}
+
+.days { align-items: end; }
+
+.dayHead {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1px;
+  min-block-size: 40px;
+  padding-block: 4px;
+  border-inline-end: 1px solid var(--line);
+  color: var(--ink-3);
+  font-size: var(--text-label);
+  font-variant-numeric: tabular-nums;
+}
+
+.dayHead[aria-current] {
+  background: var(--brand-soft);
+  color: var(--brand-text);
+  font-weight: 600;
+}
+
+.monthLabel {
+  white-space: nowrap;
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+.barRows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-block: 4px;
+}
+
+.barRow { min-block-size: 28px; }
+
+/* One item on its days. The whole bar is the link to its drawer; the word
+   inside names it, and the state is a border, never a colour alone (R3). */
+.bar {
+  display: flex;
+  align-items: center;
+  min-inline-size: 0;
+  margin-inline: 2px;
+  padding-inline: 8px;
+  block-size: 28px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--canvas);
+  color: var(--ink);
+  font-size: var(--text-dense);
+  text-decoration: none;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bar:hover { background: var(--hover); }
+
+.bar[aria-current] {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.barDone {
+  border-style: dashed;
+  color: var(--ink-3);
+  text-decoration: line-through;
+}
+
+.barConflict {
+  border-color: var(--warn);
+  border-inline-start-width: 3px;
+}
+
+.barSub { font-weight: 400; }
+
+/* The drawers' forms. */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+/* The kit ships no `date` control (its TextInput hard-codes type="text"),
+   so this is a plain input drawn to match, inside the kit's Field for the
+   label, hint and aria wiring. R1 forbids a component library. */
+.plainInput {
+  inline-size: 100%;
+  min-block-size: 36px;
+  padding-inline: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.formError {
+  margin: 0;
+  color: var(--bad);
+  font-size: 13px;
+}
+
+.divider {
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--line);
+}
+
+.subhead {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.empty {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.links {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.linkRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 36px;
+  border-block-end: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.linkRow > :first-child { flex: 1; min-inline-size: 0; }
+
+.linkRow a { color: inherit; }
+
+.addRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.footActions { display: contents; }
+
+/* The page's verbs on a phone, fixed above the tab bar — the same bar the
+   shifts and warehouse screens use, for the same reason. */
+.phoneActions { display: none; }
+
+/*
+ * 767.98px — a phone. The fractional value closes the gap a fractional
+ * viewport width opens; every module in the redesign that changes at this
+ * width repeats this comment block.
+ */
+@media (max-width: 767.98px) {
+  .page { padding-block-end: 72px; }
+
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .tiles > :first-child { grid-column: 1 / -1; }
+
+  .topActions { display: none; }
+  .phoneActions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    position: fixed;
+    z-index: var(--z-bulk);
+    inset-inline: var(--space-3);
+    inset-block-end: calc(
+      var(--tap-min) + var(--space-2) * 2 + var(--space-3)
+      + max(0px, env(safe-area-inset-bottom) - var(--space-2))
+    );
+  }
+  .phoneActions > :first-child { flex: 1; }
+
+  /* On a card the indent has no column to hang off. */
+  .subTitle { padding-inline-start: 0; }
+
+  .timeline {
+    --day-w: 24px;
+    --label-w: 96px;
+  }
+
+  .pair { grid-template-columns: 1fr; }
+  .plainInput { min-block-size: 44px; }
+  .linkRow { min-block-size: 44px; }
+
+  .footActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    inline-size: 100%;
+  }
+  .footActions > :first-child { flex-basis: 100%; }
+  .footActions > :not(:first-child) { flex: 1; }
+}

@@ -92,6 +92,12 @@ export const NAV_GROUPS: NavGroup[] = [
          operations during the event, and because every slot on it is also a
          task the משימות board already shows. */
       { id: 'shifts', label: 'משמרות', href: '/logistics/shifts', icon: 'clock' },
+      /* The work plan: what the camp builds before the burn, under which
+         topic, in what order and on which days. After משמרות because the
+         rail reads from what is kept to what is done: the gear, what is
+         bought, what is built, who staffs the event, and the calendar that
+         gets the camp to it. */
+      { id: 'plan', label: 'לוח עבודה', href: '/logistics/plan', icon: 'board' },
     ],
   },
   {
