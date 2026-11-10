@@ -6,6 +6,15 @@
   flex-direction: column;
   gap: 16px;
   min-height: 0;
+  /*
+   * `min-inline-size: 0`, because the page is a flex item of the shell's
+   * panel and the timeline below declares a minimum width of its own. A
+   * flex item's automatic minimum is its content's, so without this the
+   * timeline's width became the page's, the panel (overflow hidden)
+   * clipped it, and the weeks past the edge could never be scrolled to —
+   * measured at 960px of page on a 390px phone and at 1840px on a laptop.
+   */
+  min-inline-size: 0;
 }
 
 .head {
@@ -377,6 +386,16 @@
 
 .timelineWrap {
   position: relative;
+  /*
+   * `contain: inline-size`: the wrapper's own content never decides its
+   * width. The grid inside declares a minimum of days × `--day-w`, and
+   * without containment that minimum travelled up through the column flex
+   * chain to the page, the shell's panel (overflow hidden) clipped it, and
+   * the later weeks could never be scrolled to — measured at 960px of page
+   * on a 390px phone. With it, the wrapper takes the panel's width and the
+   * grid scrolls inside it, which is what a timeline is for.
+   */
+  contain: inline-size;
   overflow-x: auto;
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
