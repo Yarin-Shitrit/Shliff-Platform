@@ -23,7 +23,7 @@ function topic(over: Partial<Topic>): Topic {
 const PARAMS = { season: 's1' };
 
 function mount(groups: PlanGroup[]) {
-  return render(<PlanList groups={groups} params={PARAMS} currentItemId={null} />);
+  return render(<PlanList groups={groups} params={PARAMS} today="2026-05-11" currentItemId={null} />);
 }
 
 describe('PlanList', () => {
@@ -58,7 +58,7 @@ describe('PlanList', () => {
 
   it('says in words when an item has no day, and links to where one is set', () => {
     mount([{ topic: null, branches: [{ item: item({ id: 'a', title: 'לצבוע פטריות' }), children: [] }] }]);
-    const link = screen.getByRole('link', { name: 'עדיין לא נקבע' });
+    const link = screen.getByRole('link', { name: 'לקבוע יום' });
     expect(link.getAttribute('href')).toBe('/logistics/plan?season=s1&peek=a');
   });
 
@@ -101,6 +101,29 @@ describe('PlanList', () => {
     ]);
     expect(screen.getByRole('link', { name: 'מטבח' }).getAttribute('href')).toBe('/logistics/plan?season=s1&topic=t1');
     expect(screen.getByRole('heading', { name: 'בלי נושא' })).toBeTruthy();
+  });
+
+  it('says in words when an item is overdue or underway, from the day it is given', () => {
+    mount([{
+      topic: null,
+      branches: [
+        { item: item({ id: 'a', title: 'איחור', startsOn: '2026-05-01', endsOn: '2026-05-03' }), children: [] },
+        { item: item({ id: 'b', title: 'עכשיו', startsOn: '2026-05-10', endsOn: '2026-05-12' }), children: [] },
+        { item: item({ id: 'c', title: 'נגמר', startsOn: '2026-05-01', status: 'done' }), children: [] },
+      ],
+    }]);
+    expect(screen.getByText('עבר התאריך')).toBeTruthy();
+    expect(screen.getByText('בעבודה')).toBeTruthy();
+  });
+
+  it('measures each topic in words and a meter', () => {
+    mount([{
+      topic: topic({ id: 't1', name: 'מטבח' }),
+      branches: [
+        { item: item({ id: 'a', status: 'done' }), children: [item({ id: 'b', parentId: 'a' }), item({ id: 'c', parentId: 'a', status: 'cancelled' })] },
+      ],
+    }]);
+    expect(screen.getByRole('img', { name: '1 מתוך 2 הושלמו' })).toBeTruthy();
   });
 
   it('says every state in a word', () => {

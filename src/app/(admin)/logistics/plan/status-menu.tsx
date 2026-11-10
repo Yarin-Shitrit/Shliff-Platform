@@ -48,9 +48,9 @@ export function StatusMenu({ item }: { item: { id: string; title: string; status
     <Popover
       id={`status-${item.id}`}
       label={`עדכון מצב · ${item.title}`}
-      triggerTone="chip"
+      triggerTone="ghost"
       align="end"
-      triggerContent={<span className={styles.rowAction}>עדכון מצב</span>}
+      triggerContent={<span className={styles.rowAction}><Icon name="more" size={16} /></span>}
     >
       <span className={styles.menu}>
         {WORK_ITEM_STATUSES.map((status) => (

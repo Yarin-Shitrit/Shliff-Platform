@@ -645,3 +645,40 @@ export async function planRoster(db: AnyDb, seasonId: string): Promise<RosterOpt
     .map(({ personId, displayName }) => ({ personId, displayName }))
     .sort((a, b) => a.displayName.localeCompare(b.displayName, 'he'));
 }
+
+// ── Now ────────────────────────────────────────────────────────────────
+
+/** Open, scheduled, and its last day is behind the camp's today. */
+export function isOverdue(item: Pick<PlanItem, 'status' | 'startsOn' | 'endsOn'>, today: string): boolean {
+  const last = lastDayOf(item);
+  return item.status === 'open' && last !== null && last < today;
+}
+
+/** Open and today falls inside its days. */
+export function isUnderway(item: Pick<PlanItem, 'status' | 'startsOn' | 'endsOn'>, today: string): boolean {
+  const last = lastDayOf(item);
+  return item.status === 'open' && item.startsOn !== null && item.startsOn <= today && last! >= today;
+}
+
+export interface NowSummary {
+  /** Open items whose days include today, earliest start first. */
+  underway: PlanItem[];
+  /** The next open item to start after today, or null. */
+  next: PlanItem | null;
+  /** Open items whose last day has passed. */
+  overdue: PlanItem[];
+}
+
+/**
+ * What the plan says about today: what is being worked on, what comes
+ * next, what slipped. Cancelled and done items count nowhere; a part and
+ * its parent can both be underway, which is true and reads fine.
+ */
+export function nowSummary(items: PlanItem[], today: string): NowSummary {
+  const open = items.filter((item) => item.status === 'open' && item.startsOn !== null);
+  const byStart = (a: PlanItem, b: PlanItem) => a.startsOn!.localeCompare(b.startsOn!) || byOrder(a, b);
+  const underway = open.filter((item) => isUnderway(item, today)).sort(byStart);
+  const upcoming = open.filter((item) => item.startsOn! > today).sort(byStart);
+  const overdue = open.filter((item) => isOverdue(item, today)).sort(byStart);
+  return { underway, next: upcoming[0] ?? null, overdue };
+}

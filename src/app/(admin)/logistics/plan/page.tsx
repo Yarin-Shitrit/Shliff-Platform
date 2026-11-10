@@ -1,14 +1,15 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import { resolveSeason } from '@/lib/seasons/current';
 import {
-  listPlan, listTopics, topicById, buildPlanTree, buildTimeline, summarizePlan, planRoster,
+  listPlan, listTopics, topicById, buildPlanTree, buildTimeline, summarizePlan, planRoster, nowSummary,
 } from '@/lib/logistics/plan';
 import { campDayOf } from '@/lib/logistics/shift-time';
 import {
-  parsePlanQuery, planHref, newItemHref, newTopicHref, type RawParams,
+  parsePlanQuery, planHref, itemHref, newItemHref, newTopicHref, type RawParams,
 } from '@/lib/logistics/plan-views';
 import { TopBar, SeasonChip } from '@/components/shell/top-bar';
 import { StatTile } from '@/components/ui/stat-tile';
@@ -16,9 +17,11 @@ import { Banner } from '@/components/ui/banner';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ButtonLink } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
-import { PlanList, type PlanLine } from './plan-list';
+import { DateText } from '@/components/format';
+import { PlanList, civil, type PlanLine } from './plan-list';
 import { PlanTimeline } from './plan-timeline';
 import { StatusMenu } from './status-menu';
+import { DoneToggle } from './done-toggle';
 import { ItemDrawer } from './item-drawer';
 import { TopicDrawer } from './topic-drawer';
 import styles from './plan.module.css';
@@ -74,6 +77,7 @@ export default async function PlanPage(
   const totals = summarizePlan(items);
   const groups = buildPlanTree(items, topics);
   const timeline = buildTimeline(items, topics);
+  const now = nowSummary(items, today);
   const activeTopics = topics.filter((topic) => topic.archivedAt === null);
 
   const closeHref = planHref(here, {});
@@ -118,31 +122,80 @@ export default async function PlanPage(
           <h1>לוח עבודה</h1>
           <p className={styles.sub}>
             <bdi>{`${totals.open} משימות פתוחות ל${current.name}`}</bdi>
-            {' · '}
-            <bdi>{`${totals.unscheduled} עדיין בלי תאריך`}</bdi>
-            {totals.conflicts > 0 ? (
-              <>{' · '}<bdi>{`${totals.conflicts} סדרי קדימות שהתאריכים סותרים`}</bdi></>
-            ) : null}
+            {totals.done > 0 ? <>{' · '}<bdi>{`${totals.done} הושלמו`}</bdi></> : null}
+            {totals.unscheduled > 0 ? <>{' · '}<bdi>{`${totals.unscheduled} עדיין בלי יום`}</bdi></> : null}
           </p>
         </div>
       </div>
 
-      <Banner
-        tone="neutral"
-        headline="זה לוח ההכנות של הלוגיסטיקה, לא לוח המשימות של הקאמפ."
-        detail="כאן מפרקים הכנה גדולה לחלקים, פורסים אותם על ימים ואומרים מה חייב להיות מוכן לפני מה. שיבוץ אנשים למשמרות ולמשימות האירוע נשאר ב״משימות״."
-        action={{ label: 'מעבר למשימות', href: '/tasks' }}
-      />
-
       {nothingYet ? (
-        <EmptyState
-          kind="nothing-this-season"
-          noun="משימות בלוח העבודה"
-          seasonName={current.name}
-          action={{ label: 'הוספת נושא ראשון', href: newTopicHref(here) }}
-        />
+        <>
+          <Banner
+            tone="neutral"
+            headline="זה לוח ההכנות של הלוגיסטיקה, לא לוח המשימות של הקאמפ."
+            detail="כאן מפרקים הכנה גדולה לחלקים, פורסים אותם על ימים ואומרים מה חייב להיות מוכן לפני מה. שיבוץ אנשים למשמרות ולמשימות האירוע נשאר ב״משימות״."
+            action={{ label: 'מעבר למשימות', href: '/tasks' }}
+          />
+          <EmptyState
+            kind="nothing-this-season"
+            noun="משימות בלוח העבודה"
+            seasonName={current.name}
+            action={{ label: 'הוספת נושא ראשון', href: newTopicHref(here) }}
+          />
+        </>
       ) : (
         <>
+          {/*
+            What today looks like, in one strip: what is being worked on,
+            what comes next, what slipped. Every name is the link to its
+            drawer. Nothing here is a figure a reader cannot act on.
+          */}
+          <section className={styles.now} aria-label="מה קורה עכשיו">
+            <div className={styles.nowCol}>
+              <span className={styles.nowLabel}><Icon name="clock" size={14} />בעבודה עכשיו</span>
+              {now.underway.length === 0 ? (
+                <span className={styles.nowEmpty}>אין משימה שהימים שלה כוללים את היום.</span>
+              ) : (
+                <ul className={styles.nowList}>
+                  {now.underway.slice(0, 4).map((item) => (
+                    <li key={item.id}>
+                      <Link href={itemHref(here, item.id)}>{item.title}</Link>
+                      {item.assignee === null ? null : <span className={styles.nowMeta}>{` · ${item.assignee.displayName}`}</span>}
+                    </li>
+                  ))}
+                  {now.underway.length > 4 ? <li className={styles.nowMeta}>{`ועוד ${now.underway.length - 4}`}</li> : null}
+                </ul>
+              )}
+            </div>
+            <div className={styles.nowCol}>
+              <span className={styles.nowLabel}><Icon name="arrowl" size={14} />הבאה בתור</span>
+              {now.next === null ? (
+                <span className={styles.nowEmpty}>אין משימה שעוד לא התחילה ויש לה יום.</span>
+              ) : (
+                <span>
+                  <Link href={itemHref(here, now.next.id)}>{now.next.title}</Link>
+                  <span className={styles.nowMeta}>{' · '}<DateText at={civil(now.next.startsOn!)} form="prose" /></span>
+                </span>
+              )}
+            </div>
+            <div className={styles.nowCol}>
+              <span className={styles.nowLabel}><Icon name="alert" size={14} />עבר התאריך</span>
+              {now.overdue.length === 0 ? (
+                <span className={styles.nowEmpty}>שום משימה פתוחה לא חרגה מהיום האחרון שלה.</span>
+              ) : (
+                <ul className={styles.nowList}>
+                  {now.overdue.slice(0, 4).map((item) => (
+                    <li key={item.id}>
+                      <Link href={itemHref(here, item.id)}>{item.title}</Link>
+                      <span className={styles.nowMeta}>{' · עד '}<DateText at={civil(item.endsOn ?? item.startsOn!)} /></span>
+                    </li>
+                  ))}
+                  {now.overdue.length > 4 ? <li className={styles.nowMeta}>{`ועוד ${now.overdue.length - 4}`}</li> : null}
+                </ul>
+              )}
+            </div>
+          </section>
+
           <div className={styles.tiles}>
             <StatTile
               label="משימות פתוחות"
@@ -151,19 +204,26 @@ export default async function PlanPage(
               href="#list"
             />
             <StatTile
-              label="עדיין בלי תאריך"
+              label="עדיין בלי יום"
               value={totals.unscheduled}
               tone={totals.unscheduled > 0 ? 'warn' : 'default'}
               derivation={<bdi>{`${totals.scheduled} כבר על ציר הזמן`}</bdi>}
               href="#list"
             />
             <StatTile
-              label="סדרי קדימות שהתאריכים סותרים"
+              label="עבר התאריך"
+              value={now.overdue.length}
+              tone={now.overdue.length > 0 ? 'bad' : 'ok'}
+              derivation={now.overdue.length === 0 ? 'הכול בזמן' : 'פתוחות אחרי היום האחרון שלהן'}
+              href="#list"
+            />
+            <StatTile
+              label="סדר שהתאריכים סותרים"
               value={totals.conflicts}
               tone={totals.conflicts > 0 ? 'bad' : 'ok'}
               derivation={totals.conflicts === 0
                 ? 'כל מה שחייב להסתיים קודם אכן מסתיים קודם'
-                : 'משימה שמתחילה לפני שמה שהיא מחכה לו נגמר'}
+                : 'מתחילה לפני שמה שהיא מחכה לו נגמר'}
               href="#timeline"
             />
           </div>
@@ -174,7 +234,7 @@ export default async function PlanPage(
               <span className={styles.sectionHint}>
                 {timeline === null
                   ? 'משימה עולה לציר ברגע שיש לה יום התחלה.'
-                  : `${timeline.placed} משימות על הימים שלהן · שישי ושבת מודגשים`}
+                  : `${timeline.placed} משימות על הימים שלהן · שבוע מתחיל ביום ראשון, שישי ושבת מודגשים`}
               </span>
             </div>
             {timeline === null ? (
@@ -189,7 +249,7 @@ export default async function PlanPage(
           <section className={styles.section} id="list" aria-label="הרשימה המלאה">
             <div className={styles.sectionHead}>
               <h2>הרשימה המלאה</h2>
-              <span className={styles.sectionHint}>לפי נושא. משימה כללית, ותחתיה החלקים שלה.</span>
+              <span className={styles.sectionHint}>לפי נושא. משימה כללית, ותחתיה החלקים שלה. לחיצה על העיגול מסמנת שהושלמה.</span>
             </div>
             {groups.length === 0 ? (
               <EmptyState
@@ -202,7 +262,11 @@ export default async function PlanPage(
               <PlanList
                 groups={groups}
                 params={here}
+                today={today}
                 currentItemId={query.peek}
+                rowLead={(line: PlanLine) => (line.item.status === 'cancelled' ? null : (
+                  <DoneToggle item={{ id: line.item.id, title: line.item.title, status: line.item.status }} />
+                ))}
                 rowActions={(line: PlanLine) => (
                   <span className={styles.rowActions}>
                     {line.sub || line.item.status === 'cancelled' ? null : (
@@ -217,6 +281,13 @@ export default async function PlanPage(
               />
             )}
           </section>
+
+          <Banner
+            tone="neutral"
+            headline="זה לוח ההכנות של הלוגיסטיקה, לא לוח המשימות של הקאמפ."
+            detail="שיבוץ אנשים למשמרות ולמשימות האירוע נשאר ב״משימות״."
+            action={{ label: 'מעבר למשימות', href: '/tasks' }}
+          />
         </>
       )}
 

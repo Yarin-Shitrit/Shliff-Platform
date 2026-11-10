@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { buildTimeline, type PlanItem, type Topic, type TimelineBar } from '@/lib/logistics/plan';
-import { PlanTimeline, packBars } from './plan-timeline';
+import { PlanTimeline, packBars, laneRows, monthBands } from './plan-timeline';
 
 function item(over: Partial<PlanItem>): PlanItem {
   return {
@@ -33,6 +33,23 @@ describe('packBars', () => {
   });
 });
 
+describe('laneRows', () => {
+  it('puts the general items first and the parts under them', () => {
+    const rows = laneRows([
+      { item: item({ id: 'c', parentId: 'p' }), start: 1, span: 2 },
+      { item: item({ id: 'p' }), start: 0, span: 5 },
+    ]);
+    expect(rows.map((row) => row.map((one) => one.item.id))).toEqual([['p'], ['c']]);
+  });
+});
+
+describe('monthBands', () => {
+  it('spans each month over its days', () => {
+    const timeline = buildTimeline([item({ id: 'a', startsOn: '2026-05-30', endsOn: '2026-06-02' })], [])!;
+    expect(monthBands(timeline.days).map((band) => [band.label, band.span])).toEqual([['מאי', 8], ['יוני', 6]]);
+  });
+});
+
 describe('PlanTimeline', () => {
   const items = [
     item({ id: 'p', title: 'להכין מכולת מטבח', topicId: 'k', startsOn: '2026-05-12', endsOn: '2026-05-14' }),
@@ -51,7 +68,7 @@ describe('PlanTimeline', () => {
     expect(links.map((a) => a.getAttribute('aria-label'))).toEqual([
       'להכין מכולת מטבח · 12/05–14/05',
       'לתקן מקררים · 13/05',
-      'לקנות קרשים · 20/05–21/05',
+      'לקנות קרשים · 20/05–21/05 · הושלמה',
     ]);
     expect(links[0].getAttribute('href')).toBe('/logistics/plan?season=s1&peek=p');
     // The grid column is the day's index plus one, spanning the days.
@@ -64,7 +81,7 @@ describe('PlanTimeline', () => {
     expect(screen.getByText('בלי נושא')).toBeTruthy();
   });
 
-  it('heads the days with the month where one starts and marks today', () => {
+  it('heads the days with the month band and marks today', () => {
     mount('2026-05-13');
     expect(screen.getByText('מאי')).toBeTruthy();
     const days = screen.getAllByRole('listitem');
