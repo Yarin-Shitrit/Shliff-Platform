@@ -11,7 +11,7 @@ describe('nav data', () => {
       'בית', 'לטיפול',
       'אנשים', 'דמי קאמפ', 'משימות', 'מפת הקאמפ',
       'סקירה כספית', 'תנועות', 'מסיבות', 'תקציב', 'חובות',
-      'מחסן', 'רכש', 'הקמה', 'משמרות',
+      'מחסן', 'רכש', 'הקמה', 'משמרות', 'לוח עבודה',
       'קבצים וייבוא', 'העלאת קובץ',
     ]);
   });
@@ -31,12 +31,13 @@ describe('nav data', () => {
   });
 
   it('marks the logistics screen a lead is actually on', () => {
-    // All four live under `/logistics/`, so prefix matching has to pick the
-    // longest — otherwise one of them would light up the rail for all four.
+    // All five live under `/logistics/`, so prefix matching has to pick the
+    // longest — otherwise one of them would light up the rail for all five.
     expect(activeItemId('/logistics/warehouse')).toBe('warehouse');
     expect(activeItemId('/logistics/acquisitions')).toBe('acquisitions');
     expect(activeItemId('/logistics/build')).toBe('build');
     expect(activeItemId('/logistics/shifts')).toBe('shifts');
+    expect(activeItemId('/logistics/plan')).toBe('plan');
   });
 
   it('leaves the rail unmarked on the redirect that owns no screen', () => {
@@ -95,6 +96,7 @@ describe('nav data', () => {
       acquisitions: '/logistics/acquisitions',
       build: '/logistics/build',
       shifts: '/logistics/shifts',
+      plan: '/logistics/plan',
       files: '/imports',
       upload: '/upload',
     });

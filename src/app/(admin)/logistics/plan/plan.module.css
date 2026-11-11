@@ -1,0 +1,782 @@
+/* Structure is drawn with 1px borders and tokens only; shadows are reserved
+   for overlays (A7). Logical properties throughout (A10). */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  /*
+   * `min-inline-size: 0`, because the page is a flex item of the shell's
+   * panel and the timeline below declares a minimum width of its own. A
+   * flex item's automatic minimum is its content's, so without this the
+   * timeline's width became the page's, the panel (overflow hidden)
+   * clipped it, and the weeks past the edge could never be scrolled to —
+   * measured at 960px of page on a 390px phone and at 1840px on a laptop.
+   */
+  min-inline-size: 0;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.sub {
+  margin-block-start: 2px;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.topActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sectionHead h2 {
+  margin: 0;
+  font-size: var(--text-title);
+}
+
+.sectionHint {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+/* What today looks like: three columns, one sentence each. */
+.now {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+}
+
+.nowCol {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 16px;
+  font-size: var(--text-body);
+  border-inline-end: 1px solid var(--line);
+}
+
+.nowCol:last-child { border-inline-end: 0; }
+
+.nowLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+  font-weight: 600;
+}
+
+.nowList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nowList a, .nowCol > span > a {
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.nowList a:hover, .nowCol > span > a:hover { text-decoration: underline; }
+
+.nowMeta { color: var(--ink-3); font-size: var(--text-dense); }
+
+.nowEmpty { color: var(--ink-3); font-size: var(--text-dense); }
+
+/* One topic: its heading is a link to its drawer, a meter says how far it
+   is, and the verb beside it adds an item straight under it. */
+.topic {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-block-start: 8px;
+}
+
+.topicHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.topicHead h3 {
+  margin: 0;
+  font-size: var(--text-lead);
+}
+
+.topicHead h3 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.topicHead h3 a:hover { text-decoration: underline; }
+
+.topicSpacer { flex: 1; }
+
+.topicMeta {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.topicArchived h3 { color: var(--ink-3); }
+
+.progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The meter is paired with its words (R3); the fill is the ok green and
+   turns the whole track green when the topic is done. */
+.meter {
+  display: inline-block;
+  inline-size: 96px;
+  block-size: 6px;
+  border-radius: 999px;
+  background: var(--viz-track);
+  overflow: hidden;
+}
+
+.meter > i {
+  display: block;
+  block-size: 100%;
+  background: var(--ok);
+  border-radius: 999px;
+  transition: inline-size 300ms ease;
+}
+
+.meterFull { background: var(--ok-soft); }
+
+/* The five tables share one set of column widths, so ״מתי״ sits under
+   ״מתי״ from one topic to the next. Hints, not a fixed layout: the title
+   column still takes what is left. */
+.topic th:nth-child(2) { inline-size: 200px; }
+.topic th:nth-child(3) { inline-size: 150px; }
+.topic th:nth-child(4) { inline-size: 100px; }
+.topic th:nth-child(5) { inline-size: 220px; }
+
+/* A topic with nothing under it yet: a sentence and the link, not a table
+   with no rows and nothing to say. */
+.topicEmpty {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-card);
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+/* The round check at the start of a row. Pressed is filled green with a
+   white check, which with the struck title is a state said twice (R3). */
+.check {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 22px;
+  block-size: 22px;
+  padding: 0;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--panel);
+  color: transparent;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease, transform 120ms ease;
+}
+
+.check:hover {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.check:active { transform: scale(0.9); }
+
+.check:disabled { cursor: progress; opacity: .6; }
+
+.checkDone {
+  border-color: var(--ok);
+  background: var(--ok);
+  color: #FFFFFF;
+}
+
+.checkDone:hover { color: #FFFFFF; }
+
+/* The indent is what says "this belongs to the item above it" —
+   `padding-inline-start`, so under RTL it reads from the text's edge. */
+.subTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-inline-start: 22px;
+  color: var(--ink-2);
+}
+
+.itemTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.itemTitle a,
+.subTitle a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.itemTitle a:hover,
+.subTitle a:hover { text-decoration: underline; }
+
+.titleClosed a {
+  color: var(--ink-3);
+  text-decoration: line-through;
+  font-weight: 400;
+}
+
+.muted { color: var(--ink-3); }
+
+.whenCell {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.when {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.unscheduled { font-size: 13px; }
+
+.unscheduled a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--brand-text);
+  text-decoration: none;
+}
+
+.unscheduled a:hover { text-decoration: underline; }
+
+.who {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.who:hover { text-decoration: underline; }
+
+.waits {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.waitsOne {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink-2);
+}
+
+.waitsOne a { color: inherit; }
+
+.waitsConflict { color: var(--warn); font-weight: 600; }
+
+.waitsNote { font-weight: 400; }
+
+.rowActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rowAction {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 180px;
+}
+
+.menu > * { justify-content: flex-start; }
+
+/*
+ * The timeline. A CSS grid of days, the first column at the inline start —
+ * so under RTL the earliest day sits at the right, the way a Hebrew calendar
+ * reads. A narrow laptop scrolls it sideways rather than clipping a week;
+ * the topic labels stay put while it does.
+ *
+ * `--days` and `--today` are set inline by the component; `--day-w` is the
+ * one width every column shares, header and bars alike, so a bar lands
+ * under its day.
+ */
+.timelineTools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.legend {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-inline-start: auto;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.legendSwatch {
+  display: inline-block;
+  inline-size: 18px;
+  block-size: 10px;
+  border-radius: 3px;
+  border: 1px solid var(--line-strong);
+  margin-inline-end: -4px;
+}
+
+.legendParent { background: var(--ink-2); border-color: var(--ink-2); }
+.legendPart { background: var(--panel); }
+.legendDone { background: var(--ok-soft); border-color: var(--ok); }
+.legendConflict { background: var(--warn-soft); border-color: var(--warn); }
+
+.timelineWrap {
+  position: relative;
+  /*
+   * `contain: inline-size`: the wrapper's own content never decides its
+   * width. The grid inside declares a minimum of days × `--day-w`, and
+   * without containment that minimum travelled up through the column flex
+   * chain to the page, the shell's panel (overflow hidden) clipped it, and
+   * the later weeks could never be scrolled to — measured at 960px of page
+   * on a 390px phone. With it, the wrapper takes the panel's width and the
+   * grid scrolls inside it, which is what a timeline is for.
+   */
+  contain: inline-size;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  scroll-behavior: smooth;
+}
+
+.timeline {
+  --day-w: 30px;
+  --label-w: 160px;
+  --week-w: calc(7 * var(--day-w));
+  min-inline-size: calc(var(--label-w) + var(--days) * var(--day-w));
+  display: flex;
+  flex-direction: column;
+}
+
+.timelineHead,
+.lane {
+  display: grid;
+  grid-template-columns: var(--label-w) 1fr;
+  border-block-end: 1px solid var(--line);
+}
+
+.lane:last-child { border-block-end: 0; }
+
+.laneLabel {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  background: var(--sunken);
+  border-inline-end: 1px solid var(--line);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.laneLabel a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.laneLabel a:hover { text-decoration: underline; }
+
+.laneCount {
+  color: var(--ink-3);
+  font-size: var(--text-label);
+  font-weight: 400;
+}
+
+.cornerLabel { justify-content: flex-end; }
+
+.headCols {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The weekend and the week lines, drawn once per column area so they run
+   continuously from the header through every lane. Drawn from the inline
+   start, so the stripe follows the grid under RTL. The today column is a
+   third layer, only when `.hasToday` says the day is in the span. */
+.months,
+.days,
+.barRows {
+  background-image:
+    repeating-linear-gradient(
+      to left,
+      var(--line) 0 1px,
+      transparent 1px var(--week-w)
+    ),
+    repeating-linear-gradient(
+      to left,
+      transparent 0 calc(5 * var(--day-w)),
+      var(--sunken) calc(5 * var(--day-w)) var(--week-w)
+    );
+}
+
+.hasToday .days,
+.hasToday .barRows {
+  background-image:
+    linear-gradient(
+      to left,
+      transparent 0 calc(var(--today) * var(--day-w)),
+      var(--brand-soft) calc(var(--today) * var(--day-w)) calc((var(--today) + 1) * var(--day-w)),
+      transparent calc((var(--today) + 1) * var(--day-w))
+    ),
+    repeating-linear-gradient(
+      to left,
+      var(--line) 0 1px,
+      transparent 1px var(--week-w)
+    ),
+    repeating-linear-gradient(
+      to left,
+      transparent 0 calc(5 * var(--day-w)),
+      var(--sunken) calc(5 * var(--day-w)) var(--week-w)
+    );
+}
+
+.months,
+.days,
+.barRow {
+  display: grid;
+  grid-template-columns: repeat(var(--days), var(--day-w));
+}
+
+.months {
+  border-block-end: 1px solid var(--line);
+}
+
+.month {
+  position: sticky;
+  inset-inline-start: var(--label-w);
+  padding: 4px 8px;
+  font-size: var(--text-meta);
+  font-weight: 600;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dayHead {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  min-block-size: 38px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.weekday { font-size: 10.5px; line-height: 1; }
+
+.dayNumber { font-size: var(--text-dense); line-height: 1.3; }
+
+.dayHead[aria-current] {
+  color: var(--brand-text);
+  font-weight: 700;
+}
+
+.dayHead[aria-current] .dayNumber {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 22px;
+  block-size: 22px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: var(--brand-ink);
+}
+
+.barRows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-block: 6px;
+}
+
+.barRow { min-block-size: 28px; }
+
+/* One item on its days. The whole bar is the link to its drawer; the word
+   inside names it, and the state is a border and an icon, never a colour
+   alone (R3). A general item is the dark summary bar; its parts are the
+   light ones under it. */
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-inline-size: 0;
+  margin-inline: 2px;
+  padding-inline: 8px 4px;
+  block-size: 28px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: var(--text-dense);
+  text-decoration: none;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.bar:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-pop);
+  z-index: 1;
+}
+
+.barTitle {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.barWho { flex: none; display: inline-flex; }
+
+.barParent {
+  background: var(--ink-2);
+  border-color: var(--ink-2);
+  color: var(--panel);
+  font-weight: 600;
+}
+
+.barPart { font-weight: 400; }
+
+.bar[aria-current] {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.barDone {
+  background: var(--ok-soft);
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.barDone .barTitle { text-decoration: line-through; }
+
+.barConflict {
+  background: var(--warn-soft);
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.barOverdue {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+/* The drawers' forms. */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+/* The kit ships no `date` control (its TextInput hard-codes type="text"),
+   so this is a plain input drawn to match, inside the kit's Field for the
+   label, hint and aria wiring. R1 forbids a component library. */
+.plainInput {
+  inline-size: 100%;
+  min-block-size: 36px;
+  padding-inline: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.formError {
+  margin: 0;
+  color: var(--bad);
+  font-size: 13px;
+}
+
+.divider {
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--line);
+}
+
+.subhead {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.empty {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.links {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.linkRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 36px;
+  border-block-end: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.linkRow > :first-child { flex: 1; min-inline-size: 0; }
+
+.linkRow a { color: inherit; }
+
+.addRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.footActions { display: contents; }
+
+/* The page's verbs on a phone, fixed above the tab bar — the same bar the
+   shifts and warehouse screens use, for the same reason. */
+.phoneActions { display: none; }
+
+/*
+ * 767.98px — a phone. The fractional value closes the gap a fractional
+ * viewport width opens; every module in the redesign that changes at this
+ * width repeats this comment block.
+ */
+@media (max-width: 767.98px) {
+  .page { padding-block-end: 72px; }
+
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .now { grid-template-columns: 1fr; }
+  .nowCol { border-inline-end: 0; border-block-end: 1px solid var(--line); }
+  .nowCol:last-child { border-block-end: 0; }
+
+  .topActions { display: none; }
+  .phoneActions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    position: fixed;
+    z-index: var(--z-bulk);
+    inset-inline: var(--space-3);
+    inset-block-end: calc(
+      var(--tap-min) + var(--space-2) * 2 + var(--space-3)
+      + max(0px, env(safe-area-inset-bottom) - var(--space-2))
+    );
+  }
+  .phoneActions > :first-child { flex: 1; }
+
+  /* On a card the indent has no column to hang off. */
+  .subTitle { padding-inline-start: 0; }
+
+  .timeline {
+    --day-w: 26px;
+    --label-w: 104px;
+  }
+  .laneLabel { padding: 8px; font-size: 13px; }
+  .legend { display: none; }
+  .check { inline-size: 28px; block-size: 28px; }
+
+  .pair { grid-template-columns: 1fr; }
+  .plainInput { min-block-size: 44px; }
+  .linkRow { min-block-size: 44px; }
+
+  .footActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    inline-size: 100%;
+  }
+  .footActions > :first-child { flex-basis: 100%; }
+  .footActions > :not(:first-child) { flex: 1; }
+}

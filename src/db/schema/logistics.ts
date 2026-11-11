@@ -1,5 +1,5 @@
 import {
-  pgTable, uuid, text, integer, timestamp, numeric,
+  pgTable, uuid, text, integer, timestamp, numeric, unique, type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { persons, seasons, tasks } from './camp';
 import { budgetLines } from './money';
@@ -210,3 +210,96 @@ export const shiftSlots = pgTable('shift_slots', {
     .references(() => shiftTypes.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+export type WorkItemStatus = 'open' | 'done' | 'cancelled';
+
+/**
+ * A subject the logistics plan is organised under — ״סלון״, ״מטבח״,
+ * ״שירותים״, ״מחנה״. Season-scoped: the camp decides each year what it is
+ * building, and last year's list is a starting point a lead copies by hand,
+ * not a fact that carries over on its own.
+ *
+ * `position` is the order a lead gave the list, 0-based; two topics with the
+ * same position fall back to name order. No delete: a topic that is no
+ * longer wanted is `archived_at` and keeps the items under it.
+ */
+export const workTopics = pgTable('work_topics', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  seasonId: uuid('season_id').notNull()
+    .references(() => seasons.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  position: integer('position').notNull().default(0),
+  notes: text('notes'),
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: text('updated_by'),
+});
+
+/**
+ * One thing the logistics plan has to get done, on a timeline.
+ *
+ * Two levels and no more: a general item (״להכין מכולת מטבח״) and the
+ * smaller items under it (״לתקן מקררים״, ״לקנות מכולה״), each via
+ * `parent_id`. A child cascades with its parent — a parent is never deleted
+ * by this product, so the cascade is a safety net, not a verb.
+ *
+ * **Not a `tasks` row.** The camp's `tasks` table is one level deep and has
+ * no dependencies, and it is a shared surface; the plan needs both and
+ * belongs to logistics. The two are kept apart on purpose, and the screen
+ * says so.
+ *
+ * The dates are `YYYY-MM-DD` text, civil days in the camp's zone, and both
+ * are nullable: an item nobody has placed yet is listed as unscheduled, not
+ * dropped, and never given a day it was not given. A start with no end is a
+ * one-day item.
+ *
+ * `topic_id` is nullable: an item can sit under no topic (״כללי״) while a
+ * lead is still sorting the list. `set null` on the topic: an archived or
+ * removed topic leaves its items in the plan rather than taking them along.
+ */
+export const workItems = pgTable('work_items', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  seasonId: uuid('season_id').notNull()
+    .references(() => seasons.id, { onDelete: 'cascade' }),
+  topicId: uuid('topic_id')
+    .references(() => workTopics.id, { onDelete: 'set null' }),
+  parentId: uuid('parent_id')
+    .references((): AnyPgColumn => workItems.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  notes: text('notes'),
+  /** `2026-05-14`. Null is unscheduled. */
+  startsOn: text('starts_on'),
+  /** `2026-05-16`, inclusive. Null with a start means the one day. */
+  endsOn: text('ends_on'),
+  /** Who is responsible. A person on the roster, never free text. */
+  assigneePersonId: uuid('assignee_person_id')
+    .references(() => persons.id, { onDelete: 'set null' }),
+  status: text('status').$type<WorkItemStatus>().notNull().default('open'),
+  position: integer('position').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: text('updated_by'),
+});
+
+/**
+ * ״X חייב להסתיים לפני Y״. One row per ordered pair; the library refuses a
+ * pair that would close a cycle, because a plan that says A before B before
+ * A can never be laid out and the screen would have to pick one silently.
+ *
+ * The dates are not enforced here. A dependency the dates contradict is a
+ * visible decision on the timeline — the later item is marked, with the
+ * sentence saying what it waits for — never a date the system moved.
+ */
+export const workDependencies = pgTable('work_dependencies', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  /** The item that has to be finished first. */
+  beforeId: uuid('before_id').notNull()
+    .references(() => workItems.id, { onDelete: 'cascade' }),
+  /** The item that waits for it. */
+  afterId: uuid('after_id').notNull()
+    .references(() => workItems.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  unique('work_dependencies_pair_key').on(table.beforeId, table.afterId),
+]);

@@ -1,5 +1,5 @@
 import type {
-  LogisticsCategory, ItemCondition, AcquisitionSource, AcquisitionStatus,
+  LogisticsCategory, ItemCondition, AcquisitionSource, AcquisitionStatus, WorkItemStatus,
 } from '@/db/schema/logistics';
 import type { MaterialState } from './build';
 
@@ -103,4 +103,23 @@ export const MATERIAL_STATE_TONES: Record<MaterialState, 'ok' | 'warn' | 'bad' |
   needs_repair: 'warn',
   obtained: 'info',
   missing: 'bad',
+};
+
+/**
+ * The work plan's three states, in the feminine the plan's noun (משימה)
+ * takes — the same register `TASK_STATUS_LABELS` on the משימות board uses,
+ * and the same spellings, so a lead reading both screens reads one word.
+ * Written here rather than imported from `tasks/rows.ts`, because that
+ * file is the משימות area's and a plan item is not a task.
+ */
+export const WORK_STATUS_LABELS: Record<WorkItemStatus, string> = {
+  open: 'פתוחה',
+  done: 'הושלמה',
+  cancelled: 'בוטלה',
+};
+
+export const WORK_STATUS_TONES: Record<WorkItemStatus, 'ok' | 'neutral' | 'outline'> = {
+  open: 'neutral',
+  done: 'ok',
+  cancelled: 'outline',
 };
