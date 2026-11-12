@@ -131,7 +131,7 @@ describe('PeekDrawer — what it refuses to be', () => {
   /* /fees opens its payment drawer from `?peek=<personId>&act=pay`, so the
      hand-off lands with that drawer open on this person — a `person` param
      nobody read used to leave a lead on the fees list, hunting for the row. */
-  it('offers exactly three ways out, all of them links', async () => {
+  it('offers exactly four ways out, all of them links', async () => {
     await renderDrawer();
     expect(screen.getByRole('link', { name: 'פתיחת הרשומה המלאה' }).getAttribute('href'))
       .toBe('/members/p1');
@@ -139,6 +139,11 @@ describe('PeekDrawer — what it refuses to be', () => {
       .toBe('/fees?season=s26&peek=p1&act=pay');
     expect(screen.getByRole('link', { name: 'שיבוץ למשימה' }).getAttribute('href'))
       .toBe('/tasks?season=s26');
+    /* The record page's confirmation, with the season kept (R5). Nothing
+       deletes from the peek: the dialog, the preview and the refusals are
+       all the record page's. */
+    expect(screen.getByRole('link', { name: 'מחיקה' }).getAttribute('href'))
+      .toBe('/members/p1?season=s26&delete=1');
   });
 
   it('closes back to the list it was opened from, filters and all', async () => {

@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  */
 const {
   requireAdmin, addMember, issueFlatDueFor, revalidatePath,
-  unlinkAlias, aliasUnlinkTarget, redirect, renamePerson,
+  unlinkAlias, aliasUnlinkTarget, redirect, renamePerson, deletePerson,
 } = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   addMember: vi.fn(),
@@ -17,6 +17,7 @@ const {
   unlinkAlias: vi.fn(),
   aliasUnlinkTarget: vi.fn(),
   renamePerson: vi.fn(),
+  deletePerson: vi.fn(),
   redirect: vi.fn((to: string) => { throw new Error(`NEXT_REDIRECT:${to}`); }),
 }));
 vi.mock('@/db', () => ({ db: {} }));
@@ -28,6 +29,7 @@ vi.mock('next/cache', () => ({ revalidatePath }));
 vi.mock('next/navigation', () => ({ redirect }));
 vi.mock('@/lib/members/roster', () => ({ addMember }));
 vi.mock('@/lib/fees/dues', () => ({ issueFlatDueFor }));
+vi.mock('@/lib/members/delete', () => ({ deletePerson }));
 vi.mock('@/lib/members/link', () => ({
   unlinkAlias, aliasUnlinkTarget, renamePerson,
   createPerson: vi.fn(), createPersonFromAlias: vi.fn(),
@@ -37,9 +39,11 @@ vi.mock('@/lib/members/link', () => ({
 import {
   addToSeasonBulkAction, issueDuesBulkAction, unlinkAliasAction,
   unlinkAliasAndReturn, renamePersonAction, renamePersonAndReturn,
+  deletePersonAction, deletePersonAndReturn,
 } from './actions';
 import { UNLINK_ERROR_PARAM } from './unlink-error';
 import { RENAME_ERROR_PARAM } from './rename-params';
+import { DELETE_ERROR_PARAM } from './delete-params';
 import { HebrewRefusal, HEBREW_FALLBACK } from '@/lib/errors/hebrew';
 
 const LAST_ALIAS_REFUSAL =
@@ -289,5 +293,66 @@ describe('renamePersonAndReturn — A38', () => {
     await expect(renamePersonAndReturn('p1', '/members/p1', form(null))).rejects.toThrow(/NEXT_REDIRECT/);
     expect(renamePerson).toHaveBeenCalledWith({}, 'p1', '', 'lead@shliff.camp');
     expect(redirectedTo().startsWith(`/members/p1?${RENAME_ERROR_PARAM}=`)).toBe(true);
+  });
+});
+
+describe('deletePersonAction', () => {
+  it('refuses without admin and touches nothing', async () => {
+    requireAdmin.mockResolvedValue({ ok: false });
+    expect(await deletePersonAction('p1')).toEqual({ ok: false, error: 'אין הרשאה' });
+    expect(deletePerson).not.toHaveBeenCalled();
+  });
+
+  it('deletes, and refreshes the list and the inbox a requeued spelling lands in', async () => {
+    deletePerson.mockResolvedValue({
+      ok: true, removed: { aliases: 1, requeued: 1, memberships: 1, dues: 0 },
+    });
+    expect(await deletePersonAction('p1')).toEqual({ ok: true });
+    expect(deletePerson).toHaveBeenCalledWith({}, 'p1');
+    expect(revalidatePath).toHaveBeenCalledWith('/members');
+    expect(revalidatePath).toHaveBeenCalledWith('/inbox');
+  });
+
+  it('names every blocker the library refused on, in its order', async () => {
+    deletePerson.mockResolvedValue({
+      ok: false, reason: 'blocked',
+      blockers: [
+        { conflict: 'תשלומים', count: 2, href: '/members/p1?tab=payments' },
+        { conflict: 'קופה', count: 1, href: '/money' },
+      ],
+    });
+    expect(await deletePersonAction('p1'))
+      .toEqual({ ok: false, error: 'לא ניתן למחוק — קיימים: תשלומים, קופה' });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('says so in Hebrew when the id names nobody', async () => {
+    deletePerson.mockResolvedValue({ ok: false, reason: 'not-found' });
+    expect(await deletePersonAction('p1')).toEqual({ ok: false, error: 'האדם לא נמצא.' });
+  });
+
+  /* R9: a driver's English never reaches the screen. */
+  it('replaces a driver fault with the fallback rather than echoing it', async () => {
+    deletePerson.mockRejectedValue(new Error('connection refused'));
+    expect(await deletePersonAction('p1')).toEqual({ ok: false, error: HEBREW_FALLBACK });
+  });
+});
+
+describe('deletePersonAndReturn', () => {
+  it('goes to the list on success — the record page no longer exists to return to', async () => {
+    deletePerson.mockResolvedValue({
+      ok: true, removed: { aliases: 1, requeued: 0, memberships: 0, dues: 0 },
+    });
+    await expect(deletePersonAndReturn('p1', '/members?season=s26', '/members/p1?season=s26'))
+      .rejects.toThrow('NEXT_REDIRECT:/members?season=s26');
+  });
+
+  it('carries a refusal back to the record page in the URL', async () => {
+    deletePerson.mockResolvedValue({
+      ok: false, reason: 'blocked',
+      blockers: [{ conflict: 'תשלומים', count: 2, href: '/members/p1?tab=payments' }],
+    });
+    await expect(deletePersonAndReturn('p1', '/members', '/members/p1?tab=payments'))
+      .rejects.toThrow(`NEXT_REDIRECT:/members/p1?tab=payments&${DELETE_ERROR_PARAM}=${encodeURIComponent('לא ניתן למחוק — קיימים: תשלומים')}`);
   });
 });

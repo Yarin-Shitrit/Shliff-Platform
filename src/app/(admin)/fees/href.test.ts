@@ -22,6 +22,11 @@ describe('feesHref', () => {
       .toBe(`/fees?season=${SEASON}&view=unpaid&peek=p1&act=pay`);
   });
 
+  it('carries the rate drawer with no peek, since it is about the season and not a person', () => {
+    expect(feesHref({ season: SEASON, view: 'unpaid', rate: true }))
+      .toBe(`/fees?season=${SEASON}&view=unpaid&act=rate`);
+  });
+
   it('carries the exception drawer', () => {
     expect(feesHref({ season: SEASON, exception: 'p1' }))
       .toBe(`/fees?season=${SEASON}&peek=p1&act=exception`);

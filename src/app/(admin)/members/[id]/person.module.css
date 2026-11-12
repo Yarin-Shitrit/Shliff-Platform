@@ -340,3 +340,37 @@
   align-items: center;
   padding-block-end: var(--space-1);
 }
+
+/*
+ * The delete confirmation's preview: what goes with the record, one line
+ * each. Plain list, no bullets — every line already starts with its verb.
+ */
+.deleteList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-1);
+  font-size: var(--text-dense);
+}
+
+/* The drawer raised instead of the dialog when something stands in the way.
+   Each blocker is a row a lead can follow, the merge panel's shape. */
+.deleteBlocked h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-dense);
+  font-weight: 600;
+}
+
+.deleteBlockers {
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.deleteBlockers li {
+  padding: var(--space-2) 0;
+  border-block-end: 1px solid var(--line);
+}
+
+.deleteBlockers li:last-child { border-block-end: none; }

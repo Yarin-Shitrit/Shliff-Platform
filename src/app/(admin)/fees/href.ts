@@ -1,5 +1,5 @@
 import type { FeeView } from '@/lib/fees/views';
-import { closePeekHref, openPeekHref, type ReadableParams } from '@/components/ui/drawer-url';
+import { closePeekHref, openActHref, openPeekHref, type ReadableParams } from '@/components/ui/drawer-url';
 
 /**
  * Every link this screen produces, from one place.
@@ -20,6 +20,9 @@ export interface FeesHrefParts {
   view?: FeeView;
   pay?: string;
   exception?: string;
+  /** The season's rate drawer: `?act=rate` with no `peek`, since it is about
+   *  the season and not about a person. */
+  rate?: boolean;
 }
 
 export function feesHref(parts: FeesHrefParts): string {
@@ -31,5 +34,6 @@ export function feesHref(parts: FeesHrefParts): string {
   // `pay` is the one a lead is far more often in the middle of.
   if (parts.pay) return openPeekHref('/fees', current, parts.pay, 'pay');
   if (parts.exception) return openPeekHref('/fees', current, parts.exception, 'exception');
+  if (parts.rate) return openActHref('/fees', current, 'rate');
   return closePeekHref('/fees', current);
 }
