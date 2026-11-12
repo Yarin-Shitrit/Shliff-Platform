@@ -4,6 +4,7 @@ import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import { listSeasons } from '@/lib/members/roster';
 import { listSeasonFees } from '@/lib/fees/season-fees';
+import { issuedFlatDues } from '@/lib/fees/dues';
 import { seasonFeeSummary } from '@/lib/fees/summary';
 import { listOpenAccounts } from '@/lib/money/accounts';
 import {
@@ -11,6 +12,8 @@ import {
 } from '@/lib/fees/views';
 import { formatShekels } from '@/lib/money';
 import { Banner } from '@/components/ui/banner';
+import { ButtonLink } from '@/components/ui/button';
+import { Icon } from '@/components/ui/icon';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FeeRollup, feeLeadSentence, missingDuesSentence } from './fee-rollup';
 import { FeeViews } from './fee-views';
@@ -18,6 +21,8 @@ import { FeeTable } from './fee-table';
 import { IssueMissingDuesButton } from './issue-due-button';
 import { PaymentDrawer } from './payment-drawer';
 import { ExceptionDrawer } from './exception-drawer';
+import { RateDrawer } from './rate-drawer';
+import { feesHref } from './href';
 import styles from './fees.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -82,12 +87,31 @@ export default async function FeesPage(
   const payRow = peeked && params.act !== 'exception' ? peeked : undefined;
   const exceptionRow = peeked && params.act === 'exception' ? peeked : undefined;
 
+  /*
+   * The season's own drawer: `?act=rate` with no `peek`, the shape a create
+   * drawer takes (`openActHref`). What it reads — the flat dues already out,
+   * and how many carry money — is fetched only when it is open, since that
+   * is the one moment the counts decide anything.
+   */
+  const settingRate = params.act === 'rate' && !params.peek;
+  const issued = settingRate ? await issuedFlatDues(db, season.id) : null;
+
   const allClear = rows.length > 0 && visible.length === 0 && view === 'unpaid';
 
   return (
     <main className={styles.page}>
       <header className={styles.pagehead}>
-        <h1>דמי קאמפ</h1>
+        <div className={styles.headRow}>
+          <h1>דמי קאמפ</h1>
+          {/*
+            The rate is the first figure in the sentence below, and this is
+            the link that can change it (D1). A link, because the drawer it
+            opens is a URL like every other drawer here.
+          */}
+          <ButtonLink tone="ghost" size="sm" href={feesHref({ season: season.id, view, rate: true })}>
+            <Icon name="pencil" size={14} /> {`שינוי התעריף של ${season.name}`}
+          </ButtonLink>
+        </div>
         {/* A17: one isolate around the whole phrase, not one per figure. */}
         <p className={styles.sub}>
           <bdi>{feeLeadSentence(summary, counts.paid)}</bdi>
@@ -157,6 +181,16 @@ export default async function FeesPage(
           nextPersonId={nextPayable(rows, view, payRow.personId)}
           prevPersonId={null}
           position={payablePosition(rows, view, payRow.personId)}
+        />
+      )}
+
+      {issued !== null && (
+        <RateDrawer
+          seasonId={season.id}
+          seasonName={season.name}
+          view={view}
+          flatRateAgorot={summary.flatRateAgorot}
+          issued={issued}
         />
       )}
 

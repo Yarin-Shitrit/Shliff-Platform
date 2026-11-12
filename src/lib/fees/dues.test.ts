@@ -4,7 +4,10 @@ import { createSeason, addMember } from '@/lib/members/roster';
 import { createPerson } from '@/lib/members/link';
 import {
   issueFlatDues, issueFlatDueFor, setException, clearException, listDues,
+  setFlatRate, issuedFlatDues,
 } from '@/lib/fees/dues';
+import { recordPayment } from '@/lib/fees/payments';
+import { listSeasons } from '@/lib/members/roster';
 
 const LEAD = 'lead@shliff.camp';
 
@@ -178,5 +181,101 @@ describe('dues', () => {
     expect(rows.filter((r) => r.kind === 'exception')).toHaveLength(5);
     const total = rows.reduce((sum, r) => sum + r.amountAgorot, 0);
     expect(total).toBe(6095500);
+  });
+});
+
+/**
+ * The rate is what future dues are issued at; a due already out carries its
+ * own amount. Whether the change follows through to them is the lead's call,
+ * made out loud, and an exception is never on the rate to begin with.
+ */
+describe('setFlatRate', () => {
+  let db: TestDb;
+  let seasonId: string;
+
+  beforeEach(async () => {
+    db = await createTestDb();
+    const season = await createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1200 });
+    seasonId = season.id;
+  });
+
+  async function member(name: string) {
+    const id = await createPerson(db, name, LEAD);
+    await addMember(db, id, seasonId);
+    return id;
+  }
+
+  it('changes what the next due is issued at, and reports the old and new rate', async () => {
+    const change = await setFlatRate(db, seasonId, 1350, { applyToIssued: false });
+    expect(change).toEqual({ previousAgorot: 120000, nextAgorot: 135000, updatedDues: 0 });
+
+    const [season] = await listSeasons(db);
+    expect(season.flatRate).toBe('1350.00');
+
+    await member('אופק');
+    await issueFlatDues(db, seasonId);
+    expect((await listDues(db, seasonId))[0].amountAgorot).toBe(135000);
+  });
+
+  it('leaves the dues already out alone unless asked', async () => {
+    await member('אופק');
+    await issueFlatDues(db, seasonId);
+
+    await setFlatRate(db, seasonId, 1350, { applyToIssued: false });
+    expect((await listDues(db, seasonId))[0].amountAgorot).toBe(120000);
+  });
+
+  it('rewrites the flat dues when asked, and never an exception', async () => {
+    const ofek = await member('אופק');
+    await member('יוסף');
+    const amiram = await member('עמירם');
+    await issueFlatDues(db, seasonId);
+    await setException(db, {
+      personId: amiram, seasonId, amount: 0, reason: 'פטור מלא', decidedBy: LEAD,
+    });
+
+    const change = await setFlatRate(db, seasonId, 1350, { applyToIssued: true });
+    expect(change.updatedDues).toBe(2);
+
+    const rows = await listDues(db, seasonId);
+    const byPerson = new Map(rows.map((row) => [row.personId, row]));
+    expect(byPerson.get(ofek)?.amountAgorot).toBe(135000);
+    expect(byPerson.get(amiram)?.amountAgorot).toBe(0);
+    expect(byPerson.get(amiram)?.kind).toBe('exception');
+  });
+
+  it('allows zero — a season run without dues — and refuses less', async () => {
+    await expect(setFlatRate(db, seasonId, 0, { applyToIssued: false })).resolves.toMatchObject({ nextAgorot: 0 });
+    await expect(setFlatRate(db, seasonId, -1, { applyToIssued: false }))
+      .rejects.toThrow('a flat rate may not be negative');
+    await expect(setFlatRate(db, seasonId, Number.NaN, { applyToIssued: false }))
+      .rejects.toThrow('a flat rate must be a number');
+  });
+
+  it('refuses a season that does not exist', async () => {
+    await expect(setFlatRate(db, '00000000-0000-4000-8000-000000000000', 1000, { applyToIssued: false }))
+      .rejects.toThrow('unknown season');
+  });
+
+  it('counts the flat dues out, and how many of them carry money', async () => {
+    expect(await issuedFlatDues(db, seasonId)).toEqual({ count: 0, withPayments: 0 });
+
+    await member('אופק');
+    await member('יוסף');
+    const amiram = await member('עמירם');
+    await issueFlatDues(db, seasonId);
+    await setException(db, {
+      personId: amiram, seasonId, amount: 0, reason: 'פטור מלא', decidedBy: LEAD,
+    });
+    const [first] = await listDues(db, seasonId);
+    await recordPayment(db, {
+      dueId: first.dueId, amount: 500, channel: 'ביט', paidOn: new Date('2026-05-01'), recordedBy: LEAD,
+    });
+    await recordPayment(db, {
+      dueId: first.dueId, amount: 200, channel: 'מזומן', paidOn: new Date('2026-05-02'), recordedBy: LEAD,
+    });
+
+    // Two payments on one due count once; the exception is not counted at all.
+    expect(await issuedFlatDues(db, seasonId)).toEqual({ count: 2, withPayments: 1 });
   });
 });

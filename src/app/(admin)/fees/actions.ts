@@ -5,7 +5,7 @@ import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import type { ActionResult } from '@/lib/action-result';
 import {
-  issueFlatDues, issueFlatDueFor, setException, clearException,
+  issueFlatDues, issueFlatDueFor, setException, clearException, setFlatRate,
 } from '@/lib/fees/dues';
 import { recordPayment, deletePayment } from '@/lib/fees/payments';
 import type { PaymentChannel } from '@/db/schema/camp';
@@ -153,4 +153,28 @@ export async function recordPaymentAction(input: {
   }
   revalidatePath('/fees');
   return { ok: true, value: paymentId };
+}
+
+/**
+ * Sets what the season charges per person. `amount` is in shekels, as the
+ * drawer's money box holds it; `applyToIssued` is the lead's own decision
+ * about the dues already out — see `setFlatRate` on why it is never a
+ * default. Both refusals (`NaN`, negative) are the library's, mapped by
+ * `FEE_ERRORS` like every other throw in `dues.ts`.
+ *
+ * The rate shows on the home page's tile and in the shell's season list as
+ * well as here, so the whole layout is revalidated, as the season actions do.
+ */
+export async function setFlatRateAction(
+  seasonId: string, amount: number, applyToIssued: boolean,
+): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+  try {
+    await setFlatRate(db, seasonId, amount, { applyToIssued });
+  } catch (error) {
+    return failed(error);
+  }
+  revalidatePath('/', 'layout');
+  return { ok: true };
 }

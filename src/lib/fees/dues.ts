@@ -1,6 +1,6 @@
 import { and, asc, eq } from 'drizzle-orm';
 import type { AnyDb } from '@/lib/db-types';
-import { dues, seasons, memberships, persons } from '@/db/schema/camp';
+import { dues, seasons, memberships, persons, payments } from '@/db/schema/camp';
 import type { DueKind } from '@/db/schema/camp';
 import { toAgorot, fromAgorot } from '@/lib/money';
 import { isBlank } from '@/lib/text/normalize';
@@ -15,6 +15,21 @@ export interface DueRow {
   decidedBy: string | null;
 }
 
+export interface IssuedFlatDues {
+  /** Dues on the season's flat rate — the ones a rate change could rewrite. */
+  count: number;
+  /** How many of those already have money against them, so the drawer can
+   *  say whose balance would move. */
+  withPayments: number;
+}
+
+export interface FlatRateChange {
+  previousAgorot: number;
+  nextAgorot: number;
+  /** Flat dues rewritten to the new rate — zero unless asked. */
+  updatedDues: number;
+}
+
 export interface ExceptionInput {
   personId: string;
   seasonId: string;
@@ -22,6 +37,71 @@ export interface ExceptionInput {
   amount: number;
   reason: string;
   decidedBy: string;
+}
+
+/**
+ * The flat dues a season has already issued, and how many carry a payment.
+ * Read before a rate change so the drawer can state — with counts — what
+ * applying the new rate to them would do, rather than a checkbox saying
+ * "also update" over a number nobody has seen.
+ */
+export async function issuedFlatDues(db: AnyDb, seasonId: string): Promise<IssuedFlatDues> {
+  const flat = await db.select({ id: dues.id })
+    .from(dues).where(and(eq(dues.seasonId, seasonId), eq(dues.kind, 'flat')));
+  if (flat.length === 0) return { count: 0, withPayments: 0 };
+
+  const paid = await db.select({ dueId: payments.dueId })
+    .from(payments)
+    .innerJoin(dues, eq(dues.id, payments.dueId))
+    .where(and(eq(dues.seasonId, seasonId), eq(dues.kind, 'flat')));
+  return { count: flat.length, withPayments: new Set(paid.map((row) => row.dueId)).size };
+}
+
+/**
+ * Changes what a season charges per person.
+ *
+ * `seasons.flat_rate` is what every *future* due is issued at — `issueFlatDues`,
+ * `issueFlatDueFor` and `clearException` all read it at the moment they run.
+ * A due already issued carries its own `amount`, so changing the rate alone
+ * leaves every existing due exactly where it was. That is one of two honest
+ * outcomes, and which one a lead wants is not something this function can
+ * know: a rate corrected the day after the dues went out should probably
+ * follow through to them; a rate raised mid-season after half the camp has
+ * paid probably should not. So `applyToIssued` is a decision the caller
+ * makes out loud, never a default, and the drawer states both consequences
+ * before the button.
+ *
+ * Only `flat` dues are ever rewritten. An exception is a recorded decision
+ * with a reason and a name beside it, and it was never on the rate.
+ *
+ * Refuses a negative or non-numeric rate the way `setException` refuses a
+ * negative amount; zero is allowed, because a season the camp decides to
+ * run without dues is a thing the sidebar already knows how to say.
+ */
+export async function setFlatRate(
+  db: AnyDb, seasonId: string, amount: number, options: { applyToIssued: boolean },
+): Promise<FlatRateChange> {
+  if (!Number.isFinite(amount)) throw new Error('a flat rate must be a number');
+  if (amount < 0) throw new Error('a flat rate may not be negative');
+
+  const [season] = await db.select().from(seasons).where(eq(seasons.id, seasonId));
+  if (!season) throw new Error(`unknown season ${seasonId}`);
+
+  const nextAgorot = toAgorot(amount);
+  const next = fromAgorot(nextAgorot);
+
+  await db.update(seasons).set({ flatRate: next }).where(eq(seasons.id, seasonId));
+
+  let updatedDues = 0;
+  if (options.applyToIssued) {
+    const updated = await db.update(dues)
+      .set({ amount: next })
+      .where(and(eq(dues.seasonId, seasonId), eq(dues.kind, 'flat')))
+      .returning();
+    updatedDues = updated.length;
+  }
+
+  return { previousAgorot: toAgorot(season.flatRate), nextAgorot, updatedDues };
 }
 
 /**
