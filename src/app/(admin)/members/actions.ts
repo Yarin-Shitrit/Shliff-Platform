@@ -10,12 +10,14 @@ import {
   renamePerson, unlinkAlias,
 } from '@/lib/members/link';
 import { resolveName } from '@/lib/members/identity';
+import { deletePerson } from '@/lib/members/delete';
 import { addMember } from '@/lib/members/roster';
 import { issueFlatDueFor } from '@/lib/fees/dues';
 import { toHebrewError, type HebrewErrors } from '@/lib/errors/hebrew';
 import { isBlank } from '@/lib/text/normalize';
 import { UNLINK_ERROR_PARAM } from './unlink-error';
 import { RENAME_ERROR_PARAM } from './rename-params';
+import { DELETE_ERROR_PARAM } from './delete-params';
 
 export async function linkNameAction(
   aliasId: string, personId: string,
@@ -307,3 +309,52 @@ export async function renamePersonAndReturn(
   redirect(`${backHref}${separator}${RENAME_ERROR_PARAM}=${encodeURIComponent(result.error)}`);
 }
 
+
+/**
+ * Deletes a person, when nothing but the record itself would be lost.
+ *
+ * `deletePerson` refuses whenever a row elsewhere names them — a payment, a
+ * debt, a קופה, a task, a merge — and hands the refusals back as nouns, so
+ * the sentence here names what stands in the way rather than saying
+ * "cannot". The page shows the same list, with links, *before* the button
+ * is offered; this is the same refusal said again at the boundary, for the
+ * caller the page is not.
+ */
+export async function deletePersonAction(personId: string): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+
+  let result: Awaited<ReturnType<typeof deletePerson>>;
+  try {
+    result = await deletePerson(db, personId);
+  } catch (error) {
+    return { ok: false, error: toHebrewError(error, []) };
+  }
+  if (!result.ok) {
+    if (result.reason === 'not-found') return { ok: false, error: 'האדם לא נמצא.' };
+    const names = result.blockers.map((blocker) => blocker.conflict).join(', ');
+    return { ok: false, error: `לא ניתן למחוק — קיימים: ${names}` };
+  }
+
+  revalidatePath('/members');
+  // A workbook spelling the record carried is back in the inbox's queue.
+  revalidatePath('/inbox');
+  return { ok: true };
+}
+
+/**
+ * The delete dialog's submit. Same shape as `unlinkAliasAndReturn`, for the
+ * same A38 reason. Success goes to `listHref` — the record page no longer
+ * exists to return to, and the list is where the person came from; a
+ * refusal rides back to `backHref` in `?deleteError=` and the page renders it.
+ *
+ * Bound as `.bind(null, personId, listHref, backHref)`.
+ */
+export async function deletePersonAndReturn(
+  personId: string, listHref: string, backHref: string,
+): Promise<void> {
+  const result = await deletePersonAction(personId);
+  if (result.ok) redirect(listHref);
+  const separator = backHref.includes('?') ? '&' : '?';
+  redirect(`${backHref}${separator}${DELETE_ERROR_PARAM}=${encodeURIComponent(result.error)}`);
+}

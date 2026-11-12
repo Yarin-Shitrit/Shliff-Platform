@@ -8,7 +8,7 @@ import type { Dossier, DossierDue } from '@/lib/members/dossier';
 const {
   requireAdmin, personDossier, listSeasons, listPeopleForSeason,
   aliasSourcesFor, personChangeLog, listObligations, accountBalances,
-  listPayments, notFound,
+  listPayments, previewDelete, notFound,
 } = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   personDossier: vi.fn(),
@@ -19,6 +19,7 @@ const {
   listObligations: vi.fn(),
   accountBalances: vi.fn(),
   listPayments: vi.fn(),
+  previewDelete: vi.fn(),
   notFound: vi.fn(() => { throw new Error('NEXT_NOT_FOUND'); }),
 }));
 vi.mock('@/db', () => ({ db: {} }));
@@ -31,6 +32,7 @@ vi.mock('@/lib/members/change-log', () => ({ personChangeLog }));
 vi.mock('@/lib/money/obligations', () => ({ listObligations }));
 vi.mock('@/lib/money/accounts', () => ({ accountBalances }));
 vi.mock('@/lib/fees/payments', () => ({ listPayments }));
+vi.mock('@/lib/members/delete', () => ({ previewDelete }));
 vi.mock('next/navigation', () => ({
   notFound,
   useRouter: () => ({ push: vi.fn(), refresh: () => {} }),
@@ -43,6 +45,7 @@ vi.mock('../actions', () => ({
      name from the same module the action writes it with. */
   unlinkAliasAndReturn: vi.fn(),
   renamePersonAndReturn: vi.fn(),
+  deletePersonAndReturn: vi.fn(),
   UNLINK_ERROR_PARAM: 'unlinkError',
 }));
 
@@ -495,5 +498,87 @@ describe('/members/[id] — renaming', () => {
     await renderPage({ renameError: 'כבר קיים אדם בשם עמירם דהן — לא ניתן לתת לשניים את אותו השם.' });
     expect(screen.getByRole('alert').textContent)
       .toBe('כבר קיים אדם בשם עמירם דהן — לא ניתן לתת לשניים את אותו השם.');
+  });
+});
+
+/**
+ * The delete confirmation is URL-driven like the other two, and reads the
+ * same preview the library refuses on. With nothing in the way it is the
+ * kit's dialog listing what goes; with something in the way there is no
+ * confirm control at all, only the blockers and where to unpick them.
+ */
+describe('/members/[id] — deleting the record', () => {
+  const CLEAR = {
+    personId: 'p1', displayName: 'רוני אדלר',
+    manualAliases: ['רוני אדלר'], importAliases: ['Roni A.'],
+    seasons: ['ברן 25', 'ברן 26'], duesCount: 1, blockers: [],
+  };
+
+  it('offers a link that puts the decision in the URL, keeping the season and the tab', async () => {
+    await renderPage({ season: 's26', tab: 'aliases' });
+    const href = screen.getByRole('link', { name: 'מחיקה' }).getAttribute('href') ?? '';
+    expect(href.startsWith('/members/p1?')).toBe(true);
+    const query = new URLSearchParams(href.split('?')[1]);
+    expect(query.get('season')).toBe('s26');
+    expect(query.get('tab')).toBe('aliases');
+    expect(query.get('delete')).toBe('1');
+    expect(previewDelete).not.toHaveBeenCalled();
+  });
+
+  it('raises the confirmation from the server, listing exactly what the library would remove', async () => {
+    previewDelete.mockResolvedValue(CLEAR);
+    await renderPage({ delete: '1' });
+    expect(previewDelete).toHaveBeenCalledWith({}, 'p1');
+    const dialog = screen.getByRole('alertdialog', { name: 'מחיקת הרשומה' });
+    expect(within(dialog).getByText(/את המחיקה אי אפשר לבטל/)).toBeTruthy();
+    expect(within(dialog).getByText('יימחקו הכינויים שהוזנו ידנית: רוני אדלר')).toBeTruthy();
+    expect(within(dialog).getByText('יחזרו לרשימת השמות הממתינים לשיוך: Roni A.')).toBeTruthy();
+    expect(within(dialog).getByText('תוסר החברות ב: ברן 25 · ברן 26')).toBeTruthy();
+    expect(within(dialog).getByText('יימחק חיוב אחד שטרם שולם')).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'מחיקת הרשומה' })).toBeTruthy();
+  });
+
+  it('agrees the number with the noun', async () => {
+    previewDelete.mockResolvedValue({ ...CLEAR, duesCount: 2 });
+    await renderPage({ delete: '1' });
+    expect(screen.getByText('יימחקו 2 חיובים שטרם שולמו')).toBeTruthy();
+  });
+
+  it('cancels by navigating back to the tab, with no closure anywhere', async () => {
+    previewDelete.mockResolvedValue(CLEAR);
+    await renderPage({ delete: '1', tab: 'payments' });
+    const dialog = screen.getByRole('alertdialog', { name: 'מחיקת הרשומה' });
+    expect(within(dialog).getByRole('link', { name: 'ביטול' }).getAttribute('href'))
+      .toBe('/members/p1?tab=payments');
+  });
+
+  it('raises no confirm control when something stands in the way, and says where to go', async () => {
+    previewDelete.mockResolvedValue({
+      ...CLEAR,
+      blockers: [
+        { conflict: 'תשלומים', count: 2, href: '/members/p1?tab=payments' },
+        { conflict: 'מיזוג קודם', count: 1, href: null },
+      ],
+    });
+    await renderPage({ delete: '1' });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'מחיקת הרשומה' })).toBeNull();
+    expect(screen.getByText('למה אי אפשר למחוק עדיין')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'תשלומים · 2' }).getAttribute('href'))
+      .toBe('/members/p1?tab=payments');
+    expect(screen.getByText('מיזוג קודם · 1')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'מיזוג קודם · 1' })).toBeNull();
+  });
+
+  it('raises nothing when the preview names nobody', async () => {
+    previewDelete.mockResolvedValue(null);
+    await renderPage({ delete: '1' });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(screen.queryByText('למה אי אפשר למחוק עדיין')).toBeNull();
+  });
+
+  it('renders the refusal the action handed back in the URL', async () => {
+    await renderPage({ deleteError: 'לא ניתן למחוק — קיימים: תשלומים' });
+    expect(screen.getByRole('alert').textContent).toBe('לא ניתן למחוק — קיימים: תשלומים');
   });
 });

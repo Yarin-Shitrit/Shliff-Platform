@@ -8,6 +8,7 @@ import { listSeasons } from '@/lib/members/roster';
 import { listPeopleForSeason } from '@/lib/members/people-list';
 import { aliasSourcesFor, type AliasSource } from '@/lib/members/alias-sources';
 import { personChangeLog, type ChangeEntry } from '@/lib/members/change-log';
+import { previewDelete } from '@/lib/members/delete';
 import { listObligations } from '@/lib/money/obligations';
 import { accountBalances } from '@/lib/money/accounts';
 import { listPayments, type PaymentRow } from '@/lib/fees/payments';
@@ -28,6 +29,7 @@ import { StatTile } from '@/components/ui/stat-tile';
 import { SourceChip } from '@/components/ui/source-chip';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Drawer } from '@/components/ui/drawer';
 import { Icon } from '@/components/ui/icon';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Field, TextInput } from '@/components/ui/field';
@@ -35,9 +37,10 @@ import { Money, DateText } from '@/components/format';
 import { formatShekels } from '@/lib/money';
 import { formatDateShort, formatDateTime } from '@/lib/dates';
 import { AddToSeason } from '../add-member';
-import { renamePersonAndReturn, unlinkAliasAndReturn } from '../actions';
+import { deletePersonAndReturn, renamePersonAndReturn, unlinkAliasAndReturn } from '../actions';
 import { UNLINK_ERROR_PARAM } from '../unlink-error';
 import { RENAME_ERROR_PARAM, RENAME_PARAM } from '../rename-params';
+import { DELETE_ERROR_PARAM, DELETE_PARAM } from '../delete-params';
 import styles from './person.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -131,6 +134,16 @@ function changeSentence(entry: ChangeEntry): string {
       return `נרשם תשלום ${formatShekels(entry.amountAgorot ?? 0)} ב${entry.subject}`;
     case 'assigned': return `שיבוץ ל${entry.subject}`;
   }
+}
+
+/**
+ * The Hebrew agrees with the number, the rule `movingSentence` follows on the
+ * merge panel: `יימחקו 1 חיובים` is not a sentence anybody writes, and a
+ * deletion is the one screen where a lead is being asked to read carefully.
+ */
+function duesSentence(count: number): string {
+  if (count === 1) return 'יימחק חיוב אחד שטרם שולם';
+  return `יימחקו ${count} חיובים שטרם שולמו`;
 }
 
 /**
@@ -320,6 +333,27 @@ export default async function PersonPage(
     if (requested !== '') query.set('season', requested);
     if (tab !== 'overview') query.set('tab', tab);
     query.set(RENAME_PARAM, '1');
+    return `/members/${dossier!.personId}?${query.toString()}`;
+  }
+
+  /*
+   * The delete confirmation, URL-driven like the two above and for the same
+   * reason. `?delete=1` reads `previewDelete` — the same call `deletePerson`
+   * refuses on — so what the dialog lists is what the library will remove,
+   * and when anything stands in the way the dialog is not raised at all: a
+   * drawer names each blocker with a link to where it is unpicked, the merge
+   * panel's shape. A refusal that still reaches the action (a second tab, a
+   * row written in between) comes back in `?deleteError=` (A38).
+   */
+  const deleting = one(search[DELETE_PARAM]) === '1';
+  const deleteError = one(search[DELETE_ERROR_PARAM]);
+  const deletion = deleting ? await previewDelete(db, dossier.personId) : null;
+
+  function deleteHref(): string {
+    const query = new URLSearchParams();
+    if (requested !== '') query.set('season', requested);
+    if (tab !== 'overview') query.set('tab', tab);
+    query.set(DELETE_PARAM, '1');
     return `/members/${dossier!.personId}?${query.toString()}`;
   }
 
@@ -521,6 +555,9 @@ export default async function PersonPage(
       {renameError === '' ? null : (
         <p className={styles.unlinkError} role="alert">{renameError}</p>
       )}
+      {deleteError === '' ? null : (
+        <p className={styles.unlinkError} role="alert">{deleteError}</p>
+      )}
       {/* The way back keeps the season (R5). A record page reached from a
           chat link has no list behind it to return to otherwise. */}
       <nav className={styles.crumbs} aria-label="מיקום">
@@ -626,6 +663,14 @@ export default async function PersonPage(
               ))}
             </Popover>
           )}
+          {/*
+            Last, and quiet: a link that puts the decision in the URL, so the
+            confirmation below is server-rendered with what it would remove.
+            Nothing deletes from here.
+          */}
+          <ButtonLink tone="ghost" size="sm" href={deleteHref()} replace>
+            <Icon name="trash" size={14} /> מחיקה
+          </ButtonLink>
         </div>
       </header>
 
@@ -976,6 +1021,66 @@ export default async function PersonPage(
           cancelHref={tabHref(tab)}
           action={unlinkAliasAndReturn.bind(null, unlinkingId, tabHref(tab))}
         />
+      )}
+
+      {/*
+        Two shapes for one verb, chosen by the preview. With nothing in the
+        way, the kit's confirmation, naming the record and listing what goes
+        with it. With something in the way, no confirm control at all — a
+        drawer that says what, how many, and where to go about it. A dialog
+        whose only outcome is a refusal is what D4 took away from the merge,
+        and it is not coming back here.
+      */}
+      {deletion === null ? null : deletion.blockers.length === 0 ? (
+        <ConfirmDialog
+          title="מחיקת הרשומה"
+          consequence={
+            <>
+              הרשומה של <bdi>{deletion.displayName}</bdi> תימחק. את המחיקה אי אפשר לבטל.
+            </>
+          }
+          confirmLabel="מחיקת הרשומה"
+          cancelHref={tabHref(tab)}
+          action={deletePersonAndReturn.bind(null, dossier.personId, listHref, tabHref(tab))}
+        >
+          <ul className={styles.deleteList}>
+            {deletion.manualAliases.length === 0 ? null : (
+              <li><bdi>{`יימחקו הכינויים שהוזנו ידנית: ${deletion.manualAliases.join(' · ')}`}</bdi></li>
+            )}
+            {deletion.importAliases.length === 0 ? null : (
+              <li><bdi>{`יחזרו לרשימת השמות הממתינים לשיוך: ${deletion.importAliases.join(' · ')}`}</bdi></li>
+            )}
+            {deletion.seasons.length === 0 ? null : (
+              <li><bdi>{`תוסר החברות ב: ${deletion.seasons.join(' · ')}`}</bdi></li>
+            )}
+            {deletion.duesCount === 0 ? null : (
+              <li><bdi>{duesSentence(deletion.duesCount)}</bdi></li>
+            )}
+          </ul>
+        </ConfirmDialog>
+      ) : (
+        <Drawer title="מחיקת הרשומה" subtitle={deletion.displayName} closeHref={tabHref(tab)}>
+          <section className={styles.deleteBlocked}>
+            <h3>למה אי אפשר למחוק עדיין</h3>
+            <p className="muted">
+              המערכת לא מוחקת כסף, שיבוצים או החלטות יחד עם אדם. קודם מטפלים במה שרשום כאן, ואז מוחקים.
+            </p>
+            <ul className={styles.deleteBlockers}>
+              {deletion.blockers.map((blocker) => (
+                <li key={blocker.conflict}>
+                  {/* One `<bdi>` for the whole phrase, per A17. */}
+                  {blocker.href === null ? (
+                    <span><bdi>{`${blocker.conflict} · ${blocker.count}`}</bdi></span>
+                  ) : (
+                    <Link href={blocker.href}>
+                      <bdi>{`${blocker.conflict} · ${blocker.count}`}</bdi>
+                    </Link>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        </Drawer>
       )}
     </main>
   );

@@ -27,6 +27,7 @@ import type { PersonListRow } from '@/lib/members/people-list';
 import { responsibilitiesOf } from '@/lib/work/coverage';
 import { personChangeLog, type ChangeEntry } from '@/lib/members/change-log';
 import { DUES_STATE_LABELS } from '@/lib/members/labels';
+import { DELETE_PARAM } from './delete-params';
 import styles from './people.module.css';
 
 export interface PeekDrawerProps {
@@ -81,6 +82,17 @@ export async function PeekDrawer({
     .map((task) => task.title);
 
   const state = row.dues?.state ?? 'none';
+
+  /*
+   * The way to the record page's delete confirmation, which keeps the season
+   * (R5). A link and not a verb: the dialog, the preview of what goes and
+   * the refusals are all the record page's, and nothing deletes from here —
+   * the rule at the top of this file.
+   */
+  const deleteQuery = new URLSearchParams();
+  if (seasonId !== null) deleteQuery.set('season', seasonId);
+  deleteQuery.set(DELETE_PARAM, '1');
+  const deleteHref = `/members/${row.personId}?${deleteQuery.toString()}`;
 
   return (
     <Drawer
@@ -185,6 +197,9 @@ export async function PeekDrawer({
             </ButtonLink>
           </>
         )}
+        <ButtonLink tone="ghost" size="sm" href={deleteHref}>
+          מחיקה
+        </ButtonLink>
       </footer>
     </Drawer>
   );
