@@ -716,6 +716,48 @@ touched, so there is no row count to compare.
 The local `shliff-pg` still needs `0021` and `0022` with the §6 container
 command once Docker is running.
 
+### Migration `0023` — applied to Railway on 2026-11-12
+
+`0023_work_plan` is the work plan, לוח עבודה (#68): three new tables,
+`work_topics`, `work_items` and `work_dependencies`, with their foreign
+keys, and nothing else. Purely additive — no `ALTER`, no row touched.
+
+**It is read on every load of `/logistics/plan`.** The screen lists the
+season's topics and items, so a deploy that lands before the tables exist
+answers the error screen there. Migration first, merge second (§2) — this
+one went the other way round by a day: #68 merged on 2026-11-11 and the
+apply landed on 2026-11-12.
+
+Read-only check, before: none of the three; after: all three. The oracle is
+`information_schema.tables`:
+
+```sh
+docker run --rm postgres:18-alpine psql "$RAILWAY_URL" -tAc "
+select table_name from information_schema.tables
+ where table_schema='public'
+   and table_name in ('work_topics','work_items','work_dependencies')"
+```
+
+Then, from a clean checkout of `main`:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine sh -euc '
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0023_work_plan.sql
+'
+```
+
+Applied on 2026-11-12 the way `0021` and `0022` were: no `psql` and no
+Docker on the laptop, so a scratchpad script using the project's `postgres`
+driver read `RAILWAY_URL` from `.env.railway`, refused unless all three
+tables were absent, and ran the ten statements in one transaction, run by
+the camp lead from the prompt. Measured on PostgreSQL 18.6: `present
+before: (none)`, `present after: work_dependencies, work_items,
+work_topics`. No existing table was touched, so there is no row count to
+compare.
+
+The local `shliff-pg` still needs `0021`, `0022` and `0023` with the §6
+container command once Docker is running.
+
 ### Copying the laptop's database up
 
 The local container is Postgres **16**; Railway is **18**. Dump with the
