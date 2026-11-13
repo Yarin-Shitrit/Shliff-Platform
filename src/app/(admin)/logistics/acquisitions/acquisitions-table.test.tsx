@@ -7,7 +7,7 @@ import { AcquisitionsTable } from './acquisitions-table';
 function row(over: Partial<AcquisitionRow> = {}): AcquisitionRow {
   return {
     seasonId: 's26', id: 'a1', name: 'מקדחה רוטטת', category: 'build', quantityNeeded: 1,
-    source: 'buy_new', estimatedAgorot: 40000, actualAgorot: 38000,
+    source: 'buy_new', unitEstimateAgorot: 40000, estimatedAgorot: 40000, actualAgorot: 38000,
     assignee: { id: 'p1', name: 'איתי כהן' }, lender: null,
     budgetLineId: null, arrivedItemId: null, workItem: null, status: 'ordered',
     updatedAt: new Date('2026-09-14T10:00:00Z'), updatedBy: null,
@@ -53,8 +53,23 @@ describe('AcquisitionsTable', () => {
   it('gives an unpriced row a dash rather than a zero', () => {
     // A zero would claim the camp expects it to be free. The dash says
     // nobody has priced it.
-    mount([row({ estimatedAgorot: null, actualAgorot: null })]);
+    mount([row({ unitEstimateAgorot: null, estimatedAgorot: null, actualAgorot: null })]);
     expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+  });
+
+  it('shows the estimate as the product, and says what was multiplied', () => {
+    // The lead typed 150 for one; the column is read as the row's cost. Both
+    // are on the row, so nobody divides 1,800 by 12 to find the price.
+    mount([row({ quantityNeeded: 12, unitEstimateAgorot: 15000, estimatedAgorot: 180000 })]);
+    const line = screen.getByRole('link', { name: 'מקדחה רוטטת' }).closest('tr') as HTMLElement;
+    expect(line.textContent).toContain('1,800 ₪');
+    expect(line.textContent).toContain('12 × 150 ₪');
+  });
+
+  it('does not multiply one of something by one on screen', () => {
+    mount([row()]);
+    const line = screen.getByRole('link', { name: 'מקדחה רוטטת' }).closest('tr') as HTMLElement;
+    expect(line.textContent).not.toContain('×');
   });
 
   it('names the lender on a borrowed row, because somebody has to get it back', () => {

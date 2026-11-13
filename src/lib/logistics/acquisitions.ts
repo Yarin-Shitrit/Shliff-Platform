@@ -12,6 +12,7 @@ import {
 import { createItem, addToItem, itemById } from './warehouse';
 import { createItem as createPlanItem, purchaseTitle, readPurchase, type AdoptOutcome } from './plan';
 import { statusOf, type AcquisitionQuery } from './acquisitions-views';
+import { rowEstimateAgorot } from './estimate';
 
 /**
  * What the camp still needs for one season, and what happened to each of
@@ -38,9 +39,19 @@ export interface AcquisitionRow {
   category: LogisticsCategory;
   quantityNeeded: number;
   source: AcquisitionSource;
-  /** Null is "nobody has priced it", which is not the same as free. */
+  /**
+   * What one of them is expected to cost — the number a lead types, and what
+   * `estimated_cost` stores. Null is "nobody has priced it", which is not the
+   * same as free.
+   */
+  unitEstimateAgorot: number | null;
+  /** The row's estimate: the unit price times `quantityNeeded`. Never typed. */
   estimatedAgorot: number | null;
-  /** Null is "not bought yet", which is not the same as it having cost zero. */
+  /**
+   * What was paid in the end for all of them — the receipt, not a unit price,
+   * so the count does not multiply it. Null is "not bought yet", which is not
+   * the same as it having cost zero.
+   */
   actualAgorot: number | null;
   assignee: PersonRef | null;
   lender: PersonRef | null;
@@ -98,7 +109,12 @@ function ordering(query: AcquisitionQuery) {
   switch (query.sort) {
     case 'name': return [dir(acquisitionItems.name)];
     case 'category': return [dir(acquisitionItems.category), asc(acquisitionItems.name)];
-    case 'estimate': return [dir(acquisitionItems.estimatedCost), asc(acquisitionItems.name)];
+    /* By the row's estimate — what the column shows — not by the unit price
+       behind it: 200 screws at 1 ₪ outrank one drill at 150 ₪. */
+    case 'estimate': return [
+      dir(sql`${acquisitionItems.estimatedCost} * ${acquisitionItems.quantityNeeded}`),
+      asc(acquisitionItems.name),
+    ];
     case 'actual': return [dir(acquisitionItems.actualCost), asc(acquisitionItems.name)];
     case 'assignee': return [dir(acquisitionItems.assigneePersonId), asc(acquisitionItems.name)];
     case 'status':
@@ -150,6 +166,7 @@ type SelectedRow = {
 };
 
 function toRow({ row, assigneeName, lenderName, workItemId, workItemSeasonId }: SelectedRow): AcquisitionRow {
+  const unitEstimateAgorot = row.estimatedCost === null ? null : toAgorot(row.estimatedCost);
   return {
     id: row.id,
     seasonId: row.seasonId,
@@ -157,7 +174,8 @@ function toRow({ row, assigneeName, lenderName, workItemId, workItemSeasonId }: 
     category: row.category,
     quantityNeeded: row.quantityNeeded,
     source: row.source,
-    estimatedAgorot: row.estimatedCost === null ? null : toAgorot(row.estimatedCost),
+    unitEstimateAgorot,
+    estimatedAgorot: rowEstimateAgorot(unitEstimateAgorot, row.quantityNeeded),
     actualAgorot: row.actualCost === null ? null : toAgorot(row.actualCost),
     assignee: row.assigneePersonId === null || assigneeName === null
       ? null : { id: row.assigneePersonId, name: assigneeName },
@@ -256,7 +274,9 @@ export interface AcquisitionInput {
   category: LogisticsCategory;
   quantityNeeded: number;
   source: AcquisitionSource;
+  /** The price of one. The row's estimate is this times `quantityNeeded`. */
   estimatedCost: string | null;
+  /** What was paid for all of them. */
   actualCost: string | null;
   assigneePersonId: string | null;
   lenderPersonId: string | null;

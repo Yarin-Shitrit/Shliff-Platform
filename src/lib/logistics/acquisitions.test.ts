@@ -93,7 +93,8 @@ describe('what the camp still needs for one year', () => {
     const counts = await acquisitionCounts(db, seasonId, ALL);
     expect(counts.total).toBe(4);
     expect(counts.campWide).toBe(1);
-    expect(counts.estimatedAgorot).toBe(40000 + 9000 + 500000);
+    // 200 screws at 90 each: the count multiplies the price of one.
+    expect(counts.estimatedAgorot).toBe(40000 + 200 * 9000 + 500000);
   });
 
   it('moves a row between one season and every season on edit', async () => {
@@ -120,6 +121,31 @@ describe('what the camp still needs for one year', () => {
     const [drill] = await listAcquisitions(db, seasonId, { ...ALL, q: 'מקדחה' });
     expect(drill.estimatedAgorot).toBe(40000);
     expect(drill.actualAgorot).toBe(38000);
+  });
+
+  it('prices one and multiplies by how many — the estimate, never what was paid', async () => {
+    // A lead checks the price of one and types the count; the system does the
+    // sum. What was paid is the receipt for all of them and is left alone.
+    const [screws] = await listAcquisitions(db, seasonId, { ...ALL, q: 'ברגים' });
+    await updateAcquisition(db, screws.id, {
+      seasonId, name: screws.name, category: screws.category, quantityNeeded: 200,
+      source: screws.source, estimatedCost: '0.45', actualCost: '85',
+      assigneePersonId: null, lenderPersonId: null, budgetLineId: null,
+    }, LEAD);
+
+    const after = await acquisitionById(db, screws.id);
+    expect(after?.unitEstimateAgorot).toBe(45);
+    expect(after?.estimatedAgorot).toBe(9000);
+    expect(after?.actualAgorot).toBe(8500);
+  });
+
+  it('sorts by the row estimate, not by the price of one', async () => {
+    // 200 screws at 90 outrank one drill at 400: the column shows the
+    // product, and a sort that disagreed with its own column would read as
+    // broken.
+    const rows = await listAcquisitions(db, seasonId, { ...ALL, sort: 'estimate', dir: 'desc' });
+    const priced = rows.filter((row) => row.estimatedAgorot !== null).map((row) => row.name);
+    expect(priced).toEqual(['ברגים לעץ', 'מקדחה רוטטת']);
   });
 
   it('keeps "not bought yet" and "cost nothing" apart', async () => {
@@ -195,7 +221,8 @@ describe('what the camp still needs for one year', () => {
     const after = await acquisitionById(db, row.id);
     expect(after?.name).toBe('ברגים לעץ 4×60');
     expect(after?.quantityNeeded).toBe(300);
-    expect(after?.estimatedAgorot).toBe(12000);
+    expect(after?.unitEstimateAgorot).toBe(12000);
+    expect(after?.estimatedAgorot).toBe(300 * 12000);
     expect(after?.updatedBy).toBe('buyer@shliff.camp');
   });
 

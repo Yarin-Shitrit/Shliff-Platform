@@ -15,7 +15,7 @@ function item(over: Partial<WarehouseRow> = {}): WarehouseRow {
 function order(over: Partial<AcquisitionRow> = {}): AcquisitionRow {
   return {
     seasonId: 's26', id: 'a1', name: 'מקדחה רוטטת', category: 'build', quantityNeeded: 1,
-    source: 'buy_new', estimatedAgorot: 40000, actualAgorot: 38000,
+    source: 'buy_new', unitEstimateAgorot: 40000, estimatedAgorot: 40000, actualAgorot: 38000,
     assignee: { id: 'p1', name: 'איתי כהן' }, lender: null,
     budgetLineId: null, arrivedItemId: null, workItem: null, status: 'ordered',
     updatedAt: new Date('2026-09-14T10:00:00Z'), updatedBy: null,
@@ -107,15 +107,32 @@ describe('the acquisitions export', () => {
     // somebody would go back to the workbook this platform replaced.
     const [, row] = acquisitionsCsvRows([order()], 'ברן 26');
     expect(row[5]).toBe('400.00');
-    expect(row[6]).toBe('380.00');
+    expect(row[6]).toBe('400.00');
+    expect(row[7]).toBe('380.00');
+  });
+
+  it('writes the unit price and the product as two columns, each under its own name', () => {
+    // The file leaves the app. A lone ״אומדן״ column beside a count of 12
+    // would leave its reader guessing whether to multiply.
+    const [header, row] = acquisitionsCsvRows([
+      order({ quantityNeeded: 12, unitEstimateAgorot: 15000, estimatedAgorot: 180000 }),
+    ], 'ברן 26');
+    expect(header[5]).toBe('מחיר ליחידה (אומדן)');
+    expect(header[6]).toBe('אומדן לכל הכמות');
+    expect(row[3]).toBe('12');
+    expect(row[5]).toBe('150.00');
+    expect(row[6]).toBe('1800.00');
   });
 
   it('keeps "nobody priced it" empty rather than zero', () => {
     // A zero is a figure somebody could total, and it would claim the camp
     // expects the thing to be free.
-    const [, row] = acquisitionsCsvRows([order({ estimatedAgorot: null, actualAgorot: null })], 'ברן 26');
+    const [, row] = acquisitionsCsvRows([
+      order({ unitEstimateAgorot: null, estimatedAgorot: null, actualAgorot: null }),
+    ], 'ברן 26');
     expect(row[5]).toBe('');
     expect(row[6]).toBe('');
+    expect(row[7]).toBe('');
   });
 
   it('names the lender, because a borrowed thing has to go back', () => {
