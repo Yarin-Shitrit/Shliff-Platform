@@ -43,6 +43,25 @@
 
 .headRow h1 { margin: 0; }
 
+/* The two links that change the season's figures, side by side; on a phone
+   they wrap under each other rather than squeezing the title. */
+.headLinks {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* The closing drawer's roll of who and what will be zeroed. */
+.closeList {
+  margin: 0;
+  padding-inline-start: var(--space-4);
+  color: var(--ink-3);
+  font-size: 0.8125rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
 .sub {
   margin: 0;
   color: var(--ink-3);

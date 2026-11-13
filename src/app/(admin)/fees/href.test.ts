@@ -36,4 +36,9 @@ describe('feesHref', () => {
     expect(feesHref({ season: SEASON, pay: 'p1', exception: 'p2' }))
       .toBe(`/fees?season=${SEASON}&peek=p1&act=pay`);
   });
+
+  it('opens the closing drawer as ?act=close, keeping the season and the view', () => {
+    expect(feesHref({ season: SEASON, view: 'unpaid', close: true }))
+      .toBe(`/fees?season=${SEASON}&view=unpaid&act=close`);
+  });
 });
