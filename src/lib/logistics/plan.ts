@@ -246,13 +246,29 @@ export async function createItem(
   return row.id;
 }
 
+/**
+ * A purchase's line takes its title and its person from the purchase (see
+ * `followPurchase` in `acquisitions.ts`), and the drawer locks both. The
+ * lock is repeated here because a drawer opened before the list changed
+ * still sends what it was opened with: saving a day from it would write
+ * the old name and the old person back over the purchase's. For a linked
+ * item the two are not validated and not written — whatever was sent —
+ * and everything the board owns (days, topic, parent, notes) still saves.
+ */
 export async function updateItem(
   db: AnyDb, id: string, input: ItemInput, email: string,
 ): Promise<void> {
   const item = await itemRow(db, id);
   if (!item) throw new Error(`unknown work item ${id}`);
-  const resolved = await resolveItemInput(db, item.seasonId, input, id);
-  await db.update(workItems).set({ ...resolved, updatedAt: new Date(), updatedBy: email })
+  const linked = item.acquisitionItemId !== null;
+  const resolved = await resolveItemInput(
+    db, item.seasonId,
+    linked ? { ...input, title: item.title, assigneePersonId: item.assigneePersonId } : input,
+    id,
+  );
+  const { title, assigneePersonId, ...boardOwned } = resolved;
+  await db.update(workItems)
+    .set({ ...(linked ? boardOwned : { ...boardOwned, title, assigneePersonId }), updatedAt: new Date(), updatedBy: email })
     .where(eq(workItems.id, id));
   /* A parent's sub-items follow it between topics: they never had a heading
      of their own. */

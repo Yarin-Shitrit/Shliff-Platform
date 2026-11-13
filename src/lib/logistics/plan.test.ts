@@ -10,7 +10,7 @@ import {
   planRoster, purchaseTitle, purchaseNameOf, readPurchase, looksLikePurchase, adoptableItems,
   type PlanItem, type Topic,
 } from './plan';
-import { createAcquisition, setAcquisitionStatus } from './acquisitions';
+import { createAcquisition, setAcquisitionStatus, updateAcquisition } from './acquisitions';
 
 const LEAD = 'lead@shliff.camp';
 
@@ -196,6 +196,39 @@ describe('the plan against a real database', () => {
       await setAcquisitionStatus(db, acquisitionId, 'arrived', LEAD);
       await setItemStatus(db, linked.id, 'open', LEAD);
       expect((await planItemById(db, linked.id))?.status).toBe('done');
+    });
+
+    it('keeps a purchase item’s title and person following the purchase, whatever a stale drawer sends', async () => {
+      const [noa] = await db.insert(persons).values({ displayName: 'נועה' }).returning();
+      const row = {
+        seasonId, name: 'מכולה', category: 'general', quantityNeeded: 1, source: 'buy_new',
+        estimatedCost: null, actualCost: null, assigneePersonId: ofek, lenderPersonId: null, budgetLineId: null,
+      } as const;
+      const acquisitionId = await createAcquisition(db, row, LEAD);
+      const [linked] = (await listPlan(db, seasonId)).filter((item) => item.purchase !== null);
+      const kitchen = await createTopic(db, seasonId, { name: 'מטבח', notes: null }, LEAD);
+
+      // The drawer was opened here; then the list renamed the thing and gave it to somebody else.
+      const stale = { ...BLANK, title: linked.title, assigneePersonId: ofek };
+      await updateAcquisition(db, acquisitionId, { ...row, name: 'מכולה גדולה', quantityNeeded: 2, assigneePersonId: noa.id }, LEAD);
+
+      // The stale drawer saves a day, a topic and a note — and with them the old title and person.
+      await updateItem(db, linked.id, {
+        ...stale, startsOn: '2026-05-10', endsOn: '2026-05-12', topicId: kitchen, notes: 'מהנמל',
+      }, 'board@shliff.camp');
+
+      const item = await planItemById(db, linked.id);
+      expect(item?.title).toBe('לקנות מכולה גדולה (2)');
+      expect(item?.assignee).toEqual({ personId: noa.id, displayName: 'נועה' });
+      // What the board owns is saved.
+      expect([item?.startsOn, item?.endsOn, item?.topicId, item?.notes]).toEqual(['2026-05-10', '2026-05-12', kitchen, 'מהנמל']);
+      expect(item?.updatedBy).toBe('board@shliff.camp');
+
+      // A hand-built request cannot rename it or clear its person either.
+      await updateItem(db, linked.id, { ...BLANK, title: 'משהו אחר', assigneePersonId: null }, LEAD);
+      const after = await planItemById(db, linked.id);
+      expect(after?.title).toBe('לקנות מכולה גדולה (2)');
+      expect(after?.assignee?.personId).toBe(noa.id);
     });
 
     it('lists sub-items in creation order under their parent', async () => {
