@@ -10,6 +10,7 @@ function account(overrides: Partial<AccountBalance> = {}): AccountBalance {
   return {
     accountId: 'a1', name: 'קופת מזומן', kind: 'cash',
     holderPersonId: null, holderName: null, balanceAgorot: 412000,
+    countedAgorot: 412000, countedOn: null, closed: false,
     ...overrides,
   };
 }
@@ -64,6 +65,37 @@ describe('AccountCard', () => {
     })} />);
     expect(container.textContent).toContain('חשבון פרטי');
     expect(container.textContent).toContain('שמחזיק כסף של הקאמפ');
+  });
+
+  /**
+   * The count day is the figure's provenance, and the link is the page that
+   * can change it — both on the card, never only in a footnote.
+   */
+  it('says when the balance was counted and offers the count drawer', () => {
+    render(<AccountCard
+      account={account({ countedOn: new Date('2025-10-30T00:00:00Z') })}
+      countHref="/money?season=s1&account=a1&act=count"
+    />);
+    expect(screen.getByText(/נספר ב־/).textContent).toContain('נספר ב־30/10/25, ומאז לפי התנועות');
+    expect(screen.getByRole('link', { name: 'ספירת קופה' }).getAttribute('href'))
+      .toBe('/money?season=s1&account=a1&act=count');
+  });
+
+  it('says a never-counted balance is an opening plus every movement', () => {
+    render(<AccountCard account={account({ countedOn: null })} countHref="/money?act=count" />);
+    expect(screen.getByText('יתרת פתיחה ועוד כל התנועות')).toBeTruthy();
+    expect(screen.queryByText(/נספר ב־/)).toBeNull();
+  });
+
+  // A closed קופה holds nothing today, so there is nothing to count.
+  it('offers no count on a closed account, and none at all without an href', () => {
+    const { unmount } = render(<AccountCard
+      account={account({ closed: true })} countHref="/money?act=count"
+    />);
+    expect(screen.queryByRole('link', { name: 'ספירת קופה' })).toBeNull();
+    unmount();
+    render(<AccountCard account={account()} />);
+    expect(screen.queryByRole('link', { name: 'ספירת קופה' })).toBeNull();
   });
 
   // A non-personal account with a named holder is a fact, not a warning: the

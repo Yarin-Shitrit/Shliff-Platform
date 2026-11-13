@@ -21,8 +21,8 @@ export type PartyPart = 'tickets' | 'bar' | 'cost' | 'partner';
  * pretending the camp has one קופה.
  *
  * There is deliberately no `balance` column. A balance is `openingBalance`
- * plus movements in, minus movements out, and a stored copy would be a second
- * truth that drifts.
+ * plus movements in, minus movements out, **after `openingOn`**, and a stored
+ * copy would be a second truth that drifts.
  */
 export const accounts = pgTable('accounts', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -30,9 +30,15 @@ export const accounts = pgTable('accounts', {
   kind: text('kind').$type<AccountKind>().notNull(),
   holderPersonId: uuid('holder_person_id')
     .references(() => persons.id, { onDelete: 'set null' }),
-  /** What the ledger cannot derive, because the earlier book is not loaded. */
+  /** What the ledger cannot derive, because the earlier book is not loaded:
+   *  a figure the camp counted, as of `openingOn`. Set from the screen by
+   *  `countAccount` in src/lib/money/accounts.ts. */
   openingBalance: numeric('opening_balance', { precision: 12, scale: 2 })
     .notNull().default('0.00'),
+  /** The day `openingBalance` was counted. Movements up to and including
+   *  that day are already inside the figure and do not move the balance
+   *  (`insideCount` in src/lib/money/counted.ts). Null means a true opening:
+   *  every movement counts. */
   openingOn: timestamp('opening_on', { withTimezone: true }),
   closedAt: timestamp('closed_at', { withTimezone: true }),
 });

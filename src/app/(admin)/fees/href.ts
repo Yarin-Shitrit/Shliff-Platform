@@ -23,6 +23,8 @@ export interface FeesHrefParts {
   /** The season's rate drawer: `?act=rate` with no `peek`, since it is about
    *  the season and not about a person. */
   rate?: boolean;
+  /** The season's closing drawer: `?act=close`, the same shape as `rate`. */
+  close?: boolean;
 }
 
 export function feesHref(parts: FeesHrefParts): string {
@@ -35,5 +37,6 @@ export function feesHref(parts: FeesHrefParts): string {
   if (parts.pay) return openPeekHref('/fees', current, parts.pay, 'pay');
   if (parts.exception) return openPeekHref('/fees', current, parts.exception, 'exception');
   if (parts.rate) return openActHref('/fees', current, 'rate');
+  if (parts.close) return openActHref('/fees', current, 'close');
   return closePeekHref('/fees', current);
 }

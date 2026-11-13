@@ -66,7 +66,7 @@ function row(over: Partial<LedgerRow> = {}): LedgerRow {
     direction: 'in', amountAgorot: 1850000, description: 'הכנסות מסיבת גיוס',
     accountId: 'a1', accountName: 'קופת מסיבות', counterpartName: null,
     counterpartPersonId: null, isTransfer: false, budgetLineId: null,
-    budgetLineLabel: null, seasonId: 's1', source: null, ...over,
+    budgetLineLabel: null, seasonId: 's1', source: null, insideCount: false, ...over,
   };
 }
 
@@ -177,11 +177,52 @@ describe('the running balance column', () => {
   it('shows it for one account in order', async () => {
     listLedgerRows.mockResolvedValue([row({ id: '1' })]);
     runningBalanceFor.mockResolvedValue({
-      shown: true, openingAgorot: 4464700, balancesAgorot: [6314700],
+      shown: true, openingAgorot: 4464700, countedOn: null, insideCount: 0,
+      balancesAgorot: [6314700],
     });
     await renderPage({ account: 'a1', sort: 'date-asc' });
     expect(screen.getByRole('columnheader', { name: 'יתרה' })).toBeTruthy();
     expect(screen.getByText('63,147 ₪')).toBeTruthy();
+    // No count day: nothing to explain, and no note claiming one.
+    expect(screen.queryByText(/נספרה ב־/)).toBeNull();
+  });
+
+  /**
+   * The count is the provenance of the column. A lead who places a ברן 25
+   * movement and sees the balance stay put reads here why, and finds the
+   * link that would change the figure.
+   */
+  it('says when the account was counted, how many rows the count holds, and links to a recount', async () => {
+    listAccounts.mockResolvedValue([{ id: 'a1', name: 'עו״ש אופק' }]);
+    listLedgerRows.mockResolvedValue([
+      row({ id: '1', occurredOn: new Date('2025-10-16T00:00:00Z'), insideCount: true }),
+      row({ id: '2', occurredOn: new Date('2026-06-01T00:00:00Z') }),
+    ]);
+    runningBalanceFor.mockResolvedValue({
+      shown: true, openingAgorot: 1407955, countedOn: new Date('2025-10-30T00:00:00Z'),
+      insideCount: 1, balancesAgorot: [-442045, 3257955],
+    });
+    await renderPage({ account: 'a1', sort: 'date-asc' });
+    const note = screen.getByText(/נספרה ב־/);
+    expect(note.textContent).toContain('היתרה של עו״ש אופק נספרה ב־30/10/25');
+    expect(note.textContent).toContain('1 תנועות עד אותו יום כבר כלולות בה');
+    expect(screen.getByRole('link', { name: 'ספירה מחדש' }).getAttribute('href'))
+      .toBe('/money?season=s1&account=a1&act=count');
+    // The row inside the count says so on itself, and the later one does not.
+    expect(screen.getAllByText('לפני הספירה')).toHaveLength(1);
+  });
+
+  it('says every row is after the count when none is inside it', async () => {
+    listAccounts.mockResolvedValue([{ id: 'a1', name: 'קופת מזומן' }]);
+    listLedgerRows.mockResolvedValue([row({ id: '1' })]);
+    runningBalanceFor.mockResolvedValue({
+      shown: true, openingAgorot: 158400, countedOn: new Date('2025-10-30T00:00:00Z'),
+      insideCount: 0, balancesAgorot: [2008400],
+    });
+    await renderPage({ account: 'a1', sort: 'date-asc' });
+    expect(screen.getByText(/נספרה ב־/).textContent)
+      .toContain('כל התנועות כאן מאוחרות לספירה ומשנות אותה');
+    expect(screen.queryByText('לפני הספירה')).toBeNull();
   });
 
   it('hides the column and explains itself in one line when it cannot be true', async () => {
@@ -370,7 +411,11 @@ describe('money with no account', () => {
     expect(screen.getAllByRole('status')).toHaveLength(1);
     const banner = screen.getByRole('status');
     expect(within(banner).getByText(/2 תנועות נרשמו בלי לציין חשבון/)).toBeTruthy();
-    expect(within(banner).getByText(/עד שישויכו הן לא נספרות ביתרה של אף קופה/)).toBeTruthy();
+    expect(within(banner).getByText(/עד שישויכו הן לא רשומות על אף קופה/)).toBeTruthy();
+    // The old sentence said they were not counted in any balance. Under the
+    // count rule a movement from before an account's count day already is
+    // in that balance — so the banner says what attribution does instead.
+    expect(within(banner).getByText(/תנועה מלפני יום הספירה של החשבון נכנסת להיסטוריה שלו בלי לשנות את היתרה/)).toBeTruthy();
     expect(within(banner).getByText(/נרשמו בלי לציין לאיזה חשבון נכנסו/)).toBeTruthy();
     expect(within(banner).getByText(/נרשמו בלי לציין מאיזה חשבון יצאו/)).toBeTruthy();
     // 1,200 in and 1,200 out are not 2,400 of anything. Summing money that
