@@ -397,10 +397,15 @@ export async function updateAcquisition(
   validate(input);
   if (!(await acquisitionById(db, id))) throw new Error(`unknown acquisition ${id}`);
 
-  await db.update(acquisitionItems)
-    .set({ ...clean(input), updatedBy: actor, updatedAt: new Date() })
-    .where(eq(acquisitionItems.id, id));
-  await followPurchase(db, id, actor);
+  /* One transaction, as `createAcquisition` is: a row renamed whose line
+     kept the old name is the two lists disagreeing with nothing to say so. */
+  await (db as Db).transaction(async (tx) => {
+    const scoped = tx as unknown as AnyDb;
+    await scoped.update(acquisitionItems)
+      .set({ ...clean(input), updatedBy: actor, updatedAt: new Date() })
+      .where(eq(acquisitionItems.id, id));
+    await followPurchase(scoped, id, actor);
+  });
 }
 
 /**
@@ -541,10 +546,15 @@ export async function setAcquisitionStatus(
   if (!STATUSES.includes(status)) throw new Error(`unknown status: ${status}`);
   if (!(await acquisitionById(db, id))) throw new Error(`unknown acquisition ${id}`);
 
-  await db.update(acquisitionItems)
-    .set({ status, updatedBy: actor, updatedAt: new Date() })
-    .where(eq(acquisitionItems.id, id));
-  await followPurchase(db, id, actor);
+  /* One transaction: an arrived row whose line stayed open would read as
+     work still to do on the board. */
+  await (db as Db).transaction(async (tx) => {
+    const scoped = tx as unknown as AnyDb;
+    await scoped.update(acquisitionItems)
+      .set({ status, updatedBy: actor, updatedAt: new Date() })
+      .where(eq(acquisitionItems.id, id));
+    await followPurchase(scoped, id, actor);
+  });
 }
 
 export interface ArrivalInput {
