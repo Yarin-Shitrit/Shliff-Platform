@@ -25,15 +25,21 @@
  * colour-vision floor, and nothing here is the brand orange or a status
  * colour — a bar that is green is done, not ״מטבח״.
  *
- * `--topic-ink` is what is written on the solid bar: white, except on the
- * yellow, where white does not read. `--topic-soft` is the tint a part
- * sits on, mixed from the hue so the two never drift apart.
+ * `--topic-ink` is what is written on the solid bar, and it is whichever
+ * of white and near-black clears 4.5:1 on that colour — measured, not
+ * assumed. White passes only on the blue and the violet of the light
+ * theme (4.66, 5.77); it read at 2.7–3.2 on the orange, green and pink.
+ * The light blue is one step darker than the palette's (#2a78d6 gave 4.42
+ * with white and 4.46 with black: neither). On the dark theme's lighter
+ * steps near-black clears on all six (4.99–6.41), white on none.
+ * `--topic-soft` is the tint a part sits on, mixed from the hue so the
+ * two never drift apart.
  */
-.hue1 { --topic: #2a78d6; --topic-ink: #FFFFFF; }
-.hue2 { --topic: #eb6834; --topic-ink: #FFFFFF; }
-.hue3 { --topic: #1baf7a; --topic-ink: #FFFFFF; }
+.hue1 { --topic: #2774d1; --topic-ink: #FFFFFF; }
+.hue2 { --topic: #eb6834; --topic-ink: #0B0B0B; }
+.hue3 { --topic: #1baf7a; --topic-ink: #0B0B0B; }
 .hue4 { --topic: #eda100; --topic-ink: #0B0B0B; }
-.hue5 { --topic: #e87ba4; --topic-ink: #FFFFFF; }
+.hue5 { --topic: #e87ba4; --topic-ink: #0B0B0B; }
 .hue6 { --topic: #6250d6; --topic-ink: #FFFFFF; }
 
 .hue1, .hue2, .hue3, .hue4, .hue5, .hue6 {
@@ -41,20 +47,20 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :global(:root:not([data-theme='light'])) .hue1 { --topic: #3987e5; }
-  :global(:root:not([data-theme='light'])) .hue2 { --topic: #d95926; }
-  :global(:root:not([data-theme='light'])) .hue3 { --topic: #199e70; }
-  :global(:root:not([data-theme='light'])) .hue4 { --topic: #c98500; }
-  :global(:root:not([data-theme='light'])) .hue5 { --topic: #d55181; }
-  :global(:root:not([data-theme='light'])) .hue6 { --topic: #9085e9; }
+  :global(:root:not([data-theme='light'])) .hue1 { --topic: #3987e5; --topic-ink: #0B0B0B; }
+  :global(:root:not([data-theme='light'])) .hue2 { --topic: #d95926; --topic-ink: #0B0B0B; }
+  :global(:root:not([data-theme='light'])) .hue3 { --topic: #199e70; --topic-ink: #0B0B0B; }
+  :global(:root:not([data-theme='light'])) .hue4 { --topic: #c98500; --topic-ink: #0B0B0B; }
+  :global(:root:not([data-theme='light'])) .hue5 { --topic: #d55181; --topic-ink: #0B0B0B; }
+  :global(:root:not([data-theme='light'])) .hue6 { --topic: #9085e9; --topic-ink: #0B0B0B; }
 }
 
-:global([data-theme='dark']) .hue1 { --topic: #3987e5; }
-:global([data-theme='dark']) .hue2 { --topic: #d95926; }
-:global([data-theme='dark']) .hue3 { --topic: #199e70; }
-:global([data-theme='dark']) .hue4 { --topic: #c98500; }
-:global([data-theme='dark']) .hue5 { --topic: #d55181; }
-:global([data-theme='dark']) .hue6 { --topic: #9085e9; }
+:global([data-theme='dark']) .hue1 { --topic: #3987e5; --topic-ink: #0B0B0B; }
+:global([data-theme='dark']) .hue2 { --topic: #d95926; --topic-ink: #0B0B0B; }
+:global([data-theme='dark']) .hue3 { --topic: #199e70; --topic-ink: #0B0B0B; }
+:global([data-theme='dark']) .hue4 { --topic: #c98500; --topic-ink: #0B0B0B; }
+:global([data-theme='dark']) .hue5 { --topic: #d55181; --topic-ink: #0B0B0B; }
+:global([data-theme='dark']) .hue6 { --topic: #9085e9; --topic-ink: #0B0B0B; }
 
 /* The dot before a topic's name, on the lane and on the list's heading:
    the same colour in both places, so the two views agree. Hidden where
@@ -1047,6 +1053,16 @@
 .adoptRow {
   min-block-size: 36px;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding-block: 6px;
   border-block-end: 1px solid var(--line);
+}
+
+/* What the move will do with this one item, under its tick. */
+.adoptOutcome {
+  padding-inline-start: 26px;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
 }
