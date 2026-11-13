@@ -278,10 +278,13 @@ export async function scheduleItem(
  * whatever the purchase says — open, or done if it has arrived in the
  * meantime. `cancelled` stays the board's own decision: the camp can stop
  * wanting a thing, and the list has no word for that.
+ *
+ * Returns the status it wrote, which for a purchase's item is not always
+ * the one asked for — the screen reports this, not its own request.
  */
 export async function setItemStatus(
   db: AnyDb, id: string, status: WorkItemStatus, email: string,
-): Promise<void> {
+): Promise<WorkItemStatus> {
   if (!WORK_ITEM_STATUSES.includes(status)) throw new Error(`unknown work item status: ${status}`);
   const item = await itemRow(db, id);
   if (!item) throw new Error(`unknown work item ${id}`);
@@ -294,6 +297,7 @@ export async function setItemStatus(
   }
   await db.update(workItems).set({ status: next, updatedAt: new Date(), updatedBy: email })
     .where(eq(workItems.id, id));
+  return next;
 }
 
 // ── Purchases ──────────────────────────────────────────────────────────

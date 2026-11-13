@@ -168,7 +168,7 @@ describe('the plan against a real database', () => {
 
     it('marks done, cancelled and open again, and refuses a status it does not know', async () => {
       const id = await createItem(db, seasonId, { ...BLANK, title: 'לצבוע פטריות' }, LEAD);
-      await setItemStatus(db, id, 'done', LEAD);
+      expect(await setItemStatus(db, id, 'done', LEAD)).toBe('done');
       expect((await planItemById(db, id))?.status).toBe('done');
       await setItemStatus(db, id, 'open', LEAD);
       expect((await planItemById(db, id))?.status).toBe('open');
@@ -194,7 +194,8 @@ describe('the plan against a real database', () => {
       // Arrived in the meantime: reopening lands on done, because it is.
       await setItemStatus(db, linked.id, 'cancelled', LEAD);
       await setAcquisitionStatus(db, acquisitionId, 'arrived', LEAD);
-      await setItemStatus(db, linked.id, 'open', LEAD);
+      // …and says so to its caller, so the screen can name the state it landed on.
+      expect(await setItemStatus(db, linked.id, 'open', LEAD)).toBe('done');
       expect((await planItemById(db, linked.id))?.status).toBe('done');
     });
 
