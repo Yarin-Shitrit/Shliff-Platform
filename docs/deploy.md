@@ -716,6 +716,46 @@ touched, so there is no row count to compare.
 The local `shliff-pg` still needs `0021` and `0022` with the §6 container
 command once Docker is running.
 
+### Migrations `0023` and `0024` — generated, **not yet applied to Railway**
+
+`0023_work_plan` is לוח עבודה (#68): three new tables, `work_topics`,
+`work_items` and `work_dependencies`, with their foreign keys. Purely
+additive. **It is read on every load of `/logistics/plan`**, so that page
+answers the error screen until it lands.
+
+`0024_work_item_acquisition` is the purchase-to-board link: one nullable
+`uuid` column, `work_items.acquisition_item_id`, with a foreign key to
+`acquisition_items` (`set null`) and a unique constraint. No row is touched;
+a null reads as "an item of the board's own", which every existing row is.
+**It is read on every load of `/logistics/plan` and `/logistics/acquisitions`**
+— both screens join the two tables — and it is written by every row entered
+on רכש, so a deploy that lands before the column exists answers the error
+screen on both pages. Migration first, merge second (§2). `0024` depends on
+`0023`: apply them in order, in one sitting.
+
+Read-only check, before: `0, 0`; after: `3, 1`:
+
+```sh
+docker run --rm postgres:18-alpine psql "$RAILWAY_URL" -tAc "
+select '0023 tables', count(*) from information_schema.tables
+ where table_schema='public' and table_name in ('work_topics','work_items','work_dependencies')
+union all select '0024 column', count(*) from information_schema.columns
+ where table_name='work_items' and column_name='acquisition_item_id'
+union all select 'rows acquisition_items', count(*) from acquisition_items"
+```
+
+Then, from a clean checkout of `main`:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine sh -euc '
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0023_work_plan.sql
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0024_work_item_acquisition.sql
+'
+```
+
+The `acquisition_items` row count is the oracle that the apply changed
+nothing but the schema: it must read the same before and after.
+
 ### Copying the laptop's database up
 
 The local container is Postgres **16**; Railway is **18**. Dump with the

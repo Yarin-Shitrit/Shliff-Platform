@@ -36,6 +36,23 @@ vi.mock('@/lib/money/overview', async (importOriginal) => ({
   moneyOverview,
 }));
 
+/**
+ * The two drawers are client components with their own tests; here they
+ * are stand-ins that print what the page handed them, so this file tests
+ * the wiring — which URL opens which drawer, over which account — and
+ * nothing the drawers already prove about themselves.
+ */
+vi.mock('./count-drawer', () => ({
+  CountDrawer: ({ account, closeHref }: { account: { name: string; countedAgorot: number }; closeHref: string }) => (
+    <div data-testid="count-drawer" data-close={closeHref}>{account.name} · {account.countedAgorot}</div>
+  ),
+}));
+vi.mock('./new-account-drawer', () => ({
+  NewAccountDrawer: ({ closeHref }: { closeHref: string }) => (
+    <div data-testid="new-account-drawer" data-close={closeHref} />
+  ),
+}));
+
 import MoneyPage from './page';
 import styles from './money.module.css';
 
@@ -81,6 +98,7 @@ function account(overrides: Partial<AccountBalance> = {}): AccountBalance {
   return {
     accountId: 'a1', name: 'קופת מזומן', kind: 'cash',
     holderPersonId: null, holderName: null, balanceAgorot: 412000,
+    countedAgorot: 412000, countedOn: null, closed: false,
     ...overrides,
   };
 }
@@ -465,8 +483,14 @@ describe('MoneyPage', () => {
     // src/lib/money/accounts.ts) — naming a season for an empty account list
     // would be actively misleading, since switching seasons can never change
     // it. So this one is `nothing-yet`, which says nothing about a year.
+    // Its invitation is the new-account drawer, not the import page: a
+    // balance is typed from a count (`promote.ts` refuses an
+    // `account_balances` block on purpose), so the import page could never
+    // fill this section.
     const accountsSection = sectionFor('איפה הכסף');
-    expect(within(accountsSection).getByRole('link', { name: 'לדף הייבוא' })).toBeTruthy();
+    expect(within(accountsSection).getAllByRole('link', { name: 'חשבון חדש' })
+      .every((link) => link.getAttribute('href') === '/money?season=s1&act=new-account')).toBe(true);
+    expect(within(accountsSection).queryByRole('link', { name: 'לדף הייבוא' })).toBeNull();
     expect(accountsSection.textContent).not.toContain(SEASON.name);
 
     // A `>= 0` off-by-one on the unnamed-count guard would show this banner
@@ -805,5 +829,56 @@ describe('MoneyPage', () => {
       // carries a source block, so all three must read `נרשם ידנית`.
       expect(screen.getAllByText('נרשם ידנית')).toHaveLength(3);
     });
+  });
+});
+
+describe('counting what an account holds', () => {
+  it('offers the count drawer on every account card, and a new account in the section head', async () => {
+    moneyOverview.mockResolvedValue(overview({
+      summary: summary({ accounts: [account(), account({ accountId: 'a2', name: 'עו״ש אופק', kind: 'personal' })] }),
+    }));
+    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+    const links = screen.getAllByRole('link', { name: 'ספירת קופה' });
+    expect(links.map((one) => one.getAttribute('href'))).toEqual([
+      '/money?season=s1&account=a1&act=count',
+      '/money?season=s1&account=a2&act=count',
+    ]);
+    expect(screen.getByRole('link', { name: 'חשבון חדש' }).getAttribute('href'))
+      .toBe('/money?season=s1&act=new-account');
+    expect(screen.queryByTestId('count-drawer')).toBeNull();
+    expect(screen.queryByTestId('new-account-drawer')).toBeNull();
+  });
+
+  it('opens the count drawer from the URL, over the account the URL names', async () => {
+    moneyOverview.mockResolvedValue(overview({
+      summary: summary({ accounts: [account(), account({ accountId: 'a2', name: 'עו״ש אופק', countedAgorot: 1407955 })] }),
+    }));
+    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1', act: 'count', account: 'a2' }) }));
+    const drawer = screen.getByTestId('count-drawer');
+    expect(drawer.textContent).toBe('עו״ש אופק · 1407955');
+    // Closing keeps the season (R5) and drops the drawer's own params.
+    expect(drawer.getAttribute('data-close')).toBe('/money?season=s1');
+  });
+
+  // A form over a missing record would write to nothing and say it had.
+  it('opens no count drawer for an account the summary does not know', async () => {
+    moneyOverview.mockResolvedValue(overview({ summary: summary({ accounts: [account()] }) }));
+    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1', act: 'count', account: 'nope' }) }));
+    expect(screen.queryByTestId('count-drawer')).toBeNull();
+  });
+
+  it('opens the new-account drawer from the URL, and invites one when there are no accounts', async () => {
+    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1', act: 'new-account' }) }));
+    expect(screen.getByTestId('new-account-drawer').getAttribute('data-close')).toBe('/money?season=s1');
+    // The empty state's invitation is the drawer, not the import page: a
+    // count is typed, never read off a sheet.
+    const invitations = screen.getAllByRole('link', { name: 'חשבון חדש' });
+    expect(invitations.some((one) => one.getAttribute('href') === '/money?season=s1&act=new-account')).toBe(true);
+  });
+
+  it('explains the way in when the book was not kept', async () => {
+    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+    expect(screen.getByText(/לא עקבתם אחרי כל ההכנסות וההוצאות\?/).textContent)
+      .toContain('מה שנרשם מלפני הספירה נשמר כהיסטוריה');
   });
 });

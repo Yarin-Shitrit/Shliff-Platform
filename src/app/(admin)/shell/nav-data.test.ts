@@ -9,9 +9,9 @@ describe('nav data', () => {
       .toEqual([null, 'הקאמפ', 'כספים', 'לוגיסטיקה', 'נתונים']);
     expect(NAV_ITEMS.map((item) => item.label)).toEqual([
       'בית', 'לטיפול',
-      'אנשים', 'דמי קאמפ', 'משימות', 'מפת הקאמפ',
+      'אנשים', 'דמי קאמפ', 'משימות', 'משמרות', 'מפת הקאמפ',
       'סקירה כספית', 'תנועות', 'מסיבות', 'תקציב', 'חובות',
-      'מחסן', 'רכש', 'הקמה', 'משמרות', 'לוח עבודה',
+      'מחסן', 'רכש', 'הקמה', 'לוח עבודה',
       'קבצים וייבוא', 'העלאת קובץ',
     ]);
   });
@@ -31,7 +31,8 @@ describe('nav data', () => {
   });
 
   it('marks the logistics screen a lead is actually on', () => {
-    // All five live under `/logistics/`, so prefix matching has to pick the
+    // All five live under `/logistics/` (משמרות keeps the prefix though it
+    // sits under הקאמפ in the rail), so prefix matching has to pick the
     // longest — otherwise one of them would light up the rail for all five.
     expect(activeItemId('/logistics/warehouse')).toBe('warehouse');
     expect(activeItemId('/logistics/acquisitions')).toBe('acquisitions');

@@ -6,12 +6,13 @@ import { requireAdmin } from '@/lib/auth/guard';
 import { resolveSeason } from '@/lib/seasons/current';
 import {
   listPlan, listTopics, topicById, buildPlanTree, buildTimeline, timelineWindow, summarizePlan, planRoster,
-  nowSummary,
+  nowSummary, adoptableItems,
 } from '@/lib/logistics/plan';
 import { campDayOf } from '@/lib/logistics/shift-time';
 import {
-  parsePlanQuery, planHref, itemHref, newItemHref, newTopicHref, type RawParams,
+  parsePlanQuery, planHref, itemHref, newItemHref, newTopicHref, adoptHref, type RawParams,
 } from '@/lib/logistics/plan-views';
+import { acquisitionsHref } from '@/lib/logistics/acquisitions-views';
 import { TopBar, SeasonChip } from '@/components/shell/top-bar';
 import { StatTile } from '@/components/ui/stat-tile';
 import { Banner } from '@/components/ui/banner';
@@ -22,9 +23,11 @@ import { DateText } from '@/components/format';
 import { PlanList, civil, type PlanLine } from './plan-list';
 import { PlanTimeline } from './plan-timeline';
 import { StatusMenu } from './status-menu';
+import { PurchaseMenu } from './purchase-menu';
 import { DoneToggle } from './done-toggle';
 import { ItemDrawer } from './item-drawer';
 import { TopicDrawer } from './topic-drawer';
+import { AdoptDrawer } from './adopt-drawer';
 import styles from './plan.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -99,6 +102,13 @@ export default async function PlanPage(
     .map((item) => ({ id: item.id, title: item.title }));
 
   const nothingYet = items.length === 0 && topics.length === 0;
+
+  /* The open items not yet in the acquisitions list, and how many of them
+     read as buying. A purchase entered on רכש lands here on its own; these
+     are the ones written here first, and the banner offers the move. */
+  const adoptable = adoptableItems(items);
+  const suggested = adoptable.filter((candidate) => candidate.suggested).length;
+  const listHref = acquisitionsHref(here, {});
 
   return (
     <main className={styles.page}>
@@ -198,6 +208,22 @@ export default async function PlanPage(
             </div>
           </section>
 
+          {suggested > 0 ? (
+            <Banner
+              tone="info"
+              label="משימות קנייה שאינן ברכש"
+              headline={(
+                <bdi>
+                  {suggested === 1
+                    ? 'משימה אחת בלוח מתחילה ב״לקנות״ ועדיין אינה ברשימת הרכש.'
+                    : `${suggested} משימות בלוח מתחילות ב״לקנות״ ועדיין אינן ברשימת הרכש.`}
+                </bdi>
+              )}
+              detail="רכש נכנס מרשימת הרכש ומופיע כאן לבד; מה שנכתב קודם בלוח אפשר להעביר בלחיצה אחת, והמשימות נשארות בלוח."
+              action={{ label: 'העברה לרכש', href: adoptHref(here) }}
+            />
+          ) : null}
+
           <div className={styles.tiles}>
             <StatTile
               label="משימות פתוחות"
@@ -254,6 +280,12 @@ export default async function PlanPage(
             <div className={styles.sectionHead}>
               <h2>הרשימה המלאה</h2>
               <span className={styles.sectionHint}>לפי נושא, כל נושא בצבע שלו. משימה כללית, ותחתיה החלקים שלה עם קו מחבר. לחיצה על העיגול מסמנת שהושלמה.</span>
+              {adoptable.length === 0 ? null : (
+                <ButtonLink size="sm" tone="ghost" href={adoptHref(here)}>
+                  <Icon name="wallet" size={14} />
+                  העברת קניות לרכש
+                </ButtonLink>
+              )}
             </div>
             {groups.length === 0 ? (
               <EmptyState
@@ -268,7 +300,9 @@ export default async function PlanPage(
                 params={here}
                 today={today}
                 currentItemId={query.peek}
-                rowLead={(line: PlanLine) => (line.item.status === 'cancelled' ? null : (
+                /* A purchase's line has no check: it is done when the thing
+                   arrives, which its menu and its pill both say. */
+                rowLead={(line: PlanLine) => (line.item.status === 'cancelled' || line.item.purchase !== null ? null : (
                   <DoneToggle item={{ id: line.item.id, title: line.item.title, status: line.item.status }} />
                 ))}
                 rowActions={(line: PlanLine) => (
@@ -279,7 +313,11 @@ export default async function PlanPage(
                         חלק
                       </ButtonLink>
                     )}
-                    <StatusMenu item={{ id: line.item.id, title: line.item.title, status: line.item.status }} />
+                    {line.item.purchase !== null && line.item.status !== 'cancelled' ? (
+                      <PurchaseMenu item={{ acquisitionId: line.item.purchase.id, title: line.item.title, status: line.item.purchase.status }} />
+                    ) : (
+                      <StatusMenu item={{ id: line.item.id, title: line.item.title, status: line.item.status }} />
+                    )}
                   </span>
                 )}
               />
@@ -310,6 +348,15 @@ export default async function PlanPage(
       ) : null}
       {query.creatingTopic ? (
         <TopicDrawer topic={null} seasonId={current.id} seasonName={current.name} closeHref={closeHref} />
+      ) : null}
+      {query.adopting ? (
+        <AdoptDrawer
+          seasonId={current.id}
+          seasonName={current.name}
+          candidates={adoptable}
+          closeHref={closeHref}
+          listHref={listHref}
+        />
       ) : null}
       {drawerOpen ? (
         <ItemDrawer

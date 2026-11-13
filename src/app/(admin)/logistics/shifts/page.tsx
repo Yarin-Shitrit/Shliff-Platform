@@ -62,7 +62,7 @@ export default async function ShiftsPage(
   if (current === null) {
     return (
       <main className={styles.page}>
-        <TopBar crumbs={[{ label: 'לוגיסטיקה', href: '/logistics' }, { label: 'משמרות' }]} />
+        <TopBar crumbs={[{ label: 'משמרות' }]} />
         <h1>משמרות</h1>
         <EmptyState
           kind="nothing-yet"
@@ -109,7 +109,7 @@ export default async function ShiftsPage(
   return (
     <main className={styles.page}>
       <TopBar
-        crumbs={[{ label: 'לוגיסטיקה', href: '/logistics' }, { label: 'משמרות' }]}
+        crumbs={[{ label: 'משמרות' }]}
         chip={<SeasonChip seasonName={current.name} />}
         actions={(
           /* Laptop only (`.topActions`): on a phone these move to the fixed

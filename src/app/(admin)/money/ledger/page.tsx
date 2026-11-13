@@ -29,6 +29,7 @@ import { FilterBar } from '@/components/ui/filter-bar';
 import type { FilterChip, FilterOption } from '@/components/ui/filter-bar';
 import { StatTile } from '@/components/ui/stat-tile';
 import { chipSource } from '../chip-source';
+import { moneyHref } from '../href';
 import { AttributeAccount } from './attribute-account';
 import { NewMovementForm } from './new-movement-form';
 import styles from './ledger.module.css';
@@ -43,6 +44,11 @@ export type LedgerSearchParams = {
 };
 
 const PATH = '/money/ledger';
+
+/** The overview's count drawer for one account, keeping the season (R5). */
+function countHref(seasonId: string, accountId: string): string {
+  return moneyHref({ season: seasonId, count: accountId });
+}
 
 /** The current request's params, as the kit's drawer builders want them.
  *  A19: no screen spells `act` or `peek` by hand. */
@@ -209,6 +215,12 @@ export default async function LedgerPage(
         <span className={styles.description}>
           <span>{one.description}</span>
           {one.isTransfer ? <Pill tone="info">העברה</Pill> : null}
+          {/* On or before its account's count day: kept as the record of
+            * what is known, already inside the figure on the account card,
+            * and not added to it again. Said on the row, because a lead who
+            * records last year's expense and sees the balance not move needs
+            * the reason where they are looking. */}
+          {one.insideCount ? <Pill tone="neutral">לפני הספירה</Pill> : null}
         </span>
       ),
     },
@@ -446,7 +458,9 @@ export default async function LedgerPage(
           headline={<bdi>{unplacedStrip.count} תנועות נרשמו בלי לציין חשבון.</bdi>}
           detail={(
             <>
-              עד שישויכו הן לא נספרות ביתרה של אף קופה.
+              עד שישויכו הן לא רשומות על אף קופה.
+              {' '}תנועה מלפני יום הספירה של החשבון נכנסת להיסטוריה שלו בלי לשנות את היתרה;
+              תנועה מאוחרת יותר משנה אותה.
               {unplacedStrip.inAgorot === 0 ? null : (
                 <> <Money agorot={unplacedStrip.inAgorot} /> נרשמו בלי לציין לאיזה חשבון נכנסו.</>
               )}
@@ -461,6 +475,27 @@ export default async function LedgerPage(
       {balance.shown ? null : (
         <p className={styles.balanceNote}>{balance.reason}</p>
       )}
+
+      {/* The count is the provenance of every figure in the יתרה column, so
+        * it is said where the column is, with the link that can change it.
+        * A lead who places a ברן 25 movement and watches the account's
+        * balance not move needs this sentence more than any other on the
+        * page — without it, the unchanged figure reads as a broken button.
+        * Rows inside the count are read backwards from it; `runningBalanceFor`
+        * explains the arithmetic. */}
+      {balance.shown && balance.countedOn !== null && chosenAccount !== undefined ? (
+        <p className={styles.balanceNote}>
+          היתרה של <bdi>{chosenAccount.name}</bdi> נספרה ב־<DateText at={balance.countedOn} />.
+          {' '}
+          {balance.insideCount === 0
+            ? 'כל התנועות כאן מאוחרות לספירה ומשנות אותה.'
+            : <><bdi>{balance.insideCount}</bdi> תנועות עד אותו יום כבר כלולות בה: הן נשמרות כהיסטוריה ולא משנות את היתרה.</>}
+          {' '}
+          <Link className="link" href={countHref(season?.id ?? seasons[0].id, chosenAccount.id)}>
+            ספירה מחדש
+          </Link>
+        </p>
+      ) : null}
 
       {!creating ? null : (
         <Drawer

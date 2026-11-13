@@ -5,6 +5,7 @@ import { requireAdmin } from '@/lib/auth/guard';
 import { listSeasons } from '@/lib/members/roster';
 import { listSeasonFees } from '@/lib/fees/season-fees';
 import { issuedFlatDues } from '@/lib/fees/dues';
+import { seasonClosePreview } from '@/lib/fees/close-season';
 import { seasonFeeSummary } from '@/lib/fees/summary';
 import { listOpenAccounts } from '@/lib/money/accounts';
 import {
@@ -22,6 +23,7 @@ import { IssueMissingDuesButton } from './issue-due-button';
 import { PaymentDrawer } from './payment-drawer';
 import { ExceptionDrawer } from './exception-drawer';
 import { RateDrawer } from './rate-drawer';
+import { CloseSeasonDrawer } from './close-season-drawer';
 import { feesHref } from './href';
 import styles from './fees.module.css';
 
@@ -96,6 +98,14 @@ export default async function FeesPage(
   const settingRate = params.act === 'rate' && !params.peek;
   const issued = settingRate ? await issuedFlatDues(db, season.id) : null;
 
+  /*
+   * The season's closing drawer: `?act=close`, the same shape. Its preview
+   * is fetched only when it is open, for the same reason as the rate's —
+   * the counts decide something only at that moment.
+   */
+  const closing = params.act === 'close' && !params.peek;
+  const closePreview = closing ? await seasonClosePreview(db, season.id) : null;
+
   const allClear = rows.length > 0 && visible.length === 0 && view === 'unpaid';
 
   /* Counted on the whole roster, not the view: a stale due hides in any tab. */
@@ -113,9 +123,20 @@ export default async function FeesPage(
             the link that can change it (D1). A link, because the drawer it
             opens is a URL like every other drawer here.
           */}
-          <ButtonLink tone="ghost" size="sm" href={feesHref({ season: season.id, view, rate: true })}>
-            <Icon name="pencil" size={14} /> {`שינוי התעריף של ${season.name}`}
-          </ButtonLink>
+          <span className={styles.headLinks}>
+            <ButtonLink tone="ghost" size="sm" href={feesHref({ season: season.id, view, rate: true })}>
+              <Icon name="pencil" size={14} /> {`שינוי התעריף של ${season.name}`}
+            </ButtonLink>
+            {/*
+              The starting point after a year the book was not kept: every
+              open balance of the season goes to zero by a write-off that
+              says so (`closeSeasonBalances`). A link, because the drawer it
+              opens is a URL like every other drawer here.
+            */}
+            <ButtonLink tone="ghost" size="sm" href={feesHref({ season: season.id, view, close: true })}>
+              <Icon name="check" size={14} /> {`סגירת היתרות של ${season.name}`}
+            </ButtonLink>
+          </span>
         </div>
         {/* A17: one isolate around the whole phrase, not one per figure. */}
         <p className={styles.sub}>
@@ -213,6 +234,14 @@ export default async function FeesPage(
           view={view}
           flatRateAgorot={summary.flatRateAgorot}
           issued={issued}
+        />
+      )}
+
+      {closePreview !== null && (
+        <CloseSeasonDrawer
+          preview={closePreview}
+          view={view}
+          latest={season.id === seasons[0].id}
         />
       )}
 

@@ -5,11 +5,12 @@ import { isBlank } from '@/lib/text/normalize';
 import { toAgorot, fromAgorot } from '@/lib/money';
 import { persons } from '@/db/schema/camp';
 import {
-  acquisitionItems,
+  acquisitionItems, workItems,
   type AcquisitionSource, type AcquisitionStatus, type LogisticsCategory,
   type ItemCondition,
 } from '@/db/schema/logistics';
 import { createItem, addToItem, itemById } from './warehouse';
+import { createItem as createPlanItem, purchaseNameOf, purchaseTitle } from './plan';
 import { statusOf, type AcquisitionQuery } from './acquisitions-views';
 
 /**
@@ -45,10 +46,14 @@ export interface AcquisitionRow {
   lender: PersonRef | null;
   budgetLineId: string | null;
   arrivedItemId: string | null;
+  /** The row's line on the work plan, when it has one, and whose board it is on. */
+  workItem: { id: string; seasonId: string } | null;
   status: AcquisitionStatus;
   updatedAt: Date;
   updatedBy: string | null;
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const CATEGORIES: readonly LogisticsCategory[] = [
   'kitchen', 'sanitation', 'living', 'build', 'general',
@@ -120,6 +125,8 @@ function selection(db: AnyDb) {
       row: acquisitionItems,
       assigneeName: sql<string | null>`${assigneeTable}.display_name`,
       lenderName: sql<string | null>`${lenderTable}.display_name`,
+      workItemId: workItems.id,
+      workItemSeasonId: workItems.seasonId,
     })
     .from(acquisitionItems)
     .leftJoin(
@@ -129,16 +136,20 @@ function selection(db: AnyDb) {
     .leftJoin(
       sql`${persons} as ${lenderTable}`,
       sql`${lenderTable}.id = ${acquisitionItems.lenderPersonId}`,
-    );
+    )
+    /* One line per purchase at most: `work_items.acquisition_item_id` is unique. */
+    .leftJoin(workItems, eq(workItems.acquisitionItemId, acquisitionItems.id));
 }
 
 type SelectedRow = {
   row: typeof acquisitionItems.$inferSelect;
   assigneeName: string | null;
   lenderName: string | null;
+  workItemId: string | null;
+  workItemSeasonId: string | null;
 };
 
-function toRow({ row, assigneeName, lenderName }: SelectedRow): AcquisitionRow {
+function toRow({ row, assigneeName, lenderName, workItemId, workItemSeasonId }: SelectedRow): AcquisitionRow {
   return {
     id: row.id,
     seasonId: row.seasonId,
@@ -154,6 +165,7 @@ function toRow({ row, assigneeName, lenderName }: SelectedRow): AcquisitionRow {
       ? null : { id: row.lenderPersonId, name: lenderName },
     budgetLineId: row.budgetLineId,
     arrivedItemId: row.arrivedItemId,
+    workItem: workItemId !== null && workItemSeasonId !== null ? { id: workItemId, seasonId: workItemSeasonId } : null,
     status: row.status,
     updatedAt: row.updatedAt as Date,
     updatedBy: row.updatedBy,
@@ -290,14 +302,73 @@ function clean(input: AcquisitionInput) {
   };
 }
 
+/**
+ * Where a new purchase's line goes on the work plan: which season's board,
+ * and under which topic (null is ״בלי נושא״). The drawer passes the season
+ * on screen and the topic the lead picked.
+ */
+export interface PlanPlacement {
+  seasonId: string;
+  topicId: string | null;
+}
+
+/**
+ * Every purchase is a line on the work plan, made here, in the same
+ * transaction as the row: a lead who enters what to buy has said what has
+ * to get done, and typing it twice is how the two lists drift apart.
+ *
+ * Without a placement, a season's row goes on that season's board under
+ * no topic. A camp-wide row names no season, so with no placement it gets
+ * no line — the system does not pick a year for it — and the drawer always
+ * passes one.
+ */
 export async function createAcquisition(
-  db: AnyDb, input: AcquisitionInput, actor: string,
+  db: AnyDb, input: AcquisitionInput, actor: string, plan?: PlanPlacement | null,
 ): Promise<string> {
   validate(input);
-  const [row] = await db.insert(acquisitionItems)
-    .values({ ...clean(input), updatedBy: actor })
-    .returning();
-  return row.id;
+  const placement = plan ?? (input.seasonId === null ? null : { seasonId: input.seasonId, topicId: null });
+
+  return (db as Db).transaction(async (tx) => {
+    const scoped = tx as unknown as AnyDb;
+    const [row] = await scoped.insert(acquisitionItems)
+      .values({ ...clean(input), updatedBy: actor })
+      .returning();
+    if (placement !== null) {
+      const itemId = await createPlanItem(scoped, placement.seasonId, {
+        title: purchaseTitle(input.source, input.name, input.quantityNeeded),
+        notes: null,
+        topicId: placement.topicId,
+        parentId: null,
+        startsOn: null,
+        endsOn: null,
+        assigneePersonId: input.assigneePersonId,
+      }, actor);
+      await scoped.update(workItems).set({ acquisitionItemId: row.id }).where(eq(workItems.id, itemId));
+    }
+    return row.id;
+  });
+}
+
+/**
+ * The line on the board follows its purchase: the title is rebuilt from
+ * the name, the count and the way of getting it, the person is the row's,
+ * and done means arrived. A cancelled line is left alone — that was the
+ * board's decision, and a delivery does not reverse it.
+ */
+async function followPurchase(db: AnyDb, acquisitionId: string, actor: string): Promise<void> {
+  const [row] = await db.select().from(acquisitionItems).where(eq(acquisitionItems.id, acquisitionId));
+  const [item] = await db.select({ id: workItems.id, status: workItems.status }).from(workItems)
+    .where(eq(workItems.acquisitionItemId, acquisitionId));
+  if (!row || !item) return;
+  const status = item.status === 'cancelled' ? 'cancelled'
+    : row.status === 'arrived' ? 'done' : 'open';
+  await db.update(workItems).set({
+    title: purchaseTitle(row.source, row.name, row.quantityNeeded),
+    assigneePersonId: row.assigneePersonId,
+    status,
+    updatedAt: new Date(),
+    updatedBy: actor,
+  }).where(eq(workItems.id, item.id));
 }
 
 export async function updateAcquisition(
@@ -309,6 +380,54 @@ export async function updateAcquisition(
   await db.update(acquisitionItems)
     .set({ ...clean(input), updatedBy: actor, updatedAt: new Date() })
     .where(eq(acquisitionItems.id, id));
+  await followPurchase(db, id, actor);
+}
+
+/**
+ * The one-time move the board asked for: open items that are really
+ * things to buy become rows in the list, each linked to its item. The
+ * item stays on the board — that is where a purchase lives from now on —
+ * renamed from the row (״קניית קרשים״ → ״לקנות קרשים״), with its person
+ * carried over. Category, count and cost are the row's defaults: the
+ * title says none of them, and the list is where they get filled in.
+ *
+ * All or nothing. A refusal names the item, and the rows written before
+ * it are rolled back, so a half-moved board cannot happen.
+ */
+export async function adoptPurchaseItems(
+  db: AnyDb, seasonId: string, itemIds: readonly string[], actor: string,
+): Promise<number> {
+  if (itemIds.length === 0) throw new Error('nothing was chosen to move to the acquisitions list');
+
+  return (db as Db).transaction(async (tx) => {
+    const scoped = tx as unknown as AnyDb;
+    for (const itemId of itemIds) {
+      const [item] = UUID.test(itemId)
+        ? await scoped.select().from(workItems).where(eq(workItems.id, itemId))
+        : [];
+      if (!item || item.seasonId !== seasonId) throw new Error(`unknown work item ${itemId}`);
+      if (item.acquisitionItemId !== null) throw new Error(`work item ${itemId} is already in the acquisitions list`);
+      if (item.status !== 'open') throw new Error(`work item ${itemId} is not open`);
+
+      const name = purchaseNameOf(item.title);
+      const [row] = await scoped.insert(acquisitionItems).values({
+        seasonId,
+        name,
+        category: 'general',
+        quantityNeeded: 1,
+        source: 'buy_new',
+        assigneePersonId: item.assigneePersonId,
+        updatedBy: actor,
+      }).returning();
+      await scoped.update(workItems).set({
+        acquisitionItemId: row.id,
+        title: purchaseTitle('buy_new', name, 1),
+        updatedAt: new Date(),
+        updatedBy: actor,
+      }).where(eq(workItems.id, item.id));
+    }
+    return itemIds.length;
+  });
 }
 
 /**
@@ -328,6 +447,7 @@ export async function setAcquisitionStatus(
   await db.update(acquisitionItems)
     .set({ status, updatedBy: actor, updatedAt: new Date() })
     .where(eq(acquisitionItems.id, id));
+  await followPurchase(db, id, actor);
 }
 
 export interface ArrivalInput {
@@ -413,6 +533,7 @@ export async function recordArrival(
         updatedAt: new Date(),
       })
       .where(eq(acquisitionItems.id, input.acquisitionId));
+    await followPurchase(scoped, input.acquisitionId, actor);
 
     return itemId;
   });

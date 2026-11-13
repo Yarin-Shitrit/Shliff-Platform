@@ -9,7 +9,10 @@ import { DateText } from '@/components/format';
 import { cx } from '@/components/ui/cx';
 import { isOverdue, isUnderway, type PlanGroup, type PlanItem } from '@/lib/logistics/plan';
 import { itemHref, newItemHref, topicHref, type RawParams } from '@/lib/logistics/plan-views';
-import { WORK_STATUS_LABELS, WORK_STATUS_TONES } from '@/lib/logistics/labels';
+import { acquisitionHref } from '@/lib/logistics/acquisitions-views';
+import {
+  STATUS_LABELS, STATUS_TONES, WORK_STATUS_LABELS, WORK_STATUS_TONES,
+} from '@/lib/logistics/labels';
 import styles from './plan.module.css';
 
 /**
@@ -139,7 +142,15 @@ export function PlanList({
     },
     {
       key: 'status', header: 'מצב', card: 'meta',
-      cell: ({ item }) => <Pill tone={WORK_STATUS_TONES[item.status]} dot>{WORK_STATUS_LABELS[item.status]}</Pill>,
+      /* A purchase's line says the list's word and links to the row that
+         can change it; a cancelled line is the board's own word. */
+      cell: ({ item }) => (item.purchase !== null && item.status !== 'cancelled' ? (
+        <Link href={acquisitionHref(params, item.purchase.id)} className={styles.purchasePill} title="פתיחה ברשימת הרכש">
+          <Pill tone={STATUS_TONES[item.purchase.status]} dot>{`רכש · ${STATUS_LABELS[item.purchase.status]}`}</Pill>
+        </Link>
+      ) : (
+        <Pill tone={WORK_STATUS_TONES[item.status]} dot>{WORK_STATUS_LABELS[item.status]}</Pill>
+      )),
     },
     { key: 'waits', header: 'אחרי', card: 'meta', cell: ({ item }) => <WaitsFor item={item} params={params} /> },
   ];

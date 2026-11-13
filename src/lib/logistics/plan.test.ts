@@ -7,8 +7,10 @@ import {
   createItem, updateItem, scheduleItem, setItemStatus, planItemById,
   addDependency, removeDependency, listPlan,
   buildPlanTree, buildTimeline, timelineWindow, stepWindow, topicHue, summarizePlan, validateSchedule, datesConflict,
-  planRoster, type PlanItem, type Topic,
+  planRoster, purchaseTitle, purchaseNameOf, looksLikePurchase, adoptableItems,
+  type PlanItem, type Topic,
 } from './plan';
+import { createAcquisition, setAcquisitionStatus } from './acquisitions';
 
 const LEAD = 'lead@shliff.camp';
 
@@ -173,6 +175,29 @@ describe('the plan against a real database', () => {
       await expect(setItemStatus(db, id, 'lost' as never, LEAD)).rejects.toThrow(/unknown work item status/);
     });
 
+    it('lets a purchase item be cancelled on the board, but takes done and open from the purchase', async () => {
+      const acquisitionId = await createAcquisition(db, {
+        seasonId, name: 'מכולה', category: 'general', quantityNeeded: 1, source: 'buy_new',
+        estimatedCost: null, actualCost: null, assigneePersonId: null, lenderPersonId: null, budgetLineId: null,
+      }, LEAD);
+      const [linked] = (await listPlan(db, seasonId)).filter((item) => item.purchase !== null);
+      expect(linked.purchase).toEqual({ id: acquisitionId, status: 'to_search' });
+
+      await expect(setItemStatus(db, linked.id, 'done', LEAD)).rejects.toThrow(/done when its purchase arrives/);
+      expect((await planItemById(db, linked.id))?.status).toBe('open');
+
+      await setItemStatus(db, linked.id, 'cancelled', LEAD);
+      expect((await planItemById(db, linked.id))?.status).toBe('cancelled');
+      // Reopening asks the purchase: not arrived, so open.
+      await setItemStatus(db, linked.id, 'open', LEAD);
+      expect((await planItemById(db, linked.id))?.status).toBe('open');
+      // Arrived in the meantime: reopening lands on done, because it is.
+      await setItemStatus(db, linked.id, 'cancelled', LEAD);
+      await setAcquisitionStatus(db, acquisitionId, 'arrived', LEAD);
+      await setItemStatus(db, linked.id, 'open', LEAD);
+      expect((await planItemById(db, linked.id))?.status).toBe('done');
+    });
+
     it('lists sub-items in creation order under their parent', async () => {
       const parent = await createItem(db, seasonId, { ...BLANK, title: 'להכין סלון' }, LEAD);
       await createItem(db, seasonId, { ...BLANK, title: 'לקנות קרשים', parentId: parent }, LEAD);
@@ -247,7 +272,7 @@ describe('the plan against a real database', () => {
 function item(over: Partial<PlanItem>): PlanItem {
   return {
     id: 'i', seasonId: 's', topicId: null, parentId: null, title: 'x', notes: null,
-    startsOn: null, endsOn: null, status: 'open', position: 0, assignee: null,
+    startsOn: null, endsOn: null, status: 'open', position: 0, assignee: null, purchase: null,
     waitsFor: [], blocks: [], updatedAt: new Date('2026-01-01T00:00:00Z'), updatedBy: null,
     ...over,
   };
@@ -399,5 +424,42 @@ describe('the totals', () => {
       item({ id: 'd', status: 'cancelled', startsOn: '2026-05-10' }),
     ]);
     expect(totals).toEqual({ open: 2, done: 1, scheduled: 1, unscheduled: 1, conflicts: 0 });
+  });
+});
+
+describe('the words of a purchase', () => {
+  it('writes the title from the way of getting it, the name and the count', () => {
+    expect(purchaseTitle('buy_new', ' מכולה ', 1)).toBe('לקנות מכולה');
+    expect(purchaseTitle('buy_new', 'כיסא', 12)).toBe('לקנות כיסא (12)');
+    expect(purchaseTitle('second_hand', 'מקרר', 1)).toBe('להשיג מקרר');
+    expect(purchaseTitle('borrow_member', 'אוהל', 2)).toBe('להשאיל אוהל (2)');
+  });
+
+  it('recognises a buying item by its first word, however it is spelled', () => {
+    for (const title of ['לקנות מכולה', ' לרכוש קרשים', 'קניית גז', 'רכישת מקרר', 'לקנות  2 מקררים']) {
+      expect(looksLikePurchase(title), title).toBe(true);
+    }
+    for (const title of ['להכין מכולת מטבח', 'יום בניית ספסלים', 'לקנותם', 'מכולה לקנות', '']) {
+      expect(looksLikePurchase(title), title).toBe(false);
+    }
+  });
+
+  it('takes the verb off for the row’s name, and keeps a title that is only a verb', () => {
+    expect(purchaseNameOf('לקנות מכולה')).toBe('מכולה');
+    expect(purchaseNameOf('קניית קרשים לספסלים')).toBe('קרשים לספסלים');
+    expect(purchaseNameOf('גז למטבח')).toBe('גז למטבח');
+    expect(purchaseNameOf('לקנות')).toBe('לקנות');
+  });
+
+  it('offers every open item not yet in the list, suggesting the ones that read as buying', () => {
+    const offered = adoptableItems([
+      item({ id: 'a', title: 'לקנות מכולה', assignee: { personId: 'p', displayName: 'אופק' } }),
+      item({ id: 'b', title: 'להכין סלון' }),
+      item({ id: 'c', title: 'לקנות גז', purchase: { id: 'x', status: 'ordered' } }),
+      item({ id: 'd', title: 'לקנות קרשים', status: 'done' }),
+      item({ id: 'e', title: 'לקנות אוהל', status: 'cancelled' }),
+    ]);
+    expect(offered.map((one) => [one.id, one.suggested])).toEqual([['a', true], ['b', false]]);
+    expect(offered[0].assignee?.displayName).toBe('אופק');
   });
 });

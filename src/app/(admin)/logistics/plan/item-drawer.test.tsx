@@ -29,7 +29,7 @@ const KITCHEN: Topic = {
 function item(over: Partial<PlanItem>): PlanItem {
   return {
     id: 'i', seasonId: 's1', topicId: null, parentId: null, title: 'משימה', notes: null,
-    startsOn: null, endsOn: null, status: 'open', position: 0, assignee: null,
+    startsOn: null, endsOn: null, status: 'open', position: 0, assignee: null, purchase: null,
     waitsFor: [], blocks: [], updatedAt: new Date('2026-05-01T09:00:00Z'), updatedBy: 'lead@shliff.camp',
     ...over,
   };
@@ -193,5 +193,35 @@ describe('the drawer over an item', () => {
     expect(actions.updateItemAction).toHaveBeenCalledWith('b', expect.objectContaining({
       title: 'יום בניית ספסלים', startsOn: '2026-05-09', endsOn: '2026-05-10',
     }));
+  });
+});
+
+describe('the drawer over a purchase’s line', () => {
+  /* `updatedBy: null`: the subtitle prints the editor's address, which is not copy. */
+  const linked = item({ id: 'i', title: 'לקנות מכולה', purchase: { id: 'acq-1', status: 'ordered' }, updatedBy: null });
+
+  it('points the name and the person at the acquisitions list, and offers no done button', () => {
+    mount({ item: linked });
+    expect((screen.getByLabelText(/מה צריך לעשות/) as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByLabelText('אחראי') as HTMLSelectElement).disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: 'סימון כהושלמה' })).toBeNull();
+    const toList = screen.getByRole('link', { name: 'הסטטוס ברשימת הרכש' });
+    expect(toList.getAttribute('href')).toBe('/logistics/acquisitions?season=s1&peek=acq-1');
+    expect(screen.getByText('רכש · הוזמן')).toBeTruthy();
+    expect(screen.getByRole('dialog').textContent ?? '').not.toMatch(/[A-Za-z]/);
+  });
+
+  it('still lets the days, the topic and the notes be saved', async () => {
+    mount({ item: linked });
+    type('מתחילים ביום', '2026-05-10');
+    await press('שמירה');
+    expect(actions.updateItemAction).toHaveBeenCalledWith('i', expect.objectContaining({
+      title: 'לקנות מכולה', startsOn: '2026-05-10',
+    }));
+  });
+
+  it('still lets the line be cancelled, which is the board’s own decision', () => {
+    mount({ item: linked });
+    expect(screen.getByRole('button', { name: 'ביטול המשימה' })).toBeTruthy();
   });
 });

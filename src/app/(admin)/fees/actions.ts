@@ -8,6 +8,8 @@ import {
   issueFlatDues, issueFlatDueFor, setException, clearException, setFlatRate,
 } from '@/lib/fees/dues';
 import { recordPayment, deletePayment } from '@/lib/fees/payments';
+import { closeSeasonBalances } from '@/lib/fees/close-season';
+import type { CloseSeasonResult } from '@/lib/fees/close-season';
 import type { PaymentChannel } from '@/db/schema/camp';
 import { toHebrewError, HebrewRefusal } from '@/lib/errors/hebrew';
 import { listOpenAccounts } from '@/lib/money/accounts';
@@ -177,4 +179,41 @@ export async function setFlatRateAction(
   }
   revalidatePath('/', 'layout');
   return { ok: true };
+}
+
+/**
+ * Closes a season's open balances — every unpaid due and every open named
+ * debt of that year goes to zero by a write-off that says so, and the
+ * records stay. The starting point the lead asked for after a year the
+ * book was not kept; `closeSeasonBalances` says why it is a write-off and
+ * not a delete.
+ *
+ * `dues` and `obligations` are the lead's two choices, passed through as
+ * made: the library refuses a close that chooses nothing, and one with
+ * nothing open to close, so an empty year never reports success.
+ *
+ * The figures this changes sit on the people list, every person's page,
+ * the money page's debts and the home page, so the whole layout is
+ * revalidated, as `setFlatRateAction` does.
+ */
+export async function closeSeasonAction(
+  seasonId: string, choice: { dues: boolean; obligations: boolean },
+): Promise<ActionResult<CloseSeasonResult>> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+  let result: CloseSeasonResult;
+  try {
+    result = await closeSeasonBalances(db, {
+      seasonId,
+      dues: choice.dues,
+      obligations: choice.obligations,
+      closedOn: new Date(),
+      // From the session, never from the client.
+      recordedBy: admin.email,
+    });
+  } catch (error) {
+    return failed(error);
+  }
+  revalidatePath('/', 'layout');
+  return { ok: true, value: result };
 }

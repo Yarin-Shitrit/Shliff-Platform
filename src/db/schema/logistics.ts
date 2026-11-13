@@ -275,6 +275,20 @@ export const workItems = pgTable('work_items', {
   /** Who is responsible. A person on the roster, never free text. */
   assigneePersonId: uuid('assignee_person_id')
     .references(() => persons.id, { onDelete: 'set null' }),
+  /**
+   * The purchase this item is the buying of. Set when a lead enters a row on
+   * רכש — the item is made from it, under the topic they chose — or when a
+   * ״לקנות…״ item already on the board is adopted into the list. Unique, so
+   * one purchase is one line on the board and never two. `set null` is a
+   * safety net only: an acquisition row is never deleted by this product.
+   *
+   * A linked item's title, person and done/open state follow the purchase
+   * (`src/lib/logistics/acquisitions.ts`): the list is where a purchase is
+   * edited, and the board says so instead of holding a second copy.
+   */
+  acquisitionItemId: uuid('acquisition_item_id')
+    .references(() => acquisitionItems.id, { onDelete: 'set null' })
+    .unique(),
   status: text('status').$type<WorkItemStatus>().notNull().default('open'),
   position: integer('position').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

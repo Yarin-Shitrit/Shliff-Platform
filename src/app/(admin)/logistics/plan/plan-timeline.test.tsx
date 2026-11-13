@@ -7,7 +7,7 @@ import { PlanTimeline, packBars, laneRows, laneBlocks, monthBands, windowLabel }
 function item(over: Partial<PlanItem>): PlanItem {
   return {
     id: 'i', seasonId: 's', topicId: null, parentId: null, title: 'משימה', notes: null,
-    startsOn: null, endsOn: null, status: 'open', position: 0, assignee: null,
+    startsOn: null, endsOn: null, status: 'open', position: 0, assignee: null, purchase: null,
     waitsFor: [], blocks: [], updatedAt: new Date('2026-01-01T00:00:00Z'), updatedBy: null,
     ...over,
   };
