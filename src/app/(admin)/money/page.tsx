@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import { listSeasons } from '@/lib/members/roster';
+import { listPersonChoices } from '@/lib/members/dossier';
 import { moneyOverview } from '@/lib/money/overview';
 import { formatShekels } from '@/lib/money';
 import { Money } from '@/components/format';
@@ -14,6 +15,7 @@ import { StackedBar } from '@/components/charts/stacked-bar';
 import { AccountCard } from './account-card';
 import { CountDrawer } from './count-drawer';
 import { NewAccountDrawer } from './new-account-drawer';
+import { HolderDrawer } from './holder-drawer';
 import { moneyHref } from './href';
 import { ObligationsTable } from './obligations-table';
 import { BudgetTable } from './budget-table';
@@ -67,6 +69,13 @@ export default async function MoneyPage(
     ? summary.accounts.find((row) => row.accountId === params.account)
     : undefined;
   const addingAccount = params.act === 'new-account';
+  /* `?act=holder&account=<id>`: whose money this is now. The people list is
+     read only while the drawer is open — it is the one thing the page does
+     not otherwise need. */
+  const holding = params.act === 'holder'
+    ? summary.accounts.find((row) => row.accountId === params.account)
+    : undefined;
+  const people = holding === undefined ? [] : await listPersonChoices(db);
   const closeHref = moneyHref({ season: season.id });
 
   // `duesFundingIdentity` (src/lib/money/funding.ts) sets both of these to
@@ -258,6 +267,7 @@ export default async function MoneyPage(
                 key={row.accountId}
                 account={row}
                 countHref={moneyHref({ season: season.id, count: row.accountId })}
+                holderHref={moneyHref({ season: season.id, holder: row.accountId })}
               />
             ))}
           </div>
@@ -276,6 +286,18 @@ export default async function MoneyPage(
           />
         )}
         {!addingAccount ? null : <NewAccountDrawer closeHref={closeHref} />}
+        {holding === undefined ? null : (
+          <HolderDrawer
+            account={{
+              id: holding.accountId,
+              name: holding.name,
+              holderPersonId: holding.holderPersonId,
+              holderName: holding.holderName,
+            }}
+            people={people}
+            closeHref={closeHref}
+          />
+        )}
 
         {unattributedInAgorot > 0 ? (
           <Banner

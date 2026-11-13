@@ -38,10 +38,12 @@ const KIND_ICONS: Record<AccountKind, IconName> = {
  * The card's `--warn-line` border is never the only carrier of that meaning
  * (R3): the kind pill says `חשבון פרטי` and the sentence below says the rest.
  */
-export function AccountCard({ account, countHref }: {
+export function AccountCard({ account, countHref, holderHref }: {
   account: AccountBalance;
   /** The count drawer for this account. Absent on a screen that only shows. */
   countHref?: string;
+  /** The holder drawer for this account — who holds the money now. */
+  holderHref?: string;
 }) {
   const personal = account.kind === 'personal';
   const holder = account.holderName ?? 'חבר מחנה';
@@ -83,6 +85,12 @@ export function AccountCard({ account, countHref }: {
       ) : account.holderName ? (
         <span className={styles.accountHolder}>אצל <bdi>{account.holderName}</bdi></span>
       ) : null}
+
+      {holderHref === undefined ? null : (
+        <span className={styles.accountHolder}>
+          <Link className="link" href={holderHref}>מי מחזיק/ה</Link>
+        </span>
+      )}
     </div>
   );
 }

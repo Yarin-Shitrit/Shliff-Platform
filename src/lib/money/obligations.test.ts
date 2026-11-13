@@ -6,7 +6,7 @@ import { obligations } from '@/db/schema/money';
 import { createPerson, mergePersons } from '@/lib/members/link';
 import {
   createObligation, listObligations, settleObligation, unnamedObligations, checkSettlement,
-  nameObligation, PARTY_REFUSALS,
+  nameObligation, PARTY_REFUSALS, detachObligationParty,
 } from './obligations';
 
 let db: TestDb;
@@ -357,5 +357,52 @@ describe('nameObligation', () => {
     const missing = '00000000-0000-0000-0000-00000000000f';
     await expect(nameObligation(db, { obligationId: missing, partyName: 'רוני' }))
       .rejects.toThrow(`חוב לא קיים: ${missing}`);
+  });
+});
+
+describe('detachObligationParty', () => {
+  it('takes the person off the debt and keeps their name on it as text, so nothing else changes', async () => {
+    const roni = await createPerson(db, 'רוני אדלר', LEAD);
+    const id = await createObligation(db, {
+      direction: 'camp_owes', partyPersonId: roni, description: 'מקדמה', amount: 100, openedOn: WHEN,
+    });
+    await settleObligation(db, {
+      obligationId: id, amount: 40, kind: 'cash', settledOn: WHEN, recordedBy: LEAD,
+    });
+
+    expect(await detachObligationParty(db, id)).toEqual({ partyName: 'רוני אדלר' });
+
+    const [row] = await listObligations(db);
+    expect(row.partyPersonId).toBeNull();
+    expect(row.partyName).toBe('רוני אדלר');
+    expect(row.displayParty).toBe('רוני אדלר');
+    expect(row.unnamed).toBe(false);
+    expect(row.settledAgorot).toBe(4000);
+    // The spelling the workbook wrote, when there is one, is the one kept.
+    const raw = await createObligation(db, {
+      direction: 'camp_owes', partyPersonId: roni, partyName: 'רוני', description: 'חוב', amount: 5, openedOn: WHEN,
+    });
+    expect(await detachObligationParty(db, raw)).toEqual({ partyName: 'רוני' });
+  });
+
+  it('can be linked again afterwards, which is what keeping the name is for', async () => {
+    const roni = await createPerson(db, 'רוני אדלר', LEAD);
+    const maya = await createPerson(db, 'מאיה פרץ', LEAD);
+    const id = await createObligation(db, {
+      direction: 'camp_owes', partyPersonId: roni, description: 'מקדמה', amount: 100, openedOn: WHEN,
+    });
+    await detachObligationParty(db, id);
+    await nameObligation(db, { obligationId: id, partyPersonId: maya });
+    expect((await listObligations(db))[0].partyPersonId).toBe(maya);
+  });
+
+  it('refuses a debt that names nobody, and one that does not exist, in Hebrew', async () => {
+    const id = await createObligation(db, {
+      direction: 'camp_owes', partyName: 'ספק', description: 'מקדמה', amount: 100, openedOn: WHEN,
+    });
+    await expect(detachObligationParty(db, id)).rejects.toThrow('החוב הזה לא מקושר לאדם — אין מה לנתק.');
+    await expect(detachObligationParty(db, '00000000-0000-4000-8000-000000000000'))
+      .rejects.toThrow('החוב לא נמצא.');
+    expect((await listObligations(db))[0].partyName).toBe('ספק');
   });
 });

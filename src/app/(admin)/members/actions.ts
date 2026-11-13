@@ -7,7 +7,7 @@ import { requireAdmin } from '@/lib/auth/guard';
 import type { ActionResult } from '@/lib/action-result';
 import {
   aliasUnlinkTarget, createPerson, createPersonFromAlias, linkAlias, mergePersons,
-  renamePerson, unlinkAlias,
+  renamePerson, unlinkAlias, unmergePerson,
 } from '@/lib/members/link';
 import { resolveName } from '@/lib/members/identity';
 import { deletePerson } from '@/lib/members/delete';
@@ -18,6 +18,7 @@ import { isBlank } from '@/lib/text/normalize';
 import { UNLINK_ERROR_PARAM } from './unlink-error';
 import { RENAME_ERROR_PARAM } from './rename-params';
 import { DELETE_ERROR_PARAM } from './delete-params';
+import { UNMERGE_ERROR_PARAM } from './unmerge-params';
 
 export async function linkNameAction(
   aliasId: string, personId: string,
@@ -357,4 +358,43 @@ export async function deletePersonAndReturn(
   if (result.ok) redirect(listHref);
   const separator = backHref.includes('?') ? '&' : '?';
   redirect(`${backHref}${separator}${DELETE_ERROR_PARAM}=${encodeURIComponent(result.error)}`);
+}
+
+/**
+ * Reverses a merge: the record stands on its own again and the spellings
+ * that moved come back to it. The one refusal — a record that is not
+ * merged — is `unmergePerson`'s own `HebrewRefusal`.
+ *
+ * Both records change (the survivor loses the spellings), the roster and
+ * the inbox list the restored person again, and the delete preview on
+ * either record reads the merge. One revalidation of the layout covers all
+ * of it, as the money actions do.
+ */
+export async function unmergePersonAction(personId: string): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+
+  try {
+    await unmergePerson(db, personId);
+  } catch (error) {
+    return { ok: false, error: toHebrewError(error, []) };
+  }
+  revalidatePath('/', 'layout');
+  return { ok: true };
+}
+
+/**
+ * The unmerge dialog's submit. Same shape as `deletePersonAndReturn`, for
+ * the same A38 reason: success goes back to `backHref` with the dialog
+ * closed, a refusal rides back in `?unmergeError=` and the page renders it.
+ *
+ * Bound as `.bind(null, personId, backHref)`.
+ */
+export async function unmergePersonAndReturn(
+  personId: string, backHref: string,
+): Promise<void> {
+  const result = await unmergePersonAction(personId);
+  if (result.ok) redirect(backHref);
+  const separator = backHref.includes('?') ? '&' : '?';
+  redirect(`${backHref}${separator}${UNMERGE_ERROR_PARAM}=${encodeURIComponent(result.error)}`);
 }

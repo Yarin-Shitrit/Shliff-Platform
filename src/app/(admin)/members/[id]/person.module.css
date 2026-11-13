@@ -354,23 +354,54 @@
   font-size: var(--text-dense);
 }
 
-/* The drawer raised instead of the dialog when something stands in the way.
-   Each blocker is a row a lead can follow, the merge panel's shape. */
+/* The drawer raised instead of the dialog when something stands in the way:
+   a checklist. Each blocker is a numbered step with what to do, and under
+   it every row that causes it, each a link to the control that unpicks it. */
 .deleteBlocked h3 {
   margin: 0 0 var(--space-2);
   font-size: var(--text-dense);
   font-weight: 600;
 }
 
-.deleteBlockers {
+.deleteSteps {
   margin: var(--space-3) 0 0;
-  padding: 0;
-  list-style: none;
+  padding: 0 var(--space-4) 0 0;
+  display: grid;
+  gap: var(--space-3);
 }
 
-.deleteBlockers li {
-  padding: var(--space-2) 0;
+.deleteSteps > li {
+  padding-block-end: var(--space-3);
   border-block-end: 1px solid var(--line);
 }
 
-.deleteBlockers li:last-child { border-block-end: none; }
+.deleteSteps > li:last-child { border-block-end: none; padding-block-end: 0; }
+
+.deleteSteps h4 {
+  margin: 0;
+  font-size: var(--text-body);
+  font-weight: 600;
+}
+
+.deleteAction {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-dense);
+  color: var(--ink-2);
+}
+
+.deleteItems {
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-1);
+  font-size: var(--text-dense);
+}
+
+.deleteItems a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.deleteItems span { color: var(--ink-3); }

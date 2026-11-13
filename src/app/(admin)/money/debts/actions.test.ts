@@ -4,25 +4,26 @@ import type { ObligationRow } from '@/lib/money/obligations';
 
 const {
   requireAdmin, listObligations, checkSettlement, settleObligation, nameObligation,
-  recordEntry, revalidatePath,
+  detachObligationParty, recordEntry, revalidatePath,
 } = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   listObligations: vi.fn(),
   checkSettlement: vi.fn(),
   settleObligation: vi.fn(),
   nameObligation: vi.fn(),
+  detachObligationParty: vi.fn(),
   recordEntry: vi.fn(),
   revalidatePath: vi.fn(),
 }));
 vi.mock('@/db', () => ({ db: {} }));
 vi.mock('@/lib/auth/guard', () => ({ requireAdmin }));
 vi.mock('@/lib/money/obligations', () => ({
-  listObligations, checkSettlement, settleObligation, nameObligation,
+  listObligations, checkSettlement, settleObligation, nameObligation, detachObligationParty,
 }));
 vi.mock('@/lib/money/ledger', () => ({ recordEntry }));
 vi.mock('next/cache', () => ({ revalidatePath }));
 
-import { settleObligationAction, nameObligationAction } from './actions';
+import { settleObligationAction, nameObligationAction, detachObligationPartyAction } from './actions';
 
 function debt(over: Partial<ObligationRow> = {}): ObligationRow {
   return {
@@ -199,5 +200,32 @@ describe('nameObligationAction', () => {
     expect(await nameObligationAction({ obligationId: 'o1', personId: 'p1' }))
       .toEqual({ ok: false, error: HEBREW_FALLBACK });
     logged.mockRestore();
+  });
+});
+
+describe('detachObligationPartyAction', () => {
+  it('refuses a caller who is not an admin, and writes nothing', async () => {
+    requireAdmin.mockResolvedValue({ ok: false });
+    expect(await detachObligationPartyAction('o1')).toEqual({ ok: false, error: 'אין הרשאה' });
+    expect(detachObligationParty).not.toHaveBeenCalled();
+  });
+
+  it('cuts the link, hands back the name the debt now carries, and refreshes everything that shows it', async () => {
+    detachObligationParty.mockResolvedValue({ partyName: 'רוני אדלר' });
+    expect(await detachObligationPartyAction('o1')).toEqual({ ok: true, value: 'רוני אדלר' });
+    expect(detachObligationParty).toHaveBeenCalledWith({}, 'o1');
+    expect(revalidatePath).toHaveBeenCalledWith('/', 'layout');
+  });
+
+  it('carries the library’s own refusal to the screen unchanged, and never English', async () => {
+    const { HebrewRefusal } = await import('@/lib/errors/hebrew');
+    detachObligationParty.mockRejectedValue(new HebrewRefusal('החוב הזה לא מקושר לאדם — אין מה לנתק.'));
+    expect(await detachObligationPartyAction('o1'))
+      .toEqual({ ok: false, error: 'החוב הזה לא מקושר לאדם — אין מה לנתק.' });
+    const logged = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    detachObligationParty.mockRejectedValue(new Error('connection refused'));
+    expect(await detachObligationPartyAction('o1')).toEqual({ ok: false, error: HEBREW_FALLBACK });
+    logged.mockRestore();
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });

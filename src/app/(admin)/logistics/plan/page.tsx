@@ -94,6 +94,13 @@ export default async function PlanPage(
   /* Only loaded when the item drawer is open: the roster is the one thing
      the list itself does not need. */
   const roster = drawerOpen ? await planRoster(db, current.id) : [];
+  /* Plus whoever the open item already names, as the acquisitions screen
+     does: somebody taken off the season's roster can still hold a line,
+     and a picker that quietly dropped them showed ״עדיין לא נקבע״ over a
+     person it could neither keep nor clear. */
+  if (peekedItem?.assignee && !roster.some((entry) => entry.personId === peekedItem.assignee!.personId)) {
+    roster.push({ personId: peekedItem.assignee.personId, displayName: peekedItem.assignee.displayName });
+  }
   const parents = items
     .filter((item) => item.parentId === null && item.status !== 'cancelled' && item.id !== peekedItem?.id)
     .map((item) => ({ id: item.id, title: item.title, topicId: item.topicId }));

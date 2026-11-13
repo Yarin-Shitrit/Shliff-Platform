@@ -1,18 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { HEBREW_FALLBACK, HebrewRefusal } from '@/lib/errors/hebrew';
 
-const { requireAdmin, countAccount, createAccount, revalidatePath } = vi.hoisted(() => ({
+const { requireAdmin, countAccount, createAccount, setAccountHolder, revalidatePath } = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   countAccount: vi.fn(),
   createAccount: vi.fn(),
+  setAccountHolder: vi.fn(),
   revalidatePath: vi.fn(),
 }));
 vi.mock('@/db', () => ({ db: {} }));
 vi.mock('@/lib/auth/guard', () => ({ requireAdmin }));
-vi.mock('@/lib/money/accounts', () => ({ countAccount, createAccount }));
+vi.mock('@/lib/money/accounts', () => ({ countAccount, createAccount, setAccountHolder }));
 vi.mock('next/cache', () => ({ revalidatePath }));
 
-import { countAccountAction, createAccountAction } from './actions';
+import { countAccountAction, createAccountAction, setAccountHolderAction } from './actions';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -92,5 +93,33 @@ describe('createAccountAction', () => {
     createAccount.mockRejectedValueOnce(new Error('insert failed', { cause: driver }));
     expect(await createAccountAction({ name: 'קופת מזומן', kind: 'cash', balance: 0 }))
       .toEqual({ ok: false, error: 'כבר קיים חשבון בשם "קופת מזומן".' });
+  });
+});
+
+describe('setAccountHolderAction', () => {
+  it('refuses a caller who is not an admin, and writes nothing', async () => {
+    requireAdmin.mockResolvedValue({ ok: false });
+    expect(await setAccountHolderAction({ accountId: 'a1', holderPersonId: 'p1' }))
+      .toEqual({ ok: false, error: 'אין הרשאה' });
+    expect(setAccountHolder).not.toHaveBeenCalled();
+  });
+
+  it('hands the library the person, or null for nobody, and refreshes every balance', async () => {
+    expect(await setAccountHolderAction({ accountId: 'a1', holderPersonId: 'p1' })).toEqual({ ok: true });
+    expect(setAccountHolder).toHaveBeenCalledWith({}, 'a1', 'p1');
+    expect(await setAccountHolderAction({ accountId: 'a1', holderPersonId: '' })).toEqual({ ok: true });
+    expect(setAccountHolder).toHaveBeenLastCalledWith({}, 'a1', null);
+    expect(revalidatePath).toHaveBeenCalledWith('/', 'layout');
+  });
+
+  it("returns the library's refusal verbatim, and never an English message", async () => {
+    setAccountHolder.mockRejectedValue(new HebrewRefusal('אין חשבון כזה.'));
+    expect(await setAccountHolderAction({ accountId: 'a1', holderPersonId: '' }))
+      .toEqual({ ok: false, error: 'אין חשבון כזה.' });
+    const logged = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    setAccountHolder.mockRejectedValue(new Error('connection refused'));
+    expect(await setAccountHolderAction({ accountId: 'a1', holderPersonId: '' }))
+      .toEqual({ ok: false, error: HEBREW_FALLBACK });
+    logged.mockRestore();
   });
 });

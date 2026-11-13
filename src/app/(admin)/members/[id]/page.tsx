@@ -9,6 +9,7 @@ import { listPeopleForSeason } from '@/lib/members/people-list';
 import { aliasSourcesFor, type AliasSource } from '@/lib/members/alias-sources';
 import { personChangeLog, type ChangeEntry } from '@/lib/members/change-log';
 import { previewDelete } from '@/lib/members/delete';
+import { unmergePreview } from '@/lib/members/link';
 import { listObligations } from '@/lib/money/obligations';
 import { accountBalances } from '@/lib/money/accounts';
 import { listPayments, type PaymentRow } from '@/lib/fees/payments';
@@ -28,6 +29,7 @@ import { Popover } from '@/components/ui/popover';
 import { StatTile } from '@/components/ui/stat-tile';
 import { SourceChip } from '@/components/ui/source-chip';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Banner } from '@/components/ui/banner';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Drawer } from '@/components/ui/drawer';
 import { Icon } from '@/components/ui/icon';
@@ -37,10 +39,13 @@ import { Money, DateText } from '@/components/format';
 import { formatShekels } from '@/lib/money';
 import { formatDateShort, formatDateTime } from '@/lib/dates';
 import { AddToSeason } from '../add-member';
-import { deletePersonAndReturn, renamePersonAndReturn, unlinkAliasAndReturn } from '../actions';
+import {
+  deletePersonAndReturn, renamePersonAndReturn, unlinkAliasAndReturn, unmergePersonAndReturn,
+} from '../actions';
 import { UNLINK_ERROR_PARAM } from '../unlink-error';
 import { RENAME_ERROR_PARAM, RENAME_PARAM } from '../rename-params';
 import { DELETE_ERROR_PARAM, DELETE_PARAM } from '../delete-params';
+import { UNMERGE_ERROR_PARAM, UNMERGE_PARAM } from '../unmerge-params';
 import styles from './person.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -144,6 +149,16 @@ function changeSentence(entry: ChangeEntry): string {
 function duesSentence(count: number): string {
   if (count === 1) return 'יימחק חיוב אחד שטרם שולם';
   return `יימחקו ${count} חיובים שטרם שולמו`;
+}
+
+/**
+ * The drawer's own count of what stands in the way, agreeing with the
+ * number as every kit sentence does: `דבר אחד עדיין רשום`, never `1 דברים`.
+ */
+function openSentence(blockers: ReadonlyArray<{ count: number }>): string {
+  const total = blockers.reduce((sum, blocker) => sum + blocker.count, 0);
+  if (total === 1) return 'דבר אחד עדיין רשום על האדם.';
+  return `${total} דברים עדיין רשומים על האדם.`;
 }
 
 /**
@@ -357,6 +372,26 @@ export default async function PersonPage(
     return `/members/${dossier!.personId}?${query.toString()}`;
   }
 
+  /*
+   * A merged-away record. Every list hides it, so it is reached by URL
+   * alone — from the survivor's page, from the delete drawer, from a pasted
+   * link — and the one thing to do on it is undo the merge. The banner says
+   * where the person now lives; `?unmerge=1` raises the confirmation, which
+   * lists the spellings that would come back, read from the same call
+   * `unmergePerson` decides by. A refusal comes back in `?unmergeError=`.
+   */
+  const merged = dossier.mergedIntoId === null ? null : await unmergePreview(db, dossier.personId);
+  const unmerging = one(search[UNMERGE_PARAM]) === '1';
+  const unmergeError = one(search[UNMERGE_ERROR_PARAM]);
+
+  function unmergeHref(): string {
+    const query = new URLSearchParams();
+    if (requested !== '') query.set('season', requested);
+    if (tab !== 'overview') query.set('tab', tab);
+    query.set(UNMERGE_PARAM, '1');
+    return `/members/${dossier!.personId}?${query.toString()}`;
+  }
+
   const counts: Record<PersonTab, number | undefined> = {
     overview: undefined,
     payments: paymentRows.length,
@@ -557,6 +592,24 @@ export default async function PersonPage(
       )}
       {deleteError === '' ? null : (
         <p className={styles.unlinkError} role="alert">{deleteError}</p>
+      )}
+      {unmergeError === '' ? null : (
+        <p className={styles.unlinkError} role="alert">{unmergeError}</p>
+      )}
+      {merged === null ? null : (
+        <Banner
+          tone="warn"
+          label="רשומה ממוזגת"
+          headline={(
+            <>
+              הרשומה הזו מוזגה לתוך{' '}
+              <Link href={`/members/${merged.survivorId}`}>{merged.survivorName}</Link>
+              {' '}— שם האדם רשום עכשיו.
+            </>
+          )}
+          detail="היא נשמרת כדי שאפשר יהיה לבטל את המיזוג. ביטול מחזיר אליה את הכינויים שעברו, ואחריו אפשר למחוק אותה."
+          action={{ label: 'ביטול המיזוג', href: unmergeHref() }}
+        />
       )}
       {/* The way back keeps the season (R5). A record page reached from a
           chat link has no list behind it to return to otherwise. */}
@@ -1023,13 +1076,39 @@ export default async function PersonPage(
         />
       )}
 
+      {!unmerging || merged === null ? null : (
+        <ConfirmDialog
+          title="ביטול המיזוג"
+          tone="default"
+          consequence={
+            <>
+              הרשומה של <bdi>{merged.displayName}</bdi> תחזור לעמוד בפני עצמה, ותופיע שוב ברשימת האנשים.
+            </>
+          }
+          confirmLabel="ביטול המיזוג"
+          cancelHref={tabHref(tab)}
+          action={unmergePersonAndReturn.bind(null, dossier.personId, tabHref(tab))}
+        >
+          <ul className={styles.deleteList}>
+            <li>
+              <bdi>
+                {merged.returning.length === 0
+                  ? `אף כינוי לא יחזור מ${merged.survivorName}`
+                  : `יחזרו אליה מ${merged.survivorName}: ${merged.returning.join(' · ')}`}
+              </bdi>
+            </li>
+          </ul>
+        </ConfirmDialog>
+      )}
+
       {/*
         Two shapes for one verb, chosen by the preview. With nothing in the
         way, the kit's confirmation, naming the record and listing what goes
         with it. With something in the way, no confirm control at all — a
-        drawer that says what, how many, and where to go about it. A dialog
-        whose only outcome is a refusal is what D4 took away from the merge,
-        and it is not coming back here.
+        drawer that is a checklist: each refusal as a step, with what to do,
+        and every row behind it as a link to the control that unpicks it.
+        A dialog whose only outcome is a refusal is what D4 took away from
+        the merge, and it is not coming back here.
       */}
       {deletion === null ? null : deletion.blockers.length === 0 ? (
         <ConfirmDialog
@@ -1059,26 +1138,45 @@ export default async function PersonPage(
           </ul>
         </ConfirmDialog>
       ) : (
-        <Drawer title="מחיקת הרשומה" subtitle={deletion.displayName} closeHref={tabHref(tab)}>
-          <section className={styles.deleteBlocked}>
-            <h3>למה אי אפשר למחוק עדיין</h3>
+        <Drawer
+          title="מחיקת הרשומה"
+          subtitle={deletion.displayName}
+          closeHref={tabHref(tab)}
+          width={500}
+          footer={(
+            /* The same URL again: the preview is re-read from the server,
+               so a step closed in another tab disappears from the list. */
+            <ButtonLink tone="primary" size="sm" href={deleteHref()} replace>בדיקה מחדש</ButtonLink>
+          )}
+        >
+          <section className={styles.deleteBlocked} aria-label="מה צריך לסגור לפני המחיקה">
+            <h3>מה צריך לסגור לפני המחיקה</h3>
             <p className="muted">
-              המערכת לא מוחקת כסף, שיבוצים או החלטות יחד עם אדם. קודם מטפלים במה שרשום כאן, ואז מוחקים.
+              {`המערכת לא מוחקת כסף, שיבוצים או החלטות יחד עם אדם. ${openSentence(deletion.blockers)} סוגרים כל אחד מהם במקום שבו הוא רשום — כל שורה למטה היא קישור לשם — חוזרים לכאן ולוחצים ״בדיקה מחדש״.`}
             </p>
-            <ul className={styles.deleteBlockers}>
+            <ol className={styles.deleteSteps}>
               {deletion.blockers.map((blocker) => (
                 <li key={blocker.conflict}>
                   {/* One `<bdi>` for the whole phrase, per A17. */}
-                  {blocker.href === null ? (
-                    <span><bdi>{`${blocker.conflict} · ${blocker.count}`}</bdi></span>
-                  ) : (
-                    <Link href={blocker.href}>
-                      <bdi>{`${blocker.conflict} · ${blocker.count}`}</bdi>
-                    </Link>
-                  )}
+                  <h4><bdi>{`${blocker.conflict} · ${blocker.count}`}</bdi></h4>
+                  <p className={styles.deleteAction}>{blocker.action}</p>
+                  <ul className={styles.deleteItems}>
+                    {blocker.items.map((item, index) => (
+                      <li key={`${blocker.conflict}-${index}`}>
+                        {item.href === null ? (
+                          <span><bdi>{item.label}</bdi></span>
+                        ) : (
+                          <Link className="link" href={item.href}>
+                            <bdi>{item.label}</bdi>
+                            <Icon name="arrowl" size={14} />
+                          </Link>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
                 </li>
               ))}
-            </ul>
+            </ol>
           </section>
         </Drawer>
       )}

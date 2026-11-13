@@ -21,6 +21,8 @@ export interface MoneyHrefParts {
   count?: string;
   /** The new-account drawer: `?act=new-account`. */
   newAccount?: boolean;
+  /** The account whose holder is being changed: `?act=holder&account=<id>`. */
+  holder?: string;
 }
 
 export function moneyHref(parts: MoneyHrefParts): string {
@@ -28,6 +30,9 @@ export function moneyHref(parts: MoneyHrefParts): string {
   // One drawer at a time: two overlapping panels have no sensible layout.
   if (parts.count) {
     return openActHref(MONEY_PATH, [...current, ['account', parts.count]], 'count');
+  }
+  if (parts.holder) {
+    return openActHref(MONEY_PATH, [...current, ['account', parts.holder]], 'holder');
   }
   if (parts.newAccount) return openActHref(MONEY_PATH, current, 'new-account');
   return closePeekHref(MONEY_PATH, current);

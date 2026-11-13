@@ -37,6 +37,14 @@ vi.mock('@/lib/money/debts-view', async (importOriginal) => ({
   listDebts,
 }));
 
+/* A client component with its own test; here a stand-in that prints what
+   the page handed it, so this file tests the wiring only. */
+vi.mock('./detach-party', () => ({
+  DetachParty: ({ obligationId, displayParty }: { obligationId: string; displayParty: string }) => (
+    <div data-testid="detach-party">{obligationId} · {displayParty}</div>
+  ),
+}));
+
 import DebtsPage from './page';
 
 const SEASON = {
@@ -315,5 +323,35 @@ describe('naming a nameless debt', () => {
     await renderPage({ peek: 'o1', act: 'name' });
     expect(screen.queryByRole('button', { name: /התעלמות|הסרה|מחיקה/ })).toBeNull();
     expect(screen.queryByRole('link', { name: /התעלמות|הסרה|מחיקה/ })).toBeNull();
+  });
+});
+
+/**
+ * The link-cutting control exists for a person on their way out: the delete
+ * drawer links each debt here. It shows only on a debt that names a record,
+ * and the drawer opens on a debt of another season when the URL names it.
+ */
+describe('cutting a debt’s link to a person', () => {
+  it('offers the control on a debt that names a record, and not on a bare name', async () => {
+    listDebts.mockResolvedValue([debt({ partyPersonId: 'p1', partyName: null })]);
+    await renderPage({ peek: 'o1' });
+    expect(screen.getByTestId('detach-party').textContent).toBe('o1 · רוני אדלר');
+
+    listDebts.mockResolvedValue([debt()]);
+    const { unmount } = render(await DebtsPage({ searchParams: Promise.resolve({ season: 's1', peek: 'o1' }) }));
+    expect(screen.getAllByTestId('detach-party')).toHaveLength(1);
+    unmount();
+  });
+
+  it('opens the drawer on a debt of another season when the URL names it, without changing the lists', async () => {
+    const elsewhere = debt({ id: 'o9', seasonId: 's0', description: 'מקרר ישן', partyPersonId: 'p1' });
+    listDebts.mockImplementation(async (_db: unknown, filter?: { seasonId?: string }) => (
+      filter?.seasonId === 's1' ? [debt()] : [debt(), elsewhere]
+    ));
+    await renderPage({ peek: 'o9' });
+    expect(screen.getByRole('dialog', { name: 'סגירת חוב — רוני אדלר' })).toBeTruthy();
+    expect(screen.getByTestId('detach-party').textContent).toBe('o9 · רוני אדלר');
+    // The season's own list did not grow by the row the drawer shows.
+    expect(screen.queryByText('מקרר ישן', { selector: 'td *' })).toBeNull();
   });
 });
