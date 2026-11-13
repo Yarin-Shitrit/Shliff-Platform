@@ -55,6 +55,13 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: 'people', label: 'אנשים', href: '/members', icon: 'users', count: 'rosterSize' },
       { id: 'dues', label: 'דמי קאמפ', href: '/fees', icon: 'receipt' },
       { id: 'tasks', label: 'משימות', href: '/tasks', icon: 'tasks', count: 'understaffedTasks' },
+      /* The shift schedule: types of shift and one season's board of them.
+         Beside משימות rather than under לוגיסטיקה because staffing the event
+         is the camp's own concern — who stands where, not what is kept or
+         built — and because every slot on it is also a task the משימות
+         board already shows. The route keeps its `/logistics/` prefix so no
+         saved link breaks. */
+      { id: 'shifts', label: 'משמרות', href: '/logistics/shifts', icon: 'clock' },
       /* Not in B1: the camp map came after the twelve plans. It sits with
          the camp's own things — people, dues, tasks — because it is where
          those people and tasks physically land, not a logistics list. */
@@ -78,8 +85,8 @@ export const NAV_GROUPS: NavGroup[] = [
    * נתונים is the utility tail (import, upload) rather than a peer of it.
    *
    * There is no hub item. `/logistics` redirects to the warehouse, and a
-   * fourth entry holding four tiles is not worth the rail space; the three
-   * screens are what a lead actually opens.
+   * fourth entry holding four tiles is not worth the rail space; the
+   * screens themselves are what a lead actually opens.
    */
   {
     label: 'לוגיסטיקה',
@@ -87,16 +94,10 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: 'warehouse', label: 'מחסן', href: '/logistics/warehouse', icon: 'layers' },
       { id: 'acquisitions', label: 'רכש', href: '/logistics/acquisitions', icon: 'list' },
       { id: 'build', label: 'הקמה', href: '/logistics/build', icon: 'board' },
-      /* The shift schedule: types of shift and one season's board of them.
-         Under לוגיסטיקה rather than beside משימות because it is the camp's
-         operations during the event, and because every slot on it is also a
-         task the משימות board already shows. */
-      { id: 'shifts', label: 'משמרות', href: '/logistics/shifts', icon: 'clock' },
       /* The work plan: what the camp builds before the burn, under which
-         topic, in what order and on which days. After משמרות because the
-         rail reads from what is kept to what is done: the gear, what is
-         bought, what is built, who staffs the event, and the calendar that
-         gets the camp to it. */
+         topic, in what order and on which days. Last because the rail reads
+         from what is kept to what is done: the gear, what is bought, what is
+         built, and the calendar that gets the camp to it. */
       { id: 'plan', label: 'לוח עבודה', href: '/logistics/plan', icon: 'board' },
     ],
   },
