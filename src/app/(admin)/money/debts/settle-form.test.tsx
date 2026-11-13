@@ -137,3 +137,21 @@ describe('the settlement form', () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * 00:30 in Israel on the 14th is 22:30 UTC on the 13th. The form used to open
+ * on the UTC day, so a movement typed after midnight was dated yesterday —
+ * inside a count made yesterday, where it does not move the balance.
+ */
+describe('the date the form opens on', () => {
+  it('is the day it is in the camp, not the UTC day', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-13T22:30:00Z'));
+    try {
+      renderForm();
+      expect((screen.getByLabelText('תאריך הסגירה') as HTMLInputElement).value).toBe('2026-11-14');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

@@ -12,6 +12,7 @@
 
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { campDayKey } from '@/lib/money/counted';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { isBlank } from '@/lib/text/normalize';
@@ -20,8 +21,14 @@ import styles from './events.module.css';
 
 const PARTNER_HINT = 'הכסף שעבר בינינו לבינו נרשם במסיבה כהתחשבנות עם השותף';
 
+/**
+ * Today as the date input wants it — the day it is in the camp, not in UTC.
+ * Between midnight and 02:00 (03:00 in summer) Israel time the UTC day is
+ * still yesterday, and a movement dated yesterday lands inside a count made
+ * yesterday (`insideCount`) and does not move the balance.
+ */
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  return campDayKey(new Date());
 }
 
 export type PartyFormProps = {

@@ -15,6 +15,7 @@
 
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { campDayKey } from '@/lib/money/counted';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { fromAgorot } from '@/lib/money';
@@ -34,8 +35,14 @@ const AMOUNT_HINT = 'אי אפשר לקזז יותר ממה שחייבים';
 
 const NOTE_HINT = 'חובה — בלי זה אי אפשר לדעת בעוד שנה מה קרה כאן';
 
+/**
+ * Today as the date input wants it — the day it is in the camp, not in UTC.
+ * Between midnight and 02:00 (03:00 in summer) Israel time the UTC day is
+ * still yesterday, and a movement dated yesterday lands inside a count made
+ * yesterday (`insideCount`) and does not move the balance.
+ */
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  return campDayKey(new Date());
 }
 
 export function SettleForm({

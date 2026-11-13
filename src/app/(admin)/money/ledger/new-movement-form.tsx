@@ -14,6 +14,7 @@
 
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { campDayKey } from '@/lib/money/counted';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { isBlank } from '@/lib/text/normalize';
@@ -28,8 +29,14 @@ const NO_SEASON = '';
 const ACCOUNT_HINT = 'תנועה בלי חשבון לא נספרת ביתרה של אף קופה, ותופיע בהתראה למעלה';
 const SEASON_HINT = 'השנה נקבעת ביד, לא לפי התאריך';
 
+/**
+ * Today as the date input wants it — the day it is in the camp, not in UTC.
+ * Between midnight and 02:00 (03:00 in summer) Israel time the UTC day is
+ * still yesterday, and a movement dated yesterday lands inside a count made
+ * yesterday (`insideCount`) and does not move the balance.
+ */
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  return campDayKey(new Date());
 }
 
 export function NewMovementForm({
