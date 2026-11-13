@@ -54,12 +54,14 @@ export interface PeopleTableProps {
  * so the footer can never disagree with the rows above it. The alternative,
  * an independently derived season total, drifts the moment a filter is on.
  */
-function totalsFor(rows: PersonListRow[], viewLabel: string) {
+function totalsFor(rows: PersonListRow[], viewLabel: string, seasonId: string | null) {
   const bucket = { settled: 0, partial: 0, unpaid: 0, none: 0, exempt: 0 };
   let balance = 0;
+  let other = 0;
   let tasks = 0;
   for (const row of rows) {
-    balance += row.outstandingAgorot;
+    balance += seasonId === null ? row.outstandingAgorot : row.scopeOutstandingAgorot;
+    other += seasonId === null ? 0 : row.otherSeasonsOutstandingAgorot;
     tasks += row.taskCount;
     switch (row.dues?.state ?? 'none') {
       case 'paid': case 'offset': bucket.settled += 1; break;
@@ -78,7 +80,11 @@ function totalsFor(rows: PersonListRow[], viewLabel: string) {
   return [
     { key: 'label', colSpan: 4, content: <bdi>{`סה״כ ${rows.length} ב${viewLabel}`}</bdi> },
     { key: 'states', content: <span className={styles.totalsBreakdown}><bdi>{breakdown}</bdi></span> },
-    { key: 'balance', numeric: true, content: balance === 0 ? '—' : <Money agorot={balance} /> },
+    {
+      key: 'balance',
+      numeric: true,
+      content: <BalanceFigure agorot={balance} otherAgorot={other} />,
+    },
     { key: 'tasks', numeric: true, content: tasks === 0 ? '—' : <bdi>{tasks}</bdi> },
     { key: 'rest', colSpan: 2, content: '' },
   ];
@@ -99,9 +105,49 @@ function SeasonChips({ years, own }: { years: number[]; own: number[] }): ReactE
   );
 }
 
-function DuesCell({ row }: { row: PersonListRow }): ReactElement {
+/**
+ * The balance as one figure, and the part of it that is not this season's
+ * as a second, quieter line. A lead who set the rate to 2,000 ₪ and reads
+ * 3,500 ₪ beside a name is owed the sentence "and 1,500 ₪ from earlier
+ * years" — the alternative is a column that disagrees with the rate for a
+ * reason only the database knows.
+ *
+ * Zero is `—`, not `0 ₪`: a column of zeroes reads as a column of debts you
+ * have to check, and there is nothing here to check.
+ */
+function BalanceFigure(
+  { agorot, otherAgorot, href }: { agorot: number; otherAgorot: number; href?: string },
+): ReactElement {
+  if (agorot === 0 && otherAgorot === 0) return <span className="muted">—</span>;
+  const figure = agorot === 0 ? <span className="muted">—</span> : <Money agorot={agorot} />;
+  return (
+    <span className={styles.balanceCell}>
+      {/* Every figure links to the page that can change it: the season's
+          payment drawer, which is where this one shrinks. */}
+      {href && agorot > 0 ? <Link href={href}>{figure}</Link> : figure}
+      {otherAgorot > 0 ? (
+        <span className={styles.balanceNote}>
+          <bdi>{`+ ${formatShekels(otherAgorot)} משנים אחרות`}</bdi>
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function DuesCell({ row, seasonId }: { row: PersonListRow; seasonId: string | null }): ReactElement {
   const state: DuesState = row.dues?.state ?? 'none';
   const partial = row.dues !== null && state === 'partial';
+  /*
+   * A flat due issued before the rate changed keeps its own amount — the
+   * rate drawer says so and asks whether to rewrite them. Until a lead
+   * answers, the two figures disagree, and this is where the disagreement
+   * is shown instead of left for someone to discover from the balance: the
+   * pill names the amount the due was issued on, and links to the drawer
+   * that can bring it onto today's rate.
+   */
+  const staleRate = row.dues !== null
+    && row.dues.kind === 'flat'
+    && row.dues.amountAgorot !== row.dues.seasonRateAgorot;
   return (
     <span className={styles.duesCell}>
       <Pill tone={DUES_STATE_TONE[state]} dot>{DUES_STATE_LABELS[state]}</Pill>
@@ -127,6 +173,18 @@ function DuesCell({ row }: { row: PersonListRow }): ReactElement {
         /* One `<bdi>` for the whole phrase, per A17 — `getByText` reads only
            direct text children, and a lead reads `חריג · 600 ₪` as one thing. */
         <Pill tone="brand">{`חריג · ${formatShekels(row.dues.amountAgorot)}`}</Pill>
+      ) : null}
+      {staleRate && row.dues !== null ? (
+        seasonId === null ? (
+          <Pill tone="warn">{`הונפק על ${formatShekels(row.dues.amountAgorot)}`}</Pill>
+        ) : (
+          <Link
+            href={`/fees?season=${seasonId}&act=rate`}
+            title={`החיוב הונפק על ${formatShekels(row.dues.amountAgorot)} והתעריף היום ${formatShekels(row.dues.seasonRateAgorot)}. שינוי התעריף יכול לעדכן אותו.`}
+          >
+            <Pill tone="warn">{`הונפק על ${formatShekels(row.dues.amountAgorot)}`}</Pill>
+          </Link>
+        )
       ) : null}
     </span>
   );
@@ -188,18 +246,24 @@ export function PeopleTable({
          reading `טרם שולם` beside a name should not have to remember which
          year's bill that is. */
       header: seasonName === null ? 'דמי קאמפ' : `דמי קאמפ · ${seasonName}`,
-      cell: (row) => <DuesCell row={row} />,
+      cell: (row) => <DuesCell row={row} seasonId={seasonId} />,
     },
     {
       key: 'balance',
       card: 'figure',
       header: 'יתרה',
       numeric: true,
-      /* A zero balance is `—`, not `0 ₪`: a column of zeroes reads as a column
-         of debts you have to check, and there is nothing here to check. */
-      cell: (row) => (row.outstandingAgorot === 0
-        ? <span className="muted">—</span>
-        : <Money agorot={row.outstandingAgorot} />),
+      /* Under a season the figure is that season's share, with the rest as
+         a second line; with no season in scope it is the whole balance. */
+      cell: (row) => (seasonId === null
+        ? <BalanceFigure agorot={row.outstandingAgorot} otherAgorot={0} />
+        : (
+          <BalanceFigure
+            agorot={row.scopeOutstandingAgorot}
+            otherAgorot={row.otherSeasonsOutstandingAgorot}
+            href={`/fees?season=${seasonId}&peek=${row.personId}&act=pay`}
+          />
+        )),
     },
     {
       key: 'tasks',
@@ -244,7 +308,7 @@ export function PeopleTable({
         }}
         /* Omitted for an empty list: a row of zeroes under an empty state is
            noise, and the empty state is already saying the useful thing. */
-        totals={rows.length === 0 ? undefined : totalsFor(rows, viewLabel)}
+        totals={rows.length === 0 ? undefined : totalsFor(rows, viewLabel, seasonId)}
         totalsLabel="סיכום"
         rowActionsHeader="פעולות"
         rowActions={(row) => (

@@ -24,6 +24,11 @@ export interface PersonDues {
   kind: DueKind;
   exceptionReason: string | null;
   state: DuesState;
+  /** What the season charges per person today. A `flat` due whose
+   *  `amountAgorot` differs from it was issued before the rate changed and
+   *  left alone — the screen says so rather than letting the two figures
+   *  disagree in silence. */
+  seasonRateAgorot: number;
 }
 
 export interface PersonListRow {
@@ -40,6 +45,12 @@ export interface PersonListRow {
   dues: PersonDues | null;
   /** Outstanding across every season — one meaning in every view. */
   outstandingAgorot: number;
+  /** The scope season's share of `outstandingAgorot`. Zero with no scope. */
+  scopeOutstandingAgorot: number;
+  /** Everything else: `outstandingAgorot - scopeOutstandingAgorot`. The list
+   *  shows this beside the scope figure so a balance larger than the season's
+   *  dues reads as "and 1,500 ₪ from earlier years", not as a wrong number. */
+  otherSeasonsOutstandingAgorot: number;
   /** Live assignments on scope-season tasks. Zero when there is no scope. */
   taskCount: number;
   /** The newest stamp on anything belonging to this person. Never null:
@@ -230,6 +241,7 @@ export async function listPeopleForSeason(
       : null;
 
     let outstandingAgorot = 0;
+    let scopeOutstandingAgorot = 0;
     let scopeDues: PersonDues | null = null;
     for (const due of duesByPerson.get(person.id) ?? []) {
       const amountAgorot = toAgorot(due.amount);
@@ -237,6 +249,7 @@ export async function listPeopleForSeason(
       const outstanding = Math.max(0, amountAgorot - paidAgorot);
       outstandingAgorot += outstanding;
       if (scope && due.seasonId === scope.id) {
+        scopeOutstandingAgorot = outstanding;
         scopeDues = {
           dueId: due.dueId,
           amountAgorot,
@@ -247,6 +260,7 @@ export async function listPeopleForSeason(
           state: duesState(
             amountAgorot, paidAgorot, cashByDue.get(due.dueId) ?? 0, due.kind,
           ),
+          seasonRateAgorot: toAgorot(scope.flatRate),
         };
       }
     }
@@ -273,6 +287,8 @@ export async function listPeopleForSeason(
       seasons: personSeasons,
       dues: onScope ? scopeDues : null,
       outstandingAgorot,
+      scopeOutstandingAgorot,
+      otherSeasonsOutstandingAgorot: outstandingAgorot - scopeOutstandingAgorot,
       taskCount,
       lastActivityAt,
       onScopeSeason: onScope,

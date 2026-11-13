@@ -100,6 +100,19 @@ describe('FeeTable', () => {
     expect(screen.queryByRole('link', { name: 'רישום תשלום' })).toBeNull();
   });
 
+  it('flags a flat due issued on an amount other than today\'s rate, and links it to the rate drawer', () => {
+    render(<FeeTable {...base} flatRateAgorot={200000} rows={[UNPAID]} />);
+    const pill = screen.getByText('הונפק על 1,200 ₪');
+    expect(pill.closest('a')?.getAttribute('href'))
+      .toBe(`/fees?season=${SEASON}&view=unpaid&act=rate`);
+  });
+
+  it('writes a plain תעריף רגיל when the flat due is on the rate', () => {
+    render(<FeeTable {...base} rows={[UNPAID]} />);
+    expect(screen.getByText('תעריף רגיל')).toBeDefined();
+    expect(screen.queryByText(/^הונפק על/)).toBeNull();
+  });
+
   it('shows an exception inline with its reason and who decided it', () => {
     render(<FeeTable {...base} rows={[WAIVED]} />);
     const cells = screen.getAllByRole('cell');

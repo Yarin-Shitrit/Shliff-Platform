@@ -14,6 +14,8 @@ function row(overrides: Partial<PersonListRow> = {}): PersonListRow {
     seasons: [],
     dues: null,
     outstandingAgorot: 0,
+    scopeOutstandingAgorot: 0,
+    otherSeasonsOutstandingAgorot: 0,
     taskCount: 0,
     lastActivityAt: new Date('2026-09-01'),
     onScopeSeason: true,
@@ -82,16 +84,16 @@ describe('matchesView', () => {
   });
 
   it('counts an unpaid and a part-paid due as טרם שילמו, and an un-issued one as neither', () => {
-    const owing = row({ dues: { dueId: 'd', amountAgorot: 120000, paidAgorot: 0, outstandingAgorot: 120000, kind: 'flat', exceptionReason: null, state: 'unpaid' } });
-    const partial = row({ dues: { dueId: 'd', amountAgorot: 120000, paidAgorot: 50000, outstandingAgorot: 70000, kind: 'flat', exceptionReason: null, state: 'partial' } });
+    const owing = row({ dues: { dueId: 'd', amountAgorot: 120000, paidAgorot: 0, outstandingAgorot: 120000, kind: 'flat', exceptionReason: null, state: 'unpaid', seasonRateAgorot: 120000 } });
+    const partial = row({ dues: { dueId: 'd', amountAgorot: 120000, paidAgorot: 50000, outstandingAgorot: 70000, kind: 'flat', exceptionReason: null, state: 'partial', seasonRateAgorot: 120000 } });
     expect(matchesView(owing, 'unpaid')).toBe(true);
     expect(matchesView(partial, 'unpaid')).toBe(true);
     expect(matchesView(row({ dues: null }), 'unpaid')).toBe(false);
   });
 
   it('never calls an exempt or offset due unpaid', () => {
-    const exempt = row({ dues: { dueId: 'd', amountAgorot: 0, paidAgorot: 0, outstandingAgorot: 0, kind: 'exception', exceptionReason: 'הובילה את ההקמה', state: 'exempt' } });
-    const offset = row({ dues: { dueId: 'd', amountAgorot: 120000, paidAgorot: 120000, outstandingAgorot: 0, kind: 'flat', exceptionReason: null, state: 'offset' } });
+    const exempt = row({ dues: { dueId: 'd', amountAgorot: 0, paidAgorot: 0, outstandingAgorot: 0, kind: 'exception', exceptionReason: 'הובילה את ההקמה', state: 'exempt', seasonRateAgorot: 120000 } });
+    const offset = row({ dues: { dueId: 'd', amountAgorot: 120000, paidAgorot: 120000, outstandingAgorot: 0, kind: 'flat', exceptionReason: null, state: 'offset', seasonRateAgorot: 120000 } });
     expect(matchesView(exempt, 'unpaid')).toBe(false);
     expect(matchesView(offset, 'unpaid')).toBe(false);
   });
@@ -126,6 +128,16 @@ describe('applyPeopleQuery', () => {
       people, parsePeopleQuery({ view: 'all', sort: 'balance', dir: 'desc' }, true),
     );
     expect(sorted.map((r) => r.personId)).toEqual(['b', 'c', 'a']);
+  });
+
+  it('sorts by this season\'s share before the whole balance, so the column and the order agree', () => {
+    const rows = [
+      row({ personId: 'a', displayName: 'רוני אדלר', outstandingAgorot: 270000, scopeOutstandingAgorot: 0, otherSeasonsOutstandingAgorot: 270000 }),
+      row({ personId: 'b', displayName: 'איתי כהן', outstandingAgorot: 120000, scopeOutstandingAgorot: 120000 }),
+      row({ personId: 'c', displayName: 'נועה לוי', outstandingAgorot: 190000, scopeOutstandingAgorot: 120000, otherSeasonsOutstandingAgorot: 70000 }),
+    ];
+    const sorted = applyPeopleQuery(rows, parsePeopleQuery({ view: 'all', sort: 'balance', dir: 'desc' }, true));
+    expect(sorted.map((r) => r.personId)).toEqual(['c', 'b', 'a']);
   });
 
   it('leaves the input array untouched', () => {

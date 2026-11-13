@@ -117,7 +117,14 @@ function matchesSearch(row: PersonListRow, normalizedQuery: string): boolean {
  *  every comparison falls through to the name. */
 function compare(a: PersonListRow, b: PersonListRow, sort: PeopleSort): number {
   switch (sort) {
-    case 'balance': return a.outstandingAgorot - b.outstandingAgorot;
+    /*
+     * By the figure the column shows: the scope season's share first, the
+     * whole balance as the tie-break. With no scope every scope share is
+     * zero and the sort falls straight through to the total.
+     */
+    case 'balance':
+      return (a.scopeOutstandingAgorot - b.scopeOutstandingAgorot)
+        || (a.outstandingAgorot - b.outstandingAgorot);
     case 'tasks': return a.taskCount - b.taskCount;
     case 'activity': return a.lastActivityAt.getTime() - b.lastActivityAt.getTime();
     case 'name': return 0;

@@ -15,7 +15,7 @@ import { Banner } from '@/components/ui/banner';
 import { ButtonLink } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { EmptyState } from '@/components/ui/empty-state';
-import { FeeRollup, feeLeadSentence, missingDuesSentence } from './fee-rollup';
+import { FeeRollup, feeLeadSentence, missingDuesSentence, staleRateSentence } from './fee-rollup';
 import { FeeViews } from './fee-views';
 import { FeeTable } from './fee-table';
 import { IssueMissingDuesButton } from './issue-due-button';
@@ -98,6 +98,11 @@ export default async function FeesPage(
 
   const allClear = rows.length > 0 && visible.length === 0 && view === 'unpaid';
 
+  /* Counted on the whole roster, not the view: a stale due hides in any tab. */
+  const staleFlatDues = rows.filter((row) => (
+    row.kind === 'flat' && row.amountAgorot !== null && row.amountAgorot !== summary.flatRateAgorot
+  )).length;
+
   return (
     <main className={styles.page}>
       <header className={styles.pagehead}>
@@ -134,6 +139,23 @@ export default async function FeesPage(
             flatRateAgorot={summary.flatRateAgorot}
           />
         </div>
+      )}
+
+      {/*
+        Flat dues issued before the rate changed and left where they were.
+        The rate drawer offers to rewrite them and "no" is a legitimate
+        answer, but the gap must stay visible until it is closed one way or
+        the other: a roster whose balances disagree with the rate for a
+        reason only the database knows is the silent default this system
+        refuses. The banner counts them and leads to the drawer.
+      */}
+      {staleFlatDues > 0 && (
+        <Banner
+          tone="warn"
+          headline={staleRateSentence(staleFlatDues, summary.flatRateAgorot)}
+          detail="היתרות של החיובים האלה מחושבות מהסכום שהונפק, לא מהתעריף. בחלון התעריף אפשר לעדכן אותם."
+          action={{ label: 'שינוי התעריף', href: feesHref({ season: season.id, view, rate: true }) }}
+        />
       )}
 
       {summary.unattributedAgorot > 0 && (

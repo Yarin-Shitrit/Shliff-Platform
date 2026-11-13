@@ -136,9 +136,25 @@ export async function PeekDrawer({
       </Row>
 
       <Row label="יתרה לתשלום">
+        {/*
+          The same split the list makes: this season's share as the figure,
+          and the rest as a sentence. With no season in scope there is no
+          "this season", and the whole balance is the figure.
+        */}
         {row.outstandingAgorot === 0
           ? <span className="muted">אין חוב לקאמפ</span>
-          : <Money agorot={row.outstandingAgorot} />}
+          : seasonId === null ? <Money agorot={row.outstandingAgorot} /> : (
+            <>
+              {row.scopeOutstandingAgorot === 0
+                ? <span className="muted">{`אין חוב ל${seasonName}`}</span>
+                : <Money agorot={row.scopeOutstandingAgorot} />}
+              {row.otherSeasonsOutstandingAgorot > 0 ? (
+                <span className={styles.peekNote}>
+                  <bdi>{`+ ${formatShekels(row.otherSeasonsOutstandingAgorot)} משנים אחרות`}</bdi>
+                </span>
+              ) : null}
+            </>
+          )}
       </Row>
 
       <Row label="משימות">

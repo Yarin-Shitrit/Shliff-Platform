@@ -21,7 +21,7 @@ import { PeekDrawer } from './peek-drawer';
 function dues(overrides: Partial<PersonDues> = {}): PersonDues {
   return {
     dueId: 'd1', amountAgorot: 120000, paidAgorot: 0, outstandingAgorot: 120000,
-    kind: 'flat', exceptionReason: null, state: 'unpaid', ...overrides,
+    kind: 'flat', exceptionReason: null, state: 'unpaid', seasonRateAgorot: 120000, ...overrides,
   };
 }
 
@@ -34,6 +34,8 @@ function row(overrides: Partial<PersonListRow> = {}): PersonListRow {
     seasons: [{ seasonId: 's26', name: 'ברן 26', year: 2026, role: 'member' }],
     dues: null,
     outstandingAgorot: 0,
+    scopeOutstandingAgorot: 0,
+    otherSeasonsOutstandingAgorot: 0,
     taskCount: 0,
     lastActivityAt: new Date('2026-09-01T10:00:00Z'),
     onScopeSeason: true,
@@ -80,6 +82,23 @@ describe('PeekDrawer — what it shows', () => {
     await renderDrawer({ outstandingAgorot: 0 });
     expect(screen.queryByText('0 ₪')).toBeNull();
     expect(screen.getByText('אין חוב לקאמפ')).toBeTruthy();
+  });
+
+  it('shows this season\'s share of the balance, and the rest as a sentence', async () => {
+    await renderDrawer({
+      outstandingAgorot: 270000, scopeOutstandingAgorot: 120000, otherSeasonsOutstandingAgorot: 150000,
+    });
+    expect(screen.getByText('1,200 ₪')).toBeTruthy();
+    expect(screen.getByText('+ 1,500 ₪ משנים אחרות')).toBeTruthy();
+    expect(screen.queryByText('2,700 ₪')).toBeNull();
+  });
+
+  it('says a person owes nothing this season when the whole balance is an earlier year\'s', async () => {
+    await renderDrawer({
+      outstandingAgorot: 150000, scopeOutstandingAgorot: 0, otherSeasonsOutstandingAgorot: 150000,
+    });
+    expect(screen.getByText('אין חוב לברן 26')).toBeTruthy();
+    expect(screen.getByText('+ 1,500 ₪ משנים אחרות')).toBeTruthy();
   });
 
   /*

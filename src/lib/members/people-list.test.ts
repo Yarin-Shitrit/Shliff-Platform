@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { createTestDb, type TestDb } from '@/test/db';
 import { createSeason, addMember } from '@/lib/members/roster';
 import { createPerson } from '@/lib/members/link';
-import { issueFlatDues, setException } from '@/lib/fees/dues';
+import { issueFlatDues, setException, setFlatRate } from '@/lib/fees/dues';
 import { recordPayment } from '@/lib/fees/payments';
 import { createTask } from '@/lib/work/tasks';
 import { assignPerson } from '@/lib/work/coverage';
@@ -101,6 +101,55 @@ describe('listPeopleForSeason', () => {
 
     const [campWide] = await listPeopleForSeason(db, null);
     expect(campWide.outstandingAgorot).toBe(totalAgorot);
+  });
+
+  it('splits the balance into the scope season\'s share and the rest, so 2,700 beside a 1,200 due has a reason', async () => {
+    const y25 = await createSeason(db, { name: 'ברן 25', year: 2025, flatRate: 1500 });
+    const y26 = await createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1200 });
+    const owesBoth = await createPerson(db, 'עומר ביטון', LEAD);
+    await addMember(db, owesBoth, y25.id);
+    await addMember(db, owesBoth, y26.id);
+    await issueFlatDues(db, y25.id);
+    await issueFlatDues(db, y26.id);
+
+    const [scopedTo26] = await listPeopleForSeason(db, y26.id);
+    expect(scopedTo26.scopeOutstandingAgorot).toBe(120000);
+    expect(scopedTo26.otherSeasonsOutstandingAgorot).toBe(150000);
+    expect(scopedTo26.outstandingAgorot).toBe(270000);
+
+    const [scopedTo25] = await listPeopleForSeason(db, y25.id);
+    expect(scopedTo25.scopeOutstandingAgorot).toBe(150000);
+    expect(scopedTo25.otherSeasonsOutstandingAgorot).toBe(120000);
+
+    // No scope: nothing is "this season's", and the whole balance is the rest.
+    const [campWide] = await listPeopleForSeason(db, null);
+    expect(campWide.scopeOutstandingAgorot).toBe(0);
+    expect(campWide.otherSeasonsOutstandingAgorot).toBe(270000);
+  });
+
+  it('carries the season\'s rate beside the due, so a flat due left on an old rate can be told apart', async () => {
+    const y26 = await createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1200 });
+    const ofek = await createPerson(db, 'אופק כהן', LEAD);
+    await addMember(db, ofek, y26.id);
+    await issueFlatDues(db, y26.id);
+
+    const [before] = await listPeopleForSeason(db, y26.id);
+    expect(before.dues?.amountAgorot).toBe(120000);
+    expect(before.dues?.seasonRateAgorot).toBe(120000);
+
+    // The rate moves and the issued due is deliberately left where it was.
+    await setFlatRate(db, y26.id, 2000, { applyToIssued: false });
+    const [left] = await listPeopleForSeason(db, y26.id);
+    expect(left.dues?.amountAgorot).toBe(120000);
+    expect(left.dues?.seasonRateAgorot).toBe(200000);
+    expect(left.scopeOutstandingAgorot).toBe(120000);
+
+    // Asked to follow, the due and the balance come onto the rate together.
+    await setFlatRate(db, y26.id, 2000, { applyToIssued: true });
+    const [followed] = await listPeopleForSeason(db, y26.id);
+    expect(followed.dues?.amountAgorot).toBe(200000);
+    expect(followed.dues?.seasonRateAgorot).toBe(200000);
+    expect(followed.scopeOutstandingAgorot).toBe(200000);
   });
 
   it('calls a zero-amount exception פטור and an un-issued due אין חיוב, never both nothing', async () => {

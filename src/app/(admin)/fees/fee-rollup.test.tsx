@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { SeasonFeeSummary, UnpaidMember } from '@/lib/fees/summary';
-import { FeeRollup, missingDuesSentence } from './fee-rollup';
+import { FeeRollup, missingDuesSentence, staleRateSentence } from './fee-rollup';
 
 const SEASON = '8f2b1c4e-0000-4000-8000-000000000001';
 
@@ -104,6 +104,22 @@ describe('FeeRollup', () => {
  *
  * Watch it fail by restoring the plan's own wording: `חבר אחד ברשימת …`.
  */
+describe('staleRateSentence', () => {
+  it('counts the dues left on another amount and names today\'s rate', () => {
+    expect(staleRateSentence(1, 200000))
+      .toBe('חיוב אחד בתעריף הרגיל הונפק על סכום אחר מהתעריף של היום, 2,000 ₪.');
+    expect(staleRateSentence(12, 200000))
+      .toBe('12 חיובים בתעריף הרגיל הונפקו על סכום אחר מהתעריף של היום, 2,000 ₪.');
+  });
+
+  it('names no person and no gendered noun, at either count', () => {
+    for (const count of [1, 12]) {
+      expect(staleRateSentence(count, 200000))
+        .not.toMatch(/חבר |חברה |חבר\b|שילמה|שילם |פטורה|הוביל |החליט /);
+    }
+  });
+});
+
 describe('missingDuesSentence', () => {
   it('says how many dues were never issued, without inventing a gender', () => {
     expect(missingDuesSentence(1, 'ברן 26'))

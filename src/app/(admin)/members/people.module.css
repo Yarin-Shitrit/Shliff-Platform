@@ -121,6 +121,23 @@
   border-radius: var(--radius-pill);
 }
 
+/* ── The balance cell ────────────────────────────────────────── */
+
+/* The figure, and under it the part that is not this season's. */
+.balanceCell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.balanceNote {
+  color: var(--ink-3);
+  font-size: 0.75rem;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
 /* ── The row action ──────────────────────────────────────────── */
 
 .rowact {

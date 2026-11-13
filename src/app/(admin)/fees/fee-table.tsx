@@ -65,9 +65,29 @@ function nameCell(row: MemberFeeRow): ReactNode {
   );
 }
 
-function kindCell(row: MemberFeeRow): ReactNode {
+/**
+ * A flat due keeps the amount it was issued on; the season's rate can move
+ * under it (the rate drawer asks whether the issued dues follow, and "no" is
+ * a legitimate answer). When they disagree, this is where it is said — with
+ * the amount the due is on, and a link to the one drawer that can bring it
+ * onto today's rate — rather than a תעריף רגיל that is not the rate.
+ */
+function kindCell(row: MemberFeeRow, rateHref: string, flatRateAgorot: number): ReactNode {
   if (row.dueId === null) return <span className={styles.muted}>אין חיוב</span>;
-  if (row.kind !== 'exception') return 'תעריף רגיל';
+  if (row.kind !== 'exception') {
+    if (row.amountAgorot === flatRateAgorot) return 'תעריף רגיל';
+    return (
+      <span className={styles.kindCell}>
+        {'תעריף רגיל'}
+        <Link
+          href={rateHref}
+          title={`החיוב הונפק על ${formatShekels(row.amountAgorot ?? 0)} והתעריף היום ${formatShekels(flatRateAgorot)}. שינוי התעריף יכול לעדכן אותו.`}
+        >
+          <Pill tone="warn">{`הונפק על ${formatShekels(row.amountAgorot ?? 0)}`}</Pill>
+        </Link>
+      </span>
+    );
+  }
   return (
     <span className={styles.kindCell}>
       <Pill tone="brand">חריג</Pill>
@@ -129,7 +149,10 @@ export function FeeTable({
 }: FeeTableProps): ReactElement {
   const columns: ReadonlyArray<TableColumn<MemberFeeRow>> = [
     { key: 'name', card: 'title', header: 'שם', cell: nameCell },
-    { key: 'kind', card: 'meta', header: 'סוג החיוב', cell: kindCell },
+    {
+      key: 'kind', card: 'meta', header: 'סוג החיוב',
+      cell: (row) => kindCell(row, feesHref({ season: seasonId, view, rate: true }), flatRateAgorot),
+    },
     {
       key: 'due',
       card: 'meta', header: 'לתשלום', numeric: true,
