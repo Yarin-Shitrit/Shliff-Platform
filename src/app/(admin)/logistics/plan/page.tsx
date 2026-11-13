@@ -10,7 +10,7 @@ import {
 } from '@/lib/logistics/plan';
 import { campDayOf } from '@/lib/logistics/shift-time';
 import {
-  parsePlanQuery, planHref, itemHref, newItemHref, newTopicHref, adoptHref, type RawParams,
+  parsePlanQuery, planHref, itemHref, newItemHref, newTopicHref, adoptHref, itemDrawerKey, type RawParams,
 } from '@/lib/logistics/plan-views';
 import { acquisitionsHref } from '@/lib/logistics/acquisitions-views';
 import { adoptOutcomes } from '@/lib/logistics/acquisitions';
@@ -26,7 +26,7 @@ import { PlanTimeline } from './plan-timeline';
 import { StatusMenu } from './status-menu';
 import { PurchaseMenu } from './purchase-menu';
 import { DoneToggle } from './done-toggle';
-import { ItemDrawer, itemDrawerKey } from './item-drawer';
+import { ItemDrawer } from './item-drawer';
 import { TopicDrawer } from './topic-drawer';
 import { AdoptDrawer } from './adopt-drawer';
 import styles from './plan.module.css';
