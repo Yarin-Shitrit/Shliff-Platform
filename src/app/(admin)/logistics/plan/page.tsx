@@ -5,7 +5,7 @@ import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import { resolveSeason } from '@/lib/seasons/current';
 import {
-  listPlan, listTopics, topicById, buildPlanTree, buildTimeline, timelineWindow, summarizePlan, planRoster,
+  listPlan, listTopics, topicById, buildPlanTree, buildTimeline, summarizePlan, planRoster,
   nowSummary, adoptableItems,
 } from '@/lib/logistics/plan';
 import { campDayOf } from '@/lib/logistics/shift-time';
@@ -82,7 +82,7 @@ export default async function PlanPage(
   const totals = summarizePlan(items);
   const groups = buildPlanTree(items, topics);
   /* The week or month around the day the URL named, else around today. */
-  const timeline = buildTimeline(items, topics, timelineWindow(query.scale, query.at ?? today));
+  const timeline = buildTimeline(items, topics);
   const now = nowSummary(items, today);
   const activeTopics = topics.filter((topic) => topic.archivedAt === null);
 
@@ -272,9 +272,7 @@ export default async function PlanPage(
               <span className={styles.sectionHint}>
                 {timeline === null
                   ? 'משימה עולה לציר ברגע שיש לה יום התחלה.'
-                  : timeline.window === null
-                    ? `${timeline.placed} משימות על הימים שלהן · כל נושא בצבע שלו · שבוע מתחיל ביום ראשון, שישי ושבת מודגשים`
-                    : `${timeline.placed} מתוך ${timeline.scheduled} משימות עם יום נמצאות ב${timeline.window.scale === 'week' ? 'שבוע' : 'חודש'} הזה · כל נושא בצבע שלו`}
+                  : `${timeline.placed} משימות על הימים שלהן · כל נושא בצבע שלו · שבוע מתחיל ביום ראשון, שישי ושבת מודגשים`}
               </span>
             </div>
             {timeline === null ? (
@@ -282,7 +280,7 @@ export default async function PlanPage(
                 {'עדיין אין משימה עם תאריך. פותחים משימה מהרשימה למטה ובוחרים לה יום התחלה, והיא מופיעה כאן.'}
               </p>
             ) : (
-              <PlanTimeline timeline={timeline} params={here} today={today} currentItemId={query.peek} />
+              <PlanTimeline timeline={timeline} scale={query.scale} params={here} today={today} currentItemId={query.peek} />
             )}
           </section>
 

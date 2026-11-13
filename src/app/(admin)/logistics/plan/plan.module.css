@@ -489,31 +489,6 @@
   box-shadow: 0 1px 0 var(--line);
 }
 
-.windowNav {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.windowLabel {
-  min-inline-size: 140px;
-  padding-inline: 6px;
-  text-align: center;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-/* A window with no bars: the days are still drawn, the sentence sits
-   under them, and the arrows beside the window's name lead on. */
-.windowEmpty {
-  margin: 0;
-  padding: 16px;
-  color: var(--ink-3);
-  font-size: 13px;
-}
-
-.windowEmpty a { color: var(--brand-text); }
-
 .legend {
   display: inline-flex;
   align-items: center;
@@ -570,15 +545,76 @@
 }
 
 /*
- * The week fills the width it has: seven days, each a seventh of what is
- * left after the label, never narrower than 44px — on a phone the week
- * then scrolls a little rather than squeezing a bar's words to nothing.
- * The month does the same with its five or six weeks, but keeps the
- * narrow day as its floor, so on a laptop it fits and on a phone it
- * scrolls like the whole span does.
+ * The resolutions. The grid is always one column a day, so a bar starts
+ * and ends on its own days at every one of them; what changes is how wide
+ * a day is drawn. At ״שבועות״ a day is at least 14px — a week 98px, so a
+ * laptop shows about three months — and at ״חודשים״ at least 5px, a month
+ * about 150px, so a season's preparation fits one screen. Both stretch to
+ * fill the width when the plan is shorter than that, and scroll sideways
+ * when it is longer.
  */
-.scaleWeek { --day-w: max(44px, calc((100cqi - var(--label-w)) / 7)); }
-.scaleMonth { --day-w: max(30px, calc((100cqi - var(--label-w)) / var(--days))); }
+.scaleWeek { --day-w: max(14px, calc((100cqi - var(--label-w)) / var(--days))); }
+.scaleMonth { --day-w: max(5px, calc((100cqi - var(--label-w)) / var(--days))); }
+
+/* A bar on a narrow day keeps every pixel for its title. */
+.scaleWeek .bar,
+.scaleMonth .bar {
+  margin-inline: 1px;
+  padding-inline: 4px 2px;
+  gap: 3px;
+}
+
+/* At ״חודשים״ the weekend stripe is two 5px lines a week — noise. The
+   week lines and the today column stay. */
+.scaleMonth .months,
+.scaleMonth .barRows {
+  background-image:
+    repeating-linear-gradient(
+      to left,
+      var(--line) 0 1px,
+      transparent 1px var(--week-w)
+    );
+}
+
+.scaleMonth.hasToday .barRows {
+  background-image:
+    linear-gradient(
+      to left,
+      transparent 0 calc(var(--today) * var(--day-w)),
+      var(--brand) calc(var(--today) * var(--day-w)) calc(var(--today) * var(--day-w) + 2px),
+      transparent calc(var(--today) * var(--day-w) + 2px)
+    ),
+    repeating-linear-gradient(
+      to left,
+      var(--line) 0 1px,
+      transparent 1px var(--week-w)
+    );
+}
+
+/* A week's cell in the header: its first day, across its seven columns. */
+.weekHead {
+  min-block-size: 30px;
+  border-inline-start: 1px solid var(--line);
+}
+
+.weekHead[aria-current] .dayNumber {
+  inline-size: auto;
+  padding-inline: 8px;
+}
+
+/* A month as a column of its own, when months are all the header there is. */
+.monthCell {
+  position: static;
+  min-block-size: 34px;
+  display: flex;
+  align-items: center;
+  border-inline-start: 1px solid var(--line);
+}
+
+.monthCell[aria-current] {
+  color: var(--brand-text);
+  font-weight: 700;
+}
 
 .timelineHead,
 .lane {
@@ -707,8 +743,6 @@
   font-weight: 700;
 }
 
-.dayOutside { color: var(--ink-4); }
-
 .dayHead[aria-current] .dayNumber {
   display: inline-flex;
   align-items: center;
@@ -828,20 +862,6 @@
 
 /* A part that is a part: the arrow glyph is drawn in the topic's colour. */
 .barPart > svg:first-child { color: var(--topic, var(--ink-3)); }
-
-/* An item that runs past the window's edge: the bar is cut there, square,
-   with the dots that say so. */
-.barClipStart {
-  border-start-start-radius: 0;
-  border-end-start-radius: 0;
-  border-inline-start-style: dashed;
-}
-
-.barClipEnd {
-  border-start-end-radius: 0;
-  border-end-end-radius: 0;
-  border-inline-end-style: dashed;
-}
 
 .bar[aria-current] {
   outline: 2px solid var(--focus);
@@ -1006,7 +1026,6 @@
   }
   .laneLabel { padding: 8px; font-size: 13px; }
   .legend { display: none; }
-  .windowLabel { min-inline-size: 0; }
   .scaleOption { min-block-size: 32px; }
   .check { inline-size: 28px; block-size: 28px; }
 

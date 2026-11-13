@@ -8,7 +8,6 @@ import {
 } from '@/db/schema/logistics';
 import { rosterWorkload } from '@/lib/work/coverage';
 import { addDays, isCivilDay } from './shift-time';
-import type { TimelineScale } from './plan-views';
 import { PURCHASE_VERBS } from './labels';
 
 /**
@@ -717,10 +716,6 @@ export interface TimelineBar {
   span: number;
   /** For a part: the title of the item it belongs to, so the bar can say so. */
   parentTitle?: string;
-  /** True when the item began before the window's first day — the bar is cut, not the item. */
-  clippedStart?: boolean;
-  /** True when the item runs past the window's last day. */
-  clippedEnd?: boolean;
 }
 
 export interface TimelineLane {
@@ -730,27 +725,11 @@ export interface TimelineLane {
   bars: TimelineBar[];
 }
 
-export interface TimelineWindow {
-  scale: Exclude<TimelineScale, 'all'>;
-  /** The day the window was asked for — any day inside it. */
-  at: string;
-  /** First column, always a Sunday. */
-  from: string;
-  /** Last column, always a Saturday. */
-  to: string;
-  /** For a month: `YYYY-MM`, so the padding days of the neighbours can be dimmed. */
-  month: string | null;
-}
-
 export interface Timeline {
   days: TimelineDay[];
   lanes: TimelineLane[];
-  /** Scheduled, cancelled items are left off the lanes; this is the count that was placed on these days. */
+  /** Scheduled, cancelled items are left off the lanes; this is the count that was placed. */
   placed: number;
-  /** Every scheduled item of the season, inside the window or not. */
-  scheduled: number;
-  /** Null when the timeline shows everything. */
-  window: TimelineWindow | null;
 }
 
 function dayDiff(from: string, to: string): number {
@@ -763,90 +742,35 @@ function dayParts(day: string): { dayOfMonth: number; weekday: number } {
   return { dayOfMonth: at.getUTCDate(), weekday: at.getUTCDay() };
 }
 
-/** The last day of the month `2026-05-07` is in: `2026-05-31`. */
-function lastOfMonth(day: string): string {
-  const at = new Date(`${day.slice(0, 7)}-01T00:00:00Z`);
-  at.setUTCMonth(at.getUTCMonth() + 1, 0);
-  return at.toISOString().slice(0, 10);
-}
-
 /**
- * The week or the month around a day, as whole weeks: the week is the
- * Sunday-to-Saturday that holds `at`; the month is `at`'s month, padded
- * out to the Sunday before its first and the Saturday after its last, so
- * the columns stay the camp's weeks and the weekend stripe stays put.
- * Null for `all` — no window, the timeline runs over everything.
- */
-export function timelineWindow(scale: TimelineScale, at: string): TimelineWindow | null {
-  if (scale === 'all') return null;
-  if (scale === 'week') {
-    const from = addDays(at, -dayParts(at).weekday);
-    return { scale, at, from, to: addDays(from, 6), month: null };
-  }
-  const first = `${at.slice(0, 7)}-01`;
-  const last = lastOfMonth(at);
-  return {
-    scale,
-    at,
-    from: addDays(first, -dayParts(first).weekday),
-    to: addDays(last, 6 - dayParts(last).weekday),
-    month: at.slice(0, 7),
-  };
-}
-
-/**
- * The day that asks for the neighbouring window: a week on, a week back;
- * the first of the next month, the first of the one before. Always the
- * first of a month rather than `at` shifted, so a 31st never lands in a
- * month that has no 31st and skips one.
- */
-export function stepWindow(window: TimelineWindow, direction: -1 | 1): string {
-  if (window.scale === 'week') return addDays(window.at, 7 * direction);
-  const first = new Date(`${window.month}-01T00:00:00Z`);
-  first.setUTCMonth(first.getUTCMonth() + direction);
-  return first.toISOString().slice(0, 10);
-}
-
-/**
- * The scheduled items laid on days. With no window the span runs from the
- * earliest start to the latest end among open and done items, padded to
- * begin on a Sunday, so the columns are the camp's weeks. With one, the
- * columns are the window's, an item that overlaps it is drawn cut to it
- * (`clippedStart` / `clippedEnd` say so, the item's own days do not move),
- * and an item wholly outside it is left off — `scheduled` still counts it,
- * so the screen can say how many sit on other days.
+ * The scheduled items laid on days: the span runs from the earliest start
+ * to the latest end among open and done items, padded to begin on a Sunday
+ * and end on a Saturday, so the columns are the camp's whole weeks. It is
+ * always the whole plan — the screen's resolution (a column a day, a week
+ * or a month) changes how wide a day is drawn, not which days there are.
  *
  * Null when nothing in the season is scheduled — there is no timeline to
  * draw, and the screen says so instead of drawing an empty strip around
- * today. A window with nothing in it is still a timeline: its days are the
- * invitation, and the buttons to the next week are on it.
+ * today.
  *
  * Cancelled items are left off: they are history, and the list still shows
  * them. A sub-item is a bar of its own on its parent's lane, carrying its
  * parent's title; a parent with no dates of its own is not drawn, since its
  * parts are.
  */
-export function buildTimeline(
-  items: PlanItem[], topics: Topic[], window: TimelineWindow | null = null,
-): Timeline | null {
+export function buildTimeline(items: PlanItem[], topics: Topic[]): Timeline | null {
   const scheduled = items.filter((item) => item.status !== 'cancelled' && item.startsOn !== null);
   if (scheduled.length === 0) return null;
 
-  let from: string;
-  let to: string;
-  if (window !== null) {
-    ({ from, to } = window);
-  } else {
-    from = scheduled[0].startsOn!;
-    to = lastDayOf(scheduled[0])!;
-    for (const item of scheduled) {
-      if (item.startsOn! < from) from = item.startsOn!;
-      const last = lastDayOf(item)!;
-      if (last > to) to = last;
-    }
-    from = addDays(from, -dayParts(from).weekday);
-    to = addDays(to, 6 - dayParts(to).weekday);
+  let from = scheduled[0].startsOn!;
+  let to = lastDayOf(scheduled[0])!;
+  for (const item of scheduled) {
+    if (item.startsOn! < from) from = item.startsOn!;
+    const last = lastDayOf(item)!;
+    if (last > to) to = last;
   }
+  from = addDays(from, -dayParts(from).weekday);
+  to = addDays(to, 6 - dayParts(to).weekday);
 
   const days: TimelineDay[] = [];
   const total = dayDiff(from, to) + 1;
@@ -856,33 +780,28 @@ export function buildTimeline(
     days.push({ day, index, ...parts, monthStart: parts.dayOfMonth === 1 || index === 0 });
   }
 
-  const inWindow = scheduled.filter((item) => item.startsOn! <= to && lastDayOf(item)! >= from);
-  /* From every item, not the window's: a part's parent may be undated, or
-     on other days, and the bar still says whose part it is. */
+  /* From every item, not only the scheduled: a part's parent may be
+     undated, and the bar still says whose part it is. */
   const titles = new Map(items.map((item) => [item.id, item.title]));
-  const groups = buildPlanTree(inWindow, topics);
+  const groups = buildPlanTree(scheduled, topics);
   const lanes: TimelineLane[] = [];
   for (const group of groups) {
     const bars: TimelineBar[] = [];
     for (const branch of group.branches) {
       for (const item of [branch.item, ...branch.children]) {
         if (item.startsOn === null) continue;
-        const clippedStart = item.startsOn < from;
-        const clippedEnd = lastDayOf(item)! > to;
-        const first = clippedStart ? from : item.startsOn;
-        const last = clippedEnd ? to : lastDayOf(item)!;
-        const bar: TimelineBar = { item, start: dayDiff(from, first), span: dayDiff(first, last) + 1 };
+        const bar: TimelineBar = {
+          item, start: dayDiff(from, item.startsOn), span: dayDiff(item.startsOn, lastDayOf(item)!) + 1,
+        };
         const parentTitle = item.parentId === null ? undefined : titles.get(item.parentId);
         if (parentTitle !== undefined) bar.parentTitle = parentTitle;
-        if (clippedStart) bar.clippedStart = true;
-        if (clippedEnd) bar.clippedEnd = true;
         bars.push(bar);
       }
     }
     if (bars.length > 0) lanes.push({ topic: group.topic, hue: group.hue, bars });
   }
 
-  return { days, lanes, placed: inWindow.length, scheduled: scheduled.length, window };
+  return { days, lanes, placed: scheduled.length };
 }
 
 export interface PlanTotals {

@@ -1,8 +1,9 @@
 /** @vitest-environment jsdom */
 import { describe, it, expect } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
-import { buildTimeline, timelineWindow, type PlanItem, type Topic, type TimelineBar } from '@/lib/logistics/plan';
-import { PlanTimeline, packBars, laneRows, laneBlocks, monthBands, windowLabel } from './plan-timeline';
+import { buildTimeline, type PlanItem, type Topic, type TimelineBar } from '@/lib/logistics/plan';
+import type { TimelineScale } from '@/lib/logistics/plan-views';
+import { PlanTimeline, packBars, laneRows, laneBlocks, monthBands, weekCells } from './plan-timeline';
 
 function item(over: Partial<PlanItem>): PlanItem {
   return {
@@ -62,19 +63,21 @@ describe('laneBlocks', () => {
   });
 });
 
-describe('windowLabel', () => {
-  it('names a month, a week inside a month, and a week across two', () => {
-    expect(windowLabel(timelineWindow('month', '2026-05-13')!)).toBe('מאי 2026');
-    expect(windowLabel(timelineWindow('week', '2026-05-13')!)).toBe('10–16 במאי 2026');
-    expect(windowLabel(timelineWindow('week', '2026-06-01')!)).toBe('31 במאי – 6 ביוני 2026');
-    expect(windowLabel(timelineWindow('week', '2026-12-30')!)).toBe('27 בדצמבר 2026 – 2 בינואר 2027');
-  });
-});
-
 describe('monthBands', () => {
   it('spans each month over its days', () => {
     const timeline = buildTimeline([item({ id: 'a', startsOn: '2026-05-30', endsOn: '2026-06-02' })], [])!;
     expect(monthBands(timeline.days).map((band) => [band.label, band.span])).toEqual([['מאי', 8], ['יוני', 6]]);
+  });
+});
+
+describe('weekCells', () => {
+  it('cuts the days into sevens from the first column', () => {
+    const timeline = buildTimeline([item({ id: 'a', startsOn: '2026-05-12', endsOn: '2026-05-21' })], [])!;
+    expect(weekCells(timeline.days)).toEqual([
+      { from: '2026-05-10', to: '2026-05-16', span: 7 },
+      { from: '2026-05-17', to: '2026-05-23', span: 7 },
+    ]);
+    expect(weekCells([])).toEqual([]);
   });
 });
 
@@ -86,9 +89,12 @@ describe('PlanTimeline', () => {
   ];
   const timeline = buildTimeline(items, [KITCHEN])!;
 
-  function mount(today = '2026-01-01') {
-    return render(<PlanTimeline timeline={timeline} params={{ season: 's1' }} today={today} currentItemId={null} />);
+  function mount(today = '2026-01-01', scale: TimelineScale = 'day') {
+    return render(
+      <PlanTimeline timeline={timeline} scale={scale} params={scale === 'day' ? { season: 's1' } : { season: 's1', scale }} today={today} currentItemId={null} />,
+    );
   }
+  const bars = () => screen.getAllByRole('link').filter((a) => (a.getAttribute('href') ?? '').includes('peek='));
 
   it('lays one bar per scheduled item, each a link that says what and when', () => {
     mount();
@@ -132,61 +138,80 @@ describe('PlanTimeline', () => {
     expect(lanes[1].className).not.toMatch(/hue\d/);
   });
 
-  it('offers the three scales as links, the current one marked, and scrolls to today over everything', () => {
-    mount('2026-05-13');
-    const group = screen.getByRole('group', { name: 'קנה מידה' });
+
+
+  it('offers the three resolutions as links, the current one marked, ״ימים״ as the bare URL', () => {
+    mount('2026-05-13', 'week');
+    const group = screen.getByRole('group', { name: 'רזולוציה' });
     const options = within(group).getAllByRole('link');
     expect(options.map((a) => [a.textContent, a.getAttribute('href'), a.getAttribute('aria-current')])).toEqual([
-      ['שבוע', '/logistics/plan?season=s1&scale=week&at=2026-05-13', null],
-      ['חודש', '/logistics/plan?season=s1&scale=month&at=2026-05-13', null],
-      ['הכול', '/logistics/plan?season=s1', 'true'],
+      ['ימים', '/logistics/plan?season=s1', null],
+      ['שבועות', '/logistics/plan?season=s1&scale=week', 'true'],
+      ['חודשים', '/logistics/plan?season=s1&scale=month', null],
     ]);
     expect(screen.getByRole('button', { name: 'היום' })).toBeTruthy();
   });
 
-  it('in a week, names the week, steps to its neighbours, and says when today is elsewhere', () => {
-    const week = buildTimeline(items, [KITCHEN], timelineWindow('week', '2026-05-13'))!;
-    render(<PlanTimeline timeline={week} params={{ season: 's1' }} today="2026-06-01" currentItemId={null} />);
-    expect(screen.getByText('10–16 במאי 2026')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'השבוע הקודם' }).getAttribute('href'))
-      .toBe('/logistics/plan?season=s1&scale=week&at=2026-05-06');
-    expect(screen.getByRole('link', { name: 'השבוע הבא' }).getAttribute('href'))
-      .toBe('/logistics/plan?season=s1&scale=week&at=2026-05-20');
-    expect(screen.getByRole('link', { name: 'היום' }).getAttribute('href'))
-      .toBe('/logistics/plan?season=s1&scale=week&at=2026-06-01');
-    // Only the two kitchen items touch this week; the done one is on other days.
-    const bars = screen.getAllByRole('link').filter((a) => (a.getAttribute('href') ?? '').includes('peek='));
-    expect(bars).toHaveLength(2);
-    expect(screen.getAllByRole('listitem')).toHaveLength(7);
+  /*
+   * The resolution changes the header and the width of a day, never the
+   * bars: the same three items sit on the same day-columns at all three.
+   */
+  it('keeps every bar on its own days at every resolution', () => {
+    const columns: Record<string, (string | null)[]> = {};
+    for (const scale of ['day', 'week', 'month'] as const) {
+      const view = mount('2026-05-13', scale);
+      columns[scale] = bars().map((a) => a.getAttribute('style'));
+      view.unmount();
+    }
+    expect(columns.day).toHaveLength(3);
+    expect(columns.day[0]).toContain('grid-column: 3 / span 3');
+    expect(columns.week).toEqual(columns.day);
+    expect(columns.month).toEqual(columns.day);
   });
 
-  it('in a month, dims the padding days of the neighbouring months', () => {
-    const month = buildTimeline(items, [KITCHEN], timelineWindow('month', '2026-05-13'))!;
-    const { container } = render(<PlanTimeline timeline={month} params={{ season: 's1' }} today="2026-05-13" currentItemId={null} />);
-    expect(screen.getByText('מאי 2026')).toBeTruthy();
-    const days = screen.getAllByRole('listitem');
-    expect(days).toHaveLength(42);
-    const dimmed = days.filter((day) => /dayOutside/.test(day.className));
-    expect(dimmed.map((day) => day.getAttribute('aria-label'))).toEqual([
-      'א׳ 26/04', 'ב׳ 27/04', 'ג׳ 28/04', 'ד׳ 29/04', 'ה׳ 30/04', 'ב׳ 01/06', 'ג׳ 02/06', 'ד׳ 03/06', 'ה׳ 04/06', 'ו׳ 05/06', 'ש׳ 06/06',
+  it('at ״שבועות״ heads the columns with weeks, each over its seven days, and marks this week', () => {
+    const { container } = mount('2026-05-13', 'week');
+    // The span is 2026-05-10 … 2026-05-23: two whole weeks.
+    const weeks = within(screen.getByRole('list', { name: 'שבועות' })).getAllByRole('listitem');
+    expect(weeks.map((cell) => [cell.getAttribute('aria-label'), cell.getAttribute('style'), cell.getAttribute('aria-current')])).toEqual([
+      ['שבוע 10/05–16/05', 'grid-column: span 7;', 'date'],
+      ['שבוע 17/05–23/05', 'grid-column: span 7;', null],
     ]);
+    expect(screen.queryByRole('list', { name: 'ימים' })).toBeNull();
+    expect(container.querySelector('[class*="scaleWeek"]')).not.toBeNull();
     expect(container.textContent ?? '').not.toMatch(/[A-Za-z]/);
   });
 
-  it('in an empty week, keeps the days, says where the work is, and offers everything', () => {
-    const empty = buildTimeline(items, [KITCHEN], timelineWindow('week', '2026-07-01'))!;
-    render(<PlanTimeline timeline={empty} params={{ season: 's1' }} today="2026-07-01" currentItemId={null} />);
-    expect(screen.getByText(/אין משימה על הימים של השבוע הזה/).textContent).toContain('3 המשימות שיש להן יום נמצאות על ימים אחרים');
-    expect(screen.getByRole('link', { name: 'לתצוגה של הכול' }).getAttribute('href')).toBe('/logistics/plan?season=s1');
+  it('at ״חודשים״ the months are the columns, named with their year, and this month is marked', () => {
+    const long = buildTimeline([
+      item({ id: 'a', title: 'להזמין מכולה', startsOn: '2026-03-03' }),
+      item({ id: 'b', title: 'להרכיב צל', startsOn: '2026-06-18', endsOn: '2026-06-20' }),
+    ], [])!;
+    const { container } = render(
+      <PlanTimeline timeline={long} scale="month" params={{ season: 's1', scale: 'month' }} today="2026-04-10" currentItemId={null} />,
+    );
+    const months = within(screen.getByRole('list', { name: 'חודשים' })).getAllByRole('listitem');
+    // 2026-03-01 … 2026-06-20: March 31 days, April 30, May 31, June's first 20.
+    expect(months.map((cell) => [cell.textContent, cell.getAttribute('style'), cell.getAttribute('aria-current')])).toEqual([
+      ['מרץ 2026', 'grid-column: span 31;', null],
+      ['אפריל 2026', 'grid-column: span 30;', 'date'],
+      ['מאי 2026', 'grid-column: span 31;', null],
+      ['יוני 2026', 'grid-column: span 20;', null],
+    ]);
+    expect(screen.queryByRole('list', { name: 'ימים' })).toBeNull();
+    expect(screen.queryByRole('list', { name: 'שבועות' })).toBeNull();
+    expect(container.querySelector('[class*="scaleMonth"]')).not.toBeNull();
+    // Both items are drawn, three and a half months apart.
+    expect(screen.getByRole('link', { name: 'להזמין מכולה · 03/03 · עבר התאריך' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'להרכיב צל · 18/06–20/06' })).toBeTruthy();
   });
 
-  it('cuts a bar at the window’s edge and says so in the link, not by moving the item', () => {
-    const long = [item({ id: 'l', title: 'להרכיב צל', startsOn: '2026-05-08', endsOn: '2026-05-19' })];
-    const week = buildTimeline(long, [], timelineWindow('week', '2026-05-13'))!;
-    render(<PlanTimeline timeline={week} params={{ season: 's1' }} today="2026-05-13" currentItemId={null} />);
-    const bar = screen.getByRole('link', { name: 'להרכיב צל · 08/05–19/05' });
-    expect(bar.getAttribute('style')).toContain('grid-column: 1 / span 7');
-    expect(bar.className).toMatch(/barClipStart/);
-    expect(bar.className).toMatch(/barClipEnd/);
+  it('gives a bar its extras only when it has the room for them at that resolution', () => {
+    // The parent spans three days: room for its parts count at ״ימים״, not at ״חודשים״.
+    const day = mount('2026-01-01', 'day');
+    expect(bars()[0].textContent).toContain('חלק אחד');
+    day.unmount();
+    mount('2026-01-01', 'month');
+    expect(bars()[0].textContent).toBe('להכין מכולת מטבח');
   });
 });
