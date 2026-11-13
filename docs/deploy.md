@@ -716,7 +716,7 @@ touched, so there is no row count to compare.
 The local `shliff-pg` still needs `0021` and `0022` with the §6 container
 command once Docker is running.
 
-### Migrations `0023` and `0024` — generated, **not yet applied to Railway**
+### Migrations `0023` and `0024` — applied to Railway on 2026-11-12 and 2026-11-13
 
 `0023_work_plan` is לוח עבודה (#68): three new tables, `work_topics`,
 `work_items` and `work_dependencies`, with their foreign keys. Purely
@@ -731,7 +731,7 @@ a null reads as "an item of the board's own", which every existing row is.
 — both screens join the two tables — and it is written by every row entered
 on רכש, so a deploy that lands before the column exists answers the error
 screen on both pages. Migration first, merge second (§2). `0024` depends on
-`0023`: apply them in order, in one sitting.
+`0023`: apply them in order.
 
 Read-only check, before: `0, 0`; after: `3, 1`:
 
@@ -755,6 +755,26 @@ docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine s
 
 The `acquisition_items` row count is the oracle that the apply changed
 nothing but the schema: it must read the same before and after.
+
+Both went in the way `0021` and `0022` did: no `psql` and no Docker on the
+laptop, so a scratchpad script using the project's `postgres` driver read
+`RAILWAY_URL` from `.env.railway`, checked first, refused anything but a
+clean state, and ran the file in one transaction, run by the camp lead from
+the prompt. Both on PostgreSQL 18.6. Neither followed "migration first":
+
+- **`0023` on 2026-11-12**, a day after #68 merged. Ten statements.
+  Measured: `present before: (none)`, `present after: work_dependencies,
+  work_items, work_topics`.
+- **`0024` on 2026-11-13**, a few hours after #75 merged and deployed
+  (16:43 UTC), so `/logistics/plan` and `/logistics/acquisitions` answered
+  the error screen in between. Three statements. The script refused unless
+  `work_items` existed and the column and both constraints were absent.
+  Measured before: column absent, constraints 0 of 2, `acquisition_items` 0
+  rows, `work_items` 26 rows. After: column present, constraints 2 of 2,
+  `acquisition_items` 0, `work_items` 26.
+
+The local `shliff-pg` still needs `0021` through `0024` with the §6
+container command once Docker is running.
 
 ### Copying the laptop's database up
 
