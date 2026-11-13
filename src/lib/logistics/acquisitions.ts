@@ -46,8 +46,8 @@ export interface AcquisitionRow {
   lender: PersonRef | null;
   budgetLineId: string | null;
   arrivedItemId: string | null;
-  /** The row's line on the work plan, when it has one; the screen links to it. */
-  workItemId: string | null;
+  /** The row's line on the work plan, when it has one, and whose board it is on. */
+  workItem: { id: string; seasonId: string } | null;
   status: AcquisitionStatus;
   updatedAt: Date;
   updatedBy: string | null;
@@ -126,6 +126,7 @@ function selection(db: AnyDb) {
       assigneeName: sql<string | null>`${assigneeTable}.display_name`,
       lenderName: sql<string | null>`${lenderTable}.display_name`,
       workItemId: workItems.id,
+      workItemSeasonId: workItems.seasonId,
     })
     .from(acquisitionItems)
     .leftJoin(
@@ -145,9 +146,10 @@ type SelectedRow = {
   assigneeName: string | null;
   lenderName: string | null;
   workItemId: string | null;
+  workItemSeasonId: string | null;
 };
 
-function toRow({ row, assigneeName, lenderName, workItemId }: SelectedRow): AcquisitionRow {
+function toRow({ row, assigneeName, lenderName, workItemId, workItemSeasonId }: SelectedRow): AcquisitionRow {
   return {
     id: row.id,
     seasonId: row.seasonId,
@@ -163,7 +165,7 @@ function toRow({ row, assigneeName, lenderName, workItemId }: SelectedRow): Acqu
       ? null : { id: row.lenderPersonId, name: lenderName },
     budgetLineId: row.budgetLineId,
     arrivedItemId: row.arrivedItemId,
-    workItemId,
+    workItem: workItemId !== null && workItemSeasonId !== null ? { id: workItemId, seasonId: workItemSeasonId } : null,
     status: row.status,
     updatedAt: row.updatedAt as Date,
     updatedBy: row.updatedBy,

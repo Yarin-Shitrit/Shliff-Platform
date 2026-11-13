@@ -9,7 +9,7 @@ function row(over: Partial<AcquisitionRow> = {}): AcquisitionRow {
     seasonId: 's26', id: 'a1', name: 'מקדחה רוטטת', category: 'build', quantityNeeded: 1,
     source: 'buy_new', estimatedAgorot: 40000, actualAgorot: 38000,
     assignee: { id: 'p1', name: 'איתי כהן' }, lender: null,
-    budgetLineId: null, arrivedItemId: null, workItemId: null, status: 'ordered',
+    budgetLineId: null, arrivedItemId: null, workItem: null, status: 'ordered',
     updatedAt: new Date('2026-09-14T10:00:00Z'), updatedBy: null,
     ...over,
   };
@@ -88,5 +88,13 @@ describe('AcquisitionsTable', () => {
   it('shows the empty state it was handed rather than an empty grid', () => {
     mount([]);
     expect(screen.getByText('אין פריטים')).toBeTruthy();
+  });
+});
+
+describe('a row with a line on the work plan', () => {
+  it('links to that line on its own season’s board', () => {
+    mount([row({ workItem: { id: 'wi-1', seasonId: 's25' } })]);
+    expect(screen.getByRole('link', { name: 'בלוח העבודה' }).getAttribute('href'))
+      .toBe('/logistics/plan?season=s25&peek=wi-1');
   });
 });

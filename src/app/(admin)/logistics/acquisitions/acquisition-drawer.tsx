@@ -282,12 +282,12 @@ export function AcquisitionDrawer({
               options={topics.map((topic) => ({ value: topic.id, label: topic.name }))}
             />
           </Field>
-        ) : row.workItemId !== null ? (
+        ) : row.workItem !== null ? (
           <Banner
             tone="neutral"
             headline="יש לפריט הזה משימה בלוח העבודה."
             detail="השם, האחראי וההשלמה שלה נקבעים כאן; הימים, הנושא והסדר נקבעים בלוח."
-            action={{ label: 'פתיחה בלוח', href: planItemHref({ season: row.seasonId ?? seasonId }, row.workItemId) }}
+            action={{ label: 'פתיחה בלוח', href: planItemHref({ season: row.workItem.seasonId }, row.workItem.id) }}
           />
         ) : (
           <p className={styles.formHint}>

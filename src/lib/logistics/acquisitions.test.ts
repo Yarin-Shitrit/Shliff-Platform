@@ -437,7 +437,7 @@ describe('a purchase is a line on the work plan', () => {
     expect(item?.assigneePersonId).toBe(itayId);
     expect(item?.status).toBe('open');
     expect(item?.updatedBy).toBe(LEAD);
-    expect((await acquisitionById(db, id))?.workItemId).toBe(item?.id);
+    expect((await acquisitionById(db, id))?.workItem).toEqual({ id: item?.id, seasonId });
     expect((await planItemById(db, item!.id))?.purchase).toEqual({ id, status: 'to_search' });
   });
 
@@ -457,7 +457,7 @@ describe('a purchase is a line on the work plan', () => {
     expect((await linkedItem(generator))?.seasonId).toBe(seasonId);
     const pump = await createAcquisition(db, { ...BLANK_ROW, seasonId: null, name: 'משאבה' }, LEAD);
     expect(await linkedItem(pump)).toBeNull();
-    expect((await acquisitionById(db, pump))?.workItemId).toBeNull();
+    expect((await acquisitionById(db, pump))?.workItem).toBeNull();
   });
 
   it('refuses a board placement it cannot resolve, and writes no row', async () => {
@@ -521,7 +521,7 @@ describe('a purchase is a line on the work plan', () => {
       expect(containerRow.assignee?.id).toBe(itayId);
       expect(containerRow.source).toBe('buy_new');
       expect(containerRow.status).toBe('to_search');
-      expect(containerRow.workItemId).toBe(container);
+      expect(containerRow.workItem?.id).toBe(container);
       expect((await planItemById(db, container))?.title).toBe('לקנות מכולה');
       expect((await planItemById(db, boards))?.title).toBe('לקנות קרשים');
       expect((await planItemById(db, bare))?.title).toBe('לקנות גז למטבח');

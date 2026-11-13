@@ -51,8 +51,8 @@ export function AcquisitionsTable({
           {row.seasonId === null ? <Pill tone="outline">{CAMP_WIDE_LABEL}</Pill> : null}
           {/* Its line on the work plan, when it has one: the same thing,
               where the days and the order are set. */}
-          {row.workItemId === null ? null : (
-            <Link href={planItemHref(params, row.workItemId)} className={styles.boardLink}>בלוח העבודה</Link>
+          {row.workItem === null ? null : (
+            <Link href={planItemHref({ season: row.workItem.seasonId }, row.workItem.id)} className={styles.boardLink}>בלוח העבודה</Link>
           )}
         </span>
       ),
