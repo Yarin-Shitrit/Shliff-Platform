@@ -6,7 +6,7 @@ import {
   createTopic, updateTopic, setTopicArchived, listTopics, topicById,
   createItem, updateItem, scheduleItem, setItemStatus, planItemById,
   addDependency, removeDependency, listPlan,
-  buildPlanTree, buildTimeline, summarizePlan, validateSchedule, datesConflict,
+  buildPlanTree, buildTimeline, timelineWindow, stepWindow, topicHue, summarizePlan, validateSchedule, datesConflict,
   planRoster, purchaseTitle, purchaseNameOf, looksLikePurchase, adoptableItems,
   type PlanItem, type Topic,
 } from './plan';
@@ -303,6 +303,45 @@ describe('the tree', () => {
     const groups = buildPlanTree([item({ id: 'a', topicId: 'o' })], [old]);
     expect(groups[0].topic?.name).toBe('ישן');
   });
+
+  it('gives each topic a colour slot by its place, wrapping after six, and none to no topic', () => {
+    const topics = Array.from({ length: 8 }, (_, index) => topic({ id: `t${index}`, position: index }));
+    expect(topics.map((one) => topicHue(topics, one.id))).toEqual([1, 2, 3, 4, 5, 6, 1, 2]);
+    expect(topicHue(topics, null)).toBeNull();
+    expect(topicHue(topics, 'nobody')).toBeNull();
+    const groups = buildPlanTree([item({ id: 'a' })], topics.slice(0, 2));
+    expect(groups.map((group) => group.hue)).toEqual([1, 2, null]);
+  });
+});
+
+describe('the timeline’s window', () => {
+  it('is the Sunday-to-Saturday week around a day', () => {
+    // 2026-05-13 is a Wednesday.
+    expect(timelineWindow('week', '2026-05-13')).toEqual({
+      scale: 'week', at: '2026-05-13', from: '2026-05-10', to: '2026-05-16', month: null,
+    });
+  });
+
+  it('is the month around a day, padded out to whole weeks', () => {
+    // May 2026 starts on a Friday and ends on a Sunday.
+    expect(timelineWindow('month', '2026-05-13')).toEqual({
+      scale: 'month', at: '2026-05-13', from: '2026-04-26', to: '2026-06-06', month: '2026-05',
+    });
+  });
+
+  it('is nothing for everything', () => {
+    expect(timelineWindow('all', '2026-05-13')).toBeNull();
+  });
+
+  it('steps a week by seven days and a month to the first of the next, even from a 31st', () => {
+    const week = timelineWindow('week', '2026-05-13')!;
+    expect(stepWindow(week, 1)).toBe('2026-05-20');
+    expect(stepWindow(week, -1)).toBe('2026-05-06');
+    const month = timelineWindow('month', '2026-05-31')!;
+    expect(stepWindow(month, 1)).toBe('2026-06-01');
+    expect(stepWindow(month, -1)).toBe('2026-04-01');
+    expect(stepWindow(timelineWindow('month', '2026-12-05')!, 1)).toBe('2027-01-01');
+  });
 });
 
 describe('the timeline', () => {
@@ -339,7 +378,40 @@ describe('the timeline', () => {
     ], [kitchen])!;
     expect(timeline.lanes).toHaveLength(1);
     expect(timeline.lanes[0].topic?.name).toBe('מטבח');
+    expect(timeline.lanes[0].hue).toBe(1);
     expect(timeline.lanes[0].bars.map((bar) => bar.item.id)).toEqual(['c']);
+    // The part still says whose it is, though its parent is not drawn.
+    expect(timeline.lanes[0].bars[0].parentTitle).toBe('מכולה');
+    expect(timeline.window).toBeNull();
+    expect(timeline.scheduled).toBe(1);
+  });
+
+  it('inside a window, draws only what touches it, cut to its edges, and still counts the rest', () => {
+    const items = [
+      item({ id: 'before', startsOn: '2026-05-01', endsOn: '2026-05-04' }),
+      item({ id: 'across', startsOn: '2026-05-08', endsOn: '2026-05-19' }),
+      item({ id: 'inside', startsOn: '2026-05-12' }),
+      item({ id: 'after', startsOn: '2026-05-25' }),
+    ];
+    const timeline = buildTimeline(items, [], timelineWindow('week', '2026-05-13'))!;
+    expect(timeline.days.map((day) => day.day)).toEqual([
+      '2026-05-10', '2026-05-11', '2026-05-12', '2026-05-13', '2026-05-14', '2026-05-15', '2026-05-16',
+    ]);
+    expect(timeline.lanes[0].bars.map((bar) => [bar.item.id, bar.start, bar.span, bar.clippedStart ?? false, bar.clippedEnd ?? false]))
+      .toEqual([['across', 0, 7, true, true], ['inside', 2, 1, false, false]]);
+    // The items' own days are untouched: the bar is cut, not the plan.
+    expect(items[1].startsOn).toBe('2026-05-08');
+    expect(timeline.placed).toBe(2);
+    expect(timeline.scheduled).toBe(4);
+    expect(timeline.window?.scale).toBe('week');
+  });
+
+  it('inside a window with nothing in it, is a timeline with days and no lanes, never null', () => {
+    const timeline = buildTimeline([item({ id: 'a', startsOn: '2026-05-25' })], [], timelineWindow('week', '2026-05-13'))!;
+    expect(timeline).not.toBeNull();
+    expect(timeline.lanes).toEqual([]);
+    expect(timeline.days).toHaveLength(7);
+    expect(timeline.scheduled).toBe(1);
   });
 });
 

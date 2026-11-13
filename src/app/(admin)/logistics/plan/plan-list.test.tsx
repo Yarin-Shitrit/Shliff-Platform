@@ -28,14 +28,14 @@ function mount(groups: PlanGroup[]) {
 
 describe('PlanList', () => {
   it('names every column in Hebrew and nothing in English', () => {
-    mount([{ topic: topic({}), branches: [{ item: item({ id: 'a' }), children: [] }] }]);
+    mount([{ hue: 1, topic: topic({}), branches: [{ item: item({ id: 'a' }), children: [] }] }]);
     for (const header of within(screen.getByRole('table')).getAllByRole('columnheader')) {
       expect(header.textContent ?? '').not.toMatch(/[A-Za-z]/);
     }
   });
 
   it('draws a general item and its parts under it, each a link to its drawer', () => {
-    mount([{
+    mount([{ hue: null,
       topic: topic({}),
       branches: [{
         item: item({ id: 'p', title: 'להכין סלון' }),
@@ -54,22 +54,36 @@ describe('PlanList', () => {
     ]);
     expect(screen.getByRole('link', { name: 'לקנות קרשים' }).getAttribute('href'))
       .toBe('/logistics/plan?season=s1&peek=c1');
+    // The parent says how many parts it has; each part says whose it is.
+    expect(rows[1].textContent).toContain('2 חלקים');
+    expect(rows[2].textContent).toContain('חלק של להכין סלון');
+    expect(rows[3].textContent).toContain('חלק של להכין סלון');
+  });
+
+  it('wears the topic’s colour slot on the section, and none under no topic', () => {
+    const { container } = mount([
+      { hue: 3, topic: topic({ id: 't' }), branches: [{ item: item({ id: 'a', topicId: 't' }), children: [] }] },
+      { hue: null, topic: null, branches: [{ item: item({ id: 'b' }), children: [] }] },
+    ]);
+    const sections = container.querySelectorAll('section');
+    expect(sections[0].className).toContain('hue3');
+    expect(sections[1].className).not.toMatch(/hue\d/);
   });
 
   it('says in words when an item has no day, and links to where one is set', () => {
-    mount([{ topic: null, branches: [{ item: item({ id: 'a', title: 'לצבוע פטריות' }), children: [] }] }]);
+    mount([{ hue: null, topic: null, branches: [{ item: item({ id: 'a', title: 'לצבוע פטריות' }), children: [] }] }]);
     const link = screen.getByRole('link', { name: 'לקבוע יום' });
     expect(link.getAttribute('href')).toBe('/logistics/plan?season=s1&peek=a');
   });
 
   it('shows a day range in the table form', () => {
-    mount([{ topic: null, branches: [{ item: item({ id: 'a', startsOn: '2026-05-10', endsOn: '2026-05-12' }), children: [] }] }]);
+    mount([{ hue: null, topic: null, branches: [{ item: item({ id: 'a', startsOn: '2026-05-10', endsOn: '2026-05-12' }), children: [] }] }]);
     expect(screen.getByText('10/05/26')).toBeTruthy();
     expect(screen.getByText('12/05/26')).toBeTruthy();
   });
 
   it('names what an item waits for, and says when the dates contradict it', () => {
-    mount([{
+    mount([{ hue: null,
       topic: null,
       branches: [{
         item: item({
@@ -87,7 +101,7 @@ describe('PlanList', () => {
   });
 
   it('invites under an empty topic rather than drawing an empty grid', () => {
-    mount([{ topic: topic({ id: 't1', name: 'מטבח' }), branches: [] }]);
+    mount([{ hue: 1, topic: topic({ id: 't1', name: 'מטבח' }), branches: [] }]);
     expect(screen.queryByRole('table')).toBeNull();
     expect(screen.getByText(/עדיין אין משימות תחת/)).toBeTruthy();
     expect(screen.getByRole('link', { name: 'הוספת משימה' }).getAttribute('href'))
@@ -96,15 +110,15 @@ describe('PlanList', () => {
 
   it('heads a topic with a link to its drawer, and the no-topic group with plain text', () => {
     mount([
-      { topic: topic({ id: 't1', name: 'מטבח' }), branches: [{ item: item({ id: 'a', topicId: 't1' }), children: [] }] },
-      { topic: null, branches: [{ item: item({ id: 'b' }), children: [] }] },
+      { hue: 1, topic: topic({ id: 't1', name: 'מטבח' }), branches: [{ item: item({ id: 'a', topicId: 't1' }), children: [] }] },
+      { hue: null, topic: null, branches: [{ item: item({ id: 'b' }), children: [] }] },
     ]);
     expect(screen.getByRole('link', { name: 'מטבח' }).getAttribute('href')).toBe('/logistics/plan?season=s1&topic=t1');
     expect(screen.getByRole('heading', { name: 'בלי נושא' })).toBeTruthy();
   });
 
   it('says in words when an item is overdue or underway, from the day it is given', () => {
-    mount([{
+    mount([{ hue: null,
       topic: null,
       branches: [
         { item: item({ id: 'a', title: 'איחור', startsOn: '2026-05-01', endsOn: '2026-05-03' }), children: [] },
@@ -117,7 +131,7 @@ describe('PlanList', () => {
   });
 
   it('measures each topic in words and a meter', () => {
-    mount([{
+    mount([{ hue: null,
       topic: topic({ id: 't1', name: 'מטבח' }),
       branches: [
         { item: item({ id: 'a', status: 'done' }), children: [item({ id: 'b', parentId: 'a' }), item({ id: 'c', parentId: 'a', status: 'cancelled' })] },
@@ -127,7 +141,7 @@ describe('PlanList', () => {
   });
 
   it('says every state in a word', () => {
-    mount([{
+    mount([{ hue: null,
       topic: null,
       branches: [
         { item: item({ id: 'a', status: 'open' }), children: [] },
@@ -143,7 +157,7 @@ describe('PlanList', () => {
 
 describe('a purchase’s line on the board', () => {
   it('says the list’s status in the list’s word, as a link to the row on רכש', () => {
-    mount([{
+    mount([{ hue: null,
       topic: topic({}),
       branches: [{ item: item({ id: 'a', title: 'לקנות מכולה', purchase: { id: 'acq-1', status: 'ordered' } }), children: [] }],
     }]);
@@ -154,7 +168,7 @@ describe('a purchase’s line on the board', () => {
   });
 
   it('keeps the board’s own word for a cancelled purchase line', () => {
-    mount([{
+    mount([{ hue: null,
       topic: topic({}),
       branches: [{ item: item({ id: 'a', status: 'cancelled', purchase: { id: 'acq-1', status: 'ordered' } }), children: [] }],
     }]);

@@ -27,7 +27,18 @@ import styles from './plan.module.css';
  * handed in by the page, so this file holds no client code.
  */
 
-export type PlanLine = { item: PlanItem; sub: boolean };
+export type PlanLine = {
+  item: PlanItem;
+  sub: boolean;
+  /** For a part: its parent's title, said on a phone where the indent is gone. */
+  parentTitle?: string;
+  /** For a general item: how many parts it has, cancelled ones included — they are still rows under it. */
+  parts?: number;
+};
+
+function partsCount(count: number): string {
+  return count === 1 ? 'חלק אחד' : `${count} חלקים`;
+}
 
 /** A civil day as the instant `DateText` reads back as that day in Israel. */
 export function civil(day: string): Date {
@@ -109,6 +120,10 @@ export function PlanList({
             <Link href={itemHref(params, item.id)} aria-current={item.id === currentItemId ? 'true' : undefined}>
               {item.title}
             </Link>
+            {sub && line.parentTitle !== undefined ? (
+              <span className={styles.partOf}><bdi>{`חלק של ${line.parentTitle}`}</bdi></span>
+            ) : null}
+            {!sub && line.parts ? <span className={styles.partCount}>{partsCount(line.parts)}</span> : null}
           </span>
         );
       },
@@ -146,17 +161,18 @@ export function PlanList({
         const key = group.topic?.id ?? 'none';
         const name = group.topic?.name ?? 'בלי נושא';
         const rows: Array<TableRowModel<PlanLine>> = group.branches.flatMap((branch) => [
-          lineOf(branch.item, false),
-          ...branch.children.map((child) => lineOf(child, true)),
+          lineOf({ item: branch.item, sub: false, parts: branch.children.length }),
+          ...branch.children.map((child) => lineOf({ item: child, sub: true, parentTitle: branch.item.title })),
         ]);
         const archived = group.topic?.archivedAt != null;
         const progress = topicProgress(group);
         const addHref = newItemHref(params, group.topic === null ? {} : { topicId: group.topic.id });
 
         return (
-          <section key={key} className={styles.topic} aria-label={name}>
+          <section key={key} className={cx(styles.topic, group.hue !== null && styles[`hue${group.hue}`])} aria-label={name}>
             <div className={cx(styles.topicHead, archived && styles.topicArchived)}>
               <h3>
+                <i className={styles.topicDot} aria-hidden="true" />
                 {group.topic === null ? name : (
                   <Link href={topicHref(params, group.topic.id)}>{name}</Link>
                 )}
@@ -204,10 +220,10 @@ export function PlanList({
   );
 }
 
-function lineOf(item: PlanItem, sub: boolean): TableRowModel<PlanLine> {
+function lineOf(line: PlanLine): TableRowModel<PlanLine> {
   return {
-    id: item.id,
-    data: { item, sub },
-    tone: item.waitsFor.some((dep) => dep.conflict) ? 'warn' : undefined,
+    id: line.item.id,
+    data: line,
+    tone: line.item.waitsFor.some((dep) => dep.conflict) ? 'warn' : undefined,
   };
 }

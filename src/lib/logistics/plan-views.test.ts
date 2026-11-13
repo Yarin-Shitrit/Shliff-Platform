@@ -1,14 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import {
-  parsePlanQuery, planHref, itemHref, topicHref, newTopicHref, newItemHref, adoptHref, PLAN_PATH,
+  parsePlanQuery, planHref, itemHref, topicHref, newTopicHref, newItemHref, scaleHref, adoptHref, PLAN_PATH,
 } from './plan-views';
 
 describe('the plan’s query', () => {
   it('reads a bare URL as nothing open', () => {
     expect(parsePlanQuery({})).toEqual({
       season: '', peek: null, peekTopic: null, creatingTopic: false, creatingItem: false,
-      presetTopic: null, presetParent: null, adopting: false,
+      presetTopic: null, presetParent: null, scale: 'all', at: null, adopting: false,
     });
+  });
+
+  it('reads the timeline’s scale and day, and falls back to everything on nonsense', () => {
+    expect(parsePlanQuery({ scale: 'week', at: '2026-05-13' })).toMatchObject({ scale: 'week', at: '2026-05-13' });
+    expect(parsePlanQuery({ scale: 'month' })).toMatchObject({ scale: 'month', at: null });
+    expect(parsePlanQuery({ scale: 'decade', at: '13/05/2026' })).toMatchObject({ scale: 'all', at: null });
   });
 
   it('opens the move-to-acquisitions drawer only with nothing else named', () => {
@@ -48,6 +54,19 @@ describe('the plan’s links', () => {
   it('carries the season and drops the open drawer', () => {
     expect(planHref(here, {})).toBe(`${PLAN_PATH}?season=s1`);
     expect(planHref({}, {})).toBe(PLAN_PATH);
+  });
+
+  it('carries the timeline’s scale and day through every link, so a drawer closes back onto the week', () => {
+    const week = { season: 's1', scale: 'week', at: '2026-05-13' };
+    expect(itemHref(week, 'i2')).toBe(`${PLAN_PATH}?season=s1&scale=week&at=2026-05-13&peek=i2`);
+    expect(planHref(week, {})).toBe(`${PLAN_PATH}?season=s1&scale=week&at=2026-05-13`);
+  });
+
+  it('spells the scale links, and spells ״הכול״ by leaving both params out', () => {
+    expect(scaleHref({ season: 's1' }, 'week', '2026-05-13')).toBe(`${PLAN_PATH}?season=s1&scale=week&at=2026-05-13`);
+    expect(scaleHref({ season: 's1', scale: 'week', at: '2026-05-13' }, 'month', '2026-06-01'))
+      .toBe(`${PLAN_PATH}?season=s1&scale=month&at=2026-06-01`);
+    expect(scaleHref({ season: 's1', scale: 'week', at: '2026-05-13' }, 'all')).toBe(`${PLAN_PATH}?season=s1`);
   });
 
   it('builds every drawer from one place', () => {

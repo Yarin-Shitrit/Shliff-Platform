@@ -8,6 +8,7 @@ import {
 } from '@/db/schema/logistics';
 import { rosterWorkload } from '@/lib/work/coverage';
 import { addDays, isCivilDay } from './shift-time';
+import type { TimelineScale } from './plan-views';
 import { PURCHASE_VERBS } from './labels';
 
 /**
@@ -550,7 +551,32 @@ export interface PlanBranch {
 export interface PlanGroup {
   /** Null is the group for items under no topic. */
   topic: Topic | null;
+  /** The topic's colour slot, `1`–`TOPIC_HUES`; null for no topic. See `topicHue`. */
+  hue: number | null;
   branches: PlanBranch[];
+}
+
+/**
+ * How many colours a topic can wear. Six, in a fixed order, assigned by
+ * the topic's place in the lead's order — never by name, never hashed —
+ * so the first six topics are always told apart and a seventh shares the
+ * first's colour rather than inventing one. The colour is never the only
+ * thing that says which topic a bar belongs to: the lane and the heading
+ * carry the name (R3).
+ */
+export const TOPIC_HUES = 6;
+
+/**
+ * The colour slot of a topic: its index in the season's topics, which
+ * `listTopics` orders by position, wrapped into `TOPIC_HUES`. Stable for
+ * as long as the topics keep their order, which they do — a topic is
+ * archived, never reordered. Null for an item under no topic, and for a
+ * topic the list does not know.
+ */
+export function topicHue(topics: readonly Pick<Topic, 'id'>[], topicId: string | null): number | null {
+  if (topicId === null) return null;
+  const index = topics.findIndex((topic) => topic.id === topicId);
+  return index === -1 ? null : (index % TOPIC_HUES) + 1;
 }
 
 function byOrder(a: PlanItem, b: PlanItem): number {
@@ -586,13 +612,13 @@ export function buildPlanTree(items: PlanItem[], topics: Topic[]): PlanGroup[] {
 
   const groups = new Map<string | null, PlanGroup>();
   for (const topic of topics) {
-    if (topic.archivedAt === null) groups.set(topic.id, { topic, branches: [] });
+    if (topic.archivedAt === null) groups.set(topic.id, { topic, hue: topicHue(topics, topic.id), branches: [] });
   }
   for (const root of roots) {
     let group = groups.get(root.topicId);
     if (!group) {
       const topic = root.topicId === null ? null : topics.find((t) => t.id === root.topicId) ?? null;
-      group = { topic, branches: [] };
+      group = { topic, hue: topicHue(topics, topic?.id ?? null), branches: [] };
       groups.set(root.topicId, group);
     }
     group.branches.push({ item: root, children: children.get(root.id) ?? [] });
@@ -625,18 +651,42 @@ export interface TimelineBar {
   start: number;
   /** Columns the bar spans, at least 1. */
   span: number;
+  /** For a part: the title of the item it belongs to, so the bar can say so. */
+  parentTitle?: string;
+  /** True when the item began before the window's first day — the bar is cut, not the item. */
+  clippedStart?: boolean;
+  /** True when the item runs past the window's last day. */
+  clippedEnd?: boolean;
 }
 
 export interface TimelineLane {
   topic: Topic | null;
+  /** The topic's colour slot; see `topicHue`. */
+  hue: number | null;
   bars: TimelineBar[];
+}
+
+export interface TimelineWindow {
+  scale: Exclude<TimelineScale, 'all'>;
+  /** The day the window was asked for — any day inside it. */
+  at: string;
+  /** First column, always a Sunday. */
+  from: string;
+  /** Last column, always a Saturday. */
+  to: string;
+  /** For a month: `YYYY-MM`, so the padding days of the neighbours can be dimmed. */
+  month: string | null;
 }
 
 export interface Timeline {
   days: TimelineDay[];
   lanes: TimelineLane[];
-  /** Scheduled, cancelled items are left off the lanes; this is the count that was placed. */
+  /** Scheduled, cancelled items are left off the lanes; this is the count that was placed on these days. */
   placed: number;
+  /** Every scheduled item of the season, inside the window or not. */
+  scheduled: number;
+  /** Null when the timeline shows everything. */
+  window: TimelineWindow | null;
 }
 
 function dayDiff(from: string, to: string): number {
@@ -649,31 +699,90 @@ function dayParts(day: string): { dayOfMonth: number; weekday: number } {
   return { dayOfMonth: at.getUTCDate(), weekday: at.getUTCDay() };
 }
 
+/** The last day of the month `2026-05-07` is in: `2026-05-31`. */
+function lastOfMonth(day: string): string {
+  const at = new Date(`${day.slice(0, 7)}-01T00:00:00Z`);
+  at.setUTCMonth(at.getUTCMonth() + 1, 0);
+  return at.toISOString().slice(0, 10);
+}
+
 /**
- * The scheduled items laid on days. The span runs from the earliest start
- * to the latest end among open and done items, padded to begin on a Sunday,
- * so the columns are the camp's weeks. Null when nothing is scheduled —
- * there is no timeline to draw, and the screen says so instead of drawing
- * an empty strip around today.
+ * The week or the month around a day, as whole weeks: the week is the
+ * Sunday-to-Saturday that holds `at`; the month is `at`'s month, padded
+ * out to the Sunday before its first and the Saturday after its last, so
+ * the columns stay the camp's weeks and the weekend stripe stays put.
+ * Null for `all` — no window, the timeline runs over everything.
+ */
+export function timelineWindow(scale: TimelineScale, at: string): TimelineWindow | null {
+  if (scale === 'all') return null;
+  if (scale === 'week') {
+    const from = addDays(at, -dayParts(at).weekday);
+    return { scale, at, from, to: addDays(from, 6), month: null };
+  }
+  const first = `${at.slice(0, 7)}-01`;
+  const last = lastOfMonth(at);
+  return {
+    scale,
+    at,
+    from: addDays(first, -dayParts(first).weekday),
+    to: addDays(last, 6 - dayParts(last).weekday),
+    month: at.slice(0, 7),
+  };
+}
+
+/**
+ * The day that asks for the neighbouring window: a week on, a week back;
+ * the first of the next month, the first of the one before. Always the
+ * first of a month rather than `at` shifted, so a 31st never lands in a
+ * month that has no 31st and skips one.
+ */
+export function stepWindow(window: TimelineWindow, direction: -1 | 1): string {
+  if (window.scale === 'week') return addDays(window.at, 7 * direction);
+  const first = new Date(`${window.month}-01T00:00:00Z`);
+  first.setUTCMonth(first.getUTCMonth() + direction);
+  return first.toISOString().slice(0, 10);
+}
+
+/**
+ * The scheduled items laid on days. With no window the span runs from the
+ * earliest start to the latest end among open and done items, padded to
+ * begin on a Sunday, so the columns are the camp's weeks. With one, the
+ * columns are the window's, an item that overlaps it is drawn cut to it
+ * (`clippedStart` / `clippedEnd` say so, the item's own days do not move),
+ * and an item wholly outside it is left off — `scheduled` still counts it,
+ * so the screen can say how many sit on other days.
+ *
+ * Null when nothing in the season is scheduled — there is no timeline to
+ * draw, and the screen says so instead of drawing an empty strip around
+ * today. A window with nothing in it is still a timeline: its days are the
+ * invitation, and the buttons to the next week are on it.
  *
  * Cancelled items are left off: they are history, and the list still shows
- * them. A sub-item is a bar of its own on its parent's lane; a parent with
- * no dates of its own is not drawn, since its parts are.
+ * them. A sub-item is a bar of its own on its parent's lane, carrying its
+ * parent's title; a parent with no dates of its own is not drawn, since its
+ * parts are.
  */
-export function buildTimeline(items: PlanItem[], topics: Topic[]): Timeline | null {
+export function buildTimeline(
+  items: PlanItem[], topics: Topic[], window: TimelineWindow | null = null,
+): Timeline | null {
   const scheduled = items.filter((item) => item.status !== 'cancelled' && item.startsOn !== null);
   if (scheduled.length === 0) return null;
 
-  let from = scheduled[0].startsOn!;
-  let to = lastDayOf(scheduled[0])!;
-  for (const item of scheduled) {
-    if (item.startsOn! < from) from = item.startsOn!;
-    const last = lastDayOf(item)!;
-    if (last > to) to = last;
+  let from: string;
+  let to: string;
+  if (window !== null) {
+    ({ from, to } = window);
+  } else {
+    from = scheduled[0].startsOn!;
+    to = lastDayOf(scheduled[0])!;
+    for (const item of scheduled) {
+      if (item.startsOn! < from) from = item.startsOn!;
+      const last = lastDayOf(item)!;
+      if (last > to) to = last;
+    }
+    from = addDays(from, -dayParts(from).weekday);
+    to = addDays(to, 6 - dayParts(to).weekday);
   }
-  from = addDays(from, -dayParts(from).weekday);
-  const toParts = dayParts(to);
-  to = addDays(to, 6 - toParts.weekday);
 
   const days: TimelineDay[] = [];
   const total = dayDiff(from, to) + 1;
@@ -683,22 +792,33 @@ export function buildTimeline(items: PlanItem[], topics: Topic[]): Timeline | nu
     days.push({ day, index, ...parts, monthStart: parts.dayOfMonth === 1 || index === 0 });
   }
 
-  const groups = buildPlanTree(scheduled, topics);
+  const inWindow = scheduled.filter((item) => item.startsOn! <= to && lastDayOf(item)! >= from);
+  /* From every item, not the window's: a part's parent may be undated, or
+     on other days, and the bar still says whose part it is. */
+  const titles = new Map(items.map((item) => [item.id, item.title]));
+  const groups = buildPlanTree(inWindow, topics);
   const lanes: TimelineLane[] = [];
   for (const group of groups) {
     const bars: TimelineBar[] = [];
     for (const branch of group.branches) {
       for (const item of [branch.item, ...branch.children]) {
         if (item.startsOn === null) continue;
-        const start = dayDiff(from, item.startsOn);
-        const span = dayDiff(item.startsOn, lastDayOf(item)!) + 1;
-        bars.push({ item, start, span });
+        const clippedStart = item.startsOn < from;
+        const clippedEnd = lastDayOf(item)! > to;
+        const first = clippedStart ? from : item.startsOn;
+        const last = clippedEnd ? to : lastDayOf(item)!;
+        const bar: TimelineBar = { item, start: dayDiff(from, first), span: dayDiff(first, last) + 1 };
+        const parentTitle = item.parentId === null ? undefined : titles.get(item.parentId);
+        if (parentTitle !== undefined) bar.parentTitle = parentTitle;
+        if (clippedStart) bar.clippedStart = true;
+        if (clippedEnd) bar.clippedEnd = true;
+        bars.push(bar);
       }
     }
-    if (bars.length > 0) lanes.push({ topic: group.topic, bars });
+    if (bars.length > 0) lanes.push({ topic: group.topic, hue: group.hue, bars });
   }
 
-  return { days, lanes, placed: scheduled.length };
+  return { days, lanes, placed: inWindow.length, scheduled: scheduled.length, window };
 }
 
 export interface PlanTotals {
