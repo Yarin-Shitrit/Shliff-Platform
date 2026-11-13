@@ -716,6 +716,12 @@ export interface TimelineBar {
   span: number;
   /** For a part: the title of the item it belongs to, so the bar can say so. */
   parentTitle?: string;
+  /**
+   * For a general item with parts: how many it has in all — the number the
+   * list writes beside it, undated and cancelled parts included. The lanes
+   * hold only some of those as bars, so the bar says both.
+   */
+  parts?: number;
 }
 
 export interface TimelineLane {
@@ -783,6 +789,10 @@ export function buildTimeline(items: PlanItem[], topics: Topic[]): Timeline | nu
   /* From every item, not only the scheduled: a part's parent may be
      undated, and the bar still says whose part it is. */
   const titles = new Map(items.map((item) => [item.id, item.title]));
+  const partsOf = new Map<string, number>();
+  for (const item of items) {
+    if (item.parentId !== null) partsOf.set(item.parentId, (partsOf.get(item.parentId) ?? 0) + 1);
+  }
   const groups = buildPlanTree(scheduled, topics);
   const lanes: TimelineLane[] = [];
   for (const group of groups) {
@@ -795,6 +805,8 @@ export function buildTimeline(items: PlanItem[], topics: Topic[]): Timeline | nu
         };
         const parentTitle = item.parentId === null ? undefined : titles.get(item.parentId);
         if (parentTitle !== undefined) bar.parentTitle = parentTitle;
+        const parts = partsOf.get(item.id);
+        if (parts !== undefined) bar.parts = parts;
         bars.push(bar);
       }
     }

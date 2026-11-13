@@ -173,8 +173,17 @@ function barLabel(bar: TimelineBar, today: string): string {
   return `${item.title}${part} · ${when}${who}${state}`;
 }
 
-function partsCount(count: number): string {
-  return count === 1 ? 'חלק אחד' : `${count} חלקים`;
+/**
+ * What a general item's bar says about its parts: how many it has — the
+ * same number the list writes beside it — and, when the timeline draws
+ * fewer than that, how many. A part with no day or a cancelled one is not
+ * a bar, and a count of the bars alone read as a different item from the
+ * list's.
+ */
+function partsCount(total: number, placed: number): string {
+  const all = total === 1 ? 'חלק אחד' : `${total} חלקים`;
+  if (placed >= total) return all;
+  return placed === 0 ? `${all} · אף אחד לא על הציר` : `${all} · ${placed} על הציר`;
 }
 
 export function PlanTimeline({
@@ -332,6 +341,7 @@ export function PlanTimeline({
                                 const overdue = isOverdue(item, today);
                                 const isPart = item.parentId !== null;
                                 const partsHere = isPart ? 0 : block.parentId === item.id ? block.parts.flat().length : 0;
+                                const partsInAll = isPart ? 0 : Math.max(bar.parts ?? 0, partsHere);
                                 return (
                                   <Link
                                     key={item.id}
@@ -352,8 +362,8 @@ export function PlanTimeline({
                                     {!done && overdue ? <Icon name="alert" size={14} /> : null}
                                     {isPart && bar.span >= 2 * room ? <Icon name="enter" size={14} /> : null}
                                     <span className={styles.barTitle}>{item.title}</span>
-                                    {partsHere > 0 && bar.span >= 2 * room ? (
-                                      <span className={styles.barCount}>{partsCount(partsHere)}</span>
+                                    {partsInAll > 0 && bar.span >= 2 * room ? (
+                                      <span className={styles.barCount}>{partsCount(partsInAll, partsHere)}</span>
                                     ) : null}
                                     {item.assignee === null || bar.span < 3 * room ? null : (
                                       <span className={styles.barWho}>
