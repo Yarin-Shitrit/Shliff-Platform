@@ -42,4 +42,8 @@
   z-index: var(--z-pop); min-inline-size: 200px; padding-block: 6px;
   background: var(--panel); border-radius: 12px; box-shadow: var(--shadow-pop);
   display: flex; flex-direction: column; text-align: start;
+  /* The block size is capped inline to the room the viewport has
+     (`computePanelPosition`); a long list scrolls here, and the scroll does
+     not leak to the page behind it. */
+  overflow-y: auto; overscroll-behavior: contain;
 }
