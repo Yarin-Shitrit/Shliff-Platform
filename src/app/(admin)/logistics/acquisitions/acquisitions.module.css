@@ -111,3 +111,20 @@
   .pair { grid-template-columns: 1fr; }
   .plainInput { min-block-size: 44px; }
 }
+
+/* The row's line on the work plan, beside its name: a small link, in the
+   meta size, so the name stays the thing the eye lands on. */
+.boardLink {
+  font-size: var(--text-meta);
+  color: var(--brand-text);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.boardLink:hover { text-decoration: underline; }
+
+.formHint {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 13px;
+}

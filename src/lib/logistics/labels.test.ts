@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
   CATEGORY_LABELS, CONDITION_LABELS, SOURCE_LABELS, STATUS_LABELS,
-  MATERIAL_STATE_LABELS,
+  MATERIAL_STATE_LABELS, PURCHASE_VERBS,
 } from './labels';
 
 /**
@@ -24,6 +24,7 @@ describe('logistics labels', () => {
     for (const k of CATEGORIES) expect(CATEGORY_LABELS[k]).toBeTruthy();
     for (const k of CONDITIONS) expect(CONDITION_LABELS[k]).toBeTruthy();
     for (const k of SOURCES) expect(SOURCE_LABELS[k]).toBeTruthy();
+    for (const k of SOURCES) expect(PURCHASE_VERBS[k]).toBeTruthy();
     for (const k of STATUSES) expect(STATUS_LABELS[k]).toBeTruthy();
     for (const k of MATERIAL_STATES) expect(MATERIAL_STATE_LABELS[k]).toBeTruthy();
   });
@@ -50,15 +51,16 @@ describe('logistics labels', () => {
     expect(MATERIAL_STATE_LABELS.needs_repair).toBe('במחסן · דורש תיקון');
   });
 
-  it('says nothing in English, on any of the twenty', () => {
+  it('says nothing in English, on any of the twenty-three', () => {
     const every = [
       ...Object.values(CATEGORY_LABELS),
       ...Object.values(CONDITION_LABELS),
       ...Object.values(SOURCE_LABELS),
+      ...Object.values(PURCHASE_VERBS),
       ...Object.values(STATUS_LABELS),
       ...Object.values(MATERIAL_STATE_LABELS),
     ];
-    expect(every).toHaveLength(20);
+    expect(every).toHaveLength(23);
     for (const label of every) {
       expect(label).not.toMatch(/[A-Za-z]/);
       expect(label.trim()).toBe(label);

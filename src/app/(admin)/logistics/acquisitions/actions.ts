@@ -6,11 +6,12 @@ import { requireAdmin } from '@/lib/auth/guard';
 import type { ActionResult } from '@/lib/action-result';
 import {
   createAcquisition, updateAcquisition, setAcquisitionStatus, recordArrival,
-  type AcquisitionInput, type ArrivalInput,
+  type AcquisitionInput, type ArrivalInput, type PlanPlacement,
 } from '@/lib/logistics/acquisitions';
 import type { AcquisitionStatus } from '@/db/schema/logistics';
 import { ACQUISITIONS_PATH } from '@/lib/logistics/acquisitions-views';
 import { WAREHOUSE_PATH } from '@/lib/logistics/warehouse-views';
+import { PLAN_PATH } from '@/lib/logistics/plan-views';
 import { acquisitionFailureMessage, arrivalFailureMessage } from './failure-messages';
 
 /**
@@ -22,15 +23,22 @@ import { acquisitionFailureMessage, arrivalFailureMessage } from './failure-mess
  * imported rather than declared.
  */
 
+/**
+ * Every row entered here is also a line on the work plan, under the topic
+ * the drawer asked for (`plan`), so the board is revalidated with the list.
+ * The same goes for the three writes below it: a rename, a status and an
+ * arrival each move the line.
+ */
 export async function createAcquisitionAction(
-  input: AcquisitionInput,
+  input: AcquisitionInput, plan: PlanPlacement,
 ): Promise<ActionResult<string>> {
   const admin = await requireAdmin();
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   try {
-    const id = await createAcquisition(db, input, admin.email);
+    const id = await createAcquisition(db, input, admin.email, plan);
     revalidatePath(ACQUISITIONS_PATH);
+    revalidatePath(PLAN_PATH);
     return { ok: true, value: id };
   } catch (error) {
     return { ok: false, error: acquisitionFailureMessage(error) };
@@ -46,6 +54,7 @@ export async function updateAcquisitionAction(
   try {
     await updateAcquisition(db, id, input, admin.email);
     revalidatePath(ACQUISITIONS_PATH);
+    revalidatePath(PLAN_PATH);
     return { ok: true };
   } catch (error) {
     return { ok: false, error: acquisitionFailureMessage(error) };
@@ -69,6 +78,7 @@ export async function setAcquisitionStatusAction(
   try {
     await setAcquisitionStatus(db, id, status, admin.email);
     revalidatePath(ACQUISITIONS_PATH);
+    revalidatePath(PLAN_PATH);
     return { ok: true };
   } catch (error) {
     return { ok: false, error: acquisitionFailureMessage(error) };
@@ -94,6 +104,7 @@ export async function recordArrivalAction(
     const itemId = await recordArrival(db, input, admin.email);
     revalidatePath(ACQUISITIONS_PATH);
     revalidatePath(WAREHOUSE_PATH);
+    revalidatePath(PLAN_PATH);
     return { ok: true, value: itemId };
   } catch (error) {
     return { ok: false, error: arrivalFailureMessage(error) };

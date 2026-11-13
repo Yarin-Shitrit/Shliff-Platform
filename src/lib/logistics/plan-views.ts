@@ -13,6 +13,8 @@ import { ACT_PARAM, PEEK_PARAM } from '@/components/ui/drawer-url';
  *   it the same param instead pre-fills the new-item drawer with the topic.
  * - `?act=item` — a new item, optionally with `?topic=` or `?parent=` chosen.
  *   `?act=topic` — a new topic.
+ * - `?act=purchases` — the drawer that moves the board's ״לקנות…״ items
+ *   into the acquisitions list.
  *
  * A `peek` wins over everything: it names a record a lead asked to see.
  */
@@ -21,6 +23,7 @@ export const PLAN_PATH = '/logistics/plan';
 
 export const NEW_TOPIC_ACT = 'topic';
 export const NEW_ITEM_ACT = 'item';
+export const ADOPT_ACT = 'purchases';
 export const TOPIC_PARAM = 'topic';
 export const PARENT_PARAM = 'parent';
 
@@ -39,6 +42,8 @@ export interface PlanQuery {
   presetTopic: string | null;
   /** `?act=item&parent=<id>`: the new item as a sub-item of that one. */
   presetParent: string | null;
+  /** `?act=purchases` with no record named: the move-to-acquisitions drawer. */
+  adopting: boolean;
 }
 
 export type RawParams = Record<string, string | string[] | undefined>;
@@ -66,6 +71,7 @@ export function parsePlanQuery(params: RawParams): PlanQuery {
     creatingItem,
     presetTopic: creatingItem ? topic : null,
     presetParent: creatingItem ? parent : null,
+    adopting: peek === null && topic === null && act === ADOPT_ACT,
   };
 }
 
@@ -124,4 +130,9 @@ export function newItemHref(
     [TOPIC_PARAM]: preset.topicId ?? null,
     [PARENT_PARAM]: preset.parentId ?? null,
   });
+}
+
+/** The drawer that moves the board's buying items into the acquisitions list. */
+export function adoptHref(params: RawParams): string {
+  return planHref(params, { [ACT_PARAM]: ADOPT_ACT });
 }

@@ -1,14 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import {
-  parsePlanQuery, planHref, itemHref, topicHref, newTopicHref, newItemHref, PLAN_PATH,
+  parsePlanQuery, planHref, itemHref, topicHref, newTopicHref, newItemHref, adoptHref, PLAN_PATH,
 } from './plan-views';
 
 describe('the plan’s query', () => {
   it('reads a bare URL as nothing open', () => {
     expect(parsePlanQuery({})).toEqual({
       season: '', peek: null, peekTopic: null, creatingTopic: false, creatingItem: false,
-      presetTopic: null, presetParent: null,
+      presetTopic: null, presetParent: null, adopting: false,
     });
+  });
+
+  it('opens the move-to-acquisitions drawer only with nothing else named', () => {
+    expect(parsePlanQuery({ act: 'purchases' })).toMatchObject({ adopting: true, creatingItem: false, creatingTopic: false });
+    expect(parsePlanQuery({ act: 'purchases', peek: 'i1' })).toMatchObject({ adopting: false, peek: 'i1' });
+    expect(parsePlanQuery({ act: 'purchases', topic: 't1' })).toMatchObject({ adopting: false, peekTopic: 't1' });
   });
 
   it('opens one item, and lets it win over everything else', () => {
@@ -51,5 +57,6 @@ describe('the plan’s links', () => {
     expect(newItemHref(here)).toBe(`${PLAN_PATH}?season=s1&act=item`);
     expect(newItemHref(here, { topicId: 't1' })).toBe(`${PLAN_PATH}?season=s1&act=item&topic=t1`);
     expect(newItemHref(here, { parentId: 'p1' })).toBe(`${PLAN_PATH}?season=s1&act=item&parent=p1`);
+    expect(adoptHref(here)).toBe(`${PLAN_PATH}?season=s1&act=purchases`);
   });
 });

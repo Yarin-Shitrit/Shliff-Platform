@@ -780,3 +780,36 @@
   .footActions > :first-child { flex-basis: 100%; }
   .footActions > :not(:first-child) { flex: 1; }
 }
+
+/* A purchase's state on the board is the list's, said with the list's word
+   and linked to the row that can change it. */
+.purchasePill {
+  display: inline-flex;
+  text-decoration: none;
+  color: inherit;
+}
+
+.purchasePill:hover { text-decoration: underline; }
+
+/* The move-to-acquisitions drawer: one tick per item, grouped by whether
+   the title already reads as buying. */
+.adoptLead {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+.adoptList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.adoptRow {
+  min-block-size: 36px;
+  display: flex;
+  align-items: center;
+  border-block-end: 1px solid var(--line);
+}

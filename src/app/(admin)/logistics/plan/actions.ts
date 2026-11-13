@@ -4,19 +4,26 @@ import { revalidatePath } from 'next/cache';
 import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import type { ActionResult } from '@/lib/action-result';
-import type { WorkItemStatus } from '@/db/schema/logistics';
+import type { AcquisitionStatus, WorkItemStatus } from '@/db/schema/logistics';
 import {
   createTopic, updateTopic, setTopicArchived,
   createItem, updateItem, scheduleItem, setItemStatus,
   addDependency, removeDependency,
   type TopicInput, type ItemInput, type Schedule,
 } from '@/lib/logistics/plan';
+import { adoptPurchaseItems, setAcquisitionStatus } from '@/lib/logistics/acquisitions';
 import { PLAN_PATH } from '@/lib/logistics/plan-views';
-import { dependencyFailureMessage, itemFailureMessage, topicFailureMessage } from './failure-messages';
+import { ACQUISITIONS_PATH } from '@/lib/logistics/acquisitions-views';
+import {
+  adoptFailureMessage, dependencyFailureMessage, itemFailureMessage, topicFailureMessage,
+} from './failure-messages';
+import { acquisitionFailureMessage } from '../acquisitions/failure-messages';
 
 /**
  * This file exports only async functions (see `use-server-exports.test.ts`).
- * Every write revalidates the plan alone: nothing else reads these rows.
+ * A write to the plan alone revalidates the plan alone; the two verbs that
+ * touch a purchase revalidate רכש as well, because that screen shows the
+ * same row.
  */
 
 export async function createTopicAction(seasonId: string, input: TopicInput): Promise<ActionResult<string>> {
@@ -126,5 +133,45 @@ export async function removeDependencyAction(id: string): Promise<ActionResult> 
     return { ok: true };
   } catch (error) {
     return { ok: false, error: dependencyFailureMessage(error) };
+  }
+}
+
+/**
+ * The board's buying items become rows in the acquisitions list, linked.
+ * Both screens change: the list gains rows, the board's items gain their
+ * link and their rebuilt titles.
+ */
+export async function adoptPurchaseItemsAction(
+  seasonId: string, itemIds: string[],
+): Promise<ActionResult<number>> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+  try {
+    const moved = await adoptPurchaseItems(db, seasonId, itemIds, admin.email);
+    revalidatePath(PLAN_PATH);
+    revalidatePath(ACQUISITIONS_PATH);
+    return { ok: true, value: moved };
+  } catch (error) {
+    return { ok: false, error: adoptFailureMessage(error) };
+  }
+}
+
+/**
+ * A purchase's status, written from its line on the board. The same write
+ * as רכש's status menu: the library moves the line to done or open with it.
+ * The undo is this action with the status that was (E2).
+ */
+export async function setPurchaseStatusAction(
+  acquisitionId: string, status: AcquisitionStatus,
+): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+  try {
+    await setAcquisitionStatus(db, acquisitionId, status, admin.email);
+    revalidatePath(PLAN_PATH);
+    revalidatePath(ACQUISITIONS_PATH);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: acquisitionFailureMessage(error) };
   }
 }

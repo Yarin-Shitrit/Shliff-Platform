@@ -20,7 +20,7 @@ import { ArrivalDrawer, type WarehouseOption } from './arrival-drawer';
 const ROW: AcquisitionRow = {
   seasonId: 's26', id: 'acq-1', name: 'מקדחה רוטטת', category: 'build', quantityNeeded: 1,
   source: 'buy_new', estimatedAgorot: 40000, actualAgorot: 38000,
-  assignee: null, lender: null, budgetLineId: null, arrivedItemId: null,
+  assignee: null, lender: null, budgetLineId: null, arrivedItemId: null, workItemId: null,
   status: 'ordered', updatedAt: new Date('2026-09-14T10:00:00Z'), updatedBy: null,
 };
 

@@ -1,11 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { createTestDb, type TestDb } from '@/test/db';
 import { persons, seasons } from '@/db/schema/camp';
-import { inventoryItems } from '@/db/schema/logistics';
+import { inventoryItems, workItems } from '@/db/schema/logistics';
 import { itemById } from './warehouse';
+import { createTopic, createItem, setItemStatus, planItemById } from './plan';
 import {
   listAcquisitions, acquisitionCounts, acquisitionById,
   createAcquisition, updateAcquisition, setAcquisitionStatus, recordArrival,
+  adoptPurchaseItems,
 } from './acquisitions';
 
 const LEAD = 'lead@shliff.camp';
@@ -397,5 +400,151 @@ describe('the arrival decision, which the system never makes on its own', () => 
     const row = await acquisitionById(db, acquisitionId);
     expect(row?.status).toBe('arrived');
     expect(row?.arrivedItemId).toBeNull();
+  });
+});
+
+describe('a purchase is a line on the work plan', () => {
+  let db: TestDb;
+  let seasonId: string;
+  let itayId: string;
+
+  beforeEach(async () => {
+    db = await createTestDb();
+    ({ seasonId, itayId } = await seed(db));
+  });
+
+  const BLANK_ROW = {
+    category: 'general', quantityNeeded: 1, source: 'buy_new',
+    estimatedCost: null, actualCost: null,
+    assigneePersonId: null, lenderPersonId: null, budgetLineId: null,
+  } as const;
+
+  async function linkedItem(acquisitionId: string) {
+    const [row] = await db.select().from(workItems).where(eq(workItems.acquisitionItemId, acquisitionId));
+    return row ?? null;
+  }
+
+  it('entering a row makes an open ״לקנות״ item on that season’s board, linked both ways', async () => {
+    const kitchen = await createTopic(db, seasonId, { name: 'מטבח', notes: null }, LEAD);
+    const id = await createAcquisition(db, {
+      ...BLANK_ROW, seasonId, name: ' מקרר ', assigneePersonId: itayId,
+    }, LEAD, { seasonId, topicId: kitchen });
+
+    const item = await linkedItem(id);
+    expect(item?.title).toBe('לקנות מקרר');
+    expect(item?.seasonId).toBe(seasonId);
+    expect(item?.topicId).toBe(kitchen);
+    expect(item?.assigneePersonId).toBe(itayId);
+    expect(item?.status).toBe('open');
+    expect(item?.updatedBy).toBe(LEAD);
+    expect((await acquisitionById(db, id))?.workItemId).toBe(item?.id);
+    expect((await planItemById(db, item!.id))?.purchase).toEqual({ id, status: 'to_search' });
+  });
+
+  it('writes the quantity and the way of getting it into the title', async () => {
+    const chairs = await createAcquisition(db, { ...BLANK_ROW, seasonId, name: 'כיסא', quantityNeeded: 12 }, LEAD);
+    const fridge = await createAcquisition(db, { ...BLANK_ROW, seasonId, name: 'מקרר', source: 'second_hand' }, LEAD);
+    const tent = await createAcquisition(db, {
+      ...BLANK_ROW, seasonId, name: 'אוהל', source: 'borrow_member', lenderPersonId: itayId,
+    }, LEAD);
+    expect((await linkedItem(chairs))?.title).toBe('לקנות כיסא (12)');
+    expect((await linkedItem(fridge))?.title).toBe('להשיג מקרר');
+    expect((await linkedItem(tent))?.title).toBe('להשאיל אוהל');
+  });
+
+  it('puts a camp-wide row on the board the lead was looking at, and on none when no board was named', async () => {
+    const generator = await createAcquisition(db, { ...BLANK_ROW, seasonId: null, name: 'גנרטור' }, LEAD, { seasonId, topicId: null });
+    expect((await linkedItem(generator))?.seasonId).toBe(seasonId);
+    const pump = await createAcquisition(db, { ...BLANK_ROW, seasonId: null, name: 'משאבה' }, LEAD);
+    expect(await linkedItem(pump)).toBeNull();
+    expect((await acquisitionById(db, pump))?.workItemId).toBeNull();
+  });
+
+  it('refuses a board placement it cannot resolve, and writes no row', async () => {
+    await expect(createAcquisition(db, { ...BLANK_ROW, seasonId, name: 'מקרר' }, LEAD, { seasonId, topicId: 'nope' }))
+      .rejects.toThrow(/unknown topic/);
+    expect(await listAcquisitions(db, seasonId, ALL)).toEqual([]);
+  });
+
+  it('renames the item and moves its person when the row is edited', async () => {
+    const id = await createAcquisition(db, { ...BLANK_ROW, seasonId, name: 'מקרר' }, LEAD);
+    await updateAcquisition(db, id, {
+      ...BLANK_ROW, seasonId, name: 'מקרר קטן', quantityNeeded: 2, assigneePersonId: itayId,
+    }, 'buyer@shliff.camp');
+    const item = await linkedItem(id);
+    expect(item?.title).toBe('לקנות מקרר קטן (2)');
+    expect(item?.assigneePersonId).toBe(itayId);
+    expect(item?.updatedBy).toBe('buyer@shliff.camp');
+  });
+
+  it('marks the item done when the row arrives, and open again when it is moved back', async () => {
+    const id = await createAcquisition(db, { ...BLANK_ROW, seasonId, name: 'מקרר' }, LEAD);
+    await setAcquisitionStatus(db, id, 'arrived', LEAD);
+    expect((await linkedItem(id))?.status).toBe('done');
+    await setAcquisitionStatus(db, id, 'ordered', LEAD);
+    expect((await linkedItem(id))?.status).toBe('open');
+  });
+
+  it('marks the item done when the arrival is registered in the warehouse', async () => {
+    const id = await createAcquisition(db, { ...BLANK_ROW, seasonId, name: 'מקרר' }, LEAD);
+    await recordArrival(db, {
+      acquisitionId: id,
+      target: { kind: 'new', locationText: 'מכולה', condition: 'ready' },
+      quantity: 1, budgetLineId: null,
+    }, LEAD);
+    expect((await linkedItem(id))?.status).toBe('done');
+  });
+
+  it('leaves a cancelled item cancelled: the board’s decision is not undone by a delivery', async () => {
+    const id = await createAcquisition(db, { ...BLANK_ROW, seasonId, name: 'מקרר' }, LEAD);
+    const item = await linkedItem(id);
+    await setItemStatus(db, item!.id, 'cancelled', LEAD);
+    await setAcquisitionStatus(db, id, 'arrived', LEAD);
+    expect((await linkedItem(id))?.status).toBe('cancelled');
+  });
+
+  describe('adopting the ״לקנות״ items already on the board', () => {
+    const BLANK_ITEM = {
+      notes: null, topicId: null, parentId: null, startsOn: null, endsOn: null, assigneePersonId: null,
+    };
+
+    it('turns the chosen items into rows, each linked, named without the verb, with its person', async () => {
+      const container = await createItem(db, seasonId, { ...BLANK_ITEM, title: 'לקנות מכולה', assigneePersonId: itayId }, LEAD);
+      const boards = await createItem(db, seasonId, { ...BLANK_ITEM, title: 'קניית קרשים' }, LEAD);
+      const bare = await createItem(db, seasonId, { ...BLANK_ITEM, title: 'גז למטבח' }, LEAD);
+
+      expect(await adoptPurchaseItems(db, seasonId, [container, boards, bare], LEAD)).toBe(3);
+
+      const rows = await listAcquisitions(db, seasonId, ALL);
+      expect(rows.map((row) => row.name).sort()).toEqual(['גז למטבח', 'מכולה', 'קרשים'].sort());
+      const containerRow = rows.find((row) => row.name === 'מכולה')!;
+      expect(containerRow.assignee?.id).toBe(itayId);
+      expect(containerRow.source).toBe('buy_new');
+      expect(containerRow.status).toBe('to_search');
+      expect(containerRow.workItemId).toBe(container);
+      expect((await planItemById(db, container))?.title).toBe('לקנות מכולה');
+      expect((await planItemById(db, boards))?.title).toBe('לקנות קרשים');
+      expect((await planItemById(db, bare))?.title).toBe('לקנות גז למטבח');
+      expect((await planItemById(db, bare))?.purchase?.status).toBe('to_search');
+    });
+
+    it('refuses nothing chosen, an item already in the list, one that is done, and one of another season', async () => {
+      const [other] = await db.insert(seasons).values({ name: 'ברן 27', year: 2027, flatRate: '1200.00' }).returning();
+      const linked = await createItem(db, seasonId, { ...BLANK_ITEM, title: 'לקנות מכולה' }, LEAD);
+      await adoptPurchaseItems(db, seasonId, [linked], LEAD);
+      const done = await createItem(db, seasonId, { ...BLANK_ITEM, title: 'לקנות גז' }, LEAD);
+      await setItemStatus(db, done, 'done', LEAD);
+      const foreign = await createItem(db, other.id, { ...BLANK_ITEM, title: 'לקנות אוהל' }, LEAD);
+
+      await expect(adoptPurchaseItems(db, seasonId, [], LEAD)).rejects.toThrow(/nothing was chosen/);
+      await expect(adoptPurchaseItems(db, seasonId, [linked], LEAD)).rejects.toThrow(/already in the acquisitions list/);
+      await expect(adoptPurchaseItems(db, seasonId, [done], LEAD)).rejects.toThrow(/not open/);
+      await expect(adoptPurchaseItems(db, seasonId, [foreign], LEAD)).rejects.toThrow(/unknown work item/);
+      // One refusal, nothing written: the list holds the one row from before.
+      const fine = await createItem(db, seasonId, { ...BLANK_ITEM, title: 'לקנות קרשים' }, LEAD);
+      await expect(adoptPurchaseItems(db, seasonId, [fine, done], LEAD)).rejects.toThrow(/not open/);
+      expect(await listAcquisitions(db, seasonId, ALL)).toHaveLength(1);
+      expect((await planItemById(db, fine))?.purchase).toBeNull();
+    });
   });
 });
