@@ -73,6 +73,20 @@ export interface ItemDrawerProps {
 
 const TITLE_ID = 'plan-item-title';
 
+/**
+ * The React key the page gives the drawer: one per thing it can be over.
+ * Every way into the drawer is a link, and a link from inside it (״תת־משימה״
+ * on an open item) re-renders the same component with new props. The form's
+ * fields are state seeded from those props once, so without a key that
+ * changes, the new part kept the open item's title and lost its parent.
+ */
+export function itemDrawerKey(
+  item: PlanItem | null, presetParentId: string | null = null, presetTopicId: string | null = null,
+): string {
+  if (item !== null) return `item:${item.id}`;
+  return `new:parent=${presetParentId ?? ''}:topic=${presetTopicId ?? ''}`;
+}
+
 export function ItemDrawer({
   item, seasonId, closeHref, params, topics, parents, others, roster,
   presetTopicId = null, presetParentId = null,

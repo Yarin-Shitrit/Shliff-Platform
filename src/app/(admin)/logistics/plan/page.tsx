@@ -25,7 +25,7 @@ import { PlanTimeline } from './plan-timeline';
 import { StatusMenu } from './status-menu';
 import { PurchaseMenu } from './purchase-menu';
 import { DoneToggle } from './done-toggle';
-import { ItemDrawer } from './item-drawer';
+import { ItemDrawer, itemDrawerKey } from './item-drawer';
 import { TopicDrawer } from './topic-drawer';
 import { AdoptDrawer } from './adopt-drawer';
 import styles from './plan.module.css';
@@ -367,6 +367,7 @@ export default async function PlanPage(
       ) : null}
       {drawerOpen ? (
         <ItemDrawer
+          key={itemDrawerKey(peekedItem, query.presetParent, query.presetTopic)}
           item={peekedItem}
           seasonId={current.id}
           closeHref={closeHref}

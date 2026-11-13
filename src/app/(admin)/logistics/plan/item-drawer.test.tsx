@@ -19,7 +19,7 @@ const actions = vi.hoisted(() => ({
 }));
 vi.mock('./actions', () => actions);
 
-import { ItemDrawer, type ItemDrawerProps } from './item-drawer';
+import { ItemDrawer, itemDrawerKey, type ItemDrawerProps } from './item-drawer';
 
 const KITCHEN: Topic = {
   id: 'k', seasonId: 's1', name: 'מטבח', position: 0, notes: null, archivedAt: null,
@@ -113,6 +113,44 @@ describe('the drawer that adds an item', () => {
     type(/מה צריך לעשות/, 'לתקן מקררים');
     await press('הוספה ללוח');
     expect(actions.createItemAction).toHaveBeenCalledWith('s1', expect.objectContaining({ parentId: 'p', topicId: 'k' }));
+  });
+
+  /*
+   * ״תת־משימה״ inside an open item's drawer is a link to another URL of the
+   * same page, so the drawer is re-rendered, not opened afresh. Without a key
+   * that changes with what the drawer is over, React keeps the form's state:
+   * the new part came up carrying the parent's own title and no parent.
+   */
+  it('opened from a general item’s own drawer, starts blank with that item as the parent', () => {
+    const general = item({ id: 'p', title: 'להכין מכולת מטבח', topicId: 'k' });
+    const over = (props: Partial<ItemDrawerProps>) => {
+      const all = { ...BASE, ...props };
+      return (
+        <ToastProvider>
+          <ItemDrawer key={itemDrawerKey(all.item, all.presetParentId, all.presetTopicId)} {...all} />
+        </ToastProvider>
+      );
+    };
+    // The page leaves the open item out of its own parent options.
+    const view = render(over({ item: general, parents: [] }));
+    expect((screen.getByLabelText(/מה צריך לעשות/) as HTMLInputElement).value).toBe('להכין מכולת מטבח');
+
+    view.rerender(over({ item: null, presetParentId: 'p' }));
+    expect((screen.getByLabelText(/מה צריך לעשות/) as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText('חלק ממשימה') as HTMLSelectElement).value).toBe('p');
+    expect((screen.getByLabelText(/^נושא/) as HTMLSelectElement).value).toBe('k');
+  });
+
+  it('gives a different key to every thing the drawer can be over', () => {
+    const keys = [
+      itemDrawerKey(item({ id: 'p' }), null, null),
+      itemDrawerKey(item({ id: 'q' }), null, null),
+      itemDrawerKey(null, 'p', null),
+      itemDrawerKey(null, 'q', null),
+      itemDrawerKey(null, null, 'k'),
+      itemDrawerKey(null, null, null),
+    ];
+    expect(new Set(keys).size).toBe(keys.length);
   });
 
   it('shows the action’s Hebrew refusal and stays open', async () => {
