@@ -169,6 +169,13 @@
       "when": 1794348601073,
       "tag": "0023_work_plan",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794586628776,
+      "tag": "0024_work_item_acquisition",
+      "breakpoints": true
     }
   ]
 }

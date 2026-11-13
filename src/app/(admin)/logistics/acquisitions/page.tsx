@@ -10,6 +10,7 @@ import {
 } from '@/lib/logistics/acquisitions';
 import { everyItem } from '@/lib/logistics/warehouse-views';
 import { listWarehouse } from '@/lib/logistics/warehouse';
+import { listTopics } from '@/lib/logistics/plan';
 import {
   parseAcquisitionQuery, acquisitionsHref, arrivalHref, newAcquisitionHref,
   acquisitionSortHref, acquisitionsExportHref, ACQUISITION_SORTS,
@@ -91,13 +92,17 @@ export default async function AcquisitionsPage(
     );
   }
 
-  const [rows, counts, roster, budgetLines, warehouse] = await Promise.all([
+  const [rows, counts, roster, budgetLines, warehouse, topics] = await Promise.all([
     listAcquisitions(db, current.id, query),
     acquisitionCounts(db, current.id, query),
     listRoster(db, current.id),
     listBudgetLines(db, current.id),
     listWarehouse(db, everyItem()),
+    listTopics(db, current.id),
   ]);
+  /* Where a new row's line lands on the work plan: the season's active topics. */
+  const topicOptions = topics.filter((topic) => topic.archivedAt === null)
+    .map((topic) => ({ id: topic.id, name: topic.name }));
 
   const peeked = query.peek === null ? null : await acquisitionById(db, query.peek);
   const closeHref = acquisitionsHref(params, {});
@@ -321,6 +326,7 @@ export default async function AcquisitionsPage(
           seasonName={current.name}
           people={people}
           budgetLines={lineOptions}
+          topics={topicOptions}
           closeHref={closeHref}
         />
       )}
@@ -331,6 +337,7 @@ export default async function AcquisitionsPage(
           seasonName={current.name}
           people={people}
           budgetLines={lineOptions}
+          topics={topicOptions}
           closeHref={closeHref}
         />
       )}

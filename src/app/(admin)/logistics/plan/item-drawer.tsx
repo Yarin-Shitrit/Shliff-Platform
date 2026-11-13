@@ -29,7 +29,10 @@ import { isBlank } from '@/lib/text/normalize';
 import { isCivilDay } from '@/lib/logistics/shift-time';
 import type { PlanItem, RosterOption, Topic } from '@/lib/logistics/plan';
 import { itemHref, newItemHref, type RawParams } from '@/lib/logistics/plan-views';
-import { WORK_STATUS_LABELS, WORK_STATUS_TONES } from '@/lib/logistics/labels';
+import { acquisitionHref } from '@/lib/logistics/acquisitions-views';
+import {
+  STATUS_LABELS, STATUS_TONES, WORK_STATUS_LABELS, WORK_STATUS_TONES,
+} from '@/lib/logistics/labels';
 import {
   addDependencyAction, createItemAction, removeDependencyAction,
   setItemStatusAction, updateItemAction,
@@ -189,6 +192,10 @@ export function ItemDrawer({
   const isSub = parentId !== '';
   const waitingIds = new Set(item?.waitsFor.map((dep) => dep.itemId) ?? []);
   const candidates = others.filter((other) => !waitingIds.has(other.id));
+  /* A purchase's line: its name, its person and its done/open state are the
+     row's on רכש, and the fields that hold them point there. */
+  const purchase = item?.purchase ?? null;
+  const purchaseHref = purchase === null ? null : acquisitionHref(params, purchase.id);
 
   return (
     <Drawer
@@ -196,6 +203,9 @@ export function ItemDrawer({
       subtitle={creating ? 'מה צריך להכין, ומתי' : (
         <>
           <Pill tone={WORK_STATUS_TONES[item.status]} dot>{WORK_STATUS_LABELS[item.status]}</Pill>
+          {purchase === null ? null : (
+            <>{' · '}<Pill tone={STATUS_TONES[purchase.status]} dot>{`רכש · ${STATUS_LABELS[purchase.status]}`}</Pill></>
+          )}
           {' · עודכן '}
           <DateText at={item.updatedAt} />
           {item.updatedBy === null ? null : <>{' · '}{item.updatedBy}</>}
@@ -209,7 +219,12 @@ export function ItemDrawer({
             {creating ? 'הוספה ללוח' : 'שמירה'}
           </Button>
           <Button onClick={() => { router.push(closeHref); }} disabled={pending}>ביטול</Button>
-          {creating ? null : item.status === 'open' ? (
+          {creating ? null : purchaseHref !== null && item.status !== 'cancelled' ? (
+            <ButtonLink tone="ghost" href={purchaseHref}>
+              <Icon name="link" size={14} />
+              הסטטוס ברשימת הרכש
+            </ButtonLink>
+          ) : item.status === 'open' ? (
             <Button tone="ghost" onClick={() => { void setStatus('done'); }} disabled={pending}>
               <Icon name="check" size={14} />
               סימון כהושלמה
@@ -228,9 +243,11 @@ export function ItemDrawer({
           label="מה צריך לעשות"
           required
           error={errorFor('title')}
-          hint="״להכין מכולת מטבח״, ״לתקן מקררים״, ״יום עבודה של בניית ספסלים״."
+          hint={purchaseHref === null
+            ? '״להכין מכולת מטבח״, ״לתקן מקררים״, ״יום עבודה של בניית ספסלים״.'
+            : <>{'השם נקבע לפי הפריט '}<Link href={purchaseHref}>ברשימת הרכש</Link>{' — שינוי השם, הכמות או דרך ההשגה נעשה שם.'}</>}
         >
-          <TextInput id={TITLE_ID} value={title} onChange={setTitle} />
+          <TextInput id={TITLE_ID} value={title} onChange={setTitle} disabled={purchaseHref !== null} />
         </Field>
 
         <Field
@@ -283,11 +300,18 @@ export function ItemDrawer({
           </Field>
         </div>
 
-        <Field id="plan-item-assignee" label="אחראי" hint="מי מרשימת השנה מוביל את זה.">
+        <Field
+          id="plan-item-assignee"
+          label="אחראי"
+          hint={purchaseHref === null
+            ? 'מי מרשימת השנה מוביל את זה.'
+            : <>{'מי שאחראי להשיג, לפי הפריט '}<Link href={purchaseHref}>ברשימת הרכש</Link>{'.'}</>}
+        >
           <Select
             id="plan-item-assignee"
             value={assignee}
             onChange={setAssignee}
+            disabled={purchaseHref !== null}
             emptyLabel="עדיין לא נקבע"
             options={roster.map((person) => ({ value: person.personId, label: person.displayName }))}
           />

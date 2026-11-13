@@ -10,6 +10,7 @@ import {
   CAMP_WIDE_LABEL, CATEGORY_LABELS, SOURCE_LABELS, STATUS_LABELS, STATUS_TONES,
 } from '@/lib/logistics/labels';
 import { acquisitionHref, type RawParams } from '@/lib/logistics/acquisitions-views';
+import { itemHref as planItemHref } from '@/lib/logistics/plan-views';
 import styles from './acquisitions.module.css';
 
 /**
@@ -48,6 +49,11 @@ export function AcquisitionsTable({
               lead reading one year's list can tell which lines were written
               for it and which came along because they always apply. */}
           {row.seasonId === null ? <Pill tone="outline">{CAMP_WIDE_LABEL}</Pill> : null}
+          {/* Its line on the work plan, when it has one: the same thing,
+              where the days and the order are set. */}
+          {row.workItem === null ? null : (
+            <Link href={planItemHref({ season: row.workItem.seasonId }, row.workItem.id)} className={styles.boardLink}>בלוח העבודה</Link>
+          )}
         </span>
       ),
     },

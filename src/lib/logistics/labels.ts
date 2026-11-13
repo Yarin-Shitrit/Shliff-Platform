@@ -53,6 +53,18 @@ export const SOURCE_LABELS: Record<AcquisitionSource, string> = {
   borrow_member: 'השאלה מחבר קאמפ',
 };
 
+/**
+ * The verb a purchase's line on the work plan opens with — ״לקנות מכולה״,
+ * ״להשיג מקרר״, ״להשאיל אוהל״ — one per way of getting it. The board's
+ * title is built from these by `purchaseTitle` and nowhere else, so a lead
+ * reading the board and the list reads one vocabulary.
+ */
+export const PURCHASE_VERBS: Record<AcquisitionSource, string> = {
+  buy_new: 'לקנות',
+  second_hand: 'להשיג',
+  borrow_member: 'להשאיל',
+};
+
 export const STATUS_LABELS: Record<AcquisitionStatus, string> = {
   to_search: 'לחפש',
   in_review: 'במשא ומתן',

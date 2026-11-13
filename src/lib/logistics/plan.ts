@@ -3,10 +3,12 @@ import type { AnyDb } from '@/lib/db-types';
 import { isBlank, normalizeHebrew } from '@/lib/text/normalize';
 import { persons } from '@/db/schema/camp';
 import {
-  workDependencies, workItems, workTopics, type WorkItemStatus,
+  acquisitionItems, workDependencies, workItems, workTopics,
+  type AcquisitionSource, type AcquisitionStatus, type WorkItemStatus,
 } from '@/db/schema/logistics';
 import { rosterWorkload } from '@/lib/work/coverage';
 import { addDays, isCivilDay } from './shift-time';
+import { PURCHASE_VERBS } from './labels';
 
 /**
  * The logistics work plan: topics, the items under them, the smaller items
@@ -270,13 +272,87 @@ export async function scheduleItem(
     .where(eq(workItems.id, id));
 }
 
+/**
+ * A purchase's item is done when the thing arrives, and that is said on
+ * רכש, not here: `done` is refused with the pointer, and `open` lands on
+ * whatever the purchase says — open, or done if it has arrived in the
+ * meantime. `cancelled` stays the board's own decision: the camp can stop
+ * wanting a thing, and the list has no word for that.
+ */
 export async function setItemStatus(
   db: AnyDb, id: string, status: WorkItemStatus, email: string,
 ): Promise<void> {
   if (!WORK_ITEM_STATUSES.includes(status)) throw new Error(`unknown work item status: ${status}`);
-  if (!(await itemRow(db, id))) throw new Error(`unknown work item ${id}`);
-  await db.update(workItems).set({ status, updatedAt: new Date(), updatedBy: email })
+  const item = await itemRow(db, id);
+  if (!item) throw new Error(`unknown work item ${id}`);
+  let next = status;
+  if (item.acquisitionItemId !== null && status !== 'cancelled') {
+    if (status === 'done') throw new Error('a purchase item is done when its purchase arrives');
+    const [purchase] = await db.select({ status: acquisitionItems.status }).from(acquisitionItems)
+      .where(eq(acquisitionItems.id, item.acquisitionItemId));
+    next = purchase?.status === 'arrived' ? 'done' : 'open';
+  }
+  await db.update(workItems).set({ status: next, updatedAt: new Date(), updatedBy: email })
     .where(eq(workItems.id, id));
+}
+
+// ── Purchases ──────────────────────────────────────────────────────────
+
+/**
+ * The title a purchase's line on the board carries: the verb for the way
+ * of getting it, the name, and the count when it is more than one —
+ * ״לקנות כיסא (12)״. Built here and nowhere else, so the list and the
+ * board cannot drift into two spellings of one thing.
+ */
+export function purchaseTitle(source: AcquisitionSource, name: string, quantity: number): string {
+  const base = `${PURCHASE_VERBS[source]} ${name.trim()}`;
+  return quantity > 1 ? `${base} (${quantity})` : base;
+}
+
+/** The first words a lead writes when an item is a thing to buy. */
+const PURCHASE_OPENING = /^(?:לקנות|לרכוש|קניית|רכישת)\s+\S/;
+const PURCHASE_VERB = /^(?:לקנות|לרכוש|קניית|רכישת)\s+/;
+
+/** Whether an item's title reads as buying something: a buying verb, then a thing. */
+export function looksLikePurchase(title: string): boolean {
+  return PURCHASE_OPENING.test(normalizeHebrew(title));
+}
+
+/**
+ * The thing itself, for the row's name: ״לקנות מכולה״ → ״מכולה״. A title
+ * that is not a buying sentence is kept whole — the lead chose it, and the
+ * board's title is rewritten from the name afterwards anyway. A title that
+ * is only the verb is kept too: a row with no name is a refusal, not a row.
+ */
+export function purchaseNameOf(title: string): string {
+  const clean = normalizeHebrew(title);
+  const name = clean.replace(PURCHASE_VERB, '').trim();
+  return name === '' ? clean : name;
+}
+
+export interface AdoptableItem {
+  id: string;
+  title: string;
+  /** True when the title opens with a buying verb — ticked by default. */
+  suggested: boolean;
+  assignee: { personId: string; displayName: string } | null;
+  parentId: string | null;
+}
+
+/**
+ * The open items not yet in the acquisitions list, for the drawer that
+ * moves them there: the ones that read as buying first and suggested, the
+ * rest after and left for the lead to tick. Done and cancelled items are
+ * history and are not offered.
+ */
+export function adoptableItems(items: PlanItem[]): AdoptableItem[] {
+  return items
+    .filter((item) => item.status === 'open' && item.purchase === null)
+    .map((item) => ({
+      id: item.id, title: item.title, suggested: looksLikePurchase(item.title),
+      assignee: item.assignee, parentId: item.parentId,
+    }))
+    .sort((a, b) => Number(b.suggested) - Number(a.suggested));
 }
 
 // ── Dependencies ───────────────────────────────────────────────────────
@@ -347,6 +423,12 @@ export interface DependencyRef {
   conflict: boolean;
 }
 
+export interface PurchaseRef {
+  /** The acquisition row; the board links to its drawer on רכש. */
+  id: string;
+  status: AcquisitionStatus;
+}
+
 export interface PlanItem {
   id: string;
   seasonId: string;
@@ -359,6 +441,8 @@ export interface PlanItem {
   status: WorkItemStatus;
   position: number;
   assignee: { personId: string; displayName: string } | null;
+  /** The purchase this item is the buying of, or null for an item of the board's own. */
+  purchase: PurchaseRef | null;
   /** What this item has to wait for. */
   waitsFor: DependencyRef[];
   /** What waits for this item. */
@@ -390,9 +474,11 @@ export async function listPlan(db: AnyDb, seasonId: string): Promise<PlanItem[]>
   const rows = await db.select({
     item: workItems,
     assigneeName: persons.displayName,
+    purchaseStatus: acquisitionItems.status,
   })
     .from(workItems)
     .leftJoin(persons, eq(persons.id, workItems.assigneePersonId))
+    .leftJoin(acquisitionItems, eq(acquisitionItems.id, workItems.acquisitionItemId))
     .where(eq(workItems.seasonId, seasonId))
     .orderBy(asc(workItems.position), asc(workItems.createdAt));
   if (rows.length === 0) return [];
@@ -402,7 +488,7 @@ export async function listPlan(db: AnyDb, seasonId: string): Promise<PlanItem[]>
     .where(or(inArray(workDependencies.beforeId, ids), inArray(workDependencies.afterId, ids)));
 
   const byId = new Map(rows.map((row) => [row.item.id, row.item]));
-  const items: PlanItem[] = rows.map(({ item, assigneeName }) => ({
+  const items: PlanItem[] = rows.map(({ item, assigneeName, purchaseStatus }) => ({
     id: item.id,
     seasonId: item.seasonId,
     topicId: item.topicId,
@@ -415,6 +501,9 @@ export async function listPlan(db: AnyDb, seasonId: string): Promise<PlanItem[]>
     position: item.position,
     assignee: item.assigneePersonId !== null && assigneeName !== null
       ? { personId: item.assigneePersonId, displayName: assigneeName }
+      : null,
+    purchase: item.acquisitionItemId !== null && purchaseStatus !== null
+      ? { id: item.acquisitionItemId, status: purchaseStatus }
       : null,
     waitsFor: [],
     blocks: [],

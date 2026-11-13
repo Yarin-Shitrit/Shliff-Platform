@@ -19,6 +19,9 @@ export const END_BEFORE_START = 'יום הסיום לא יכול להיות לפ
 export const END_WITHOUT_START = 'יום סיום בלי יום התחלה לא אומר כלום — צריך לבחור מתי מתחילים';
 export const BAD_DAY = 'צריך לבחור יום מהלוח, למשל 14/05/2026';
 export const DEPENDENCY_REQUIRED = 'צריך לבחור איזו משימה חייבת להסתיים קודם';
+/** A purchase's line is finished when the thing arrives, and that is said on רכש. */
+export const PURCHASE_DONE_ON_LIST = 'משימת רכש מסתיימת כשהפריט מגיע — מעדכנים את הסטטוס ברשימת הרכש';
+export const NOTHING_CHOSEN = 'צריך לסמן לפחות משימה אחת להעברה';
 
 const TOPIC_UNKNOWN = 'לא מצאנו את הנושא הזה';
 const ITEM_UNKNOWN = 'לא מצאנו את המשימה הזו בלוח';
@@ -37,6 +40,7 @@ export const ITEM_ERRORS: HebrewErrors = [
   ['a work item cannot end before it starts', END_BEFORE_START],
   ['a work item cannot be its own parent', 'משימה לא יכולה להיות תת־משימה של עצמה'],
   ['a sub-item cannot have sub-items of its own', 'יש רק שתי רמות: משימה ותת־משימות שלה. תת־משימה לא יכולה להכיל תת־משימות'],
+  ['a purchase item is done when its purchase arrives', PURCHASE_DONE_ON_LIST],
   ['unknown work item status', 'המצב הזה אינו אחד משלושת המצבים האפשריים'],
   ['unknown work item', ITEM_UNKNOWN],
   ['unknown topic', TOPIC_UNKNOWN],
@@ -51,6 +55,17 @@ export const DEPENDENCY_ERRORS: HebrewErrors = [
   ['that dependency would make a cycle', 'הקשר הזה סוגר מעגל — משימה שמחכה למשימה שמחכה לה. אי אפשר לסדר לוח כזה'],
   ['unknown dependency', 'לא מצאנו את הקשר הזה'],
   ['unknown work item', ITEM_UNKNOWN],
+];
+
+/**
+ * Moving the board's buying items into the acquisitions list. Each item is
+ * checked before any row is written, so a refusal here means nothing moved.
+ */
+export const ADOPT_ERRORS: HebrewErrors = [
+  ['nothing was chosen', NOTHING_CHOSEN],
+  ['work item', 'אחת המשימות שסומנו כבר ברשימת הרכש, או שכבר אינה פתוחה. שום דבר לא הועבר'],
+  ['unknown work item', ITEM_UNKNOWN],
+  ['unknown season', 'לא מצאנו את השנה הזו'],
 ];
 
 /** The driver naming the refusal, for the pair the library’s own check raced. */
@@ -73,4 +88,8 @@ export function itemFailureMessage(error: unknown): string {
 
 export function dependencyFailureMessage(error: unknown): string {
   return withFallback(error, DEPENDENCY_ERRORS, 'שמירת הקשר נכשלה. נסו שוב.', DEPENDENCY_CONSTRAINTS);
+}
+
+export function adoptFailureMessage(error: unknown): string {
+  return withFallback(error, ADOPT_ERRORS, 'ההעברה לרכש נכשלה. שום דבר לא הועבר. נסו שוב.');
 }

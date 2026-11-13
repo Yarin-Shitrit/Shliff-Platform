@@ -1,0 +1,3 @@
+ALTER TABLE "work_items" ADD COLUMN "acquisition_item_id" uuid;--> statement-breakpoint
+ALTER TABLE "work_items" ADD CONSTRAINT "work_items_acquisition_item_id_acquisition_items_id_fk" FOREIGN KEY ("acquisition_item_id") REFERENCES "public"."acquisition_items"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "work_items" ADD CONSTRAINT "work_items_acquisition_item_id_unique" UNIQUE("acquisition_item_id");

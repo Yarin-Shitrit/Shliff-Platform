@@ -12,6 +12,7 @@
 
 import { useState } from 'react';
 import type { FormEvent } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Drawer } from '@/components/ui/drawer';
 import { Checkbox, Field, MoneyInput, Select, TextInput } from '@/components/ui/field';
@@ -22,6 +23,7 @@ import { isBlank } from '@/lib/text/normalize';
 import { formatShekels } from '@/lib/money';
 import type { AcquisitionRow } from '@/lib/logistics/acquisitions';
 import { CAMP_WIDE_LABEL, CATEGORY_LABELS, SOURCE_LABELS } from '@/lib/logistics/labels';
+import { itemHref as planItemHref, PLAN_PATH } from '@/lib/logistics/plan-views';
 import type {
   AcquisitionSource, LogisticsCategory,
 } from '@/db/schema/logistics';
@@ -31,6 +33,8 @@ import styles from './acquisitions.module.css';
 
 export interface PersonOption { id: string; name: string }
 export interface BudgetLineOption { id: string; label: string; totalAgorot: number }
+/** An active topic on the season's work plan, for where the new line goes. */
+export interface TopicOption { id: string; name: string }
 
 type Refusal = { where: 'name' | 'quantity' | 'lender' | 'form'; message: string };
 
@@ -46,13 +50,14 @@ function amountValue(agorot: number | null): string {
 }
 
 export function AcquisitionDrawer({
-  row, seasonId, seasonName, people, budgetLines, closeHref,
+  row, seasonId, seasonName, people, budgetLines, topics, closeHref,
 }: {
   row: AcquisitionRow | null;
   seasonId: string;
   seasonName: string;
   people: readonly PersonOption[];
   budgetLines: readonly BudgetLineOption[];
+  topics: readonly TopicOption[];
   closeHref: string;
 }) {
   const router = useRouter();
@@ -67,6 +72,9 @@ export function AcquisitionDrawer({
   const [assignee, setAssignee] = useState(row?.assignee?.id ?? '');
   const [lender, setLender] = useState(row?.lender?.id ?? '');
   const [budgetLineId, setBudgetLineId] = useState(row?.budgetLineId ?? '');
+  /* Where the new row's line goes on the work plan. Only a new row asks:
+     an existing line is moved between topics on the board itself. */
+  const [topicId, setTopicId] = useState('');
   /* A new row starts as this season's; only an explicit tick makes it
      camp-wide. An existing row keeps whichever it already is. */
   const [campWide, setCampWide] = useState(row !== null && row.seasonId === null);
@@ -109,12 +117,12 @@ export function AcquisitionDrawer({
     setPending(true);
     try {
       const result = row === null
-        ? await createAcquisitionAction(input)
+        ? await createAcquisitionAction(input, { seasonId, topicId: isBlank(topicId) ? null : topicId })
         : await updateAcquisitionAction(row.id, input);
 
       if (!result.ok) { setRefusal({ where: 'form', message: result.error }); return; }
 
-      show({ message: row === null ? `${name.trim()} נוסף לרשימת הרכש` : `${name.trim()} עודכן`, tone: 'ok' });
+      show({ message: row === null ? `${name.trim()} נוסף לרשימת הרכש וללוח העבודה` : `${name.trim()} עודכן`, tone: 'ok' });
       router.push(closeHref);
       router.refresh();
     } finally {
@@ -259,6 +267,35 @@ export function AcquisitionDrawer({
             }))}
           />
         </Field>
+
+        {creating ? (
+          <Field
+            id="acq-topic"
+            label="נושא בלוח העבודה"
+            hint={`הפריט נוצר גם כמשימה בלוח העבודה של ${seasonName} — ״לקנות…״ — ושם קובעים לה ימים וסדר. הנושא אומר תחת איזו כותרת היא תופיע.`}
+          >
+            <Select
+              id="acq-topic"
+              value={topicId}
+              emptyLabel="בלי נושא"
+              onChange={setTopicId}
+              options={topics.map((topic) => ({ value: topic.id, label: topic.name }))}
+            />
+          </Field>
+        ) : row.workItem !== null ? (
+          <Banner
+            tone="neutral"
+            headline="יש לפריט הזה משימה בלוח העבודה."
+            detail="השם, האחראי וההשלמה שלה נקבעים כאן; הימים, הנושא והסדר נקבעים בלוח."
+            action={{ label: 'פתיחה בלוח', href: planItemHref({ season: row.workItem.seasonId }, row.workItem.id) }}
+          />
+        ) : (
+          <p className={styles.formHint}>
+            {'לפריט הזה אין משימה בלוח העבודה — הוא נכנס לפני שהשניים חוברו. אפשר '}
+            <Link href={PLAN_PATH}>להוסיף משימה בלוח</Link>
+            {' כרגיל.'}
+          </p>
+        )}
 
         {row !== null && row.arrivedItemId !== null && (
           <Banner

@@ -24,6 +24,12 @@ export const ACQUISITION_ERRORS: HebrewErrors = [
   ['unknown category', 'הקטגוריה הזו אינה אחת מחמש הקטגוריות האפשריות'],
   ['unknown source', 'דרך ההשגה הזו אינה אחת משלוש האפשרויות'],
   ['unknown status', 'הסטטוס הזה אינו אחד מארבעת הסטטוסים האפשריים'],
+  /* The line on the work plan is written with the row, so its refusals
+     arrive here too. */
+  ['unknown topic', 'לא מצאנו את הנושא הזה בלוח העבודה'],
+  ['unknown season', 'לא מצאנו את השנה הזו'],
+  ['unknown person', 'האדם הזה לא ברשימת החברים'],
+  ['a work item', 'יצירת המשימה בלוח העבודה נכשלה, והפריט לא נשמר'],
 ];
 
 /**

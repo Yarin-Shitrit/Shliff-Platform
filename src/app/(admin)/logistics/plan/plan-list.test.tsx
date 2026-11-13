@@ -7,7 +7,7 @@ import { PlanList } from './plan-list';
 function item(over: Partial<PlanItem>): PlanItem {
   return {
     id: 'i', seasonId: 's', topicId: null, parentId: null, title: 'משימה', notes: null,
-    startsOn: null, endsOn: null, status: 'open', position: 0, assignee: null,
+    startsOn: null, endsOn: null, status: 'open', position: 0, assignee: null, purchase: null,
     waitsFor: [], blocks: [], updatedAt: new Date('2026-01-01T00:00:00Z'), updatedBy: null,
     ...over,
   };
@@ -138,5 +138,27 @@ describe('PlanList', () => {
     expect(screen.getByText('פתוחה')).toBeTruthy();
     expect(screen.getByText('הושלמה')).toBeTruthy();
     expect(screen.getByText('בוטלה')).toBeTruthy();
+  });
+});
+
+describe('a purchase’s line on the board', () => {
+  it('says the list’s status in the list’s word, as a link to the row on רכש', () => {
+    mount([{
+      topic: topic({}),
+      branches: [{ item: item({ id: 'a', title: 'לקנות מכולה', purchase: { id: 'acq-1', status: 'ordered' } }), children: [] }],
+    }]);
+    const pill = screen.getByText('רכש · הוזמן');
+    const link = pill.closest('a');
+    expect(link?.getAttribute('href')).toBe('/logistics/acquisitions?season=s1&peek=acq-1');
+    expect(screen.queryByText('פתוחה')).toBeNull();
+  });
+
+  it('keeps the board’s own word for a cancelled purchase line', () => {
+    mount([{
+      topic: topic({}),
+      branches: [{ item: item({ id: 'a', status: 'cancelled', purchase: { id: 'acq-1', status: 'ordered' } }), children: [] }],
+    }]);
+    expect(screen.getByText('בוטלה')).toBeTruthy();
+    expect(screen.queryByText(/רכש ·/)).toBeNull();
   });
 });
