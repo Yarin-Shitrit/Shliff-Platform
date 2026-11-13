@@ -7,7 +7,7 @@ import type { ActionResult } from '@/lib/action-result';
 import { toHebrewError, HebrewRefusal } from '@/lib/errors/hebrew';
 import type { HebrewConstraints } from '@/lib/errors/hebrew';
 import { parseDateInput } from '@/lib/dates';
-import { countAccount, createAccount } from '@/lib/money/accounts';
+import { countAccount, createAccount, setAccountHolder } from '@/lib/money/accounts';
 import type { CountResult } from '@/lib/money/accounts';
 import type { AccountKind } from '@/db/schema/money';
 import { MONEY_ERRORS } from './error-messages';
@@ -117,4 +117,28 @@ export async function createAccountAction(input: NewAccountInput): Promise<Actio
   }
   revalidateBalances();
   return { ok: true, value: id };
+}
+
+export interface SetHolderInput {
+  accountId: string;
+  /** Empty means nobody holds it. */
+  holderPersonId: string;
+}
+
+/**
+ * Says who holds an account from now on. The refusals — no such account, a
+ * person who is not on the list or was merged away — are `setAccountHolder`'s
+ * own. The holder shows on the card, on the person's page and in the delete
+ * preview, so the whole layout is revalidated as every balance change is.
+ */
+export async function setAccountHolderAction(input: SetHolderInput): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+  try {
+    await setAccountHolder(db, input.accountId, input.holderPersonId === '' ? null : input.holderPersonId);
+  } catch (error) {
+    return failed(error);
+  }
+  revalidateBalances();
+  return { ok: true };
 }

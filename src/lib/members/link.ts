@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull, or } from 'drizzle-orm';
 import type { AnyDb } from '@/lib/db-types';
 import {
   persons, personAliases, memberships, dues, payments, seasons, taskAssignments,
@@ -211,11 +211,70 @@ export async function mergePersons(
   return { ok: true, movedAliases: moved.length };
 }
 
-/** Reverses a merge exactly: every alias goes back to the person it came from. */
+/** What an unmerge would restore, read before the button is offered. */
+export interface UnmergePreview {
+  personId: string;
+  displayName: string;
+  survivorId: string;
+  survivorName: string;
+  /** The spellings that moved in the merge and would come back. A spelling
+   *  a lead has since unlinked (it sits in the queue) comes back too; one
+   *  that was since linked to a third person stays where it was put. */
+  returning: string[];
+}
+
+/**
+ * Null when the id names nobody, or names a record that is not merged —
+ * the screen then offers no unmerge, and `unmergePerson` would refuse.
+ */
+export async function unmergePreview(db: AnyDb, sourceId: string): Promise<UnmergePreview | null> {
+  if (!UUID.test(sourceId)) return null;
+  const [source] = await db.select({
+    id: persons.id, displayName: persons.displayName, mergedIntoId: persons.mergedIntoId,
+  }).from(persons).where(eq(persons.id, sourceId));
+  if (!source || source.mergedIntoId === null) return null;
+
+  const [survivor] = await db.select({ displayName: persons.displayName })
+    .from(persons).where(eq(persons.id, source.mergedIntoId));
+
+  const returning = await db.select({ alias: personAliases.alias })
+    .from(personAliases)
+    .where(and(
+      eq(personAliases.mergedFromPersonId, sourceId),
+      or(eq(personAliases.personId, source.mergedIntoId), isNull(personAliases.personId)),
+    ))
+    .orderBy(personAliases.alias);
+
+  return {
+    personId: sourceId,
+    displayName: source.displayName,
+    survivorId: source.mergedIntoId,
+    survivorName: survivor?.displayName ?? 'אדם אחר',
+    returning: returning.map((row) => row.alias),
+  };
+}
+
+/**
+ * Reverses a merge: every alias that moved goes back to the person it came
+ * from, and the record stands on its own again.
+ *
+ * Refuses, in Hebrew, a record that is not merged — the only way to reach
+ * that is a stale link, and "unmerging" it would move nothing while the
+ * screen reported success. An alias that was since linked to a third person
+ * is left there: `unlinkAlias` keeps `merged_from_person_id` on purpose so
+ * the origin is not lost, and pulling such a spelling off somebody a lead
+ * chose for it would undo a later decision, not the merge.
+ */
 export async function unmergePerson(db: AnyDb, sourceId: string): Promise<void> {
+  const preview = await unmergePreview(db, sourceId);
+  if (preview === null) throw new HebrewRefusal('הרשומה הזו לא ממוזגת — אין מיזוג לבטל.');
+
   await db.update(personAliases)
     .set({ personId: sourceId, mergedFromPersonId: null })
-    .where(eq(personAliases.mergedFromPersonId, sourceId));
+    .where(and(
+      eq(personAliases.mergedFromPersonId, sourceId),
+      or(eq(personAliases.personId, preview.survivorId), isNull(personAliases.personId)),
+    ));
 
   await db.update(persons)
     .set({ mergedIntoId: null })

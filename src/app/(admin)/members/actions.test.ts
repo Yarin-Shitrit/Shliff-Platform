@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  */
 const {
   requireAdmin, addMember, issueFlatDueFor, revalidatePath,
-  unlinkAlias, aliasUnlinkTarget, redirect, renamePerson, deletePerson,
+  unlinkAlias, aliasUnlinkTarget, redirect, renamePerson, deletePerson, unmergePerson,
 } = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   addMember: vi.fn(),
@@ -18,6 +18,7 @@ const {
   aliasUnlinkTarget: vi.fn(),
   renamePerson: vi.fn(),
   deletePerson: vi.fn(),
+  unmergePerson: vi.fn(),
   redirect: vi.fn((to: string) => { throw new Error(`NEXT_REDIRECT:${to}`); }),
 }));
 vi.mock('@/db', () => ({ db: {} }));
@@ -31,7 +32,7 @@ vi.mock('@/lib/members/roster', () => ({ addMember }));
 vi.mock('@/lib/fees/dues', () => ({ issueFlatDueFor }));
 vi.mock('@/lib/members/delete', () => ({ deletePerson }));
 vi.mock('@/lib/members/link', () => ({
-  unlinkAlias, aliasUnlinkTarget, renamePerson,
+  unlinkAlias, aliasUnlinkTarget, renamePerson, unmergePerson,
   createPerson: vi.fn(), createPersonFromAlias: vi.fn(),
   linkAlias: vi.fn(), mergePersons: vi.fn(),
 }));
@@ -39,8 +40,9 @@ vi.mock('@/lib/members/link', () => ({
 import {
   addToSeasonBulkAction, issueDuesBulkAction, unlinkAliasAction,
   unlinkAliasAndReturn, renamePersonAction, renamePersonAndReturn,
-  deletePersonAction, deletePersonAndReturn,
+  deletePersonAction, deletePersonAndReturn, unmergePersonAction, unmergePersonAndReturn,
 } from './actions';
+import { UNMERGE_ERROR_PARAM } from './unmerge-params';
 import { UNLINK_ERROR_PARAM } from './unlink-error';
 import { RENAME_ERROR_PARAM } from './rename-params';
 import { DELETE_ERROR_PARAM } from './delete-params';
@@ -354,5 +356,43 @@ describe('deletePersonAndReturn', () => {
     });
     await expect(deletePersonAndReturn('p1', '/members', '/members/p1?tab=payments'))
       .rejects.toThrow(`NEXT_REDIRECT:/members/p1?tab=payments&${DELETE_ERROR_PARAM}=${encodeURIComponent('לא ניתן למחוק — קיימים: תשלומים')}`);
+  });
+});
+
+describe('unmergePersonAction', () => {
+  it('refuses without admin and touches nothing', async () => {
+    requireAdmin.mockResolvedValue({ ok: false });
+    expect(await unmergePersonAction('p1')).toEqual({ ok: false, error: 'אין הרשאה' });
+    expect(unmergePerson).not.toHaveBeenCalled();
+  });
+
+  it('unmerges and refreshes the whole layout — both records, the roster, the inbox', async () => {
+    unmergePerson.mockResolvedValue(undefined);
+    expect(await unmergePersonAction('p1')).toEqual({ ok: true });
+    expect(unmergePerson).toHaveBeenCalledWith({}, 'p1');
+    expect(revalidatePath).toHaveBeenCalledWith('/', 'layout');
+  });
+
+  it('hands the library refusal back verbatim, and a driver fault as the fallback', async () => {
+    unmergePerson.mockRejectedValue(new HebrewRefusal('הרשומה הזו לא ממוזגת — אין מיזוג לבטל.'));
+    expect(await unmergePersonAction('p1'))
+      .toEqual({ ok: false, error: 'הרשומה הזו לא ממוזגת — אין מיזוג לבטל.' });
+    unmergePerson.mockRejectedValue(new Error('connection refused'));
+    expect(await unmergePersonAction('p1')).toEqual({ ok: false, error: HEBREW_FALLBACK });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe('unmergePersonAndReturn — A38', () => {
+  it('goes back clean when it went through', async () => {
+    unmergePerson.mockResolvedValue(undefined);
+    await expect(unmergePersonAndReturn('p1', '/members/p1?tab=aliases'))
+      .rejects.toThrow('NEXT_REDIRECT:/members/p1?tab=aliases');
+  });
+
+  it('hands a refusal back in the URL rather than dropping it', async () => {
+    unmergePerson.mockRejectedValue(new HebrewRefusal('הרשומה הזו לא ממוזגת — אין מיזוג לבטל.'));
+    await expect(unmergePersonAndReturn('p1', '/members/p1'))
+      .rejects.toThrow(`NEXT_REDIRECT:/members/p1?${UNMERGE_ERROR_PARAM}=${encodeURIComponent('הרשומה הזו לא ממוזגת — אין מיזוג לבטל.')}`);
   });
 });

@@ -17,10 +17,12 @@ import type { MoneyOverview } from '@/lib/money/overview';
  * initialization" — `vi.hoisted` gives the factories something to close
  * over instead (see `src/lib/auth/guard.test.ts`).
  */
-const { requireAdmin, listSeasons, moneyOverview } = vi.hoisted(() => ({
+const { requireAdmin, listSeasons, moneyOverview, listPersonChoices,
+} = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   listSeasons: vi.fn(),
   moneyOverview: vi.fn(),
+  listPersonChoices: vi.fn(),
 }));
 vi.mock('@/db', () => ({ db: {} }));
 vi.mock('@/lib/auth/guard', () => ({ requireAdmin }));
@@ -52,6 +54,16 @@ vi.mock('./new-account-drawer', () => ({
     <div data-testid="new-account-drawer" data-close={closeHref} />
   ),
 }));
+vi.mock('./holder-drawer', () => ({
+  HolderDrawer: ({ account, people, closeHref }: {
+    account: { name: string; holderName: string | null }; people: Array<{ displayName: string }>; closeHref: string;
+  }) => (
+    <div data-testid="holder-drawer" data-close={closeHref}>
+      {account.name} · {account.holderName ?? '—'} · {people.map((one) => one.displayName).join(',')}
+    </div>
+  ),
+}));
+vi.mock('@/lib/members/dossier', () => ({ listPersonChoices }));
 
 import MoneyPage from './page';
 import styles from './money.module.css';
@@ -847,6 +859,26 @@ describe('counting what an account holds', () => {
       .toBe('/money?season=s1&act=new-account');
     expect(screen.queryByTestId('count-drawer')).toBeNull();
     expect(screen.queryByTestId('new-account-drawer')).toBeNull();
+  });
+
+  it('offers the holder drawer on every card, and opens it from the URL with the people to choose from', async () => {
+    listPersonChoices.mockResolvedValue([{ id: 'p1', displayName: 'אופק' }, { id: 'p2', displayName: 'רוני' }]);
+    moneyOverview.mockResolvedValue(overview({
+      summary: summary({ accounts: [account(), account({ accountId: 'a2', name: 'עו״ש אופק', kind: 'personal', holderName: 'אופק' })] }),
+    }));
+    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+    expect(screen.getAllByRole('link', { name: 'מי מחזיק/ה' }).map((one) => one.getAttribute('href'))).toEqual([
+      '/money?season=s1&account=a1&act=holder',
+      '/money?season=s1&account=a2&act=holder',
+    ]);
+    expect(screen.queryByTestId('holder-drawer')).toBeNull();
+    expect(listPersonChoices).not.toHaveBeenCalled();
+
+    render(await MoneyPage({ searchParams: Promise.resolve({ act: 'holder', account: 'a2' }) }));
+    const drawer = screen.getByTestId('holder-drawer');
+    expect(drawer.textContent).toBe('עו״ש אופק · אופק · אופק,רוני');
+    // The URL named no season; the page picked one and closing keeps it (R5).
+    expect(drawer.getAttribute('data-close')).toBe('/money?season=s1');
   });
 
   it('opens the count drawer from the URL, over the account the URL names', async () => {

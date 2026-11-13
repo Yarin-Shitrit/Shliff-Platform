@@ -6,7 +6,7 @@ import { requireAdmin } from '@/lib/auth/guard';
 import type { ActionResult } from '@/lib/action-result';
 import { toHebrewError, HebrewRefusal } from '@/lib/errors/hebrew';
 import {
-  listObligations, checkSettlement, settleObligation, nameObligation,
+  listObligations, checkSettlement, settleObligation, nameObligation, detachObligationParty,
 } from '@/lib/money/obligations';
 import { recordEntry } from '@/lib/money/ledger';
 import { MONEY_ERRORS } from '../error-messages';
@@ -149,4 +149,26 @@ export async function nameObligationAction(input: NameInput): Promise<ActionResu
   revalidatePath('/inbox');
   if (input.personId) revalidatePath(`/members/${input.personId}`);
   return { ok: true };
+}
+
+/**
+ * Takes the person off a debt, keeping their name on it as text. The one
+ * reason to do it is a record on its way out — `deletePerson` refuses while
+ * a debt names the person — so the whole layout is revalidated, as the
+ * money actions do: the debt shows on /money, on /money/debts and on the
+ * person's page, and the delete preview reads the same row.
+ */
+export async function detachObligationPartyAction(obligationId: string): Promise<ActionResult<string>> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+
+  let partyName: string;
+  try {
+    ({ partyName } = await detachObligationParty(db, obligationId));
+  } catch (error) {
+    return failed(error);
+  }
+
+  revalidatePath('/', 'layout');
+  return { ok: true, value: partyName };
 }

@@ -301,3 +301,48 @@ export async function nameObligation(db: AnyDb, input: ObligationParty): Promise
     .set({ partyName: input.partyName! })
     .where(eq(obligations.id, current.id));
 }
+
+/** What `detachObligationParty` leaves on the row. */
+export interface DetachedParty {
+  /** The text the debt now carries in place of the link. */
+  partyName: string;
+}
+
+/**
+ * Takes the person off a debt without touching the debt.
+ *
+ * The one case for it is a record that is about to be deleted or was made
+ * in error: `deletePerson` refuses while a debt names the person, because
+ * the schema's `set null` would turn `חוב יוסף 15,240` into a debt owed to
+ * nobody. This is the lead doing by hand what the schema would have done in
+ * silence — except the name is kept. The row's `party_name` becomes the
+ * person's display name (or stays what the workbook wrote, when it wrote
+ * something), so the debt reads exactly as before and `nameObligation` can
+ * link it to the right record later. Nothing else on the row moves: amount,
+ * settlements and the ledger entries written for them are history.
+ *
+ * Refuses a debt that names nobody — there is no link to cut, and a screen
+ * that reached here with one is showing a stale row.
+ */
+export async function detachObligationParty(
+  db: AnyDb, obligationId: string,
+): Promise<DetachedParty> {
+  const [row] = await db
+    .select({
+      id: obligations.id,
+      partyPersonId: obligations.partyPersonId,
+      partyName: obligations.partyName,
+      personName: persons.displayName,
+    })
+    .from(obligations)
+    .leftJoin(persons, eq(persons.id, obligations.partyPersonId))
+    .where(eq(obligations.id, obligationId));
+  if (!row) throw new HebrewRefusal('החוב לא נמצא.');
+  if (row.partyPersonId === null) throw new HebrewRefusal('החוב הזה לא מקושר לאדם — אין מה לנתק.');
+
+  const partyName = isBlank(row.partyName) ? (row.personName ?? '') : row.partyName!;
+  await db.update(obligations)
+    .set({ partyPersonId: null, partyName })
+    .where(eq(obligations.id, obligationId));
+  return { partyName };
+}

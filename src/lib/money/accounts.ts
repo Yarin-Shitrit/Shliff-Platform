@@ -283,3 +283,32 @@ export async function unattributedAgorot(
     paymentsAgorot: await paymentsTotal(),
   };
 }
+
+/**
+ * Who holds the account from now on: a person on the roster, or nobody.
+ *
+ * The holder is otherwise written once, at creation, and the new-account
+ * drawer offers no picker. The one thing that needs it changed afterwards
+ * is a person on their way out: `deletePerson` refuses while an account
+ * names them, because `set null` would leave `חשבון פרטי של ___` on the
+ * card with nothing saying whose it was. So the lead says whose it is now.
+ * A merged-away person cannot be chosen — their money lives on the record
+ * they were merged into.
+ */
+export async function setAccountHolder(
+  db: AnyDb, accountId: string, holderPersonId: string | null,
+): Promise<void> {
+  const [account] = await db.select({ id: accounts.id })
+    .from(accounts).where(eq(accounts.id, accountId));
+  if (!account) throw new HebrewRefusal('אין חשבון כזה.');
+
+  if (holderPersonId !== null) {
+    const [person] = await db.select({ id: persons.id, mergedIntoId: persons.mergedIntoId })
+      .from(persons).where(eq(persons.id, holderPersonId));
+    if (!person || person.mergedIntoId !== null) {
+      throw new HebrewRefusal('האדם שנבחר לא נמצא ברשימת האנשים.');
+    }
+  }
+
+  await db.update(accounts).set({ holderPersonId }).where(eq(accounts.id, accountId));
+}

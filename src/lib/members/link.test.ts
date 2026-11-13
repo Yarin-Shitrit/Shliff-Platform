@@ -9,7 +9,7 @@ import {
 } from '@/lib/members/identity';
 import {
   createPerson, createPersonFromAlias, linkAlias, unlinkAlias,
-  mergePersons, unmergePerson, mergeConflicts, previewMerge, aliasUnlinkTarget,
+  mergePersons, unmergePerson, unmergePreview, mergeConflicts, previewMerge, aliasUnlinkTarget,
   splitAlias, renamePerson,
 } from '@/lib/members/link';
 
@@ -208,6 +208,52 @@ describe('merging', () => {
     expect((await resolveName(db, 'אופק')).personId).toBe(target);
     const [restored] = await db.select().from(persons).where(eq(persons.id, source));
     expect(restored.mergedIntoId).toBeNull();
+  });
+
+  it('previews an unmerge — who absorbed whom and which spellings come back — and nothing for a record that is not merged', async () => {
+    const target = await createPerson(db, 'אופק', LEAD);
+    const source = await createPerson(db, 'אופק כהן', LEAD);
+    expect(await unmergePreview(db, source)).toBeNull();
+    expect(await unmergePreview(db, 'not-an-id')).toBeNull();
+
+    await mergePersons(db, source, target, LEAD);
+    expect(await unmergePreview(db, source)).toEqual({
+      personId: source, displayName: 'אופק כהן', survivorId: target, survivorName: 'אופק',
+      returning: ['אופק כהן'],
+    });
+  });
+
+  it('refuses, in Hebrew, to unmerge a record that is not merged', async () => {
+    const id = await createPerson(db, 'אופק', LEAD);
+    await expect(unmergePerson(db, id)).rejects.toThrow('הרשומה הזו לא ממוזגת — אין מיזוג לבטל.');
+    await expect(unmergePerson(db, 'not-an-id')).rejects.toThrow('הרשומה הזו לא ממוזגת — אין מיזוג לבטל.');
+  });
+
+  /*
+   * `unlinkAlias` keeps `merged_from_person_id` so the origin is not lost.
+   * A spelling since unlinked still belongs to the record it came from and
+   * comes back with the unmerge; one since linked to a third person was a
+   * later decision and stays where the lead put it.
+   */
+  it('brings back a spelling that was unlinked since, and leaves one that was linked to somebody else', async () => {
+    const target = await createPerson(db, 'אופק', LEAD);
+    const source = await createPerson(db, 'אופק כהן', LEAD);
+    const third = await createPerson(db, 'אופק לוי', LEAD);
+    const queued = await recordUnlinkedName(db, 'אופק ק.', 'import');
+    await linkAlias(db, queued, source, LEAD);
+    const typed = await recordUnlinkedName(db, 'אופקי', 'import');
+    await linkAlias(db, typed, source, LEAD);
+    await mergePersons(db, source, target, LEAD);
+
+    await unlinkAlias(db, queued);
+    await db.update(personAliases).set({ personId: third }).where(eq(personAliases.id, typed));
+
+    expect((await unmergePreview(db, source))?.returning).toEqual(['אופק כהן', 'אופק ק.']);
+    await unmergePerson(db, source);
+
+    expect((await resolveName(db, 'אופק כהן')).personId).toBe(source);
+    expect((await resolveName(db, 'אופק ק.')).personId).toBe(source);
+    expect((await resolveName(db, 'אופקי')).personId).toBe(third);
   });
 });
 
