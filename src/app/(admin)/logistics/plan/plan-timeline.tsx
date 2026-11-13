@@ -212,7 +212,13 @@ export function PlanTimeline({
             </Link>
           ))}
         </span>
-        {todayIndex >= 0 ? <TimelineScroll wrapperId={TIMELINE_WRAP_ID} todayId={TODAY_CELL_ID} /> : null}
+        {/*
+          Keyed by the scale: a scale link changes only the query string, so
+          the page re-renders in place and this would stay mounted, its
+          centring already spent — leaving the scroll offset of the old
+          column width, and today off the screen. A new key centres again.
+        */}
+        {todayIndex >= 0 ? <TimelineScroll key={scale} wrapperId={TIMELINE_WRAP_ID} todayId={TODAY_CELL_ID} /> : null}
         <span className={styles.legend} aria-hidden="true">
           <span className={cx(styles.legendSwatch, styles.legendParent)} /> משימה כללית
           <span className={cx(styles.legendSwatch, styles.legendPart)} /> חלק

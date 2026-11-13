@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { buildTimeline, type PlanItem, type Topic, type TimelineBar } from '@/lib/logistics/plan';
 import type { TimelineScale } from '@/lib/logistics/plan-views';
@@ -204,6 +204,45 @@ describe('PlanTimeline', () => {
     // Both items are drawn, three and a half months apart.
     expect(screen.getByRole('link', { name: 'להזמין מכולה · 03/03 · עבר התאריך' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'להרכיב צל · 18/06–20/06' })).toBeTruthy();
+  });
+
+  describe('bringing today into view', () => {
+    /* jsdom has no `scrollBy`; a stand-in on the wrapper's prototype is how
+       the test sees each time the timeline was centred on today. */
+    const scrollBy = vi.fn();
+    const proto = HTMLElement.prototype as unknown as { scrollBy?: unknown };
+    beforeEach(() => { scrollBy.mockClear(); proto.scrollBy = scrollBy; });
+    afterEach(() => { delete proto.scrollBy; });
+
+    const TODAY = '2026-05-13';
+    const at = (scale: TimelineScale, peek: string | null = null) => (
+      <PlanTimeline
+        timeline={timeline} scale={scale} today={TODAY} currentItemId={peek}
+        params={{ season: 's1', ...(scale === 'day' ? {} : { scale }), ...(peek === null ? {} : { peek }) }}
+      />
+    );
+
+    it('centres on today when the page lands', () => {
+      render(at('day'));
+      expect(scrollBy).toHaveBeenCalledTimes(1);
+      expect(scrollBy).toHaveBeenLastCalledWith({ left: 0, behavior: 'auto' });
+    });
+
+    it('centres again when the resolution changes under the same page — the columns are another width now', () => {
+      // A scale link is a search-param navigation: the page re-renders in place, nothing remounts on its own.
+      const page = render(at('day'));
+      page.rerender(at('week'));
+      expect(scrollBy).toHaveBeenCalledTimes(2);
+      page.rerender(at('month'));
+      expect(scrollBy).toHaveBeenCalledTimes(3);
+      expect(scrollBy).toHaveBeenLastCalledWith({ left: 0, behavior: 'auto' });
+    });
+
+    it('leaves the scroll where the reader put it when anything else in the URL changes', () => {
+      const page = render(at('week'));
+      page.rerender(at('week', 'p'));
+      expect(scrollBy).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('gives a bar its extras only when it has the room for them at that resolution', () => {
