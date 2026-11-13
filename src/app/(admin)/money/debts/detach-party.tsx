@@ -24,11 +24,21 @@ import styles from './debts.module.css';
 
 export const DETACH_LABEL = 'ניתוק מהאדם';
 
-export function DetachParty({ obligationId, displayParty, description }: {
+export function DetachParty({ obligationId, displayParty, keptName, description }: {
   obligationId: string;
+  /** The record's name — who the debt is linked to now. */
   displayParty: string;
+  /**
+   * The name the debt keeps once the link is cut: the spelling written on
+   * the debt itself when it has one, the record's name only when it has
+   * none. A workbook debt of ״יוסף״ later linked to ״יוסף כהן״ goes back to
+   * ״יוסף״ — `detachObligationParty` keeps what the sheet said — and this
+   * control used to promise the record's name instead.
+   */
+  keptName: string;
   description: string;
 }) {
+  const sameName = keptName === displayParty;
   const router = useRouter();
   const toast = useToast();
   const [confirming, setConfirming] = useState(false);
@@ -45,7 +55,9 @@ export function DetachParty({ obligationId, displayParty, description }: {
         setError(result.error);
         return;
       }
-      toast.show({ message: `החוב ״${description}״ כבר לא מקושר לרשומה של ${displayParty}; השם נשאר עליו כטקסט.` });
+      // The library's answer, not this control's expectation of it.
+      const kept = result.value ?? keptName;
+      toast.show({ message: `החוב ״${description}״ כבר לא מקושר לרשומה של ${displayParty}; הוא רשום עכשיו על השם ${kept}, כטקסט.` });
       router.refresh();
     } finally {
       setPending(false);
@@ -56,7 +68,7 @@ export function DetachParty({ obligationId, displayParty, description }: {
     <div className={styles.detach}>
       <p className={styles.detachNote}>
         החוב מקושר לרשומה של <bdi>{displayParty}</bdi>. כדי למחוק את הרשומה הזו מרשימת האנשים,
-        מנתקים את החוב ממנה קודם — החוב עצמו נשאר רשום, על אותו שם.
+        מנתקים את החוב ממנה קודם — החוב עצמו נשאר רשום, {sameName ? 'על אותו שם' : <>על השם <bdi>{keptName}</bdi></>}.
       </p>
       <Button tone="ghost" size="sm" disabled={pending} onClick={() => { setConfirming(true); }}>
         {DETACH_LABEL}
@@ -67,8 +79,10 @@ export function DetachParty({ obligationId, displayParty, description }: {
           title="ניתוק החוב מהאדם"
           consequence={(
             <>
-              החוב ״<bdi>{description}</bdi>״ יישאר רשום על השם <bdi>{displayParty}</bdi> כטקסט חופשי,
-              בלי קישור לרשומה שלו. הסכום, מה שנסגר ממנו והתנועות לא משתנים.
+              החוב ״<bdi>{description}</bdi>״ יישאר רשום על השם <bdi>{keptName}</bdi> כטקסט חופשי,
+              בלי קישור לרשומה של <bdi>{displayParty}</bdi>.
+              {sameName ? null : ' זה השם שנכתב על החוב במקור, לא השם שברשומה.'}
+              {' הסכום, מה שנסגר ממנו והתנועות לא משתנים.'}
             </>
           )}
           confirmLabel={DETACH_LABEL}

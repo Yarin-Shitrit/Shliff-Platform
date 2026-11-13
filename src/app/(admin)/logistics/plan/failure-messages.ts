@@ -58,11 +58,13 @@ export const DEPENDENCY_ERRORS: HebrewErrors = [
 ];
 
 /**
- * Moving the board's buying items into the acquisitions list. Each item is
- * checked before any row is written, so a refusal here means nothing moved.
+ * Moving the board's buying items into the acquisitions list. The move is
+ * one transaction, so a refusal here means nothing moved.
  */
 export const ADOPT_ERRORS: HebrewErrors = [
   ['nothing was chosen', NOTHING_CHOSEN],
+  ['several acquisitions share the name', 'ברשימת הרכש יש יותר מפריט אחד בשם של אחת המשימות שסומנו, ואי אפשר לדעת לאיזה מהם לקשר אותה. שום דבר לא הועבר'],
+  ['a borrowed work item needs a lender', 'אחת המשימות שסומנו היא השאלה, והשאלה צריכה שם של המשאיל/ה — את זה ממלאים ברשימת הרכש. שום דבר לא הועבר'],
   ['work item', 'אחת המשימות שסומנו כבר ברשימת הרכש, או שכבר אינה פתוחה. שום דבר לא הועבר'],
   ['unknown work item', ITEM_UNKNOWN],
   ['unknown season', 'לא מצאנו את השנה הזו'],

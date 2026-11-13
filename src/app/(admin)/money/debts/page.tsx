@@ -26,6 +26,7 @@ import { chipSource } from '../chip-source';
 import { SettleForm } from './settle-form';
 import { NameForm } from './name-form';
 import { DetachParty } from './detach-party';
+import { isBlank } from '@/lib/text/normalize';
 import styles from './debts.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -402,7 +403,8 @@ export default async function DebtsPage(
               {peeked.partyPersonId === null ? null : (
                 <DetachParty
                   obligationId={peeked.id}
-                  displayParty={peeked.displayParty}
+                  displayParty={peeked.displayParty ?? ''}
+                  keptName={isBlank(peeked.partyName) ? (peeked.displayParty ?? '') : peeked.partyName!}
                   description={peeked.description}
                 />
               )}

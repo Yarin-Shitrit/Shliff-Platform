@@ -17,10 +17,10 @@ vi.mock('./actions', () => ({ detachObligationPartyAction }));
 
 import { DetachParty, DETACH_LABEL } from './detach-party';
 
-function renderControl() {
+function renderControl(keptName = 'רוני אדלר') {
   return render(
     <ToastProvider>
-      <DetachParty obligationId="o1" displayParty="רוני אדלר" description="מקדמה לגנרטור" />
+      <DetachParty obligationId="o1" displayParty="רוני אדלר" keptName={keptName} description="מקדמה לגנרטור" />
     </ToastProvider>,
   );
 }
@@ -47,6 +47,24 @@ describe('DetachParty', () => {
     await waitFor(() => { expect(detachObligationPartyAction).toHaveBeenCalledWith('o1'); });
     await waitFor(() => { expect(refresh).toHaveBeenCalled(); });
     expect(screen.getByRole('status').textContent).toContain('כבר לא מקושר לרשומה של רוני אדלר');
+  });
+
+  /*
+   * A workbook debt of ״רוני״ linked later to the record ״רוני אדלר״ keeps
+   * ״רוני״ when the link is cut. Every sentence has to say that name.
+   */
+  it('promises the name the debt will keep, not the record’s, when the two differ', async () => {
+    detachObligationPartyAction.mockResolvedValueOnce({ ok: true, value: 'רוני' });
+    renderControl('רוני');
+    expect(screen.getByText(/החוב עצמו נשאר רשום/).textContent).toContain('על השם רוני.');
+    fireEvent.click(screen.getByRole('button', { name: DETACH_LABEL }));
+    const dialog = screen.getByRole('alertdialog', { name: 'ניתוק החוב מהאדם' });
+    expect(dialog.textContent).toContain('יישאר רשום על השם רוני כטקסט חופשי');
+    expect(dialog.textContent).toContain('בלי קישור לרשומה של רוני אדלר');
+    expect(dialog.textContent).toContain('זה השם שנכתב על החוב במקור, לא השם שברשומה.');
+    fireEvent.click(screen.getAllByRole('button', { name: DETACH_LABEL }).at(-1)!);
+    await waitFor(() => { expect(refresh).toHaveBeenCalled(); });
+    expect(screen.getByRole('status').textContent).toContain('הוא רשום עכשיו על השם רוני, כטקסט');
   });
 
   it('shows the refusal beside the control, in the library’s words', async () => {

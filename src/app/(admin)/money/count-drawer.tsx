@@ -48,7 +48,7 @@ export function absorbedSentence(inside: number, after: number): string {
       ? 'תנועה אחת עד אותו יום כלולה בספירה'
       : `${inside} תנועות עד אותו יום כלולות בספירה`;
   const built = after === 0
-    ? 'ומכאן כל תנועה חדשה תשנה את היתרה'
+    ? 'ורק תנועה שתאריכה אחרי אותו יום תשנה את היתרה'
     : after === 1
       ? 'ותנועה אחת מאוחרת יותר כבר משנה אותה'
       : `ו־${after} תנועות מאוחרות יותר כבר משנות אותה`;
@@ -128,8 +128,9 @@ export function CountDrawer({ account, closeHref }: {
     >
       <form onSubmit={onSubmit} className={styles.drawerForm}>
         <p className={styles.muted}>
-          אם לא עקבתם אחרי כל ההכנסות וההוצאות, זו הדרך להתחיל מחדש: רשמו כמה כסף יש
-          בחשבון היום, ומכאן כל תנועה שתירשם תעדכן את היתרה.
+          אם לא עקבתם אחרי כל ההכנסות וההוצאות, זו הדרך להתחיל מחדש: רשמו כמה כסף היה
+          בחשבון בסוף היום שתבחרו. תנועות שתאריכן אחרי אותו יום יעדכנו את היתרה; תנועות
+          מאותו יום עצמו ולפניו כבר כלולות בסכום.
         </p>
 
         <Field
@@ -153,6 +154,19 @@ export function CountDrawer({ account, closeHref }: {
             onChange={(event) => { setCountedOn(event.target.value); }}
           />
         </Field>
+
+        {/*
+          The trap of counting today: the payment form's date is today too,
+          so cash taken in this evening is filed inside a count made at noon
+          and the balance does not move. Said here, where the day is chosen.
+        */}
+        {countedOn === todayInput() ? (
+          <p className={styles.warnNote}>
+            בחרתם את היום. תשלום או תנועה שיירשמו בתאריך של היום — גם אם ייכנסו אחרי
+            הספירה — ייחשבו ככלולים בה ולא ישנו את היתרה. אם ייכנס או ייצא כסף עוד היום,
+            ספרו שוב בסוף היום.
+          </p>
+        ) : null}
 
         {/*
           The count already on the account, said before it is replaced. With

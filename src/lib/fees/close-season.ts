@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm';
+import type { Db } from '@/db';
 import type { AnyDb } from '@/lib/db-types';
 import { seasons } from '@/db/schema/camp';
 import type { ObligationDirection } from '@/db/schema/money';
@@ -157,6 +158,15 @@ export function closingNote(seasonName: string): string {
  * Two refusals, both `HebrewRefusal` (§5 A20): nothing chosen, and nothing
  * open to close among what was chosen — a close that writes nothing must
  * say so rather than report success over an empty year.
+ *
+ * One transaction, behind a lock on the season's row. It was neither:
+ * the preview was read and the write-offs written one after another on
+ * the open connection. Two leads pressing together each read the same
+ * open dues and each wrote a full write-off for them — `recordPayment`
+ * has no overpayment guard — and a debt that failed midway left the dues
+ * already written off under a screen reporting failure. Now the second
+ * close waits for the first, reads nothing open, and is refused; and a
+ * failure anywhere writes nothing.
  */
 export async function closeSeasonBalances(
   db: AnyDb, input: CloseSeasonInput,
@@ -164,6 +174,14 @@ export async function closeSeasonBalances(
   if (!input.dues && !input.obligations) {
     throw new HebrewRefusal('בחרו מה לסגור: חיובים, חובות, או שניהם.');
   }
+  return (db as Db).transaction(async (tx) => {
+    const scoped = tx as unknown as AnyDb;
+    await tx.select({ id: seasons.id }).from(seasons).where(eq(seasons.id, input.seasonId)).for('update');
+    return closeInside(scoped, input);
+  });
+}
+
+async function closeInside(db: AnyDb, input: CloseSeasonInput): Promise<CloseSeasonResult> {
   const preview = await seasonClosePreview(db, input.seasonId);
   const duesToClose = input.dues ? preview.dues.rows : [];
   const debtsToClose = input.obligations ? preview.obligations.rows : [];
@@ -184,9 +202,8 @@ export async function closeSeasonBalances(
     });
   }
 
-  // Sequential, like every multi-row write in this tree: a failure midway
-  // leaves the earlier debts closed and the rest open, each still a true
-  // record, and the lead runs the close again for what remains.
+  // Sequential, and inside the caller's transaction: a failure on any debt
+  // rolls back the dues and the debts before it.
   for (const debt of debtsToClose) {
     await settleObligation(db, {
       obligationId: debt.id,

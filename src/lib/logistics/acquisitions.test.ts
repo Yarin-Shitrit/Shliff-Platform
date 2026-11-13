@@ -2,13 +2,13 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { createTestDb, type TestDb } from '@/test/db';
 import { persons, seasons } from '@/db/schema/camp';
-import { inventoryItems, workItems } from '@/db/schema/logistics';
+import { acquisitionItems, inventoryItems, workItems } from '@/db/schema/logistics';
 import { itemById } from './warehouse';
 import { createTopic, createItem, setItemStatus, planItemById } from './plan';
 import {
   listAcquisitions, acquisitionCounts, acquisitionById,
   createAcquisition, updateAcquisition, setAcquisitionStatus, recordArrival,
-  adoptPurchaseItems,
+  adoptPurchaseItems, adoptOutcomes,
 } from './acquisitions';
 
 const LEAD = 'lead@shliff.camp';
@@ -526,6 +526,91 @@ describe('a purchase is a line on the work plan', () => {
       expect((await planItemById(db, boards))?.title).toBe('לקנות קרשים');
       expect((await planItemById(db, bare))?.title).toBe('לקנות גז למטבח');
       expect((await planItemById(db, bare))?.purchase?.status).toBe('to_search');
+    });
+
+    /** A row with no line on the board, as every row written before the link was. */
+    async function bareRow(name: string, over: Partial<typeof acquisitionItems.$inferInsert> = {}) {
+      const [row] = await db.insert(acquisitionItems).values({
+        seasonId, name, category: 'kitchen', quantityNeeded: 3, source: 'second_hand', updatedBy: LEAD, ...over,
+      }).returning();
+      return row.id;
+    }
+    const named = async (name: string) =>
+      (await listAcquisitions(db, seasonId, ALL)).filter((row) => row.name === name);
+
+    it('links an item to the row of that name already in the list, and writes no second row', async () => {
+      const rowId = await bareRow('מכולה');
+      const before = (await listAcquisitions(db, seasonId, ALL)).length;
+      const item = await createItem(db, seasonId, { ...BLANK_ITEM, title: 'לקנות מכולה', assigneePersonId: itayId }, LEAD);
+
+      const preview = (await adoptOutcomes(db, seasonId, [{ id: item, title: 'לקנות מכולה' }])).get(item);
+      expect(preview?.existing).toEqual({ id: rowId, name: 'מכולה' });
+      expect(preview?.boardTitle).toBe('להשיג מכולה (3)');
+
+      expect(await adoptPurchaseItems(db, seasonId, [item], LEAD)).toBe(1);
+
+      expect(await listAcquisitions(db, seasonId, ALL)).toHaveLength(before);
+      const [row] = await named('מכולה');
+      expect(row.id).toBe(rowId);
+      expect(row.workItem?.id).toBe(item);
+      // The row is the list's: its way of getting it and its count stand, and name the board's line.
+      expect(row.source).toBe('second_hand');
+      expect((await planItemById(db, item))?.title).toBe('להשיג מכולה (3)');
+      // It had nobody; the item's person fills the blank.
+      expect(row.assignee?.id).toBe(itayId);
+    });
+
+    it('matches a name whatever quote mark it was typed with, and leaves both spellings as typed', async () => {
+      const rowId = await bareRow("צ'ילר");
+      const item = await createItem(db, seasonId, { ...BLANK_ITEM, title: 'לקנות צ\u05F3ילר' }, LEAD);
+      await adoptPurchaseItems(db, seasonId, [item], LEAD);
+      expect((await named("צ'ילר")).map((row) => row.id)).toEqual([rowId]);
+      expect(await named('צ\u05F3ילר')).toHaveLength(0);
+    });
+
+    it('stores a new row’s name as it was typed, geresh and all', async () => {
+      const item = await createItem(db, seasonId, { ...BLANK_ITEM, title: 'לקנות ראנצ\u05F3ו' }, LEAD);
+      await adoptPurchaseItems(db, seasonId, [item], LEAD);
+      expect(await named('ראנצ\u05F3ו')).toHaveLength(1);
+      expect((await planItemById(db, item))?.title).toBe('לקנות ראנצ\u05F3ו');
+    });
+
+    it('reads ״להשיג״ as second hand, and leaves the board’s title as the lead wrote it', async () => {
+      const item = await createItem(db, seasonId, { ...BLANK_ITEM, title: 'להשיג מקרר' }, LEAD);
+      await adoptPurchaseItems(db, seasonId, [item], LEAD);
+      const [row] = await named('מקרר');
+      expect(row.source).toBe('second_hand');
+      expect((await planItemById(db, item))?.title).toBe('להשיג מקרר');
+      expect(await named('להשיג מקרר')).toHaveLength(0);
+    });
+
+    it('refuses a borrowed thing with no lender, and two rows of one name, writing nothing', async () => {
+      const before = (await listAcquisitions(db, seasonId, ALL)).length;
+      const tent = await createItem(db, seasonId, { ...BLANK_ITEM, title: 'להשאיל אוהל' }, LEAD);
+      expect((await adoptOutcomes(db, seasonId, [{ id: tent, title: 'להשאיל אוהל' }])).get(tent)?.refusal).toBe('needs_lender');
+      await expect(adoptPurchaseItems(db, seasonId, [tent], LEAD)).rejects.toThrow(/needs a lender/);
+
+      await bareRow('גנרטור');
+      await bareRow('גנרטור');
+      const generator = await createItem(db, seasonId, { ...BLANK_ITEM, title: 'לקנות גנרטור' }, LEAD);
+      expect((await adoptOutcomes(db, seasonId, [{ id: generator, title: 'לקנות גנרטור' }])).get(generator)?.refusal).toBe('ambiguous');
+      await expect(adoptPurchaseItems(db, seasonId, [generator], LEAD)).rejects.toThrow(/several acquisitions share the name/);
+
+      expect(await listAcquisitions(db, seasonId, ALL)).toHaveLength(before + 2);
+      expect((await planItemById(db, tent))?.purchase).toBeNull();
+      expect((await planItemById(db, generator))?.purchase).toBeNull();
+    });
+
+    it('does not match a row that already has a line, or one that has arrived', async () => {
+      // "מקדחה רוטטת" was made by createAcquisition in beforeEach, so it has its line.
+      const drill = await createItem(db, seasonId, { ...BLANK_ITEM, title: 'לקנות מקדחה רוטטת' }, LEAD);
+      await bareRow('סולם', { status: 'arrived' });
+      const ladder = await createItem(db, seasonId, { ...BLANK_ITEM, title: 'לקנות סולם' }, LEAD);
+      const preview = await adoptOutcomes(db, seasonId, [
+        { id: drill, title: 'לקנות מקדחה רוטטת' }, { id: ladder, title: 'לקנות סולם' },
+      ]);
+      expect(preview.get(drill)?.existing).toBeNull();
+      expect(preview.get(ladder)?.existing).toBeNull();
     });
 
     it('refuses nothing chosen, an item already in the list, one that is done, and one of another season', async () => {
