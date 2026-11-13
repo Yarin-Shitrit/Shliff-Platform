@@ -1,4 +1,5 @@
 import { ACT_PARAM, PEEK_PARAM } from '@/components/ui/drawer-url';
+import { isCivilDay } from './shift-time';
 
 /**
  * The work plan's URL, and the only place it is spelled.
@@ -15,6 +16,12 @@ import { ACT_PARAM, PEEK_PARAM } from '@/components/ui/drawer-url';
  *   `?act=topic` — a new topic.
  *
  * A `peek` wins over everything: it names a record a lead asked to see.
+ *
+ * The timeline's scale travels too — `?scale=week|month` with `?at=<day>`
+ * for the week or month that holds that day — so a drawer opened from the
+ * week view closes back onto the week view, and a link to ״השבוע של
+ * הבנייה״ can be sent to someone. `all`, the default, is spelled by its
+ * absence.
  */
 
 export const PLAN_PATH = '/logistics/plan';
@@ -23,6 +30,17 @@ export const NEW_TOPIC_ACT = 'topic';
 export const NEW_ITEM_ACT = 'item';
 export const TOPIC_PARAM = 'topic';
 export const PARENT_PARAM = 'parent';
+export const SCALE_PARAM = 'scale';
+export const AT_PARAM = 'at';
+
+/**
+ * How much of the calendar the timeline shows at once. Spelled here, not
+ * in `plan.ts`, because this file is what the client drawers import, and
+ * it must stay free of the database.
+ */
+export type TimelineScale = 'week' | 'month' | 'all';
+
+export const TIMELINE_SCALES: readonly TimelineScale[] = ['week', 'month', 'all'];
 
 export interface PlanQuery {
   /** Empty means "the page picks", which `resolveSeason` does. */
@@ -39,6 +57,10 @@ export interface PlanQuery {
   presetTopic: string | null;
   /** `?act=item&parent=<id>`: the new item as a sub-item of that one. */
   presetParent: string | null;
+  /** `?scale=`: how much of the calendar the timeline shows. `all` when absent or unknown. */
+  scale: TimelineScale;
+  /** `?at=`: a day inside the week or month to show; null when absent or not a day. */
+  at: string | null;
 }
 
 export type RawParams = Record<string, string | string[] | undefined>;
@@ -54,6 +76,8 @@ export function parsePlanQuery(params: RawParams): PlanQuery {
   const topic = one(params[TOPIC_PARAM]) || null;
   const parent = one(params[PARENT_PARAM]) || null;
   const act = one(params[ACT_PARAM]);
+  const rawScale = one(params[SCALE_PARAM]) as TimelineScale;
+  const at = one(params[AT_PARAM]);
 
   const creatingItem = peek === null && act === NEW_ITEM_ACT;
   const peekTopic = peek === null && !creatingItem ? topic : null;
@@ -66,10 +90,12 @@ export function parsePlanQuery(params: RawParams): PlanQuery {
     creatingItem,
     presetTopic: creatingItem ? topic : null,
     presetParent: creatingItem ? parent : null,
+    scale: TIMELINE_SCALES.includes(rawScale) ? rawScale : 'all',
+    at: isCivilDay(at) ? at : null,
   };
 }
 
-const KEYS = ['season'] as const;
+const KEYS = ['season', SCALE_PARAM, AT_PARAM] as const;
 type PatchKey =
   | (typeof KEYS)[number] | typeof PEEK_PARAM | typeof ACT_PARAM
   | typeof TOPIC_PARAM | typeof PARENT_PARAM;
@@ -94,6 +120,17 @@ export function planHref(
   }
   const qs = next.toString();
   return qs ? `${PLAN_PATH}?${qs}` : PLAN_PATH;
+}
+
+/**
+ * The timeline at another scale, or the same scale around another day.
+ * `all` needs no day and drops the one it had.
+ */
+export function scaleHref(params: RawParams, scale: TimelineScale, at: string | null = null): string {
+  return planHref(params, {
+    [SCALE_PARAM]: scale === 'all' ? null : scale,
+    [AT_PARAM]: scale === 'all' ? null : at,
+  });
 }
 
 /** The drawer over one item (R6: a drawer is a URL). */

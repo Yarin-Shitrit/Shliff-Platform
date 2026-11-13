@@ -5,7 +5,8 @@ import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import { resolveSeason } from '@/lib/seasons/current';
 import {
-  listPlan, listTopics, topicById, buildPlanTree, buildTimeline, summarizePlan, planRoster, nowSummary,
+  listPlan, listTopics, topicById, buildPlanTree, buildTimeline, timelineWindow, summarizePlan, planRoster,
+  nowSummary,
 } from '@/lib/logistics/plan';
 import { campDayOf } from '@/lib/logistics/shift-time';
 import {
@@ -76,7 +77,8 @@ export default async function PlanPage(
   const [items, topics] = await Promise.all([listPlan(db, current.id), listTopics(db, current.id)]);
   const totals = summarizePlan(items);
   const groups = buildPlanTree(items, topics);
-  const timeline = buildTimeline(items, topics);
+  /* The week or month around the day the URL named, else around today. */
+  const timeline = buildTimeline(items, topics, timelineWindow(query.scale, query.at ?? today));
   const now = nowSummary(items, today);
   const activeTopics = topics.filter((topic) => topic.archivedAt === null);
 
@@ -234,7 +236,9 @@ export default async function PlanPage(
               <span className={styles.sectionHint}>
                 {timeline === null
                   ? 'משימה עולה לציר ברגע שיש לה יום התחלה.'
-                  : `${timeline.placed} משימות על הימים שלהן · שבוע מתחיל ביום ראשון, שישי ושבת מודגשים`}
+                  : timeline.window === null
+                    ? `${timeline.placed} משימות על הימים שלהן · כל נושא בצבע שלו · שבוע מתחיל ביום ראשון, שישי ושבת מודגשים`
+                    : `${timeline.placed} מתוך ${timeline.scheduled} משימות עם יום נמצאות ב${timeline.window.scale === 'week' ? 'שבוע' : 'חודש'} הזה · כל נושא בצבע שלו`}
               </span>
             </div>
             {timeline === null ? (
@@ -249,7 +253,7 @@ export default async function PlanPage(
           <section className={styles.section} id="list" aria-label="הרשימה המלאה">
             <div className={styles.sectionHead}>
               <h2>הרשימה המלאה</h2>
-              <span className={styles.sectionHint}>לפי נושא. משימה כללית, ותחתיה החלקים שלה. לחיצה על העיגול מסמנת שהושלמה.</span>
+              <span className={styles.sectionHint}>לפי נושא, כל נושא בצבע שלו. משימה כללית, ותחתיה החלקים שלה עם קו מחבר. לחיצה על העיגול מסמנת שהושלמה.</span>
             </div>
             {groups.length === 0 ? (
               <EmptyState

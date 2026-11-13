@@ -17,6 +17,60 @@
   min-inline-size: 0;
 }
 
+/*
+ * A topic's colour. Six slots in a fixed order, assigned by the topic's
+ * place in the lead's order (`topicHue`); the seventh topic wears the
+ * first's. Validated as a categorical palette on the light panel and,
+ * with its own steps, on the dark one: every adjacent pair clears the
+ * colour-vision floor, and nothing here is the brand orange or a status
+ * colour — a bar that is green is done, not ״מטבח״.
+ *
+ * `--topic-ink` is what is written on the solid bar: white, except on the
+ * yellow, where white does not read. `--topic-soft` is the tint a part
+ * sits on, mixed from the hue so the two never drift apart.
+ */
+.hue1 { --topic: #2a78d6; --topic-ink: #FFFFFF; }
+.hue2 { --topic: #eb6834; --topic-ink: #FFFFFF; }
+.hue3 { --topic: #1baf7a; --topic-ink: #FFFFFF; }
+.hue4 { --topic: #eda100; --topic-ink: #0B0B0B; }
+.hue5 { --topic: #e87ba4; --topic-ink: #FFFFFF; }
+.hue6 { --topic: #6250d6; --topic-ink: #FFFFFF; }
+
+.hue1, .hue2, .hue3, .hue4, .hue5, .hue6 {
+  --topic-soft: color-mix(in oklab, var(--topic) 16%, var(--panel));
+}
+
+@media (prefers-color-scheme: dark) {
+  :global(:root:not([data-theme='light'])) .hue1 { --topic: #3987e5; }
+  :global(:root:not([data-theme='light'])) .hue2 { --topic: #d95926; }
+  :global(:root:not([data-theme='light'])) .hue3 { --topic: #199e70; }
+  :global(:root:not([data-theme='light'])) .hue4 { --topic: #c98500; }
+  :global(:root:not([data-theme='light'])) .hue5 { --topic: #d55181; }
+  :global(:root:not([data-theme='light'])) .hue6 { --topic: #9085e9; }
+}
+
+:global([data-theme='dark']) .hue1 { --topic: #3987e5; }
+:global([data-theme='dark']) .hue2 { --topic: #d95926; }
+:global([data-theme='dark']) .hue3 { --topic: #199e70; }
+:global([data-theme='dark']) .hue4 { --topic: #c98500; }
+:global([data-theme='dark']) .hue5 { --topic: #d55181; }
+:global([data-theme='dark']) .hue6 { --topic: #9085e9; }
+
+/* The dot before a topic's name, on the lane and on the list's heading:
+   the same colour in both places, so the two views agree. Hidden where
+   there is no topic — ״בלי נושא״ has no colour, which is also a fact. */
+.topicDot {
+  flex: none;
+  display: none;
+  inline-size: 10px;
+  block-size: 10px;
+  border-radius: 999px;
+  background: var(--topic);
+}
+
+.hue1 .topicDot, .hue2 .topicDot, .hue3 .topicDot,
+.hue4 .topicDot, .hue5 .topicDot, .hue6 .topicDot { display: inline-block; }
+
 .head {
   display: flex;
   align-items: flex-start;
@@ -132,6 +186,9 @@
 }
 
 .topicHead h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   margin: 0;
   font-size: var(--text-lead);
 }
@@ -234,13 +291,42 @@
 .checkDone:hover { color: #FFFFFF; }
 
 /* The indent is what says "this belongs to the item above it" —
-   `padding-inline-start`, so under RTL it reads from the text's edge. */
+   `padding-inline-start`, so under RTL it reads from the text's edge —
+   and the guide drawn in the topic's colour down the indent says it
+   again, in the colour the timeline uses for the same thing. */
 .subTitle {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding-inline-start: 22px;
   color: var(--ink-2);
+}
+
+.subTitle::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 8px;
+  inset-block: -8px;
+  border-inline-start: 2px solid var(--topic, var(--line-strong));
+  opacity: .7;
+}
+
+/* ״חלק של X״ beside a part's title: only on a phone, where the card has
+   no indent to hang the relation off. */
+.partOf {
+  display: none;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+  font-weight: 400;
+}
+
+/* ״3 חלקים״ after a general item's title. */
+.partCount {
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+  font-weight: 400;
+  white-space: nowrap;
 }
 
 .itemTitle {
@@ -360,6 +446,68 @@
   gap: 12px;
 }
 
+/* The three scales, one link each; the current one is filled. A segment
+   control drawn with the kit's tokens — the kit ships no such control and
+   R1 forbids a library. */
+.scaleSwitch {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--sunken);
+}
+
+.scaleOption {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 26px;
+  padding-inline: 12px;
+  border-radius: 999px;
+  color: var(--ink-2);
+  font-size: var(--text-dense);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.scaleOption:hover { color: var(--ink); }
+
+.scaleOption:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.scaleCurrent {
+  background: var(--panel);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 1px 0 var(--line);
+}
+
+.windowNav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.windowLabel {
+  min-inline-size: 140px;
+  padding-inline: 6px;
+  text-align: center;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A window with no bars: the days are still drawn, the sentence sits
+   under them, and the arrows beside the window's name lead on. */
+.windowEmpty {
+  margin: 0;
+  padding: 16px;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.windowEmpty a { color: var(--brand-text); }
+
 .legend {
   display: inline-flex;
   align-items: center;
@@ -396,6 +544,9 @@
    * grid scrolls inside it, which is what a timeline is for.
    */
   contain: inline-size;
+  /* ...and a size container, so the week scale can measure the width it
+     has and give each of its seven days a seventh of it. */
+  container-type: inline-size;
   overflow-x: auto;
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
@@ -411,6 +562,17 @@
   display: flex;
   flex-direction: column;
 }
+
+/*
+ * The week fills the width it has: seven days, each a seventh of what is
+ * left after the label, never narrower than 44px — on a phone the week
+ * then scrolls a little rather than squeezing a bar's words to nothing.
+ * The month does the same with its five or six weeks, but keeps the
+ * narrow day as its floor, so on a laptop it fits and on a phone it
+ * scrolls like the whole span does.
+ */
+.scaleWeek { --day-w: max(44px, calc((100cqi - var(--label-w)) / 7)); }
+.scaleMonth { --day-w: max(30px, calc((100cqi - var(--label-w)) / var(--days))); }
 
 .timelineHead,
 .lane {
@@ -539,6 +701,8 @@
   font-weight: 700;
 }
 
+.dayOutside { color: var(--ink-4); }
+
 .dayHead[aria-current] .dayNumber {
   display: inline-flex;
   align-items: center;
@@ -553,17 +717,40 @@
 .barRows {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
   padding-block: 6px;
 }
 
+/* One general item with its parts, or the general items drawn alone. */
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .barRow { min-block-size: 28px; }
+
+/* The guide from a summary bar down through its parts: a line at the
+   summary's first day, in the topic's colour, bridging the gap between
+   rows so it reads as one stroke. */
+.partGuide {
+  grid-row: 1;
+  justify-self: start;
+  inline-size: 0;
+  block-size: calc(100% + 4px);
+  margin-block-start: -4px;
+  margin-inline-start: 10px;
+  border-inline-start: 2px solid var(--topic, var(--ink-3));
+  opacity: .6;
+  pointer-events: none;
+}
 
 /* One item on its days. The whole bar is the link to its drawer; the word
    inside names it, and the state is a border and an icon, never a colour
    alone (R3). A general item is the dark summary bar; its parts are the
    light ones under it. */
 .bar {
+  grid-row: 1;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -595,16 +782,60 @@
   text-overflow: ellipsis;
 }
 
-.barWho { flex: none; display: inline-flex; }
+.barWho {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
 
+.barWhoName { font-weight: 400; }
+
+/* The part's parent, written after its title where the week gives room. */
+.barMeta { font-weight: 400; opacity: .8; }
+
+/* ״3 חלקים״ on a summary bar. */
+.barCount {
+  flex: none;
+  padding-inline: 6px;
+  border-radius: 999px;
+  background: color-mix(in oklab, currentColor 18%, transparent);
+  font-size: var(--text-meta);
+  font-weight: 500;
+}
+
+/* A general item is the solid bar in its topic's colour; a part is the
+   tint of the same colour with the colour as its border. Under no topic
+   the two fall back to the ink and the panel. */
 .barParent {
-  background: var(--ink-2);
-  border-color: var(--ink-2);
-  color: var(--panel);
+  background: var(--topic, var(--ink-2));
+  border-color: var(--topic, var(--ink-2));
+  color: var(--topic-ink, var(--panel));
   font-weight: 600;
 }
 
-.barPart { font-weight: 400; }
+.barPart {
+  background: var(--topic-soft, var(--panel));
+  border-color: var(--topic, var(--line-strong));
+  font-weight: 400;
+}
+
+/* A part that is a part: the arrow glyph is drawn in the topic's colour. */
+.barPart > svg:first-child { color: var(--topic, var(--ink-3)); }
+
+/* An item that runs past the window's edge: the bar is cut there, square,
+   with the dots that say so. */
+.barClipStart {
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+  border-inline-start-style: dashed;
+}
+
+.barClipEnd {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+  border-inline-end-style: dashed;
+}
 
 .bar[aria-current] {
   outline: 2px solid var(--focus);
@@ -626,6 +857,7 @@
 }
 
 .barOverdue {
+  background: var(--bad-soft);
   border-color: var(--bad);
   color: var(--bad);
 }
@@ -756,8 +988,11 @@
   }
   .phoneActions > :first-child { flex: 1; }
 
-  /* On a card the indent has no column to hang off. */
-  .subTitle { padding-inline-start: 0; }
+  /* On a card the indent has no column to hang off, so the relation is
+     said in words instead. */
+  .subTitle { padding-inline-start: 0; flex-wrap: wrap; }
+  .subTitle::before { display: none; }
+  .partOf { display: block; flex-basis: 100%; }
 
   .timeline {
     --day-w: 26px;
@@ -765,6 +1000,8 @@
   }
   .laneLabel { padding: 8px; font-size: 13px; }
   .legend { display: none; }
+  .windowLabel { min-inline-size: 0; }
+  .scaleOption { min-block-size: 32px; }
   .check { inline-size: 28px; block-size: 28px; }
 
   .pair { grid-template-columns: 1fr; }
