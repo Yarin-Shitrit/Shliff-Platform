@@ -412,8 +412,10 @@ async function unlinkedRows(db: AnyDb, seasonId: string) {
   const rows = await db.select({
     id: acquisitionItems.id, name: acquisitionItems.name, status: acquisitionItems.status,
     source: acquisitionItems.source, quantityNeeded: acquisitionItems.quantityNeeded,
+    assigneePersonId: acquisitionItems.assigneePersonId, assigneeName: persons.displayName,
   }).from(acquisitionItems)
     .leftJoin(workItems, eq(workItems.acquisitionItemId, acquisitionItems.id))
+    .leftJoin(persons, eq(persons.id, acquisitionItems.assigneePersonId))
     .where(and(
       isNull(workItems.id),
       or(eq(acquisitionItems.seasonId, seasonId), isNull(acquisitionItems.seasonId)),
@@ -437,7 +439,12 @@ function outcomeOf(title: string, rows: readonly UnlinkedRow[]): AdoptOutcome {
   if (same.length === 1) {
     const [row] = same;
     return {
-      source: row.source, name: row.name, existing: { id: row.id, name: row.name },
+      source: row.source, name: row.name,
+      existing: {
+        id: row.id, name: row.name,
+        assignee: row.assigneePersonId === null || row.assigneeName === null
+          ? null : { id: row.assigneePersonId, name: row.assigneeName },
+      },
       boardTitle: purchaseTitle(row.source, row.name, row.quantityNeeded), refusal: null,
     };
   }
@@ -496,7 +503,9 @@ export async function adoptPurchaseItems(
       let rowId: string;
       if (outcome.existing !== null) {
         rowId = outcome.existing.id;
-        /* The row keeps its own person; the item's fills only a blank. */
+        /* The row keeps its own person; the item's fills only a blank. When
+           the two differ the item's is replaced by the row's, below — the
+           drawer said so before the button (`existing.assignee`). */
         if (item.assigneePersonId !== null) {
           await scoped.update(acquisitionItems)
             .set({ assigneePersonId: item.assigneePersonId, updatedAt: new Date(), updatedBy: actor })
