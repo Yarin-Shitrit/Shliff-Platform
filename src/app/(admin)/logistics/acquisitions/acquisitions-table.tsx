@@ -89,7 +89,19 @@ export function AcquisitionsTable({
       numeric: true,
       // Null is "nobody has priced it", and a dash says that. A zero here
       // would claim the camp expects it to be free.
-      cell: (row) => (row.estimatedAgorot === null ? DASH : <Money agorot={row.estimatedAgorot} />),
+      cell: (row) => (row.estimatedAgorot === null || row.unitEstimateAgorot === null ? DASH : (
+        <>
+          <Money agorot={row.estimatedAgorot} />
+          {/* The figure is a product, and says of what: a lead who sees
+              1,800 ₪ beside "12" should not have to divide to find the price
+              that was typed. One of something is its own price. */}
+          {row.quantityNeeded > 1 ? (
+            <span className={styles.cellNote}>
+              <bdi>{row.quantityNeeded}{' × '}<Money agorot={row.unitEstimateAgorot} /></bdi>
+            </span>
+          ) : null}
+        </>
+      )),
     },
     {
       key: 'actual',

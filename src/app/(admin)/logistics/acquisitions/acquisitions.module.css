@@ -47,6 +47,16 @@
   margin-block-start: 2px;
 }
 
+/* How a row's estimate was reached — count × unit price — under the figure,
+   in the meta size so the total stays the number the column is read by. */
+.cellNote {
+  display: block;
+  margin-block-start: 2px;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+  white-space: nowrap;
+}
+
 .rowActions {
   display: inline-flex;
   align-items: center;
@@ -128,3 +138,15 @@
   color: var(--ink-3);
   font-size: 13px;
 }
+
+/* The product of the count and the unit price, live under the two amounts. */
+.formTotal {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+.formTotal strong { color: var(--ink-1); }

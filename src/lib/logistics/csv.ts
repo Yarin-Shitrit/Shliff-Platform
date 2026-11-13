@@ -77,7 +77,7 @@ export function warehouseCsvRows(items: readonly WarehouseRow[]): string[][] {
  */
 export function acquisitionsCsvRows(rows: readonly AcquisitionRow[], seasonName: string): string[][] {
   return [
-    ['שם הפריט', 'שייך ל', 'קטגוריה', 'כמות דרושה', 'דרך ההשגה', 'אומדן', 'בפועל', 'אחראי', 'משאיל', 'סטטוס', 'מקור הנתון'],
+    ['שם הפריט', 'שייך ל', 'קטגוריה', 'כמות דרושה', 'דרך ההשגה', 'מחיר ליחידה (אומדן)', 'אומדן לכל הכמות', 'בפועל', 'אחראי', 'משאיל', 'סטטוס', 'מקור הנתון'],
     ...rows.map((row) => [
       row.name,
       row.seasonId === null ? CAMP_WIDE_LABEL : seasonName,
@@ -88,6 +88,10 @@ export function acquisitionsCsvRows(rows: readonly AcquisitionRow[], seasonName:
          a number a reader can sum, and `4,850 ₪` is text. Null stays empty —
          "nobody has priced it" is not zero, and a zero here would be a figure
          somebody could total. */
+      row.unitEstimateAgorot === null ? NONE : fromAgorot(row.unitEstimateAgorot),
+      /* The product, written out: the file leaves the app, and a reader
+         should not have to know that this column is the two before it
+         multiplied. */
       row.estimatedAgorot === null ? NONE : fromAgorot(row.estimatedAgorot),
       row.actualAgorot === null ? NONE : fromAgorot(row.actualAgorot),
       row.assignee?.name ?? NONE,

@@ -21,6 +21,8 @@ import { Banner } from '@/components/ui/banner';
 import { useToast } from '@/components/ui/toaster';
 import { isBlank } from '@/lib/text/normalize';
 import { formatShekels } from '@/lib/money';
+import { Money } from '@/components/format';
+import { typedEstimate } from '@/lib/logistics/estimate';
 import type { AcquisitionRow } from '@/lib/logistics/acquisitions';
 import { CAMP_WIDE_LABEL, CATEGORY_LABELS, SOURCE_LABELS } from '@/lib/logistics/labels';
 import { itemHref as planItemHref, PLAN_PATH } from '@/lib/logistics/plan-views';
@@ -67,7 +69,7 @@ export function AcquisitionDrawer({
   const [category, setCategory] = useState<LogisticsCategory>(row?.category ?? 'general');
   const [quantity, setQuantity] = useState(String(row?.quantityNeeded ?? 1));
   const [source, setSource] = useState<AcquisitionSource>(row?.source ?? 'buy_new');
-  const [estimate, setEstimate] = useState(amountValue(row?.estimatedAgorot ?? null));
+  const [estimate, setEstimate] = useState(amountValue(row?.unitEstimateAgorot ?? null));
   const [actual, setActual] = useState(amountValue(row?.actualAgorot ?? null));
   const [assignee, setAssignee] = useState(row?.assignee?.id ?? '');
   const [lender, setLender] = useState(row?.lender?.id ?? '');
@@ -82,6 +84,9 @@ export function AcquisitionDrawer({
   const [refusal, setRefusal] = useState<Refusal | null>(null);
 
   const borrowed = source === 'borrow_member';
+  /* The row's estimate, as the two boxes stand right now. Null while either
+     cannot be read — then nothing is shown rather than a total of a guess. */
+  const product = typedEstimate(estimate, quantity);
 
   function errorFor(where: Refusal['where']): string | undefined {
     return refusal?.where === where ? refusal.message : undefined;
@@ -219,8 +224,8 @@ export function AcquisitionDrawer({
         <div className={styles.pair}>
           <Field
             id="acq-estimate"
-            label="אומדן"
-            hint="כמה זה אמור לעלות. ריק פירושו שעוד לא תמחרו — לא שזה בחינם."
+            label="מחיר ליחידה (אומדן)"
+            hint="כמה אחד כזה אמור לעלות — את ההכפלה בכמות המערכת עושה. ריק פירושו שעוד לא תמחרו — לא שזה בחינם."
           >
             <MoneyInput id="acq-estimate" value={estimate} onChange={setEstimate} />
           </Field>
@@ -228,11 +233,20 @@ export function AcquisitionDrawer({
           <Field
             id="acq-actual"
             label="בפועל"
-            hint="כמה זה עלה בסוף. ריק פירושו שעוד לא נקנה."
+            hint="כמה שולם בסוף על כל הכמות — הסכום שבקבלה, לא מחיר ליחידה. ריק פירושו שעוד לא נקנה."
           >
             <MoneyInput id="acq-actual" value={actual} onChange={setActual} />
           </Field>
         </div>
+
+        {product !== null && (
+          <p className={styles.formTotal} aria-live="polite">
+            {'אומדן לכל הכמות: '}
+            <strong><Money agorot={product.totalAgorot} /></strong>
+            {' · '}
+            <bdi>{product.quantity}{' × '}<Money agorot={product.unitAgorot} /></bdi>
+          </p>
+        )}
 
         <Field
           id="acq-assignee"
