@@ -312,23 +312,79 @@ export function purchaseTitle(source: AcquisitionSource, name: string, quantity:
 
 /** The first words a lead writes when an item is a thing to buy. */
 const PURCHASE_OPENING = /^(?:לקנות|לרכוש|קניית|רכישת)\s+\S/;
-const PURCHASE_VERB = /^(?:לקנות|לרכוש|קניית|רכישת)\s+/;
+
+/**
+ * Every opening the list's own vocabulary knows, and the way of getting
+ * the thing each one says: the buying words a lead writes, and the two
+ * verbs `purchaseTitle` itself writes for the other sources.
+ */
+const VERB_SOURCES: ReadonlyArray<readonly [string, AcquisitionSource]> = [
+  ['לקנות', 'buy_new'], ['לרכוש', 'buy_new'], ['קניית', 'buy_new'], ['רכישת', 'buy_new'],
+  [PURCHASE_VERBS.second_hand, 'second_hand'],
+  [PURCHASE_VERBS.borrow_member, 'borrow_member'],
+];
+/** Whitespace and the invisible marks a browser adds around pasted Hebrew. */
+const EDGES = /^[\s\u00a0\u200b\u200d\u200e\u200f]+|[\s\u00a0\u200b\u200d\u200e\u200f]+$/g;
 
 /** Whether an item's title reads as buying something: a buying verb, then a thing. */
 export function looksLikePurchase(title: string): boolean {
   return PURCHASE_OPENING.test(normalizeHebrew(title));
 }
 
+export interface PurchaseReading {
+  /** The way of getting it the title's own first word says; buying when it says none. */
+  source: AcquisitionSource;
+  /** The thing itself, in the lead's spelling. */
+  name: string;
+}
+
 /**
- * The thing itself, for the row's name: ״לקנות מכולה״ → ״מכולה״. A title
- * that is not a buying sentence is kept whole — the lead chose it, and the
- * board's title is rewritten from the name afterwards anyway. A title that
- * is only the verb is kept too: a row with no name is a refusal, not a row.
+ * What a board title says about a purchase: ״לקנות מכולה״ is buying a
+ * ״מכולה״, ״להשיג מקרר״ is a second-hand ״מקרר״. The verb is read, never
+ * added to: a title that already opens with one of the list's verbs keeps
+ * it, so the board's line is not rewritten into ״לקנות להשיג מקרר״.
+ *
+ * The name is cut out of the title as it was typed. Nothing here is
+ * normalised — `normalizeHebrew` is for comparing, and storing its output
+ * turned the geresh of ״צ׳ילר״ into an apostrophe no lead wrote.
+ *
+ * A title with no verb is kept whole and read as buying — the lead ticked
+ * it as a purchase, and the drawer says how it will go in. A title that is
+ * only the verb is kept too: a row with no name is a refusal, not a row.
  */
+export function readPurchase(title: string): PurchaseReading {
+  const whole = title.replace(EDGES, '');
+  for (const [verb, source] of VERB_SOURCES) {
+    if (!whole.startsWith(verb)) continue;
+    const rest = whole.slice(verb.length);
+    if (!/^[\s\u00a0]/.test(rest)) continue;
+    const name = rest.replace(EDGES, '');
+    if (name !== '') return { source, name };
+  }
+  return { source: 'buy_new', name: whole };
+}
+
+/** The thing itself, for the row's name: ״לקנות מכולה״ → ״מכולה״. */
 export function purchaseNameOf(title: string): string {
-  const clean = normalizeHebrew(title);
-  const name = clean.replace(PURCHASE_VERB, '').trim();
-  return name === '' ? clean : name;
+  return readPurchase(title).name;
+}
+
+/**
+ * What moving one board item to the acquisitions list will do, worked out
+ * before the button is pressed and again, from the database, when it is.
+ */
+export interface AdoptOutcome extends PurchaseReading {
+  /** A row of the same name already in the list with no line on the board:
+   *  the item is linked to it, and no second row is written. */
+  existing: { id: string; name: string } | null;
+  /** The board's title after the move. */
+  boardTitle: string;
+  /**
+   * Why this item cannot move from here. `needs_lender`: a borrowed thing
+   * has to name who lends it, and the board does not know. `ambiguous`:
+   * more than one row carries the name, and the system does not pick.
+   */
+  refusal: 'needs_lender' | 'ambiguous' | null;
 }
 
 export interface AdoptableItem {
@@ -338,6 +394,8 @@ export interface AdoptableItem {
   suggested: boolean;
   assignee: { personId: string; displayName: string } | null;
   parentId: string | null;
+  /** What the move will do with it; the page fills it in for the drawer. */
+  outcome?: AdoptOutcome;
 }
 
 /**
@@ -567,15 +625,21 @@ export interface PlanGroup {
 export const TOPIC_HUES = 6;
 
 /**
- * The colour slot of a topic: its index in the season's topics, which
- * `listTopics` orders by position, wrapped into `TOPIC_HUES`. Stable for
- * as long as the topics keep their order, which they do — a topic is
- * archived, never reordered. Null for an item under no topic, and for a
- * topic the list does not know.
+ * The colour slot of a topic: its place among the season's topics by the
+ * lead's own order (position, then name), wrapped into `TOPIC_HUES`.
+ *
+ * Archived topics are counted where they stand. `listTopics` hands them
+ * over last, and taking the index in that list meant archiving ״מטבח״
+ * repainted every topic after it — the colour a lead had learned for
+ * ״סלון״ became another topic's overnight. Null for an item under no
+ * topic, and for a topic the list does not know.
  */
-export function topicHue(topics: readonly Pick<Topic, 'id'>[], topicId: string | null): number | null {
+export function topicHue(
+  topics: readonly Pick<Topic, 'id' | 'position' | 'name'>[], topicId: string | null,
+): number | null {
   if (topicId === null) return null;
-  const index = topics.findIndex((topic) => topic.id === topicId);
+  const inOrder = [...topics].sort((a, b) => a.position - b.position || a.name.localeCompare(b.name, 'he'));
+  const index = inOrder.findIndex((topic) => topic.id === topicId);
   return index === -1 ? null : (index % TOPIC_HUES) + 1;
 }
 

@@ -21,6 +21,7 @@ import { Checkbox } from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toaster';
 import type { AdoptableItem } from '@/lib/logistics/plan';
+import { SOURCE_LABELS } from '@/lib/logistics/labels';
 import { adoptPurchaseItemsAction } from './actions';
 import { NOTHING_CHOSEN } from './failure-messages';
 import styles from './plan.module.css';
@@ -34,11 +35,38 @@ export interface AdoptDrawerProps {
   listHref: string;
 }
 
+/** An item the move would refuse is never ticked and cannot be. */
+function movable(item: AdoptableItem): boolean {
+  return (item.outcome?.refusal ?? null) === null;
+}
+
+/**
+ * What will happen to this one item, said under it before the button: the
+ * name and the way of getting it the row will carry, the board's new title
+ * when it changes, that it joins a row already in the list instead of
+ * making a second — or why it cannot move from here.
+ */
+function outcomeLine(item: AdoptableItem): string | null {
+  const outcome = item.outcome;
+  if (outcome === undefined) return null;
+  if (outcome.refusal === 'needs_lender') {
+    return 'השאלה צריכה שם של המשאיל/ה, ולכן היא לא עוברת מכאן. מוסיפים את הפריט ברשימת הרכש והוא מופיע בלוח לבד; את המשימה הזו אפשר אז לבטל.';
+  }
+  if (outcome.refusal === 'ambiguous') {
+    return `ברשימת הרכש יש יותר מפריט אחד בשם ״${outcome.name}״, ואי אפשר לדעת לאיזה מהם לקשר. אחרי שינוי השם של אחד מהם שם, המשימה תוכל לעבור.`;
+  }
+  if (outcome.existing !== null) {
+    return `״${outcome.existing.name}״ כבר ברשימת הרכש — המשימה תקושר לפריט הקיים, ולא ייווצר פריט נוסף.`;
+  }
+  const retitled = outcome.boardTitle === item.title.trim() ? '' : ` · בלוח תיקרא ״${outcome.boardTitle}״`;
+  return `תיכנס כ״${outcome.name}״ · ${SOURCE_LABELS[outcome.source]}${retitled}`;
+}
+
 export function AdoptDrawer({ seasonId, seasonName, candidates, closeHref, listHref }: AdoptDrawerProps) {
   const router = useRouter();
   const { show } = useToast();
   const [chosen, setChosen] = useState<Set<string>>(
-    () => new Set(candidates.filter((item) => item.suggested).map((item) => item.id)),
+    () => new Set(candidates.filter((item) => item.suggested && movable(item)).map((item) => item.id)),
   );
   const [pending, setPending] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
@@ -76,6 +104,7 @@ export function AdoptDrawer({ seasonId, seasonName, candidates, closeHref, listH
 
   function row(item: AdoptableItem) {
     const label = item.assignee === null ? item.title : `${item.title} · ${item.assignee.displayName}`;
+    const line = outcomeLine(item);
     return (
       <li key={item.id} className={styles.adoptRow}>
         <Checkbox
@@ -83,8 +112,9 @@ export function AdoptDrawer({ seasonId, seasonName, candidates, closeHref, listH
           label={label}
           checked={chosen.has(item.id)}
           onChange={(on) => { toggle(item.id, on); }}
-          disabled={pending}
+          disabled={pending || !movable(item)}
         />
+        {line === null ? null : <span className={styles.adoptOutcome}><bdi>{line}</bdi></span>}
       </li>
     );
   }
@@ -108,7 +138,7 @@ export function AdoptDrawer({ seasonId, seasonName, candidates, closeHref, listH
         <p className={styles.adoptLead}>
           {'כל משימה שתסומן תיכנס ל'}
           <Link href={listHref}>רשימת הרכש</Link>
-          {' כפריט ״לקנות חדש״, כמות 1, עם האחראי שלה — ותישאר בלוח, מקושרת לפריט. מעכשיו רכש נכנס מרשימת הרכש ומופיע בלוח לבד.'}
+          {' כפריט בכמות 1, עם האחראי שלה — ותישאר בלוח, מקושרת לפריט. מתחת לכל משימה כתוב איך היא תיכנס. מעכשיו רכש נכנס מרשימת הרכש ומופיע בלוח לבד.'}
         </p>
 
         {candidates.length === 0 ? (

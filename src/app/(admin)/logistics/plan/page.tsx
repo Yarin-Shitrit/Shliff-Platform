@@ -13,6 +13,7 @@ import {
   parsePlanQuery, planHref, itemHref, newItemHref, newTopicHref, adoptHref, type RawParams,
 } from '@/lib/logistics/plan-views';
 import { acquisitionsHref } from '@/lib/logistics/acquisitions-views';
+import { adoptOutcomes } from '@/lib/logistics/acquisitions';
 import { TopBar, SeasonChip } from '@/components/shell/top-bar';
 import { StatTile } from '@/components/ui/stat-tile';
 import { Banner } from '@/components/ui/banner';
@@ -114,6 +115,8 @@ export default async function PlanPage(
      read as buying. A purchase entered on רכש lands here on its own; these
      are the ones written here first, and the banner offers the move. */
   const adoptable = adoptableItems(items);
+  /* What the move would do with each, only when its drawer is open. */
+  const outcomes = query.adopting ? await adoptOutcomes(db, current.id, adoptable) : null;
   const suggested = adoptable.filter((candidate) => candidate.suggested).length;
   const listHref = acquisitionsHref(here, {});
 
@@ -360,7 +363,7 @@ export default async function PlanPage(
         <AdoptDrawer
           seasonId={current.id}
           seasonName={current.name}
-          candidates={adoptable}
+          candidates={adoptable.map((candidate) => ({ ...candidate, outcome: outcomes?.get(candidate.id) }))}
           closeHref={closeHref}
           listHref={listHref}
         />

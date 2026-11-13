@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
 import type { Db } from '@/db';
 import type { AnyDb } from '@/lib/db-types';
-import { isBlank } from '@/lib/text/normalize';
+import { isBlank, normalizeHebrew } from '@/lib/text/normalize';
 import { toAgorot, fromAgorot } from '@/lib/money';
 import { persons } from '@/db/schema/camp';
 import {
@@ -10,7 +10,7 @@ import {
   type ItemCondition,
 } from '@/db/schema/logistics';
 import { createItem, addToItem, itemById } from './warehouse';
-import { createItem as createPlanItem, purchaseNameOf, purchaseTitle } from './plan';
+import { createItem as createPlanItem, purchaseTitle, readPurchase, type AdoptOutcome } from './plan';
 import { statusOf, type AcquisitionQuery } from './acquisitions-views';
 
 /**
@@ -384,12 +384,71 @@ export async function updateAcquisition(
 }
 
 /**
+ * The rows a board item could be the line of: this season's and the
+ * camp-wide ones, not yet arrived, that no work item points at. Rows
+ * written before purchases had lines are all like this.
+ */
+async function unlinkedRows(db: AnyDb, seasonId: string) {
+  const rows = await db.select({
+    id: acquisitionItems.id, name: acquisitionItems.name, status: acquisitionItems.status,
+    source: acquisitionItems.source, quantityNeeded: acquisitionItems.quantityNeeded,
+  }).from(acquisitionItems)
+    .leftJoin(workItems, eq(workItems.acquisitionItemId, acquisitionItems.id))
+    .where(and(
+      isNull(workItems.id),
+      or(eq(acquisitionItems.seasonId, seasonId), isNull(acquisitionItems.seasonId)),
+    ));
+  return rows.filter((row) => row.status !== 'arrived');
+}
+type UnlinkedRow = Awaited<ReturnType<typeof unlinkedRows>>[number];
+
+/**
+ * One item against the list. Names are compared normalised — a geresh and
+ * an apostrophe are one spelling to a reader — and never stored that way.
+ * A row of the same name wins over what the verb says: ״להשאיל אוהל״ with
+ * a borrowed ״אוהל״ already in the list is that row's line.
+ */
+function outcomeOf(title: string, rows: readonly UnlinkedRow[]): AdoptOutcome {
+  const reading = readPurchase(title);
+  const key = normalizeHebrew(reading.name);
+  const same = rows.filter((row) => normalizeHebrew(row.name) === key);
+  const fresh = { ...reading, existing: null, boardTitle: purchaseTitle(reading.source, reading.name, 1) };
+  if (same.length > 1) return { ...fresh, refusal: 'ambiguous' };
+  if (same.length === 1) {
+    const [row] = same;
+    return {
+      source: row.source, name: row.name, existing: { id: row.id, name: row.name },
+      boardTitle: purchaseTitle(row.source, row.name, row.quantityNeeded), refusal: null,
+    };
+  }
+  return { ...fresh, refusal: reading.source === 'borrow_member' ? 'needs_lender' : null };
+}
+
+/**
+ * What the move would do with each of these items, for the drawer to say
+ * before anything is pressed. The move itself asks again, inside its
+ * transaction — this is a preview, not a promise.
+ */
+export async function adoptOutcomes(
+  db: AnyDb, seasonId: string, items: readonly { id: string; title: string }[],
+): Promise<Map<string, AdoptOutcome>> {
+  if (items.length === 0) return new Map();
+  const rows = await unlinkedRows(db, seasonId);
+  return new Map(items.map((item) => [item.id, outcomeOf(item.title, rows)]));
+}
+
+/**
  * The one-time move the board asked for: open items that are really
- * things to buy become rows in the list, each linked to its item. The
+ * things to get become rows in the list, each linked to its item. The
  * item stays on the board — that is where a purchase lives from now on —
- * renamed from the row (״קניית קרשים״ → ״לקנות קרשים״), with its person
+ * titled from the row (״קניית קרשים״ → ״לקנות קרשים״), with its person
  * carried over. Category, count and cost are the row's defaults: the
  * title says none of them, and the list is where they get filled in.
+ *
+ * An item whose thing is already a row in the list is linked to that row
+ * instead: a second ״מכולה״ beside the first is the drift this link exists
+ * to end. Two rows of the name, or a borrowed thing with no lender, are
+ * refused — neither is the system's to decide.
  *
  * All or nothing. A refusal names the item, and the rows written before
  * it are rolled back, so a half-moved board cannot happen.
@@ -409,22 +468,40 @@ export async function adoptPurchaseItems(
       if (item.acquisitionItemId !== null) throw new Error(`work item ${itemId} is already in the acquisitions list`);
       if (item.status !== 'open') throw new Error(`work item ${itemId} is not open`);
 
-      const name = purchaseNameOf(item.title);
-      const [row] = await scoped.insert(acquisitionItems).values({
-        seasonId,
-        name,
-        category: 'general',
-        quantityNeeded: 1,
-        source: 'buy_new',
-        assigneePersonId: item.assigneePersonId,
-        updatedBy: actor,
-      }).returning();
-      await scoped.update(workItems).set({
-        acquisitionItemId: row.id,
-        title: purchaseTitle('buy_new', name, 1),
-        updatedAt: new Date(),
-        updatedBy: actor,
-      }).where(eq(workItems.id, item.id));
+      /* Read again for every item: the one before it may have taken a row. */
+      const outcome = outcomeOf(item.title, await unlinkedRows(scoped, seasonId));
+      if (outcome.refusal === 'ambiguous') throw new Error(`several acquisitions share the name of work item ${itemId}`);
+      if (outcome.refusal === 'needs_lender') throw new Error(`a borrowed work item needs a lender: ${itemId}`);
+
+      let rowId: string;
+      if (outcome.existing !== null) {
+        rowId = outcome.existing.id;
+        /* The row keeps its own person; the item's fills only a blank. */
+        if (item.assigneePersonId !== null) {
+          await scoped.update(acquisitionItems)
+            .set({ assigneePersonId: item.assigneePersonId, updatedAt: new Date(), updatedBy: actor })
+            .where(and(eq(acquisitionItems.id, rowId), isNull(acquisitionItems.assigneePersonId)));
+        }
+      } else {
+        const [row] = await scoped.insert(acquisitionItems).values({
+          seasonId,
+          name: outcome.name,
+          category: 'general',
+          quantityNeeded: 1,
+          source: outcome.source,
+          assigneePersonId: item.assigneePersonId,
+          updatedBy: actor,
+        }).returning();
+        rowId = row.id;
+      }
+      /* Only while it is still unlinked: two leads pressing at once must not
+         leave the loser's row behind with no line. */
+      const linked = await scoped.update(workItems)
+        .set({ acquisitionItemId: rowId })
+        .where(and(eq(workItems.id, item.id), isNull(workItems.acquisitionItemId)))
+        .returning();
+      if (linked.length === 0) throw new Error(`work item ${itemId} is already in the acquisitions list`);
+      await followPurchase(scoped, rowId, actor);
     }
     return itemIds.length;
   });

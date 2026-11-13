@@ -7,7 +7,7 @@ import {
   createItem, updateItem, scheduleItem, setItemStatus, planItemById,
   addDependency, removeDependency, listPlan,
   buildPlanTree, buildTimeline, timelineWindow, stepWindow, topicHue, summarizePlan, validateSchedule, datesConflict,
-  planRoster, purchaseTitle, purchaseNameOf, looksLikePurchase, adoptableItems,
+  planRoster, purchaseTitle, purchaseNameOf, readPurchase, looksLikePurchase, adoptableItems,
   type PlanItem, type Topic,
 } from './plan';
 import { createAcquisition, setAcquisitionStatus } from './acquisitions';
@@ -309,6 +309,10 @@ describe('the tree', () => {
     expect(topics.map((one) => topicHue(topics, one.id))).toEqual([1, 2, 3, 4, 5, 6, 1, 2]);
     expect(topicHue(topics, null)).toBeNull();
     expect(topicHue(topics, 'nobody')).toBeNull();
+    /* Archiving the first topic sends it to the end of `listTopics`. Every
+       colour stays where it was: t0 is still slot 1, t1 still slot 2. */
+    const afterArchive = [...topics.slice(1), topic({ id: 't0', position: 0, archivedAt: new Date() })];
+    expect(topics.map((one) => topicHue(afterArchive, one.id))).toEqual([1, 2, 3, 4, 5, 6, 1, 2]);
     const groups = buildPlanTree([item({ id: 'a' })], topics.slice(0, 2));
     expect(groups.map((group) => group.hue)).toEqual([1, 2, null]);
   });
@@ -449,6 +453,24 @@ describe('the words of a purchase', () => {
     expect(purchaseNameOf('קניית קרשים לספסלים')).toBe('קרשים לספסלים');
     expect(purchaseNameOf('גז למטבח')).toBe('גז למטבח');
     expect(purchaseNameOf('לקנות')).toBe('לקנות');
+  });
+
+  it('keeps the name exactly as it was typed: a geresh stays a geresh', () => {
+    // U+05F3 and U+05F4, not the ASCII quotes `normalizeHebrew` would leave.
+    expect(purchaseNameOf('לקנות צ\u05F3ילר')).toBe('צ\u05F3ילר');
+    expect(purchaseNameOf('  קניית מנג\u05F4ל גדול ')).toBe('מנג\u05F4ל גדול');
+  });
+
+  it('reads the way of getting it from the verb the lead wrote, and buying when there is none', () => {
+    expect(readPurchase('לקנות מכולה')).toEqual({ source: 'buy_new', name: 'מכולה' });
+    expect(readPurchase('רכישת קרשים')).toEqual({ source: 'buy_new', name: 'קרשים' });
+    expect(readPurchase('להשיג מקרר')).toEqual({ source: 'second_hand', name: 'מקרר' });
+    expect(readPurchase('להשאיל אוהל')).toEqual({ source: 'borrow_member', name: 'אוהל' });
+    expect(readPurchase('גז למטבח')).toEqual({ source: 'buy_new', name: 'גז למטבח' });
+    // A word that only starts like a verb is part of the name.
+    expect(readPurchase('להשיגם')).toEqual({ source: 'buy_new', name: 'להשיגם' });
+    // The title the board writes reads back to what it was written from.
+    expect(readPurchase(purchaseTitle('second_hand', 'מקרר', 1))).toEqual({ source: 'second_hand', name: 'מקרר' });
   });
 
   it('offers every open item not yet in the list, suggesting the ones that read as buying', () => {

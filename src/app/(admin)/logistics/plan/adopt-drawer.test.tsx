@@ -87,6 +87,39 @@ describe('the drawer that moves buying items to the acquisitions list', () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  it('says under each item how it will go in, and when it joins a row already in the list', () => {
+    mount({
+      candidates: [
+        { ...CANDIDATES[0], outcome: { source: 'buy_new', name: 'מכולה', existing: { id: 'r', name: 'מכולה' }, boardTitle: 'לקנות מכולה', refusal: null } },
+        { ...CANDIDATES[1], outcome: { source: 'buy_new', name: 'קרשים', existing: null, boardTitle: 'לקנות קרשים', refusal: null } },
+        { ...CANDIDATES[2], outcome: { source: 'buy_new', name: 'להכין סלון', existing: null, boardTitle: 'לקנות להכין סלון', refusal: null } },
+      ],
+    });
+    const dialog = screen.getByRole('dialog').textContent ?? '';
+    expect(dialog).toContain('״מכולה״ כבר ברשימת הרכש — המשימה תקושר לפריט הקיים, ולא ייווצר פריט נוסף.');
+    expect(dialog).toContain('תיכנס כ״קרשים״ · לקנות חדש · בלוח תיקרא ״לקנות קרשים״');
+    expect(dialog).toContain('בלוח תיקרא ״לקנות להכין סלון״');
+    expect(dialog).not.toMatch(/[A-Za-z]/);
+  });
+
+  it('never ticks an item the move would refuse, and does not let it be ticked', async () => {
+    mount({
+      candidates: [
+        { ...CANDIDATES[0], outcome: { source: 'buy_new', name: 'מכולה', existing: null, boardTitle: 'לקנות מכולה', refusal: 'ambiguous' } },
+        { ...CANDIDATES[1], outcome: { source: 'borrow_member', name: 'קרשים', existing: null, boardTitle: 'להשאיל קרשים', refusal: 'needs_lender' } },
+        CANDIDATES[2],
+      ],
+    });
+    const container = screen.getByLabelText('לקנות מכולה · אופק') as HTMLInputElement;
+    const boards = screen.getByLabelText('קניית קרשים') as HTMLInputElement;
+    expect([container.checked, container.disabled]).toEqual([false, true]);
+    expect([boards.checked, boards.disabled]).toEqual([false, true]);
+    expect(screen.getByRole('dialog').textContent).toContain('יותר מפריט אחד בשם ״מכולה״');
+    expect(screen.getByRole('dialog').textContent).toContain('השאלה צריכה שם של המשאיל/ה');
+    await press('העברה לרכש');
+    expect(actions.adoptPurchaseItemsAction).not.toHaveBeenCalled();
+  });
+
   it('says so when there is nothing to move, and disables the verb', () => {
     mount({ candidates: [] });
     expect(screen.getByText(/אין בלוח משימות פתוחות/)).toBeTruthy();
