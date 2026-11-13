@@ -46,8 +46,10 @@ const TONE_CLASS: Record<PopoverTriggerTone, string> = {
   bulk: 'bulk',
 };
 
-type PanelPosition = { top: number; left: number };
+type PanelPosition = { top: number; left: number; maxHeight: number };
 const GAP = 6;
+/** Kept clear between the panel and the viewport's edge. */
+const EDGE = 8;
 
 /**
  * Physical `left`/`top`, not a logical inset: the panel is portaled to
@@ -56,11 +58,22 @@ const GAP = 6;
  * is the trigger's *right* edge and "inline-end" its *left* in this app's
  * fixed RTL, but that fact only picks which candidate is tried first — the
  * one actually used is whichever fits, from the rect and viewport width.
+ *
+ * The block axis is bounded too. A `fixed` panel does not scroll with the
+ * page, so a list longer than the room under its trigger — the merge picker
+ * lists every person in the system — ran off the bottom of the window with
+ * its last rows unreachable. `maxHeight` is the room there actually is, and
+ * the panel scrolls inside it (`.panel`'s `overflow-y`). It opens upwards
+ * only when it does not fit below *and* there is more room above.
  */
-function computePanelPosition(
-  trigger: DOMRect, panelWidth: number, preferredAlign: 'start' | 'end',
+export function computePanelPosition(
+  trigger: Pick<DOMRect, 'top' | 'bottom' | 'left' | 'right'>,
+  panel: { width: number; height: number },
+  preferredAlign: 'start' | 'end',
+  viewport: { width: number; height: number } = { width: window.innerWidth, height: window.innerHeight },
 ): PanelPosition {
-  const viewportWidth = window.innerWidth;
+  const panelWidth = panel.width;
+  const viewportWidth = viewport.width;
   const startLeft = trigger.right - panelWidth; // panel's start (right) edge meets the trigger's
   const endLeft = trigger.left;                 // panel's end (left) edge meets the trigger's
   const preferred = preferredAlign === 'start' ? startLeft : endLeft;
@@ -69,7 +82,12 @@ function computePanelPosition(
   const left = fits(preferred)
     ? preferred
     : fits(fallback) ? fallback : Math.min(Math.max(preferred, 0), Math.max(viewportWidth - panelWidth, 0));
-  return { top: trigger.bottom + GAP, left };
+  const below = Math.max(viewport.height - (trigger.bottom + GAP) - EDGE, 0);
+  const above = Math.max(trigger.top - GAP - EDGE, 0);
+  if (panel.height <= below || below >= above) {
+    return { top: trigger.bottom + GAP, left, maxHeight: below };
+  }
+  return { top: trigger.top - GAP - Math.min(panel.height, above), left, maxHeight: above };
 }
 
 export function Popover({
@@ -106,8 +124,9 @@ export function Popover({
       setPosition(null);
       return;
     }
+    const panel = panelRef.current.getBoundingClientRect();
     setPosition(computePanelPosition(
-      triggerRef.current.getBoundingClientRect(), panelRef.current.getBoundingClientRect().width, align,
+      triggerRef.current.getBoundingClientRect(), { width: panel.width, height: panel.height }, align,
     ));
   }, [open, align]);
 
@@ -161,6 +180,7 @@ export function Popover({
           id={`${id}-panel`}
           style={{
             top: position?.top ?? 0, left: position?.left ?? 0,
+            maxBlockSize: position?.maxHeight,
             visibility: position === null ? 'hidden' : 'visible',
           }}
           onClick={(event) => {
