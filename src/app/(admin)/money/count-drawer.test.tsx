@@ -52,6 +52,19 @@ describe('CountDrawer', () => {
    * The consequence is stated before the button: what the day does to the
    * movements on either side of it, and what the account carries now.
    */
+  /*
+   * The drawer opens on today, and so does every payment form. A payment
+   * typed tonight with today's date is inside a count made at noon, so the
+   * warning is there while today is chosen and gone for any other day.
+   */
+  it('warns, while today is the count day, that today’s later movements will not move the balance', () => {
+    renderDrawer();
+    expect(screen.getByText(/בחשבון בסוף היום שתבחרו/)).toBeTruthy();
+    expect(screen.getByText(/בחרתם את היום/).textContent).toContain('ספרו שוב בסוף היום');
+    fireEvent.change(screen.getByLabelText('נכון לתאריך'), { target: { value: '2025-10-30' } });
+    expect(screen.queryByText(/בחרתם את היום/)).toBeNull();
+  });
+
   it('says what the count day does, and that a never-counted account is an opening', () => {
     renderDrawer();
     expect(screen.getByText(/תנועות עד היום הזה \(כולל\) כבר כלולות בסכום/)).toBeTruthy();
@@ -124,7 +137,7 @@ describe('CountDrawer', () => {
 describe('absorbedSentence', () => {
   it('agrees with the numbers', () => {
     expect(absorbedSentence(0, 0))
-      .toBe('אף תנועה רשומה לא קדמה לספירה, ומכאן כל תנועה חדשה תשנה את היתרה.');
+      .toBe('אף תנועה רשומה לא קדמה לספירה, ורק תנועה שתאריכה אחרי אותו יום תשנה את היתרה.');
     expect(absorbedSentence(1, 1))
       .toBe('תנועה אחת עד אותו יום כלולה בספירה, ותנועה אחת מאוחרת יותר כבר משנה אותה.');
     expect(absorbedSentence(3, 2))

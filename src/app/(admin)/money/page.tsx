@@ -249,8 +249,9 @@ export default async function MoneyPage(
           * each carry the link — a lead who has never counted needs the
           * sentence more than the link. */}
         <p className={styles.sectionLead}>
-          לא עקבתם אחרי כל ההכנסות וההוצאות? ספרו כמה כסף יש בכל חשבון היום, ומאותו יום
-          כל תנועה שתירשם תעדכן את היתרה. מה שנרשם מלפני הספירה נשמר כהיסטוריה.
+          לא עקבתם אחרי כל ההכנסות וההוצאות? ספרו כמה כסף יש בכל חשבון, ותנועות שתאריכן
+          אחרי יום הספירה יעדכנו את היתרה. מה שנרשם עד יום הספירה, כולל אותו יום, נשמר
+          כהיסטוריה.
         </p>
 
         {/* A bar list compared account balances against each other, which is
