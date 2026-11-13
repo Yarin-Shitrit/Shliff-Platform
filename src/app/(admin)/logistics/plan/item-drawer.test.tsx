@@ -19,7 +19,8 @@ const actions = vi.hoisted(() => ({
 }));
 vi.mock('./actions', () => actions);
 
-import { ItemDrawer, itemDrawerKey, type ItemDrawerProps } from './item-drawer';
+import { ItemDrawer, type ItemDrawerProps } from './item-drawer';
+import { itemDrawerKey } from '@/lib/logistics/plan-views';
 
 const KITCHEN: Topic = {
   id: 'k', seasonId: 's1', name: 'מטבח', position: 0, notes: null, archivedAt: null,

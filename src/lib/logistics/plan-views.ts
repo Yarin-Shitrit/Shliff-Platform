@@ -161,3 +161,23 @@ export function newItemHref(
 export function adoptHref(params: RawParams): string {
   return planHref(params, { [ACT_PARAM]: ADOPT_ACT });
 }
+
+/**
+ * The React key the page gives the item drawer: one per thing it can be
+ * over. Every way into the drawer is a link, and a link from inside it
+ * (״תת־משימה״ on an open item) re-renders the same component with new
+ * props. The form's fields are state seeded from those props once, so
+ * without a key that changes, the new part kept the open item's title and
+ * lost its parent.
+ *
+ * It lives here and not beside the drawer because the page calls it, and
+ * the page is a server component: what a `'use client'` file exports is
+ * only a reference on the server, and calling one throws while the screen
+ * is built. Every item drawer on the board failed that way.
+ */
+export function itemDrawerKey(
+  item: { id: string } | null, presetParentId: string | null = null, presetTopicId: string | null = null,
+): string {
+  if (item !== null) return `item:${item.id}`;
+  return `new:parent=${presetParentId ?? ''}:topic=${presetTopicId ?? ''}`;
+}
