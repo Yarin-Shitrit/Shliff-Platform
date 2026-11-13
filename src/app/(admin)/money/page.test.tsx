@@ -911,6 +911,6 @@ describe('counting what an account holds', () => {
   it('explains the way in when the book was not kept', async () => {
     render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
     expect(screen.getByText(/לא עקבתם אחרי כל ההכנסות וההוצאות\?/).textContent)
-      .toContain('מה שנרשם מלפני הספירה נשמר כהיסטוריה');
+      .toContain('מה שנרשם עד יום הספירה, כולל אותו יום, נשמר');
   });
 });
