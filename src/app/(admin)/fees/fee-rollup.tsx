@@ -38,6 +38,17 @@ export function missingDuesSentence(count: number, seasonName: string): string {
     : `${count} חיובים ברשימת ${seasonName} עדיין לא הונפקו, ולכן הם חסרים מצפי הגבייה.`;
 }
 
+/**
+ * The banner over flat dues that sit on an amount other than today's rate.
+ * Written about the חיוב for the same reason as the sentence above, and it
+ * names the rate so the reader does not have to find it in the header.
+ */
+export function staleRateSentence(count: number, flatRateAgorot: number): string {
+  return count === 1
+    ? `חיוב אחד בתעריף הרגיל הונפק על סכום אחר מהתעריף של היום, ${formatShekels(flatRateAgorot)}.`
+    : `${count} חיובים בתעריף הרגיל הונפקו על סכום אחר מהתעריף של היום, ${formatShekels(flatRateAgorot)}.`;
+}
+
 export interface FeeRollupProps {
   summary: SeasonFeeSummary;
   counts: Record<FeeView, number>;

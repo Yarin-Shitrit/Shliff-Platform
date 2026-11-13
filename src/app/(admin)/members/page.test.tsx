@@ -52,7 +52,7 @@ const SEASON_25 = { id: 's25', name: 'ברן 25', year: 2025, flatRate: '1500.00
 function dues(overrides: Partial<PersonDues> = {}): PersonDues {
   return {
     dueId: 'd1', amountAgorot: 120000, paidAgorot: 0, outstandingAgorot: 120000,
-    kind: 'flat', exceptionReason: null, state: 'unpaid', ...overrides,
+    kind: 'flat', exceptionReason: null, state: 'unpaid', seasonRateAgorot: 120000, ...overrides,
   };
 }
 
@@ -65,6 +65,8 @@ function row(overrides: Partial<PersonListRow> = {}): PersonListRow {
     seasons: [{ seasonId: 's26', name: 'ברן 26', year: 2026, role: 'member' }],
     dues: null,
     outstandingAgorot: 0,
+    scopeOutstandingAgorot: 0,
+    otherSeasonsOutstandingAgorot: 0,
     taskCount: 0,
     lastActivityAt: new Date('2026-09-01T10:00:00Z'),
     onScopeSeason: true,
@@ -174,8 +176,8 @@ describe('/members — the saved views', () => {
 describe('/members — the totals row', () => {
   const people = [
     row({ personId: 'a', displayName: 'אופק כהן', outstandingAgorot: 0, taskCount: 2, dues: dues({ paidAgorot: 120000, outstandingAgorot: 0, state: 'paid' }) }),
-    row({ personId: 'b', displayName: 'נועה לוי', outstandingAgorot: 70000, taskCount: 1, dues: dues({ paidAgorot: 50000, outstandingAgorot: 70000, state: 'partial' }) }),
-    row({ personId: 'c', displayName: 'תמר גולן', outstandingAgorot: 120000, taskCount: 0, dues: dues({ state: 'unpaid' }) }),
+    row({ personId: 'b', displayName: 'נועה לוי', outstandingAgorot: 70000, scopeOutstandingAgorot: 70000, taskCount: 1, dues: dues({ paidAgorot: 50000, outstandingAgorot: 70000, state: 'partial' }) }),
+    row({ personId: 'c', displayName: 'תמר גולן', outstandingAgorot: 120000, scopeOutstandingAgorot: 120000, taskCount: 0, dues: dues({ state: 'unpaid' }) }),
     row({ personId: 'd', displayName: 'ליאור קפלן', outstandingAgorot: 0, taskCount: 0, dues: null }),
   ];
 

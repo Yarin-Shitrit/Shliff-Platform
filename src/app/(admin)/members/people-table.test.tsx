@@ -39,6 +39,7 @@ function dues(overrides: Partial<PersonDues> = {}): PersonDues {
     kind: 'flat',
     exceptionReason: null,
     state: 'unpaid',
+    seasonRateAgorot: 120000,
     ...overrides,
   };
 }
@@ -52,6 +53,8 @@ function row(overrides: Partial<PersonListRow> = {}): PersonListRow {
     seasons: [{ seasonId: 's26', name: 'ברן 26', year: 2026, role: 'member' }],
     dues: null,
     outstandingAgorot: 0,
+    scopeOutstandingAgorot: 0,
+    otherSeasonsOutstandingAgorot: 0,
     taskCount: 0,
     lastActivityAt: new Date('2026-09-01T10:00:00Z'),
     onScopeSeason: true,
@@ -161,11 +164,68 @@ describe('PeopleTable — the numeric columns', () => {
   });
 
   it('writes a real balance through the one money helper', () => {
-    const { container } = renderTable([row({ outstandingAgorot: 70000 })]);
+    const { container } = renderTable([row({ outstandingAgorot: 70000, scopeOutstandingAgorot: 70000 })]);
     /* Scoped to the body: the totals row carries the same figure, which is the
        point of summing it from the displayed rows. */
     const body = container.querySelector('tbody')!;
     expect(within(body as HTMLElement).getByText('700 ₪')).toBeTruthy();
+  });
+
+  /*
+   * The complaint this answers: "I set the dues to 2,000 and the balances
+   * differ". A balance larger than this season's due is an earlier year's
+   * debt, and the column has to say so rather than show one number that
+   * disagrees with the rate for a reason only the database knows.
+   */
+  it('shows the scope season\'s share as the figure and the rest as a second line', () => {
+    const { container } = renderTable([row({
+      outstandingAgorot: 270000, scopeOutstandingAgorot: 120000, otherSeasonsOutstandingAgorot: 150000,
+    })]);
+    const body = container.querySelector('tbody')!;
+    expect(within(body as HTMLElement).getByText('1,200 ₪')).toBeTruthy();
+    expect(within(body as HTMLElement).getByText('+ 1,500 ₪ משנים אחרות')).toBeTruthy();
+    expect(within(body as HTMLElement).queryByText('2,700 ₪')).toBeNull();
+  });
+
+  it('links this season\'s balance to the payment drawer that can change it', () => {
+    renderTable([row({ outstandingAgorot: 120000, scopeOutstandingAgorot: 120000 })]);
+    expect(screen.getByRole('link', { name: '1,200 ₪' }).getAttribute('href'))
+      .toBe('/fees?season=s26&peek=p1&act=pay');
+  });
+
+  it('sums the footer the same way: this season\'s share, then the rest', () => {
+    const { container } = renderTable([
+      row({ personId: 'a', outstandingAgorot: 270000, scopeOutstandingAgorot: 120000, otherSeasonsOutstandingAgorot: 150000 }),
+      row({ personId: 'b', displayName: 'איתי כהן', outstandingAgorot: 120000, scopeOutstandingAgorot: 120000 }),
+    ]);
+    const foot = container.querySelector('tfoot')!;
+    expect(within(foot as HTMLElement).getByText('2,400 ₪')).toBeTruthy();
+    expect(within(foot as HTMLElement).getByText('+ 1,500 ₪ משנים אחרות')).toBeTruthy();
+  });
+
+  it('writes a balance owed only on other seasons as — plus the second line, never as a bare dash', () => {
+    const { container } = renderTable([row({
+      outstandingAgorot: 150000, scopeOutstandingAgorot: 0, otherSeasonsOutstandingAgorot: 150000,
+    })]);
+    const body = container.querySelector('tbody')!;
+    expect(within(body as HTMLElement).getByText('+ 1,500 ₪ משנים אחרות')).toBeTruthy();
+  });
+});
+
+describe('PeopleTable — a flat due left on an old rate', () => {
+  it('flags it with the amount it was issued on, linked to the rate drawer', () => {
+    renderTable([row({ dues: dues({ amountAgorot: 120000, seasonRateAgorot: 200000 }) })]);
+    const pill = screen.getByText('הונפק על 1,200 ₪');
+    expect(pill).toBeTruthy();
+    expect(pill.closest('a')?.getAttribute('href')).toBe('/fees?season=s26&act=rate');
+  });
+
+  it('says nothing when the due is on the rate, and nothing about an exception', () => {
+    renderTable([
+      row({ personId: 'a', dues: dues({ amountAgorot: 200000, seasonRateAgorot: 200000 }) }),
+      row({ personId: 'b', displayName: 'איתי כהן', dues: dues({ kind: 'exception', amountAgorot: 60000, seasonRateAgorot: 200000, exceptionReason: 'הובלת ההקמה' }) }),
+    ]);
+    expect(screen.queryByText(/^הונפק על/)).toBeNull();
   });
 });
 
