@@ -7,14 +7,17 @@ describe('the plan’s query', () => {
   it('reads a bare URL as nothing open', () => {
     expect(parsePlanQuery({})).toEqual({
       season: '', peek: null, peekTopic: null, creatingTopic: false, creatingItem: false,
-      presetTopic: null, presetParent: null, scale: 'all', at: null, adopting: false,
+      presetTopic: null, presetParent: null, scale: 'day', adopting: false,
     });
   });
 
-  it('reads the timeline’s scale and day, and falls back to everything on nonsense', () => {
-    expect(parsePlanQuery({ scale: 'week', at: '2026-05-13' })).toMatchObject({ scale: 'week', at: '2026-05-13' });
-    expect(parsePlanQuery({ scale: 'month' })).toMatchObject({ scale: 'month', at: null });
-    expect(parsePlanQuery({ scale: 'decade', at: '13/05/2026' })).toMatchObject({ scale: 'all', at: null });
+  it('reads the timeline’s resolution, and falls back to days on nonsense and on the old ״הכול״', () => {
+    expect(parsePlanQuery({ scale: 'week' })).toMatchObject({ scale: 'week' });
+    expect(parsePlanQuery({ scale: 'month' })).toMatchObject({ scale: 'month' });
+    expect(parsePlanQuery({ scale: 'decade' })).toMatchObject({ scale: 'day' });
+    expect(parsePlanQuery({ scale: 'all' })).toMatchObject({ scale: 'day' });
+    // A link from before, with the day of a window in it: the day is ignored, not an error.
+    expect(parsePlanQuery({ scale: 'week', at: '2026-05-13' })).not.toHaveProperty('at');
   });
 
   it('opens the move-to-acquisitions drawer only with nothing else named', () => {
@@ -56,17 +59,18 @@ describe('the plan’s links', () => {
     expect(planHref({}, {})).toBe(PLAN_PATH);
   });
 
-  it('carries the timeline’s scale and day through every link, so a drawer closes back onto the week', () => {
-    const week = { season: 's1', scale: 'week', at: '2026-05-13' };
-    expect(itemHref(week, 'i2')).toBe(`${PLAN_PATH}?season=s1&scale=week&at=2026-05-13&peek=i2`);
-    expect(planHref(week, {})).toBe(`${PLAN_PATH}?season=s1&scale=week&at=2026-05-13`);
+  it('carries the timeline’s resolution through every link, so a drawer closes back onto the months', () => {
+    const months = { season: 's1', scale: 'month' };
+    expect(itemHref(months, 'i2')).toBe(`${PLAN_PATH}?season=s1&scale=month&peek=i2`);
+    expect(planHref(months, {})).toBe(`${PLAN_PATH}?season=s1&scale=month`);
+    // The day of an old window link is not carried on.
+    expect(planHref({ season: 's1', scale: 'week', at: '2026-05-13' }, {})).toBe(`${PLAN_PATH}?season=s1&scale=week`);
   });
 
-  it('spells the scale links, and spells ״הכול״ by leaving both params out', () => {
-    expect(scaleHref({ season: 's1' }, 'week', '2026-05-13')).toBe(`${PLAN_PATH}?season=s1&scale=week&at=2026-05-13`);
-    expect(scaleHref({ season: 's1', scale: 'week', at: '2026-05-13' }, 'month', '2026-06-01'))
-      .toBe(`${PLAN_PATH}?season=s1&scale=month&at=2026-06-01`);
-    expect(scaleHref({ season: 's1', scale: 'week', at: '2026-05-13' }, 'all')).toBe(`${PLAN_PATH}?season=s1`);
+  it('spells the resolution links, and spells ״ימים״ by leaving the param out', () => {
+    expect(scaleHref({ season: 's1' }, 'week')).toBe(`${PLAN_PATH}?season=s1&scale=week`);
+    expect(scaleHref({ season: 's1', scale: 'week' }, 'month')).toBe(`${PLAN_PATH}?season=s1&scale=month`);
+    expect(scaleHref({ season: 's1', scale: 'month' }, 'day')).toBe(`${PLAN_PATH}?season=s1`);
   });
 
   it('builds every drawer from one place', () => {
