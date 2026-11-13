@@ -491,9 +491,14 @@ export default async function LedgerPage(
             ? 'כל התנועות כאן מאוחרות לספירה ומשנות אותה.'
             : <><bdi>{balance.insideCount}</bdi> תנועות עד אותו יום כבר כלולות בה: הן נשמרות כהיסטוריה ולא משנות את היתרה.</>}
           {' '}
-          <Link className="link" href={countHref(season?.id ?? seasons[0].id, chosenAccount.id)}>
-            ספירה מחדש
-          </Link>
+          {/* A closed account cannot be counted — `countAccount` refuses it —
+            * so the link would lead to a form whose only answer is no. The
+            * card on /money hides its own link for the same reason. */}
+          {chosenAccount.closedAt ? 'החשבון סגור, ולכן אי אפשר לספור אותו מחדש.' : (
+            <Link className="link" href={countHref(season?.id ?? seasons[0].id, chosenAccount.id)}>
+              ספירה מחדש
+            </Link>
+          )}
         </p>
       ) : null}
 
