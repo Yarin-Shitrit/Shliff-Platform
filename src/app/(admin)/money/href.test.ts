@@ -6,6 +6,7 @@ describe('moneyHref', () => {
     expect(moneyHref({ season: 's1' })).toBe('/money?season=s1');
     expect(moneyHref({ season: 's1', count: 'a1' })).toBe('/money?season=s1&account=a1&act=count');
     expect(moneyHref({ season: 's1', newAccount: true })).toBe('/money?season=s1&act=new-account');
+    expect(moneyHref({ season: 's1', holder: 'a1' })).toBe('/money?season=s1&account=a1&act=holder');
   });
 
   it('opens one drawer at a time, the count winning', () => {

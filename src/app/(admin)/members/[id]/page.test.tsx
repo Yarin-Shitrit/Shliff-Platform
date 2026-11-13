@@ -8,7 +8,7 @@ import type { Dossier, DossierDue } from '@/lib/members/dossier';
 const {
   requireAdmin, personDossier, listSeasons, listPeopleForSeason,
   aliasSourcesFor, personChangeLog, listObligations, accountBalances,
-  listPayments, previewDelete, notFound,
+  listPayments, previewDelete, unmergePreview, notFound,
 } = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   personDossier: vi.fn(),
@@ -20,6 +20,7 @@ const {
   accountBalances: vi.fn(),
   listPayments: vi.fn(),
   previewDelete: vi.fn(),
+  unmergePreview: vi.fn(),
   notFound: vi.fn(() => { throw new Error('NEXT_NOT_FOUND'); }),
 }));
 vi.mock('@/db', () => ({ db: {} }));
@@ -33,6 +34,7 @@ vi.mock('@/lib/money/obligations', () => ({ listObligations }));
 vi.mock('@/lib/money/accounts', () => ({ accountBalances }));
 vi.mock('@/lib/fees/payments', () => ({ listPayments }));
 vi.mock('@/lib/members/delete', () => ({ previewDelete }));
+vi.mock('@/lib/members/link', () => ({ unmergePreview }));
 vi.mock('next/navigation', () => ({
   notFound,
   useRouter: () => ({ push: vi.fn(), refresh: () => {} }),
@@ -46,6 +48,7 @@ vi.mock('../actions', () => ({
   unlinkAliasAndReturn: vi.fn(),
   renamePersonAndReturn: vi.fn(),
   deletePersonAndReturn: vi.fn(),
+  unmergePersonAndReturn: vi.fn(),
   UNLINK_ERROR_PARAM: 'unlinkError',
 }));
 
@@ -94,6 +97,7 @@ beforeEach(() => {
   listObligations.mockResolvedValue([]);
   accountBalances.mockResolvedValue([]);
   listPayments.mockResolvedValue([]);
+  unmergePreview.mockResolvedValue(null);
 });
 
 describe('/members/[id] — the gate', () => {
@@ -552,22 +556,66 @@ describe('/members/[id] — deleting the record', () => {
       .toBe('/members/p1?tab=payments');
   });
 
-  it('raises no confirm control when something stands in the way, and says where to go', async () => {
+  /*
+   * The blocked shape is a checklist: every refusal is a step that says
+   * what to do, and every row behind it is a link to the control that
+   * unpicks that one row. A row with no control is text, never a dead link.
+   */
+  it('raises no confirm control when something stands in the way; each step says what to do and links every row', async () => {
     previewDelete.mockResolvedValue({
       ...CLEAR,
       blockers: [
-        { conflict: 'תשלומים', count: 2, href: '/members/p1?tab=payments' },
-        { conflict: 'מיזוג קודם', count: 1, href: null },
+        {
+          conflict: 'תשלומים', count: 2, href: '/fees?season=s26&peek=p1&act=pay',
+          action: 'תחת ״תשלומים קודמים״ לוחצים הסרה ליד כל תשלום.',
+          items: [
+            { label: 'ברן 26 · 500 ₪ · ביט · 01/05/26', href: '/fees?season=s26&peek=p1&act=pay' },
+            { label: 'ברן 25 · 700 ₪ · מזומן · 01/06/25 · לא ברשימת ברן 25', href: null },
+          ],
+        },
+        {
+          conflict: 'קופה', count: 1, href: '/money?act=holder&account=a1',
+          action: 'בכרטיס החשבון לוחצים ״מי מחזיק/ה״.',
+          items: [{ label: 'ביט של רוני', href: '/money?act=holder&account=a1' }],
+        },
       ],
     });
-    await renderPage({ delete: '1' });
+    await renderPage({ delete: '1', tab: 'payments' });
     expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(screen.queryByRole('button', { name: 'מחיקת הרשומה' })).toBeNull();
-    expect(screen.getByText('למה אי אפשר למחוק עדיין')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'תשלומים · 2' }).getAttribute('href'))
+
+    const drawer = screen.getByRole('dialog', { name: 'מחיקת הרשומה' });
+    expect(within(drawer).getByRole('heading', { level: 3, name: 'מה צריך לסגור לפני המחיקה' })).toBeTruthy();
+    expect(within(drawer).getByText(/3 דברים עדיין רשומים על האדם/)).toBeTruthy();
+    expect(within(drawer).getByRole('heading', { level: 4, name: 'תשלומים · 2' })).toBeTruthy();
+    expect(within(drawer).getByRole('heading', { level: 4, name: 'קופה · 1' })).toBeTruthy();
+    expect(within(drawer).getByText('תחת ״תשלומים קודמים״ לוחצים הסרה ליד כל תשלום.')).toBeTruthy();
+    expect(within(drawer).getByText('בכרטיס החשבון לוחצים ״מי מחזיק/ה״.')).toBeTruthy();
+
+    expect(within(drawer).getByRole('link', { name: 'ברן 26 · 500 ₪ · ביט · 01/05/26' }).getAttribute('href'))
+      .toBe('/fees?season=s26&peek=p1&act=pay');
+    expect(within(drawer).getByRole('link', { name: 'ביט של רוני' }).getAttribute('href'))
+      .toBe('/money?act=holder&account=a1');
+    expect(within(drawer).getByText('ברן 25 · 700 ₪ · מזומן · 01/06/25 · לא ברשימת ברן 25')).toBeTruthy();
+    expect(within(drawer).queryByRole('link', { name: /לא ברשימת ברן 25/ })).toBeNull();
+
+    // The way back to the same preview, re-read, and the drawer's own way out — keeping the tab.
+    expect(within(drawer).getByRole('link', { name: 'בדיקה מחדש' }).getAttribute('href'))
+      .toBe('/members/p1?tab=payments&delete=1');
+    expect(within(drawer).getByRole('link', { name: 'סגירה' }).getAttribute('href'))
       .toBe('/members/p1?tab=payments');
-    expect(screen.getByText('מיזוג קודם · 1')).toBeTruthy();
-    expect(screen.queryByRole('link', { name: 'מיזוג קודם · 1' })).toBeNull();
+  });
+
+  it('agrees the count of what is open with the noun', async () => {
+    previewDelete.mockResolvedValue({
+      ...CLEAR,
+      blockers: [{
+        conflict: 'קופה', count: 1, href: '/money?act=holder&account=a1', action: 'x',
+        items: [{ label: 'ביט של רוני', href: '/money?act=holder&account=a1' }],
+      }],
+    });
+    await renderPage({ delete: '1' });
+    expect(screen.getByText(/דבר אחד עדיין רשום על האדם/)).toBeTruthy();
   });
 
   it('raises nothing when the preview names nobody', async () => {
@@ -580,5 +628,57 @@ describe('/members/[id] — deleting the record', () => {
   it('renders the refusal the action handed back in the URL', async () => {
     await renderPage({ deleteError: 'לא ניתן למחוק — קיימים: תשלומים' });
     expect(screen.getByRole('alert').textContent).toBe('לא ניתן למחוק — קיימים: תשלומים');
+  });
+});
+
+/**
+ * A merged-away record is reached by URL alone — every list hides it — and
+ * the one thing to do on it is undo the merge. The banner names the
+ * survivor; `?unmerge=1` raises the confirmation from the same preview the
+ * library decides by, listing what comes back.
+ */
+describe('/members/[id] — a merged-away record', () => {
+  const MERGED = {
+    personId: 'p1', displayName: 'רוני אדלר', survivorId: 'p2', survivorName: 'רוני א.',
+    returning: ['רוני אדלר', 'Roni A.'],
+  };
+
+  it('shows no banner and no unmerge on a record that is not merged, even if the URL asks', async () => {
+    await renderPage({ unmerge: '1' });
+    expect(screen.queryByRole('region', { name: 'רשומה ממוזגת' })).toBeNull();
+    expect(screen.queryByRole('alertdialog', { name: 'ביטול המיזוג' })).toBeNull();
+  });
+
+  it('says where the person now lives, links there, and offers the unmerge keeping season and tab', async () => {
+    personDossier.mockResolvedValue(dossier({ mergedIntoId: 'p2' }));
+    unmergePreview.mockResolvedValue(MERGED);
+    await renderPage({ season: 's26', tab: 'aliases' });
+    expect(unmergePreview).toHaveBeenCalledWith({}, 'p1');
+    const banner = screen.getByRole('region', { name: 'רשומה ממוזגת' });
+    expect(within(banner).getByRole('link', { name: 'רוני א.' }).getAttribute('href')).toBe('/members/p2');
+    const href = within(banner).getByRole('link', { name: 'ביטול המיזוג' }).getAttribute('href') ?? '';
+    const query = new URLSearchParams(href.split('?')[1]);
+    expect(href.startsWith('/members/p1?')).toBe(true);
+    expect(query.get('season')).toBe('s26');
+    expect(query.get('tab')).toBe('aliases');
+    expect(query.get('unmerge')).toBe('1');
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('raises the confirmation from the server, listing the spellings that come back', async () => {
+    personDossier.mockResolvedValue(dossier({ mergedIntoId: 'p2' }));
+    unmergePreview.mockResolvedValue(MERGED);
+    await renderPage({ unmerge: '1', tab: 'aliases' });
+    const dialog = screen.getByRole('alertdialog', { name: 'ביטול המיזוג' });
+    expect(within(dialog).getByText(/תחזור לעמוד בפני עצמה/)).toBeTruthy();
+    expect(within(dialog).getByText('יחזרו אליה מרוני א.: רוני אדלר · Roni A.')).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'ביטול המיזוג' })).toBeTruthy();
+    expect(within(dialog).getByRole('link', { name: 'ביטול' }).getAttribute('href'))
+      .toBe('/members/p1?tab=aliases');
+  });
+
+  it('renders the refusal the action handed back in the URL', async () => {
+    await renderPage({ unmergeError: 'הרשומה הזו לא ממוזגת — אין מיזוג לבטל.' });
+    expect(screen.getByRole('alert').textContent).toBe('הרשומה הזו לא ממוזגת — אין מיזוג לבטל.');
   });
 });

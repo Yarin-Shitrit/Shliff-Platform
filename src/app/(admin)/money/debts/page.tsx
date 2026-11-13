@@ -25,6 +25,7 @@ import { listPersonChoices } from '@/lib/members/dossier';
 import { chipSource } from '../chip-source';
 import { SettleForm } from './settle-form';
 import { NameForm } from './name-form';
+import { DetachParty } from './detach-party';
 import styles from './debts.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -152,6 +153,11 @@ export default async function DebtsPage(
    * because the verb in the URL cannot know more than the row does. */
   const peeked = params.peek !== undefined
     ? rows.find((row) => row.id === params.peek)
+      /* A debt of another season, reached by a link that names the row
+         (the delete drawer's, or a pasted one): the drawer opens on the
+         record itself rather than on nothing. The page's lists stay the
+         season's; only the drawer looks past it. */
+      ?? (await listDebts(db)).find((row) => row.id === params.peek)
     : undefined;
 
   const columns: Array<TableColumn<DebtRow>> = [
@@ -382,14 +388,25 @@ export default async function DebtsPage(
               />
             </>
           ) : (
-            <SettleForm
-              obligationId={peeked.id}
-              direction={peeked.direction}
-              displayParty={peeked.displayParty}
-              outstandingAgorot={peeked.outstandingAgorot}
-              accounts={accounts.map((one) => ({ id: one.id, name: one.name }))}
-              closeHref={closePeekHref(PATH, asParams(params))}
-            />
+            <>
+              <SettleForm
+                obligationId={peeked.id}
+                direction={peeked.direction}
+                displayParty={peeked.displayParty}
+                outstandingAgorot={peeked.outstandingAgorot}
+                accounts={accounts.map((one) => ({ id: one.id, name: one.name }))}
+                closeHref={closePeekHref(PATH, asParams(params))}
+              />
+              {/* Only for a debt that names a record: a bare name has no
+                  link to cut. The person's deletion is what needs it. */}
+              {peeked.partyPersonId === null ? null : (
+                <DetachParty
+                  obligationId={peeked.id}
+                  displayParty={peeked.displayParty}
+                  description={peeked.description}
+                />
+              )}
+            </>
           )}
         </Drawer>
       )}

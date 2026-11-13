@@ -107,4 +107,12 @@ describe('AccountCard', () => {
     expect(screen.getByText(/טלי/)).toBeTruthy();
     expect(screen.queryByText(/שמחזיק כסף של הקאמפ/)).toBeNull();
   });
+
+  it('offers the holder drawer when given its href, and nothing without one', () => {
+    render(<AccountCard account={account()} holderHref="/money?season=s1&account=a1&act=holder" />);
+    expect(screen.getByRole('link', { name: 'מי מחזיק/ה' }).getAttribute('href'))
+      .toBe('/money?season=s1&account=a1&act=holder');
+    render(<AccountCard account={account({ accountId: 'a2', name: 'אחר' })} />);
+    expect(screen.getAllByRole('link', { name: 'מי מחזיק/ה' })).toHaveLength(1);
+  });
 });

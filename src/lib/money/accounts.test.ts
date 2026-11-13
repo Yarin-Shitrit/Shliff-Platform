@@ -3,14 +3,14 @@ import type { TestDb } from '@/test/db';
 import { createTestDb } from '@/test/db';
 import { ledgerEntries } from '@/db/schema/money';
 import { createSeason, addMember } from '@/lib/members/roster';
-import { createPerson } from '@/lib/members/link';
+import { createPerson, mergePersons } from '@/lib/members/link';
 import { issueFlatDues } from '@/lib/fees/dues';
 import { recordOffset } from '@/lib/fees/payments';
 import { listSeasonFees } from '@/lib/fees/season-fees';
 import { payments } from '@/db/schema/camp';
 import {
   createAccount, listAccounts, listOpenAccounts, accountBalances, unattributedAgorot,
-  countAccount,
+  countAccount, setAccountHolder,
 } from './accounts';
 
 let db: TestDb;
@@ -251,5 +251,34 @@ describe('countAccount', () => {
     const [balance] = (await accountBalances(db)).filter((row) => row.accountId === open.id);
     expect(balance.countedOn).toBeNull();
     expect(balance.balanceAgorot).toBe(0);
+  });
+});
+
+describe('setAccountHolder', () => {
+  it('hands the account to another person, or to nobody, and the balance view says so', async () => {
+    const yosef = await createPerson(db, 'יוסף', 'lead@example.com');
+    const maya = await createPerson(db, 'מאיה', 'lead@example.com');
+    const account = await createAccount(db, { name: 'ביט של יוסף', kind: 'personal', holderPersonId: yosef });
+
+    await setAccountHolder(db, account.id, maya);
+    expect((await accountBalances(db))[0]).toMatchObject({ holderPersonId: maya, holderName: 'מאיה' });
+
+    await setAccountHolder(db, account.id, null);
+    expect((await accountBalances(db))[0]).toMatchObject({ holderPersonId: null, holderName: null });
+  });
+
+  it('refuses a missing account, a missing person and a merged-away person, each in Hebrew, writing nothing', async () => {
+    const yosef = await createPerson(db, 'יוסף', 'lead@example.com');
+    const gone = await createPerson(db, 'יוסף כהן', 'lead@example.com');
+    await mergePersons(db, gone, yosef, 'lead@example.com');
+    const account = await createAccount(db, { name: 'ביט של יוסף', kind: 'personal', holderPersonId: yosef });
+
+    await expect(setAccountHolder(db, '00000000-0000-4000-8000-000000000000', null))
+      .rejects.toThrow('אין חשבון כזה.');
+    await expect(setAccountHolder(db, account.id, '00000000-0000-4000-8000-000000000000'))
+      .rejects.toThrow('האדם שנבחר לא נמצא ברשימת האנשים.');
+    await expect(setAccountHolder(db, account.id, gone))
+      .rejects.toThrow('האדם שנבחר לא נמצא ברשימת האנשים.');
+    expect((await accountBalances(db))[0].holderPersonId).toBe(yosef);
   });
 });
