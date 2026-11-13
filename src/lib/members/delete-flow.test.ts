@@ -133,7 +133,7 @@ describe('closing everything, then deleting', () => {
 
     // The absorbed record's ביטול המיזוג.
     expect((await unmergePreview(db, duplicate))?.returning).toEqual(['רוני א.']);
-    await unmergePerson(db, duplicate);
+    await unmergePerson(db, duplicate, LEAD);
     const [restored] = await db.select().from(persons).where(eq(persons.id, duplicate));
     expect(restored.mergedIntoId).toBeNull();
     expect((await db.select().from(personAliases).where(eq(personAliases.personId, duplicate))).map((row) => row.alias))
@@ -184,7 +184,7 @@ describe('closing everything, then deleting', () => {
     ]);
     expect(preview?.blockers[0].items).toEqual([{ label: 'מוזגה לתוך רוני אדלר', href: `/members/${survivor}` }]);
 
-    await unmergePerson(db, absorbed);
+    await unmergePerson(db, absorbed, LEAD);
     expect((await previewDelete(db, absorbed))?.blockers).toEqual([]);
     expect(await deletePerson(db, absorbed)).toEqual({
       ok: true, removed: { aliases: 1, requeued: 0, memberships: 0, dues: 0 },

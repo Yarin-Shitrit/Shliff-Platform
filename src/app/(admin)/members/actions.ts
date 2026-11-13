@@ -375,7 +375,7 @@ export async function unmergePersonAction(personId: string): Promise<ActionResul
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   try {
-    await unmergePerson(db, personId);
+    await unmergePerson(db, personId, admin.email);
   } catch (error) {
     return { ok: false, error: toHebrewError(error, []) };
   }

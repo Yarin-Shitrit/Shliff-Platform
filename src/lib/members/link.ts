@@ -219,8 +219,26 @@ export interface UnmergePreview {
   survivorName: string;
   /** The spellings that moved in the merge and would come back. A spelling
    *  a lead has since unlinked (it sits in the queue) comes back too; one
-   *  that was since linked to a third person stays where it was put. */
+   *  that was since linked to a third person, or unlinked and then set aside
+   *  as not-a-person, stays where it was put. */
   returning: string[];
+}
+
+/**
+ * The rows an unmerge returns, as one condition, so the preview and the
+ * write cannot disagree about them: still on the survivor, or waiting in the
+ * queue. `person_id` null with a `confirmed_by` is not waiting — that pair
+ * is the ignore state (`listIgnoredNames`), a lead's later decision that
+ * this spelling is nobody, and it is left alone like a link to a third person.
+ */
+function returningAliases(sourceId: string, survivorId: string) {
+  return and(
+    eq(personAliases.mergedFromPersonId, sourceId),
+    or(
+      eq(personAliases.personId, survivorId),
+      and(isNull(personAliases.personId), isNull(personAliases.confirmedBy)),
+    ),
+  );
 }
 
 /**
@@ -239,10 +257,7 @@ export async function unmergePreview(db: AnyDb, sourceId: string): Promise<Unmer
 
   const returning = await db.select({ alias: personAliases.alias })
     .from(personAliases)
-    .where(and(
-      eq(personAliases.mergedFromPersonId, sourceId),
-      or(eq(personAliases.personId, source.mergedIntoId), isNull(personAliases.personId)),
-    ))
+    .where(returningAliases(sourceId, source.mergedIntoId))
     .orderBy(personAliases.alias);
 
   return {
@@ -263,18 +278,26 @@ export async function unmergePreview(db: AnyDb, sourceId: string): Promise<Unmer
  * screen reported success. An alias that was since linked to a third person
  * is left there: `unlinkAlias` keeps `merged_from_person_id` on purpose so
  * the origin is not lost, and pulling such a spelling off somebody a lead
- * chose for it would undo a later decision, not the merge.
+ * chose for it would undo a later decision, not the merge. The same goes for
+ * one a lead unlinked and then marked not-a-person.
+ *
+ * Every spelling that comes back is stamped with who confirmed the unmerge
+ * and when, as `mergePersons` stamps the ones it moves: `unlinkAlias` clears
+ * the confirmation, so one returning from the queue would otherwise be a
+ * link nobody is on record as having made.
  */
-export async function unmergePerson(db: AnyDb, sourceId: string): Promise<void> {
+export async function unmergePerson(db: AnyDb, sourceId: string, email: string): Promise<void> {
   const preview = await unmergePreview(db, sourceId);
   if (preview === null) throw new HebrewRefusal('הרשומה הזו לא ממוזגת — אין מיזוג לבטל.');
 
   await db.update(personAliases)
-    .set({ personId: sourceId, mergedFromPersonId: null })
-    .where(and(
-      eq(personAliases.mergedFromPersonId, sourceId),
-      or(eq(personAliases.personId, preview.survivorId), isNull(personAliases.personId)),
-    ));
+    .set({
+      personId: sourceId,
+      mergedFromPersonId: null,
+      confirmedBy: email,
+      confirmedAt: new Date(),
+    })
+    .where(returningAliases(sourceId, preview.survivorId));
 
   await db.update(persons)
     .set({ mergedIntoId: null })
