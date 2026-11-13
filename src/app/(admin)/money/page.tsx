@@ -12,6 +12,9 @@ import { StatTile } from '@/components/ui/stat-tile';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StackedBar } from '@/components/charts/stacked-bar';
 import { AccountCard } from './account-card';
+import { CountDrawer } from './count-drawer';
+import { NewAccountDrawer } from './new-account-drawer';
+import { moneyHref } from './href';
 import { ObligationsTable } from './obligations-table';
 import { BudgetTable } from './budget-table';
 import { RecentMovements } from './recent-movements';
@@ -29,7 +32,9 @@ export const metadata: Metadata = { title: 'כספים' };
  * nobody could see before this page existed.
  */
 export default async function MoneyPage(
-  { searchParams }: { searchParams: Promise<{ season?: string }> },
+  { searchParams }: {
+    searchParams: Promise<{ season?: string; act?: string; account?: string }>;
+  },
 ) {
   const admin = await requireAdmin();
   if (!admin.ok) notFound();
@@ -44,12 +49,25 @@ export default async function MoneyPage(
     );
   }
 
-  const { season: requested } = await searchParams;
-  const season = seasons.find((s) => s.id === requested) ?? seasons[0];
+  const params = await searchParams;
+  const season = seasons.find((s) => s.id === params.season) ?? seasons[0];
   const view = await moneyOverview(db, season.id);
   const { summary } = view;
   const { identity } = summary;
   const scope = `?season=${season.id}`;
+
+  /**
+   * The two drawers this screen owns, read from the URL (R6): `?act=count&
+   * account=<id>` counts one account, `?act=new-account` adds one. An
+   * `account` the summary does not know is treated as no drawer rather
+   * than as an empty form — a form over a missing record would write to
+   * nothing and say it had.
+   */
+  const counting = params.act === 'count'
+    ? summary.accounts.find((row) => row.accountId === params.account)
+    : undefined;
+  const addingAccount = params.act === 'new-account';
+  const closeHref = moneyHref({ season: season.id });
 
   // `duesFundingIdentity` (src/lib/money/funding.ts) sets both of these to
   // `null` in exactly the same branch — no planned camp size — so bundling
@@ -213,7 +231,18 @@ export default async function MoneyPage(
           <span className={styles.sectionNote}>
             חשבונות אינם שייכים לשנה — היתרה היא תמיד הנוכחית
           </span>
+          <Link className={`link ${styles.sectionLink}`} href={moneyHref({ season: season.id, newAccount: true })}>
+            חשבון חדש
+          </Link>
         </div>
+        {/* The way in when the book was not kept: count what there is, say
+          * when, and go on from there. Said here, once, above the cards that
+          * each carry the link — a lead who has never counted needs the
+          * sentence more than the link. */}
+        <p className={styles.sectionLead}>
+          לא עקבתם אחרי כל ההכנסות וההוצאות? ספרו כמה כסף יש בכל חשבון היום, ומאותו יום
+          כל תנועה שתירשם תעדכן את היתרה. מה שנרשם מלפני הספירה נשמר כהיסטוריה.
+        </p>
 
         {/* A bar list compared account balances against each other, which is
           * not a question anyone asks — a קופה does not compete with a bank
@@ -221,14 +250,32 @@ export default async function MoneyPage(
           * whose, and is anything wrong with it. */}
         {summary.accounts.length === 0 ? (
           <EmptyState kind="nothing-yet" noun="חשבונות"
-                      action={{ href: '/upload', label: 'לדף הייבוא' }} />
+                      action={{ href: moneyHref({ season: season.id, newAccount: true }), label: 'חשבון חדש' }} />
         ) : (
           <div className={styles.accountGrid}>
             {summary.accounts.map((row) => (
-              <AccountCard key={row.accountId} account={row} />
+              <AccountCard
+                key={row.accountId}
+                account={row}
+                countHref={moneyHref({ season: season.id, count: row.accountId })}
+              />
             ))}
           </div>
         )}
+
+        {counting === undefined ? null : (
+          <CountDrawer
+            account={{
+              id: counting.accountId,
+              name: counting.name,
+              balanceAgorot: counting.balanceAgorot,
+              countedAgorot: counting.countedAgorot,
+              countedOn: counting.countedOn,
+            }}
+            closeHref={closeHref}
+          />
+        )}
+        {!addingAccount ? null : <NewAccountDrawer closeHref={closeHref} />}
 
         {unattributedInAgorot > 0 ? (
           <Banner

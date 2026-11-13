@@ -60,6 +60,12 @@
 .sectionHeading { font-size: inherit; margin: 0; }
 .sectionNote { font-weight: 400; font-size: var(--text-meta); color: var(--ink-3); }
 .sectionLink { margin-inline-start: auto; font-size: var(--text-dense); font-weight: 400; }
+.sectionLead {
+  margin-block: 0 var(--space-3);
+  max-inline-size: 48rem;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
 
 .accountGrid {
   display: grid;
@@ -81,6 +87,14 @@
   font-variant-numeric: tabular-nums;
 }
 .accountHolder { font-size: var(--text-meta); color: var(--ink-3); }
+.accountCount {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: var(--text-meta);
+}
 .accountWarning {
   font-size: var(--text-meta);
   color: var(--warn);
@@ -109,3 +123,49 @@
 .quantity { display: block; font-size: var(--text-dense); color: var(--ink-3); }
 .rationale { font-size: var(--text-dense); color: var(--ink-3); }
 .dim { color: var(--ink-4); }
+
+/* ——— the drawers (ספירת קופה, חשבון חדש) ——— */
+
+.drawerForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.muted {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+/* Mirrors `fees.module.css`'s `.dateInput`: there is no kit date input
+   (§5 A28), so the native control is dressed against the same tokens. */
+.dateInput {
+  inline-size: 100%;
+  min-block-size: var(--control-h-lg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--ink);
+  padding-inline: var(--space-2);
+  padding-block: var(--space-1);
+  font: inherit;
+}
+
+/* A9: a focus ring is never removed, only replaced by a better one. */
+.dateInput:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.warnNote {
+  margin: 0;
+  color: var(--warn);
+  font-size: var(--text-meta);
+}
+
+.formError {
+  margin: 0;
+  color: var(--bad);
+  font-size: var(--text-meta);
+}
