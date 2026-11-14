@@ -5,7 +5,7 @@ import {
   persons, personAliases, seasons, memberships, dues, payments, tasks, taskAssignments,
 } from '@/db/schema/camp';
 import {
-  recordUnlinkedName, resolveName, listUnlinkedNames, listIgnoredNames,
+  recordUnlinkedName, resolveName, listUnlinkedNames, listIgnoredNames, ignoreName,
 } from '@/lib/members/identity';
 import {
   createPerson, createPersonFromAlias, linkAlias, unlinkAlias,
@@ -171,7 +171,7 @@ describe('merging', () => {
     if (!chained.ok) expect(chained.conflicts).toContain('מיזוג קודם');
 
     // X is still recoverable, which is the whole point of refusing.
-    await unmergePerson(db, x);
+    await unmergePerson(db, x, LEAD);
     expect((await resolveName(db, 'אופק כהן')).personId).toBe(x);
   });
 
@@ -202,7 +202,7 @@ describe('merging', () => {
     const target = await createPerson(db, 'אופק', LEAD);
     const source = await createPerson(db, 'אופק כהן', LEAD);
     await mergePersons(db, source, target, LEAD);
-    await unmergePerson(db, source);
+    await unmergePerson(db, source, LEAD);
 
     expect((await resolveName(db, 'אופק כהן')).personId).toBe(source);
     expect((await resolveName(db, 'אופק')).personId).toBe(target);
@@ -225,8 +225,8 @@ describe('merging', () => {
 
   it('refuses, in Hebrew, to unmerge a record that is not merged', async () => {
     const id = await createPerson(db, 'אופק', LEAD);
-    await expect(unmergePerson(db, id)).rejects.toThrow('הרשומה הזו לא ממוזגת — אין מיזוג לבטל.');
-    await expect(unmergePerson(db, 'not-an-id')).rejects.toThrow('הרשומה הזו לא ממוזגת — אין מיזוג לבטל.');
+    await expect(unmergePerson(db, id, LEAD)).rejects.toThrow('הרשומה הזו לא ממוזגת — אין מיזוג לבטל.');
+    await expect(unmergePerson(db, 'not-an-id', LEAD)).rejects.toThrow('הרשומה הזו לא ממוזגת — אין מיזוג לבטל.');
   });
 
   /*
@@ -249,11 +249,68 @@ describe('merging', () => {
     await db.update(personAliases).set({ personId: third }).where(eq(personAliases.id, typed));
 
     expect((await unmergePreview(db, source))?.returning).toEqual(['אופק כהן', 'אופק ק.']);
-    await unmergePerson(db, source);
+    await unmergePerson(db, source, LEAD);
 
     expect((await resolveName(db, 'אופק כהן')).personId).toBe(source);
     expect((await resolveName(db, 'אופק ק.')).personId).toBe(source);
     expect((await resolveName(db, 'אופקי')).personId).toBe(third);
+  });
+
+  /*
+   * A moved spelling a lead unlinked and then marked not-a-person has no
+   * person and a `confirmed_by` — the ignore state. That is a decision made
+   * after the merge, like linking it to somebody else, and the unmerge
+   * leaves it where it was put.
+   */
+  it('leaves a moved spelling that was since set aside as not-a-person, and does not promise it back', async () => {
+    const target = await createPerson(db, 'אופק', LEAD);
+    const source = await createPerson(db, 'אופק כהן', LEAD);
+    const swept = await recordUnlinkedName(db, 'סה״כ אופק', 'import');
+    await linkAlias(db, swept, source, LEAD);
+    await mergePersons(db, source, target, LEAD);
+
+    await unlinkAlias(db, swept);
+    await ignoreName(db, swept, 'second@shliff.camp');
+
+    expect((await unmergePreview(db, source))?.returning).toEqual(['אופק כהן']);
+    await unmergePerson(db, source, LEAD);
+
+    const [row] = await db.select().from(personAliases).where(eq(personAliases.id, swept));
+    expect(row.personId).toBeNull();
+    expect(row.confirmedBy).toBe('second@shliff.camp');
+    expect((await listIgnoredNames(db)).map((name) => name.alias)).toEqual(['סה״כ אופק']);
+    expect((await resolveName(db, 'סה״כ אופק')).personId).toBeNull();
+  });
+
+  /*
+   * `unlinkAlias` clears the confirmation with the link, so a spelling that
+   * came back from the queue was linked with nobody's name on it. Every
+   * other link written here says who decided and when; so does this one.
+   */
+  it('stamps every spelling it brings back with who confirmed the unmerge and when', async () => {
+    const target = await createPerson(db, 'אופק', LEAD);
+    const source = await createPerson(db, 'אופק כהן', LEAD);
+    const queued = await recordUnlinkedName(db, 'אופק ק.', 'import');
+    await linkAlias(db, queued, source, LEAD);
+    await mergePersons(db, source, target, LEAD);
+    await unlinkAlias(db, queued);
+
+    const before = Date.now();
+    await unmergePerson(db, source, 'second@shliff.camp');
+
+    // The one that came back from the queue is the one that had no stamp.
+    const [returned] = await db.select().from(personAliases).where(eq(personAliases.id, queued));
+    expect(returned.personId).toBe(source);
+    expect(returned.confirmedBy).toBe('second@shliff.camp');
+
+    const rows = await db.select().from(personAliases).where(eq(personAliases.personId, source));
+    expect(rows.map((row) => row.alias).sort()).toEqual(['אופק כהן', 'אופק ק.']);
+    for (const row of rows) {
+      expect(row.confirmedBy).toBe('second@shliff.camp');
+      expect(row.confirmedAt).toBeInstanceOf(Date);
+      expect(row.confirmedAt!.getTime()).toBeGreaterThanOrEqual(before - 1000);
+      expect(row.mergedFromPersonId).toBeNull();
+    }
   });
 });
 

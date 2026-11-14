@@ -369,7 +369,8 @@ describe('unmergePersonAction', () => {
   it('unmerges and refreshes the whole layout — both records, the roster, the inbox', async () => {
     unmergePerson.mockResolvedValue(undefined);
     expect(await unmergePersonAction('p1')).toEqual({ ok: true });
-    expect(unmergePerson).toHaveBeenCalledWith({}, 'p1');
+    // The lead's address goes with it: the spellings that return are stamped.
+    expect(unmergePerson).toHaveBeenCalledWith({}, 'p1', 'lead@shliff.camp');
     expect(revalidatePath).toHaveBeenCalledWith('/', 'layout');
   });
 
