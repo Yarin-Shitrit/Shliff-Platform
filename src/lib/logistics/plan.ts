@@ -374,8 +374,10 @@ export function purchaseNameOf(title: string): string {
  */
 export interface AdoptOutcome extends PurchaseReading {
   /** A row of the same name already in the list with no line on the board:
-   *  the item is linked to it, and no second row is written. */
-  existing: { id: string; name: string } | null;
+   *  the item is linked to it, and no second row is written. `assignee` is
+   *  the row's own person, who stays on both — the drawer says so when the
+   *  item names somebody else. */
+  existing: { id: string; name: string; assignee: { id: string; name: string } | null } | null;
   /** The board's title after the move. */
   boardTitle: string;
   /**
