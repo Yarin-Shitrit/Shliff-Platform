@@ -76,6 +76,14 @@ export default async function MoneyPage(
     ? summary.accounts.find((row) => row.accountId === params.account)
     : undefined;
   const people = holding === undefined ? [] : await listPersonChoices(db);
+  /* Plus whoever holds it now, as the acquisitions screen does: a merge does
+     not refuse a person who holds an account, and the list above leaves
+     merged-away records out. A picker that quietly dropped the holder showed
+     ״אף אחד״ over an id it still sent, which the library then refused. */
+  if (holding !== undefined && holding.holderPersonId !== null && holding.holderName !== null
+    && !people.some((person) => person.id === holding.holderPersonId)) {
+    people.push({ id: holding.holderPersonId, displayName: holding.holderName });
+  }
   const closeHref = moneyHref({ season: season.id });
 
   // `duesFundingIdentity` (src/lib/money/funding.ts) sets both of these to
