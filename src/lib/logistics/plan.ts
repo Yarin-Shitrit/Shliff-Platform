@@ -246,13 +246,29 @@ export async function createItem(
   return row.id;
 }
 
+/**
+ * A purchase's line takes its title and its person from the purchase (see
+ * `followPurchase` in `acquisitions.ts`), and the drawer locks both. The
+ * lock is repeated here because a drawer opened before the list changed
+ * still sends what it was opened with: saving a day from it would write
+ * the old name and the old person back over the purchase's. For a linked
+ * item the two are not validated and not written — whatever was sent —
+ * and everything the board owns (days, topic, parent, notes) still saves.
+ */
 export async function updateItem(
   db: AnyDb, id: string, input: ItemInput, email: string,
 ): Promise<void> {
   const item = await itemRow(db, id);
   if (!item) throw new Error(`unknown work item ${id}`);
-  const resolved = await resolveItemInput(db, item.seasonId, input, id);
-  await db.update(workItems).set({ ...resolved, updatedAt: new Date(), updatedBy: email })
+  const linked = item.acquisitionItemId !== null;
+  const resolved = await resolveItemInput(
+    db, item.seasonId,
+    linked ? { ...input, title: item.title, assigneePersonId: item.assigneePersonId } : input,
+    id,
+  );
+  const { title, assigneePersonId, ...boardOwned } = resolved;
+  await db.update(workItems)
+    .set({ ...(linked ? boardOwned : { ...boardOwned, title, assigneePersonId }), updatedAt: new Date(), updatedBy: email })
     .where(eq(workItems.id, id));
   /* A parent's sub-items follow it between topics: they never had a heading
      of their own. */
@@ -278,10 +294,13 @@ export async function scheduleItem(
  * whatever the purchase says — open, or done if it has arrived in the
  * meantime. `cancelled` stays the board's own decision: the camp can stop
  * wanting a thing, and the list has no word for that.
+ *
+ * Returns the status it wrote, which for a purchase's item is not always
+ * the one asked for — the screen reports this, not its own request.
  */
 export async function setItemStatus(
   db: AnyDb, id: string, status: WorkItemStatus, email: string,
-): Promise<void> {
+): Promise<WorkItemStatus> {
   if (!WORK_ITEM_STATUSES.includes(status)) throw new Error(`unknown work item status: ${status}`);
   const item = await itemRow(db, id);
   if (!item) throw new Error(`unknown work item ${id}`);
@@ -294,6 +313,7 @@ export async function setItemStatus(
   }
   await db.update(workItems).set({ status: next, updatedAt: new Date(), updatedBy: email })
     .where(eq(workItems.id, id));
+  return next;
 }
 
 // ── Purchases ──────────────────────────────────────────────────────────
@@ -374,8 +394,10 @@ export function purchaseNameOf(title: string): string {
  */
 export interface AdoptOutcome extends PurchaseReading {
   /** A row of the same name already in the list with no line on the board:
-   *  the item is linked to it, and no second row is written. */
-  existing: { id: string; name: string } | null;
+   *  the item is linked to it, and no second row is written. `assignee` is
+   *  the row's own person, who stays on both — the drawer says so when the
+   *  item names somebody else. */
+  existing: { id: string; name: string; assignee: { id: string; name: string } | null } | null;
   /** The board's title after the move. */
   boardTitle: string;
   /**
@@ -716,6 +738,12 @@ export interface TimelineBar {
   span: number;
   /** For a part: the title of the item it belongs to, so the bar can say so. */
   parentTitle?: string;
+  /**
+   * For a general item with parts: how many it has in all — the number the
+   * list writes beside it, undated and cancelled parts included. The lanes
+   * hold only some of those as bars, so the bar says both.
+   */
+  parts?: number;
 }
 
 export interface TimelineLane {
@@ -783,6 +811,10 @@ export function buildTimeline(items: PlanItem[], topics: Topic[]): Timeline | nu
   /* From every item, not only the scheduled: a part's parent may be
      undated, and the bar still says whose part it is. */
   const titles = new Map(items.map((item) => [item.id, item.title]));
+  const partsOf = new Map<string, number>();
+  for (const item of items) {
+    if (item.parentId !== null) partsOf.set(item.parentId, (partsOf.get(item.parentId) ?? 0) + 1);
+  }
   const groups = buildPlanTree(scheduled, topics);
   const lanes: TimelineLane[] = [];
   for (const group of groups) {
@@ -795,6 +827,8 @@ export function buildTimeline(items: PlanItem[], topics: Topic[]): Timeline | nu
         };
         const parentTitle = item.parentId === null ? undefined : titles.get(item.parentId);
         if (parentTitle !== undefined) bar.parentTitle = parentTitle;
+        const parts = partsOf.get(item.id);
+        if (parts !== undefined) bar.parts = parts;
         bars.push(bar);
       }
     }

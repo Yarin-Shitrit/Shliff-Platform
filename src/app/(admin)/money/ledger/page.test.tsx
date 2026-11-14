@@ -212,6 +212,25 @@ describe('the running balance column', () => {
     expect(screen.getAllByText('לפני הספירה')).toHaveLength(1);
   });
 
+  /**
+   * `countAccount` refuses a closed account, so a recount link beside one
+   * leads to a drawer that can only refuse. The note stays — the count is
+   * still where the column comes from — and says why there is no link.
+   */
+  it('offers no recount for a closed account, and says why', async () => {
+    listAccounts.mockResolvedValue([
+      { id: 'a1', name: 'קופת מזומן', closedAt: new Date('2026-01-10T00:00:00Z') },
+    ]);
+    listLedgerRows.mockResolvedValue([row({ id: '1' })]);
+    runningBalanceFor.mockResolvedValue({
+      shown: true, openingAgorot: 158400, countedOn: new Date('2025-10-30T00:00:00Z'),
+      insideCount: 0, balancesAgorot: [2008400],
+    });
+    await renderPage({ account: 'a1', sort: 'date-asc' });
+    expect(screen.getByText(/נספרה ב־/).textContent).toContain('החשבון סגור');
+    expect(screen.queryByRole('link', { name: 'ספירה מחדש' })).toBeNull();
+  });
+
   it('says every row is after the count when none is inside it', async () => {
     listAccounts.mockResolvedValue([{ id: 'a1', name: 'קופת מזומן' }]);
     listLedgerRows.mockResolvedValue([row({ id: '1' })]);

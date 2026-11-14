@@ -12,8 +12,10 @@
  *
  * A client component because the sentence under the select follows the
  * choice, and the refusal is shown beside the form rather than lost in a
- * redirect. The people list is the roster's active records; a merged-away
- * person cannot hold money, and the library refuses them too.
+ * redirect. The people list is the roster's active records, plus the current
+ * holder when they are not among them (the page adds them): a merged-away
+ * person cannot be given money and the library refuses them, but one who
+ * already holds an account has to be visible to be cleared or replaced.
  */
 
 import { useState } from 'react';

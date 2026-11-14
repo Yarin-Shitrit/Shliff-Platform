@@ -4,7 +4,7 @@
  * The one-time move: the board's items that are really things to buy
  * become rows in the acquisitions list, each linked to its item. The item
  * stays on the board — from now on a purchase is entered on רכש and lands
- * here on its own — renamed from the row, with its person carried over.
+ * here on its own — renamed from the row, and carrying the row's person.
  *
  * A drawer rather than a sweep, because which items are purchases is a
  * decision: the ones that open with ״לקנות״ are ticked, the rest of the
@@ -56,7 +56,12 @@ function outcomeLine(item: AdoptableItem): string | null {
     return `ברשימת הרכש יש יותר מפריט אחד בשם ״${outcome.name}״, ואי אפשר לדעת לאיזה מהם לקשר. אחרי שינוי השם של אחד מהם שם, המשימה תוכל לעבור.`;
   }
   if (outcome.existing !== null) {
-    return `״${outcome.existing.name}״ כבר ברשימת הרכש — המשימה תקושר לפריט הקיים, ולא ייווצר פריט נוסף.`;
+    const joins = `״${outcome.existing.name}״ כבר ברשימת הרכש — המשימה תקושר לפריט הקיים, ולא ייווצר פריט נוסף.`;
+    /* The list is the authority on who: the row's person replaces the
+       item's. That is somebody's name leaving the board, so it is said. */
+    const stays = outcome.existing.assignee;
+    if (item.assignee === null || stays === null || stays.id === item.assignee.personId) return joins;
+    return `${joins} המשימה רשומה על ${item.assignee.displayName} והפריט ברשימה על ${stays.name}: האחריות תישאר על ${stays.name}, גם בלוח, והשם ${item.assignee.displayName} יירד מהמשימה.`;
   }
   const retitled = outcome.boardTitle === item.title.trim() ? '' : ` · בלוח תיקרא ״${outcome.boardTitle}״`;
   return `תיכנס כ״${outcome.name}״ · ${SOURCE_LABELS[outcome.source]}${retitled}`;
@@ -138,7 +143,7 @@ export function AdoptDrawer({ seasonId, seasonName, candidates, closeHref, listH
         <p className={styles.adoptLead}>
           {'כל משימה שתסומן תיכנס ל'}
           <Link href={listHref}>רשימת הרכש</Link>
-          {' כפריט בכמות 1, עם האחראי שלה — ותישאר בלוח, מקושרת לפריט. מתחת לכל משימה כתוב איך היא תיכנס. מעכשיו רכש נכנס מרשימת הרכש ומופיע בלוח לבד.'}
+          {' כפריט בכמות 1 — ותישאר בלוח, מקושרת לפריט. פריט חדש מקבל את האחריות שרשומה על המשימה; משימה שהפריט שלה כבר ברשימה מקושרת אליו, והאחריות שרשומה ברשימה היא שנשארת. מתחת לכל משימה כתוב איך היא תיכנס. מעכשיו רכש נכנס מרשימת הרכש ומופיע בלוח לבד.'}
         </p>
 
         {candidates.length === 0 ? (

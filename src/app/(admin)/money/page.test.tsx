@@ -881,6 +881,34 @@ describe('counting what an account holds', () => {
     expect(drawer.getAttribute('data-close')).toBe('/money?season=s1');
   });
 
+  // A merge does not refuse a source that holds an account, and the people
+  // list leaves merged-away records out. Without the holder as an option the
+  // select showed ״אף אחד״ over an id it still held, and saving was refused
+  // for a person the lead could neither see nor clear.
+  it('keeps a current holder who is off the people list as an option in the holder drawer', async () => {
+    listPersonChoices.mockResolvedValue([{ id: 'p1', displayName: 'אופק' }, { id: 'p2', displayName: 'רוני' }]);
+    moneyOverview.mockResolvedValue(overview({
+      summary: summary({
+        accounts: [account({
+          accountId: 'a2', name: 'עו״ש אופק', kind: 'personal', holderPersonId: 'p9', holderName: 'אופק ב׳',
+        })],
+      }),
+    }));
+    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1', act: 'holder', account: 'a2' }) }));
+    expect(screen.getByTestId('holder-drawer').textContent).toBe('עו״ש אופק · אופק ב׳ · אופק,רוני,אופק ב׳');
+  });
+
+  it('does not list the holder twice when the people list already has them', async () => {
+    listPersonChoices.mockResolvedValue([{ id: 'p1', displayName: 'אופק' }, { id: 'p2', displayName: 'רוני' }]);
+    moneyOverview.mockResolvedValue(overview({
+      summary: summary({
+        accounts: [account({ accountId: 'a2', name: 'עו״ש אופק', kind: 'personal', holderPersonId: 'p1', holderName: 'אופק' })],
+      }),
+    }));
+    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1', act: 'holder', account: 'a2' }) }));
+    expect(screen.getByTestId('holder-drawer').textContent).toBe('עו״ש אופק · אופק · אופק,רוני');
+  });
+
   it('opens the count drawer from the URL, over the account the URL names', async () => {
     moneyOverview.mockResolvedValue(overview({
       summary: summary({ accounts: [account(), account({ accountId: 'a2', name: 'עו״ש אופק', countedAgorot: 1407955 })] }),

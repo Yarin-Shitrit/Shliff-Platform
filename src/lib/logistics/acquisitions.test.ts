@@ -571,7 +571,7 @@ describe('a purchase is a line on the work plan', () => {
       const item = await createItem(db, seasonId, { ...BLANK_ITEM, title: 'לקנות מכולה', assigneePersonId: itayId }, LEAD);
 
       const preview = (await adoptOutcomes(db, seasonId, [{ id: item, title: 'לקנות מכולה' }])).get(item);
-      expect(preview?.existing).toEqual({ id: rowId, name: 'מכולה' });
+      expect(preview?.existing).toEqual({ id: rowId, name: 'מכולה', assignee: null });
       expect(preview?.boardTitle).toBe('להשיג מכולה (3)');
 
       expect(await adoptPurchaseItems(db, seasonId, [item], LEAD)).toBe(1);
@@ -585,6 +585,20 @@ describe('a purchase is a line on the work plan', () => {
       expect((await planItemById(db, item))?.title).toBe('להשיג מכולה (3)');
       // It had nobody; the item's person fills the blank.
       expect(row.assignee?.id).toBe(itayId);
+    });
+
+    it('tells the preview whose name the row carries, since that is the one that stays on both', async () => {
+      const [noa] = await db.insert(persons).values({ displayName: 'נועה לוי' }).returning();
+      const rowId = await bareRow('מכולה', { assigneePersonId: noa.id });
+      const item = await createItem(db, seasonId, { ...BLANK_ITEM, title: 'לקנות מכולה', assigneePersonId: itayId }, LEAD);
+
+      const preview = (await adoptOutcomes(db, seasonId, [{ id: item, title: 'לקנות מכולה' }])).get(item);
+      expect(preview?.existing).toEqual({ id: rowId, name: 'מכולה', assignee: { id: noa.id, name: 'נועה לוי' } });
+
+      await adoptPurchaseItems(db, seasonId, [item], LEAD);
+      // The list is the authority: the row keeps its person, and the board's line follows it.
+      expect((await named('מכולה'))[0].assignee?.id).toBe(noa.id);
+      expect((await planItemById(db, item))?.assignee?.personId).toBe(noa.id);
     });
 
     it('matches a name whatever quote mark it was typed with, and leaves both spellings as typed', async () => {

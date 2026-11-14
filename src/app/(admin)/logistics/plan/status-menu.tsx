@@ -33,10 +33,19 @@ export function StatusMenu({ item }: { item: { id: string; title: string; status
       const result = await setItemStatusAction(item.id, next);
       if (!result.ok) { show({ message: result.error, tone: 'bad' }); return; }
       show({
-        message: `${item.title} · ${WORK_STATUS_LABELS[next]}`,
+        /* The state the server set, which for a purchase's line reopened
+           after its purchase arrived is done, not the open that was asked for. */
+        message: `${item.title} · ${WORK_STATUS_LABELS[result.value ?? next]}`,
         tone: 'ok',
         /* E2: the undo is the domain's own inverse — the status that was. */
-        undo: { label: 'ביטול', run: () => setItemStatusAction(item.id, previous) },
+        undo: {
+          label: 'ביטול',
+          /* The toaster wants a bare result; the status the undo landed on is not its to report. */
+          run: async () => {
+            const undone = await setItemStatusAction(item.id, previous);
+            return undone.ok ? { ok: true } : undone;
+          },
+        },
       });
       router.refresh();
     } finally {

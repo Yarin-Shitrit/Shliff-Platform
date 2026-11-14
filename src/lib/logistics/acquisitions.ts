@@ -397,10 +397,15 @@ export async function updateAcquisition(
   validate(input);
   if (!(await acquisitionById(db, id))) throw new Error(`unknown acquisition ${id}`);
 
-  await db.update(acquisitionItems)
-    .set({ ...clean(input), updatedBy: actor, updatedAt: new Date() })
-    .where(eq(acquisitionItems.id, id));
-  await followPurchase(db, id, actor);
+  /* One transaction, as `createAcquisition` is: a row renamed whose line
+     kept the old name is the two lists disagreeing with nothing to say so. */
+  await (db as Db).transaction(async (tx) => {
+    const scoped = tx as unknown as AnyDb;
+    await scoped.update(acquisitionItems)
+      .set({ ...clean(input), updatedBy: actor, updatedAt: new Date() })
+      .where(eq(acquisitionItems.id, id));
+    await followPurchase(scoped, id, actor);
+  });
 }
 
 /**
@@ -412,8 +417,10 @@ async function unlinkedRows(db: AnyDb, seasonId: string) {
   const rows = await db.select({
     id: acquisitionItems.id, name: acquisitionItems.name, status: acquisitionItems.status,
     source: acquisitionItems.source, quantityNeeded: acquisitionItems.quantityNeeded,
+    assigneePersonId: acquisitionItems.assigneePersonId, assigneeName: persons.displayName,
   }).from(acquisitionItems)
     .leftJoin(workItems, eq(workItems.acquisitionItemId, acquisitionItems.id))
+    .leftJoin(persons, eq(persons.id, acquisitionItems.assigneePersonId))
     .where(and(
       isNull(workItems.id),
       or(eq(acquisitionItems.seasonId, seasonId), isNull(acquisitionItems.seasonId)),
@@ -437,7 +444,12 @@ function outcomeOf(title: string, rows: readonly UnlinkedRow[]): AdoptOutcome {
   if (same.length === 1) {
     const [row] = same;
     return {
-      source: row.source, name: row.name, existing: { id: row.id, name: row.name },
+      source: row.source, name: row.name,
+      existing: {
+        id: row.id, name: row.name,
+        assignee: row.assigneePersonId === null || row.assigneeName === null
+          ? null : { id: row.assigneePersonId, name: row.assigneeName },
+      },
       boardTitle: purchaseTitle(row.source, row.name, row.quantityNeeded), refusal: null,
     };
   }
@@ -496,7 +508,9 @@ export async function adoptPurchaseItems(
       let rowId: string;
       if (outcome.existing !== null) {
         rowId = outcome.existing.id;
-        /* The row keeps its own person; the item's fills only a blank. */
+        /* The row keeps its own person; the item's fills only a blank. When
+           the two differ the item's is replaced by the row's, below — the
+           drawer said so before the button (`existing.assignee`). */
         if (item.assigneePersonId !== null) {
           await scoped.update(acquisitionItems)
             .set({ assigneePersonId: item.assigneePersonId, updatedAt: new Date(), updatedBy: actor })
@@ -541,10 +555,15 @@ export async function setAcquisitionStatus(
   if (!STATUSES.includes(status)) throw new Error(`unknown status: ${status}`);
   if (!(await acquisitionById(db, id))) throw new Error(`unknown acquisition ${id}`);
 
-  await db.update(acquisitionItems)
-    .set({ status, updatedBy: actor, updatedAt: new Date() })
-    .where(eq(acquisitionItems.id, id));
-  await followPurchase(db, id, actor);
+  /* One transaction: an arrived row whose line stayed open would read as
+     work still to do on the board. */
+  await (db as Db).transaction(async (tx) => {
+    const scoped = tx as unknown as AnyDb;
+    await scoped.update(acquisitionItems)
+      .set({ status, updatedBy: actor, updatedAt: new Date() })
+      .where(eq(acquisitionItems.id, id));
+    await followPurchase(scoped, id, actor);
+  });
 }
 
 export interface ArrivalInput {

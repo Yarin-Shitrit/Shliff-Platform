@@ -90,7 +90,7 @@ describe('the drawer that moves buying items to the acquisitions list', () => {
   it('says under each item how it will go in, and when it joins a row already in the list', () => {
     mount({
       candidates: [
-        { ...CANDIDATES[0], outcome: { source: 'buy_new', name: 'מכולה', existing: { id: 'r', name: 'מכולה' }, boardTitle: 'לקנות מכולה', refusal: null } },
+        { ...CANDIDATES[0], outcome: { source: 'buy_new', name: 'מכולה', existing: { id: 'r', name: 'מכולה', assignee: null }, boardTitle: 'לקנות מכולה', refusal: null } },
         { ...CANDIDATES[1], outcome: { source: 'buy_new', name: 'קרשים', existing: null, boardTitle: 'לקנות קרשים', refusal: null } },
         { ...CANDIDATES[2], outcome: { source: 'buy_new', name: 'להכין סלון', existing: null, boardTitle: 'לקנות להכין סלון', refusal: null } },
       ],
@@ -100,6 +100,34 @@ describe('the drawer that moves buying items to the acquisitions list', () => {
     expect(dialog).toContain('תיכנס כ״קרשים״ · לקנות חדש · בלוח תיקרא ״לקנות קרשים״');
     expect(dialog).toContain('בלוח תיקרא ״לקנות להכין סלון״');
     expect(dialog).not.toMatch(/[A-Za-z]/);
+  });
+
+  const joining = (rowAssignee: { id: string; name: string } | null): AdoptableItem => ({
+    ...CANDIDATES[0],
+    outcome: { source: 'buy_new', name: 'מכולה', existing: { id: 'r', name: 'מכולה', assignee: rowAssignee }, boardTitle: 'לקנות מכולה', refusal: null },
+  });
+
+  it('names both people, and which one stays, when the row in the list is somebody else’s', () => {
+    mount({ candidates: [joining({ id: 'q', name: 'נועה' })] });
+    const dialog = screen.getByRole('dialog').textContent ?? '';
+    expect(dialog).toContain('המשימה רשומה על אופק והפריט ברשימה על נועה');
+    expect(dialog).toContain('האחריות תישאר על נועה, גם בלוח');
+    expect(dialog).toContain('השם אופק יירד מהמשימה');
+    expect(dialog).not.toMatch(/[A-Za-z]/);
+  });
+
+  it('says nothing about people when the two agree, or when either side names nobody', () => {
+    mount({ candidates: [joining({ id: 'p', name: 'אופק' })] });
+    expect(screen.getByRole('dialog').textContent).not.toContain('יירד מהמשימה');
+    mount({ candidates: [{ ...joining(null), id: 'a2' }] });
+    for (const dialog of screen.getAllByRole('dialog')) expect(dialog.textContent).not.toContain('יירד מהמשימה');
+  });
+
+  it('does not promise that an item goes in with its own person', () => {
+    mount();
+    const dialog = screen.getByRole('dialog').textContent ?? '';
+    expect(dialog).not.toContain('עם האחראי שלה');
+    expect(dialog).toContain('האחריות שרשומה ברשימה היא שנשארת');
   });
 
   it('never ticks an item the move would refuse, and does not let it be ticked', async () => {

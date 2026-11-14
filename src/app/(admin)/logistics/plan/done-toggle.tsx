@@ -35,7 +35,14 @@ export function DoneToggle({ item }: { item: { id: string; title: string; status
       show({
         message: next === 'done' ? `${item.title} הושלמה` : `${item.title} נפתחה מחדש`,
         tone: 'ok',
-        undo: { label: 'ביטול', run: () => setItemStatusAction(item.id, item.status) },
+        undo: {
+          label: 'ביטול',
+          /* The toaster wants a bare result; the status the undo landed on is not its to report. */
+          run: async () => {
+            const undone = await setItemStatusAction(item.id, item.status);
+            return undone.ok ? { ok: true } : undone;
+          },
+        },
       });
       router.refresh();
     } finally {
