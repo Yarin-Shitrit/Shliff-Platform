@@ -13,7 +13,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push, replace, refresh }
 const actions = vi.hoisted(() => ({
   createItemAction: vi.fn(async (): Promise<ActionResult<string>> => ({ ok: true, value: 'new' })),
   updateItemAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
-  setItemStatusAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
+  setItemStatusAction: vi.fn(async (): Promise<ActionResult<PlanItem['status']>> => ({ ok: true })),
   addDependencyAction: vi.fn(async (): Promise<ActionResult<string>> => ({ ok: true, value: 'dep' })),
   removeDependencyAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
 }));
@@ -262,5 +262,14 @@ describe('the drawer over a purchase’s line', () => {
   it('still lets the line be cancelled, which is the board’s own decision', () => {
     mount({ item: linked });
     expect(screen.getByRole('button', { name: 'ביטול המשימה' })).toBeTruthy();
+  });
+
+  it('reopening a cancelled line names the state it landed on — done, when the purchase has arrived', async () => {
+    actions.setItemStatusAction.mockResolvedValueOnce({ ok: true, value: 'done' });
+    mount({ item: { ...linked, status: 'cancelled', purchase: { id: 'acq-1', status: 'arrived' } } });
+    await press('פתיחה מחדש');
+    expect(actions.setItemStatusAction).toHaveBeenCalledWith('i', 'open');
+    expect(await screen.findByText('לקנות מכולה · הושלמה')).toBeTruthy();
+    expect(screen.queryByText('לקנות מכולה · פתוחה')).toBeNull();
   });
 });

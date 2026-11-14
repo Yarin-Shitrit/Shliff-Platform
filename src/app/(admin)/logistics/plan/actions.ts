@@ -99,14 +99,20 @@ export async function scheduleItemAction(id: string, schedule: Schedule): Promis
   }
 }
 
-/** The undo is this action with the previous status (E2). */
-export async function setItemStatusAction(id: string, status: WorkItemStatus): Promise<ActionResult> {
+/**
+ * The undo is this action with the previous status (E2). The value is the
+ * status that was written: a purchase's line reopened after its purchase
+ * arrived lands on done, and the toast names where it landed.
+ */
+export async function setItemStatusAction(
+  id: string, status: WorkItemStatus,
+): Promise<ActionResult<WorkItemStatus>> {
   const admin = await requireAdmin();
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
-    await setItemStatus(db, id, status, admin.email);
+    const landed = await setItemStatus(db, id, status, admin.email);
     revalidatePath(PLAN_PATH);
-    return { ok: true };
+    return { ok: true, value: landed };
   } catch (error) {
     return { ok: false, error: itemFailureMessage(error) };
   }

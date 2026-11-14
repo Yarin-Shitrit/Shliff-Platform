@@ -151,7 +151,9 @@ export function ItemDrawer({
     try {
       const result = await setItemStatusAction(item.id, status);
       if (!result.ok) { setRefusal({ where: 'form', message: result.error }); return; }
-      show({ message: `${item.title} · ${WORK_STATUS_LABELS[status]}`, tone: 'ok' });
+      /* The state the server set: a purchase's line reopened after its
+         purchase arrived lands on done. */
+      show({ message: `${item.title} · ${WORK_STATUS_LABELS[result.value ?? status]}`, tone: 'ok' });
       setCancelling(false);
       router.refresh();
     } finally {
