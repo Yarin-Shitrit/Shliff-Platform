@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import { describe, it, expect } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
-import { buildTimeline, type PlanItem, type Topic, type TimelineBar } from '@/lib/logistics/plan';
+import { buildPlanTree, buildTimeline, type PlanItem, type Topic, type TimelineBar } from '@/lib/logistics/plan';
 import type { TimelineScale } from '@/lib/logistics/plan-views';
 import { PlanTimeline, packBars, laneRows, laneBlocks, monthBands, weekCells } from './plan-timeline';
 
@@ -204,6 +204,39 @@ describe('PlanTimeline', () => {
     // Both items are drawn, three and a half months apart.
     expect(screen.getByRole('link', { name: 'להזמין מכולה · 03/03 · עבר התאריך' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'להרכיב צל · 18/06–20/06' })).toBeTruthy();
+  });
+
+  describe('the parts count on a general item’s bar', () => {
+    const parent = item({ id: 'p', title: 'להכין סלון', startsOn: '2026-05-10', endsOn: '2026-05-16' });
+    const part = (id: string, over: Partial<PlanItem> = {}) => item({ id, title: `חלק ${id}`, parentId: 'p', ...over });
+    const FIVE = [
+      parent,
+      part('a', { startsOn: '2026-05-11' }),
+      part('b', { startsOn: '2026-05-12' }),
+      part('c'),
+      part('d'),
+      part('e', { startsOn: '2026-05-13', status: 'cancelled' }),
+    ];
+    function parentBar(items: PlanItem[]) {
+      render(<PlanTimeline timeline={buildTimeline(items, [])!} scale="day" params={{ season: 's1' }} today="2026-01-01" currentItemId={null} />);
+      return screen.getByRole('link', { name: /^להכין סלון/ }).textContent ?? '';
+    }
+
+    it('counts every part the item has, as the list does, and says how many of them the timeline draws', () => {
+      // Five rows under it in the list — two with no day and one cancelled are not bars here.
+      expect(buildPlanTree(FIVE, [])[0].branches[0].children).toHaveLength(5);
+      const text = parentBar(FIVE);
+      expect(text).toContain('5 חלקים · 2 על הציר');
+      expect(text).not.toContain('2 חלקים');
+    });
+
+    it('says only the count when every part is drawn', () => {
+      expect(parentBar(FIVE.slice(0, 3))).toBe('להכין סלון2 חלקים');
+    });
+
+    it('still counts the parts when none of them has a day', () => {
+      expect(parentBar([parent, part('c'), part('d')])).toBe('להכין סלון2 חלקים · אף אחד לא על הציר');
+    });
   });
 
   it('gives a bar its extras only when it has the room for them at that resolution', () => {
