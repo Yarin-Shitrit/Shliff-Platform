@@ -12,6 +12,9 @@ vi.mock('./issue-due-button', () => ({
     <button type="button">הנפקת חיוב {flatRateAgorot / 100} ₪</button>
   ),
   IssueMissingDuesButton: () => null,
+  TrackButton: ({ to, amountAgorot }: { to: string; amountAgorot: number | null }) => (
+    <button type="button">{`move:${to}:${amountAgorot}`}</button>
+  ),
 }));
 
 import { FeeTable } from './fee-table';
@@ -29,7 +32,7 @@ function payment(over: Partial<PaymentRow> = {}): PaymentRow {
 function row(over: Partial<MemberFeeRow> = {}): MemberFeeRow {
   return {
     personId: 'p1', displayName: 'איתי כהן', role: 'member',
-    dueId: 'd1', amountAgorot: 120000, kind: 'flat',
+    dueId: 'd1', amountAgorot: 120000, kind: 'flat', track: 'burn',
     exceptionReason: null, decidedBy: null,
     paidAgorot: 0, outstandingAgorot: 120000, settled: false, payments: [], ...over,
   };
@@ -37,7 +40,7 @@ function row(over: Partial<MemberFeeRow> = {}): MemberFeeRow {
 
 const NO_DUE = row({
   personId: 'p-nodue', displayName: 'ליאור קפלן', dueId: null, amountAgorot: null,
-  kind: null, outstandingAgorot: 0,
+  kind: null, track: null, outstandingAgorot: 0,
 });
 const UNPAID = row({ personId: 'p-unpaid', displayName: 'איתי כהן' });
 const PARTIAL = row({
@@ -195,5 +198,45 @@ describe('FeeTable', () => {
       <FeeTable {...base} rows={[]} totals={{ ...base.totals, memberCount: 0 }} />,
     );
     expect(screen.getByText('אין כאן כלום לשנה הזו')).toBeDefined();
+  });
+});
+
+/*
+ * A season with דמי חבר: the kind cell names the track, a new due is issued
+ * on the membership sum, and each row offers the move to the other track
+ * with the amount it lands on.
+ */
+describe('FeeTable in a season with a membership rate', () => {
+  const MEMBER = row({
+    personId: 'p-member', track: 'membership', amountAgorot: 30000, outstandingAgorot: 30000,
+  });
+
+  it('names the track each due is on', () => {
+    render(<FeeTable {...base} membershipRateAgorot={30000} rows={[MEMBER, UNPAID]} />);
+    expect(screen.getByText('דמי חבר')).toBeDefined();
+    expect(screen.getByText('דמי קאמפ למידברן')).toBeDefined();
+    expect(screen.queryByText('תעריף רגיל')).toBeNull();
+  });
+
+  it('offers each due the move to the other track, with the amount it lands on', () => {
+    render(<FeeTable {...base} membershipRateAgorot={30000} rows={[MEMBER, UNPAID]} />);
+    expect(screen.getByRole('button', { name: 'move:burn:120000' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'move:membership:30000' })).toBeDefined();
+  });
+
+  it('issues a new due on the membership sum', () => {
+    render(<FeeTable {...base} membershipRateAgorot={30000} rows={[NO_DUE]} />);
+    expect(screen.getByRole('button', { name: 'הנפקת חיוב 300 ₪' })).toBeDefined();
+  });
+
+  it('flags a membership due against the membership sum, not the Midburn rate', () => {
+    render(<FeeTable {...base} membershipRateAgorot={35000} rows={[MEMBER]} />);
+    expect(screen.getByText('הונפק על 300 ₪')).toBeDefined();
+  });
+
+  it('offers no move in a season without one', () => {
+    render(<FeeTable {...base} rows={[UNPAID]} />);
+    expect(screen.queryByRole('button', { name: /^move:/ })).toBeNull();
+    expect(screen.getByText('תעריף רגיל')).toBeDefined();
   });
 });

@@ -4,9 +4,9 @@ import { createSeason, addMember } from '@/lib/members/roster';
 import { createPerson } from '@/lib/members/link';
 import {
   issueFlatDues, issueFlatDueFor, setException, clearException, listDues,
-  setFlatRate, issuedFlatDues,
+  setFlatRate, issuedFlatDues, setMembershipRate, setTrack,
 } from '@/lib/fees/dues';
-import { recordPayment } from '@/lib/fees/payments';
+import { recordPayment, settlementFor } from '@/lib/fees/payments';
 import { listSeasons } from '@/lib/members/roster';
 
 const LEAD = 'lead@shliff.camp';
@@ -277,5 +277,156 @@ describe('setFlatRate', () => {
 
     // Two payments on one due count once; the exception is not counted at all.
     expect(await issuedFlatDues(db, seasonId)).toEqual({ count: 2, withPayments: 1 });
+  });
+});
+
+/*
+ * דמי חבר: everyone starts on the small sum, and going to Midburn raises the
+ * same due to the full camp dues with its payments still on it.
+ */
+describe('the membership track', () => {
+  let db: TestDb;
+  let seasonId: string;
+
+  beforeEach(async () => {
+    db = await createTestDb();
+    const season = await createSeason(db, { name: 'ברן 27', year: 2027, flatRate: 1200 });
+    seasonId = season.id;
+  });
+
+  async function member(name: string) {
+    const id = await createPerson(db, name, LEAD);
+    await addMember(db, id, seasonId);
+    return id;
+  }
+
+  it('leaves a season without a membership rate issuing Midburn dues, as before', async () => {
+    await member('אופק');
+    await issueFlatDues(db, seasonId);
+    const [due] = await listDues(db, seasonId);
+    expect(due.track).toBe('burn');
+    expect(due.amountAgorot).toBe(120000);
+  });
+
+  it('starts everyone on the membership sum once the season has one', async () => {
+    const ofek = await member('אופק');
+    await member('יוסף');
+    await setMembershipRate(db, seasonId, 300, { applyToIssued: false });
+
+    expect(await issueFlatDueFor(db, ofek, seasonId)).toBe(true);
+    expect(await issueFlatDues(db, seasonId)).toBe(1);
+    const rows = await listDues(db, seasonId);
+    expect(rows.map((row) => [row.track, row.kind, row.amountAgorot]))
+      .toEqual([['membership', 'flat', 30000], ['membership', 'flat', 30000]]);
+  });
+
+  it('raises the same due to the full dues on the way to Midburn, keeping what was paid', async () => {
+    const ofek = await member('אופק');
+    await setMembershipRate(db, seasonId, 300, { applyToIssued: false });
+    await issueFlatDues(db, seasonId);
+    const [before] = await listDues(db, seasonId);
+    await recordPayment(db, {
+      dueId: before.dueId, amount: 300, channel: 'ביט', paidOn: new Date(), recordedBy: LEAD,
+    });
+    expect((await settlementFor(db, before.dueId)).settled).toBe(true);
+
+    expect(await setTrack(db, ofek, seasonId, 'burn'))
+      .toEqual({ track: 'burn', previousAgorot: 30000, nextAgorot: 120000 });
+
+    const [after] = await listDues(db, seasonId);
+    expect(after.dueId).toBe(before.dueId);
+    expect(after.track).toBe('burn');
+    const settlement = await settlementFor(db, after.dueId);
+    expect(settlement.paidAgorot).toBe(30000);
+    expect(settlement.outstandingAgorot).toBe(90000);
+  });
+
+  it('comes back down to the membership sum, and says so when that leaves it overpaid', async () => {
+    const ofek = await member('אופק');
+    await setMembershipRate(db, seasonId, 300, { applyToIssued: false });
+    await issueFlatDues(db, seasonId);
+    await setTrack(db, ofek, seasonId, 'burn');
+    const [due] = await listDues(db, seasonId);
+    await recordPayment(db, {
+      dueId: due.dueId, amount: 500, channel: 'ביט', paidOn: new Date(), recordedBy: LEAD,
+    });
+
+    await setTrack(db, ofek, seasonId, 'membership');
+    const settlement = await settlementFor(db, due.dueId);
+    expect(settlement.dueAgorot).toBe(30000);
+    expect(settlement.overpaid).toBe(true);
+  });
+
+  it('keeps an exception on its amount across a move, and cancels it to its own track', async () => {
+    const ofek = await member('אופק');
+    await setMembershipRate(db, seasonId, 300, { applyToIssued: false });
+    await issueFlatDues(db, seasonId);
+    await setException(db, {
+      personId: ofek, seasonId, amount: 0, reason: 'הובלת ההקמה', decidedBy: LEAD,
+    });
+
+    await setTrack(db, ofek, seasonId, 'burn');
+    let [due] = await listDues(db, seasonId);
+    expect([due.track, due.kind, due.amountAgorot]).toEqual(['burn', 'exception', 0]);
+
+    await clearException(db, ofek, seasonId);
+    [due] = await listDues(db, seasonId);
+    expect([due.track, due.kind, due.amountAgorot]).toEqual(['burn', 'flat', 120000]);
+
+    await setTrack(db, ofek, seasonId, 'membership');
+    await setException(db, {
+      personId: ofek, seasonId, amount: 100, reason: 'הנחה', decidedBy: LEAD,
+    });
+    await clearException(db, ofek, seasonId);
+    [due] = await listDues(db, seasonId);
+    expect([due.track, due.kind, due.amountAgorot]).toEqual(['membership', 'flat', 30000]);
+  });
+
+  it('refuses the membership track in a season that has no membership rate', async () => {
+    const ofek = await member('אופק');
+    await issueFlatDues(db, seasonId);
+    await expect(setTrack(db, ofek, seasonId, 'membership'))
+      .rejects.toThrow('this season has no membership rate');
+    await expect(setTrack(db, await member('יוסף'), seasonId, 'burn'))
+      .rejects.toThrow('nothing to move');
+  });
+
+  it('a change of one rate never rewrites the dues on the other', async () => {
+    const ofek = await member('אופק');
+    await member('יוסף');
+    await setMembershipRate(db, seasonId, 300, { applyToIssued: false });
+    await issueFlatDues(db, seasonId);
+    await setTrack(db, ofek, seasonId, 'burn');
+
+    expect(await issuedFlatDues(db, seasonId)).toEqual({ count: 1, withPayments: 0 });
+    expect(await issuedFlatDues(db, seasonId, 'membership')).toEqual({ count: 1, withPayments: 0 });
+
+    expect((await setFlatRate(db, seasonId, 1400, { applyToIssued: true })).updatedDues).toBe(1);
+    expect((await setMembershipRate(db, seasonId, 350, { applyToIssued: true })).updatedDues).toBe(1);
+    const rows = await listDues(db, seasonId);
+    expect(rows.map((row) => [row.track, row.amountAgorot]).sort())
+      .toEqual([['burn', 140000], ['membership', 35000]]);
+  });
+
+  it('keeps the membership sum no larger than the full dues, from either side', async () => {
+    await expect(setMembershipRate(db, seasonId, 1300, { applyToIssued: false }))
+      .rejects.toThrow('a membership rate may not exceed the flat rate');
+    await expect(setMembershipRate(db, seasonId, -1, { applyToIssued: false }))
+      .rejects.toThrow('a membership rate may not be negative');
+    await setMembershipRate(db, seasonId, 300, { applyToIssued: false });
+    await expect(setFlatRate(db, seasonId, 200, { applyToIssued: false }))
+      .rejects.toThrow('a flat rate may not be below the membership rate');
+  });
+
+  it('takes the track away only while nobody is on it', async () => {
+    await member('אופק');
+    await setMembershipRate(db, seasonId, 300, { applyToIssued: false });
+    await setMembershipRate(db, seasonId, null, { applyToIssued: false });
+    expect((await listSeasons(db))[0].membershipRate).toBeNull();
+
+    await setMembershipRate(db, seasonId, 300, { applyToIssued: false });
+    await issueFlatDues(db, seasonId);
+    await expect(setMembershipRate(db, seasonId, null, { applyToIssued: false }))
+      .rejects.toThrow('membership dues are still issued in this season');
   });
 });

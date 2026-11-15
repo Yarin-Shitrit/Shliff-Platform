@@ -20,14 +20,20 @@ export interface FeeViewsProps {
   counts: Record<FeeView, number>;
   seasonId: string;
   view: FeeView;
+  /** False in a season without דמי חבר: its two track tabs would both be a
+   *  restatement of הכול, so they are left out. */
+  tracks?: boolean;
 }
 
-export function FeeViews({ counts, seasonId, view }: FeeViewsProps): ReactElement {
+export function FeeViews({ counts, seasonId, view, tracks = true }: FeeViewsProps): ReactElement {
+  const shown = tracks
+    ? FEE_VIEWS
+    : FEE_VIEWS.filter((one) => one.id !== 'burn' && one.id !== 'membership');
   return (
     <SavedViews
       label="תצוגות של דמי קאמפ"
       currentId={view}
-      views={FEE_VIEWS.map((one) => ({
+      views={shown.map((one) => ({
         id: one.id,
         label: one.label,
         count: counts[one.id],

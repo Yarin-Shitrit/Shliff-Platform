@@ -31,7 +31,7 @@ import type { MemberFeeRow } from '@/lib/fees/season-fees';
 import {
   paymentStateOf, isPayable, lastPaymentOf, FEE_VIEWS, type FeeView,
 } from '@/lib/fees/views';
-import { IssueDueButton } from './issue-due-button';
+import { IssueDueButton, TrackButton } from './issue-due-button';
 import { feesHref } from './href';
 import styles from './fees.module.css';
 
@@ -50,6 +50,9 @@ export interface FeeTableProps {
   seasonName: string;
   view: FeeView;
   flatRateAgorot: number;
+  /** Null when the season has no membership track; the table then reads
+   *  exactly as it did before there was one. */
+  membershipRateAgorot?: number | null;
   totals: FeeTotals;
 }
 
@@ -72,16 +75,28 @@ function nameCell(row: MemberFeeRow): ReactNode {
  * the amount the due is on, and a link to the one drawer that can bring it
  * onto today's rate — rather than a תעריף רגיל that is not the rate.
  */
-function kindCell(row: MemberFeeRow, rateHref: string, flatRateAgorot: number): ReactNode {
+function kindCell(
+  row: MemberFeeRow, rateHref: string, flatRateAgorot: number, membershipRateAgorot: number | null,
+): ReactNode {
   if (row.dueId === null) return <span className={styles.muted}>אין חיוב</span>;
+  /*
+   * Which of the season's two rates the due stands on. In a season without
+   * דמי חבר there is one rate and the word stays תעריף רגיל; where there are
+   * two, the cell names the track instead, because "regular" no longer says
+   * which.
+   */
+  const onMembership = row.track === 'membership';
+  const trackLabel = onMembership ? 'דמי חבר'
+    : membershipRateAgorot === null ? 'תעריף רגיל' : 'דמי קאמפ למידברן';
   if (row.kind !== 'exception') {
-    if (row.amountAgorot === flatRateAgorot) return 'תעריף רגיל';
+    const rateAgorot = onMembership ? membershipRateAgorot : flatRateAgorot;
+    if (rateAgorot === null || row.amountAgorot === rateAgorot) return trackLabel;
     return (
       <span className={styles.kindCell}>
-        {'תעריף רגיל'}
+        {trackLabel}
         <Link
           href={rateHref}
-          title={`החיוב הונפק על ${formatShekels(row.amountAgorot ?? 0)} והתעריף היום ${formatShekels(flatRateAgorot)}. שינוי התעריף יכול לעדכן אותו.`}
+          title={`החיוב הונפק על ${formatShekels(row.amountAgorot ?? 0)} והתעריף היום ${formatShekels(rateAgorot)}. שינוי התעריף יכול לעדכן אותו.`}
         >
           <Pill tone="warn">{`הונפק על ${formatShekels(row.amountAgorot ?? 0)}`}</Pill>
         </Link>
@@ -91,6 +106,7 @@ function kindCell(row: MemberFeeRow, rateHref: string, flatRateAgorot: number): 
   return (
     <span className={styles.kindCell}>
       <Pill tone="brand">חריג</Pill>
+      {membershipRateAgorot !== null && <span className={styles.muted}>{trackLabel}</span>}
       {row.exceptionReason && (
         <span className={styles.muted}>
           {/* A17: one isolate around the phrase — the decider is an address. */}
@@ -145,13 +161,17 @@ function lastPaymentCell(row: MemberFeeRow): ReactNode {
 }
 
 export function FeeTable({
-  rows, seasonId, seasonName, view, flatRateAgorot, totals,
+  rows, seasonId, seasonName, view, flatRateAgorot, membershipRateAgorot = null, totals,
 }: FeeTableProps): ReactElement {
+  /* What a new due is issued on: the membership sum where the season has one. */
+  const issueRateAgorot = membershipRateAgorot ?? flatRateAgorot;
   const columns: ReadonlyArray<TableColumn<MemberFeeRow>> = [
     { key: 'name', card: 'title', header: 'שם', cell: nameCell },
     {
       key: 'kind', card: 'meta', header: 'סוג החיוב',
-      cell: (row) => kindCell(row, feesHref({ season: seasonId, view, rate: true }), flatRateAgorot),
+      cell: (row) => kindCell(
+        row, feesHref({ season: seasonId, view, rate: true }), flatRateAgorot, membershipRateAgorot,
+      ),
     },
     {
       key: 'due',
@@ -194,7 +214,7 @@ export function FeeTable({
         <>
           {row.dueId === null ? (
             <IssueDueButton
-              personId={row.personId} seasonId={seasonId} flatRateAgorot={flatRateAgorot}
+              personId={row.personId} seasonId={seasonId} flatRateAgorot={issueRateAgorot}
             />
           ) : isPayable(row) ? (
             <ButtonLink
@@ -210,6 +230,24 @@ export function FeeTable({
             >
               <Icon name="eye" size={15} />
             </ButtonLink>
+          )}
+          {/*
+            The move between the two tracks, offered only where the season
+            has both. An exception keeps its amount across the move, so its
+            button promises no figure.
+          */}
+          {row.dueId !== null && membershipRateAgorot !== null && (
+            row.track === 'membership' ? (
+              <TrackButton
+                personId={row.personId} seasonId={seasonId} to="burn"
+                amountAgorot={row.kind === 'exception' ? null : flatRateAgorot}
+              />
+            ) : (
+              <TrackButton
+                personId={row.personId} seasonId={seasonId} to="membership"
+                amountAgorot={row.kind === 'exception' ? null : membershipRateAgorot}
+              />
+            )
           )}
           <ButtonLink
             tone="ghost" size="sm"

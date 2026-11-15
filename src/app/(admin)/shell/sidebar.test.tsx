@@ -37,7 +37,7 @@ import { Sidebar } from './sidebar';
 
 function row(over: Partial<Season>): Season {
   return {
-    id: 'b26', name: 'ברן 26', year: 2026, flatRate: '1200.00', plannedSize: null, startsOn: null,
+    id: 'b26', name: 'ברן 26', year: 2026, flatRate: '1200.00', membershipRate: null, plannedSize: null, startsOn: null,
     ...over,
   };
 }

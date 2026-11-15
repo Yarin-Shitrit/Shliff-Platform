@@ -68,7 +68,7 @@ describe('GET /members/export', () => {
     const { listDues } = await import('@/lib/fees/dues');
     vi.mocked(listDues).mockResolvedValue([{
       dueId: 'd1', personId: 'p1', displayName: 'אופק', amountAgorot: 120000,
-      kind: 'exception', exceptionReason: 'הוביל את ההקמה', decidedBy: 'lead@shliff.camp',
+      kind: 'exception', track: 'burn', exceptionReason: 'הוביל את ההקמה', decidedBy: 'lead@shliff.camp',
     }]);
     const { settlementFor } = await import('@/lib/fees/payments');
     vi.mocked(settlementFor).mockResolvedValue({

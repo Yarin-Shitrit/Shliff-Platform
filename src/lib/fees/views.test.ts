@@ -17,7 +17,7 @@ function payment(over: Partial<PaymentRow> = {}): PaymentRow {
 function row(over: Partial<MemberFeeRow> = {}): MemberFeeRow {
   return {
     personId: 'p1', displayName: 'איתי כהן', role: 'member',
-    dueId: 'd1', amountAgorot: 120000, kind: 'flat',
+    dueId: 'd1', amountAgorot: 120000, kind: 'flat', track: 'burn',
     exceptionReason: null, decidedBy: null,
     paidAgorot: 0, outstandingAgorot: 120000, settled: false, payments: [], ...over,
   };
@@ -25,7 +25,7 @@ function row(over: Partial<MemberFeeRow> = {}): MemberFeeRow {
 
 const NO_DUE = row({
   personId: 'p-nodue', displayName: 'ליאור קפלן', dueId: null, amountAgorot: null,
-  kind: null, outstandingAgorot: 0,
+  kind: null, track: null, outstandingAgorot: 0,
 });
 const UNPAID = row({ personId: 'p-unpaid', displayName: 'איתי כהן' });
 const PARTIAL = row({
@@ -57,6 +57,15 @@ describe('parseFeeView', () => {
 });
 
 describe('paymentStateOf', () => {
+  it('separates the dues on the Midburn track from the ones on דמי חבר', () => {
+    const member = { ...UNPAID, personId: 'p-member', track: 'membership' as const, amountAgorot: 30000 };
+    expect(matchesView(member, 'membership')).toBe(true);
+    expect(matchesView(member, 'burn')).toBe(false);
+    expect(matchesView(UNPAID, 'burn')).toBe(true);
+    // No due, no track: in neither.
+    expect(matchesView(NO_DUE, 'burn')).toBe(false);
+    expect(matchesView(NO_DUE, 'membership')).toBe(false);
+  });
   it('calls a member with no due nodue', () => {
     expect(paymentStateOf(NO_DUE)).toBe('nodue');
   });
@@ -104,7 +113,7 @@ describe('matchesView', () => {
 describe('viewCounts', () => {
   it('counts each view over the same rows, overlaps included', () => {
     expect(viewCounts(ALL)).toEqual({
-      all: 6, unpaid: 1, partial: 1, paid: 3, exception: 1, offset: 1, nodue: 1,
+      all: 6, unpaid: 1, partial: 1, paid: 3, exception: 1, offset: 1, nodue: 1, burn: 5, membership: 0,
     });
   });
   /**
@@ -122,7 +131,7 @@ describe('viewCounts', () => {
   it('returns a present-and-zero count for every known view when there are no rows', () => {
     expect(rowsForView([], 'unpaid')).toEqual([]);
     expect(viewCounts([])).toEqual({
-      all: 0, unpaid: 0, partial: 0, paid: 0, exception: 0, offset: 0, nodue: 0,
+      all: 0, unpaid: 0, partial: 0, paid: 0, exception: 0, offset: 0, nodue: 0, burn: 0, membership: 0,
     });
   });
 });

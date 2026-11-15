@@ -6,11 +6,12 @@ import { requireAdmin } from '@/lib/auth/guard';
 import type { ActionResult } from '@/lib/action-result';
 import {
   issueFlatDues, issueFlatDueFor, setException, clearException, setFlatRate,
+  setMembershipRate, setTrack,
 } from '@/lib/fees/dues';
 import { recordPayment, deletePayment } from '@/lib/fees/payments';
 import { closeSeasonBalances } from '@/lib/fees/close-season';
 import type { CloseSeasonResult } from '@/lib/fees/close-season';
-import type { PaymentChannel } from '@/db/schema/camp';
+import type { PaymentChannel, DueTrack } from '@/db/schema/camp';
 import { toHebrewError, HebrewRefusal } from '@/lib/errors/hebrew';
 import { listOpenAccounts } from '@/lib/money/accounts';
 import { FEE_ERRORS } from './error-messages';
@@ -174,6 +175,47 @@ export async function setFlatRateAction(
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await setFlatRate(db, seasonId, amount, { applyToIssued });
+  } catch (error) {
+    return failed(error);
+  }
+  revalidatePath('/', 'layout');
+  return { ok: true };
+}
+
+/**
+ * Sets what the season charges a member who is not going to Midburn.
+ * `null` is the empty box: a season without that track. The refusals are
+ * the library's (`setMembershipRate`), mapped by `FEE_ERRORS`.
+ */
+export async function setMembershipRateAction(
+  seasonId: string, amount: number | null, applyToIssued: boolean,
+): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+  try {
+    await setMembershipRate(db, seasonId, amount, { applyToIssued });
+  } catch (error) {
+    return failed(error);
+  }
+  revalidatePath('/', 'layout');
+  return { ok: true };
+}
+
+/**
+ * Moves one person's due between דמי חבר and the full Midburn dues. The
+ * same due and the same payments; only what is owed changes, so every page
+ * that shows a balance is revalidated.
+ */
+export async function setTrackAction(
+  personId: string, seasonId: string, track: DueTrack,
+): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+  try {
+    if (track !== 'burn' && track !== 'membership') {
+      throw new HebrewRefusal('המסלול הזה לא מוכר.');
+    }
+    await setTrack(db, personId, seasonId, track);
   } catch (error) {
     return failed(error);
   }

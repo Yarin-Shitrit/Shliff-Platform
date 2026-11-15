@@ -28,6 +28,7 @@ const UNPAID: UnpaidMember[] = Array.from({ length: 12 }, (_, index) => ({
 
 const SUMMARY: SeasonFeeSummary = {
   seasonId: SEASON, seasonName: 'ברן 26', flatRateAgorot: 120000,
+  membershipRateAgorot: null, burnCount: 33, membershipCount: 0,
   memberCount: 35, flatCount: 28, exceptionCount: 5,
   expectedAgorot: 3650000, collectedAgorot: 2430000, outstandingAgorot: 1220000,
   unpaidCount: 12, missingDues: ['ליאור קפלן', 'תמר גולן'],
@@ -36,7 +37,7 @@ const SUMMARY: SeasonFeeSummary = {
 };
 
 const COUNTS = {
-  all: 35, unpaid: 9, partial: 3, paid: 21, exception: 5, offset: 5, nodue: 2,
+  all: 35, unpaid: 9, partial: 3, paid: 21, exception: 5, offset: 5, nodue: 2, burn: 33, membership: 0,
 };
 
 function renderRollup() {

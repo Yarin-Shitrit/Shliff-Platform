@@ -10,7 +10,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { formatShekels } from '@/lib/money';
-import { issueDueForAction, issueDuesAction } from './actions';
+import type { DueTrack } from '@/db/schema/camp';
+import { issueDueForAction, issueDuesAction, setTrackAction } from './actions';
 import styles from './fees.module.css';
 
 /** One member's flat rate. Never the season's — a button must not do more
@@ -39,6 +40,46 @@ export function IssueDueButton({ personId, seasonId, flatRateAgorot }: {
       <Button size="sm" onClick={issue} disabled={pending}>
         {/* A17: one isolate around the whole phrase, not one around the amount. */}
         <bdi>{`הנפקת חיוב ${formatShekels(flatRateAgorot)}`}</bdi>
+      </Button>
+      {error && <p className={styles.formError} role="alert">{error}</p>}
+    </>
+  );
+}
+
+/**
+ * Moves one due to the other track. The label carries the amount the due
+ * lands on, so the consequence is read before the click; an exception keeps
+ * its own amount, and then there is no figure to promise.
+ *
+ * I12: written about the חיוב — העברה, החזרה — never about the member.
+ */
+export function TrackButton({ personId, seasonId, to, amountAgorot }: {
+  personId: string; seasonId: string; to: DueTrack;
+  /** What the due will be on after the move; null when it will not change. */
+  amountAgorot: number | null;
+}) {
+  const router = useRouter();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function move() {
+    setError(null);
+    setPending(true);
+    try {
+      const result = await setTrackAction(personId, seasonId, to);
+      if (result.ok) router.refresh();
+      else setError(result.error);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const verb = to === 'burn' ? 'העברה למידברן' : 'החזרה לדמי חבר';
+
+  return (
+    <>
+      <Button tone="ghost" size="sm" onClick={move} disabled={pending}>
+        <bdi>{amountAgorot === null ? verb : `${verb} — ${formatShekels(amountAgorot)}`}</bdi>
       </Button>
       {error && <p className={styles.formError} role="alert">{error}</p>}
     </>

@@ -259,7 +259,7 @@ export function PaymentDrawer({
       phone="full"
       subtitle={(
         <>
-          {row.kind === 'exception' ? 'חריג' : 'תעריף רגיל'}
+          {row.kind === 'exception' ? 'חריג' : row.track === 'membership' ? 'דמי חבר' : 'תעריף רגיל'}
           {' · נותר '}
           <Money agorot={row.outstandingAgorot} />
         </>

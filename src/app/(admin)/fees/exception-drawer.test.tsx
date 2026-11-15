@@ -30,7 +30,7 @@ const SEASON = '8f2b1c4e-0000-4000-8000-000000000001';
 function row(over: Partial<MemberFeeRow> = {}): MemberFeeRow {
   return {
     personId: 'p1', displayName: 'איתי כהן', role: 'member',
-    dueId: 'd1', amountAgorot: 120000, kind: 'flat',
+    dueId: 'd1', amountAgorot: 120000, kind: 'flat', track: 'burn',
     exceptionReason: null, decidedBy: null,
     paidAgorot: 0, outstandingAgorot: 120000, settled: false, payments: [], ...over,
   };
@@ -42,7 +42,7 @@ const EXISTING = row({
 });
 
 const NO_DUE = row({
-  dueId: null, amountAgorot: null, kind: null, outstandingAgorot: 0,
+  dueId: null, amountAgorot: null, kind: null, track: null, outstandingAgorot: 0,
 });
 
 function renderDrawer(over: Partial<Parameters<typeof ExceptionDrawer>[0]> = {}) {
@@ -162,6 +162,25 @@ describe('ExceptionDrawer', () => {
     const dialog = screen.getByRole('alertdialog');
     fireEvent.click(within(dialog).getByRole('button', { name: 'ביטול החריג' }));
     expect(clearExceptionAction).toHaveBeenCalledWith('p1', SEASON);
+  });
+
+  /**
+   * A due on דמי חבר returns to the membership sum, and calling that sum the
+   * "regular rate" would name the season's Midburn dues beside the wrong
+   * figure.
+   */
+  it('names דמי חבר as the rate a membership due returns to', () => {
+    renderDrawer({
+      row: row({ ...EXISTING, track: 'membership' }), flatRateAgorot: 30000, onMembership: true,
+    });
+    expect(screen.getByRole('dialog').textContent).toContain('דמי חבר לברן 26: 300 ₪');
+    fireEvent.click(screen.getByRole('button', { name: 'ביטול החריג' }));
+
+    const dialog = screen.getByRole('alertdialog');
+    expect(dialog.textContent).toContain('לדמי החבר של ברן 26');
+    expect(dialog.textContent).toContain('300 ₪');
+    expect(document.body.textContent).not.toContain('תעריף הרגיל');
+    expect(document.body.textContent).not.toContain('תעריף רגיל');
   });
 
   it('shows a server refusal rather than pretending it saved', async () => {

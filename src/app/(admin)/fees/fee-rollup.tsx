@@ -49,6 +49,13 @@ export function staleRateSentence(count: number, flatRateAgorot: number): string
     : `${count} חיובים בתעריף הרגיל הונפקו על סכום אחר מהתעריף של היום, ${formatShekels(flatRateAgorot)}.`;
 }
 
+/** The same banner for dues on the membership rate. */
+export function staleMembershipSentence(count: number, membershipRateAgorot: number): string {
+  return count === 1
+    ? `חיוב אחד על דמי חבר הונפק על סכום אחר מדמי החבר של היום, ${formatShekels(membershipRateAgorot)}.`
+    : `${count} חיובים על דמי חבר הונפקו על סכום אחר מדמי החבר של היום, ${formatShekels(membershipRateAgorot)}.`;
+}
+
 export interface FeeRollupProps {
   summary: SeasonFeeSummary;
   counts: Record<FeeView, number>;
@@ -71,7 +78,11 @@ export function FeeRollup({
         href={feesHref({ season: seasonId })}
         /* A17: one isolate per phrase, not one per number. */
         derivation={(
-          <bdi>{`${summary.flatCount} בתעריף רגיל · ${summary.exceptionCount} חריגים`}</bdi>
+          <bdi>
+            {summary.membershipRateAgorot === null
+              ? `${summary.flatCount} בתעריף רגיל · ${summary.exceptionCount} חריגים`
+              : `${summary.burnCount} למידברן · ${summary.membershipCount} על דמי חבר · ${summary.exceptionCount} חריגים`}
+          </bdi>
         )}
       />
 
@@ -112,7 +123,11 @@ export function FeeRollup({
 
 /** Kept beside the tiles so the lead sentence and the figures agree. */
 export function feeLeadSentence(summary: SeasonFeeSummary, settledCount: number): string {
-  return `${formatShekels(summary.flatRateAgorot)} לאדם`
+  const rates = summary.membershipRateAgorot === null
+    ? `${formatShekels(summary.flatRateAgorot)} לאדם`
+    : `${formatShekels(summary.flatRateAgorot)} לאדם למידברן`
+      + ` · ${formatShekels(summary.membershipRateAgorot)} דמי חבר`;
+  return rates
     + ` · נאספו ${formatShekels(summary.collectedAgorot)}`
     + ` מתוך ${formatShekels(summary.expectedAgorot)}`
     + ` · ${settledCount} מתוך ${summary.memberCount} שילמו במלואם`;
