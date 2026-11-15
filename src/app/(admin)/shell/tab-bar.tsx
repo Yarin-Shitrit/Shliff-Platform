@@ -19,8 +19,9 @@ import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { Icon } from '@/components/ui/icon';
 import { useFocusTrap } from '@/components/ui/use-focus-trap';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { NAV_GROUPS, NAV_ITEMS, activeItemId, type NavItem } from './nav-data';
+import { carrySeason } from './season-href';
 import { useShellCounts } from './shell-counts';
 import styles from './tab-bar.module.css';
 
@@ -47,7 +48,9 @@ function tabLabel(item: NavItem): string {
  * unmounts with it — `useFocusTrap` does its work on mount, which is what
  * gives focus-in, `esc` and focus-return for free.
  */
-function MoreSheet({ items, onClose }: { items: NavItem[]; onClose: () => void }) {
+function MoreSheet({ items, season, onClose }: {
+  items: NavItem[]; season: string | null; onClose: () => void;
+}) {
   const headingRef = useRef<HTMLHeadingElement | null>(null);
   const { rootRef, onKeyDown } = useFocusTrap<HTMLDivElement>({
     onEscape: onClose,
@@ -72,7 +75,7 @@ function MoreSheet({ items, onClose }: { items: NavItem[]; onClose: () => void }
           <span className={styles.soon}>בקרוב</span>
         </span>
       ) : (
-        <Link key={item.id} href={item.href} className={styles.sheetItem} onClick={onClose}>
+        <Link key={item.id} href={carrySeason(item.href, season)} className={styles.sheetItem} onClick={onClose}>
           <Icon name={item.icon} size={20} />
           <span>{item.label}</span>
         </Link>
@@ -86,6 +89,8 @@ export function TabBar() {
   const active = activeItemId(usePathname());
   const [more, setMore] = useState(false);
   const counts = useShellCounts();
+  // The year is changed in the switcher and nowhere else: a tab keeps it.
+  const season = useSearchParams().get('season');
 
   const tabs = PRIMARY_IDS.map((id) => NAV_ITEMS.find((item) => item.id === id)!);
   const rest = NAV_ITEMS.filter((item) => !PRIMARY_IDS.includes(item.id));
@@ -104,7 +109,7 @@ export function TabBar() {
 
   return (
     <>
-      {more && <MoreSheet items={rest} onClose={() => setMore(false)} />}
+      {more && <MoreSheet items={rest} season={season} onClose={() => setMore(false)} />}
 
       <nav className={styles.bar} aria-label="ניווט מהיר">
         {tabs.map((item) => {
@@ -118,7 +123,7 @@ export function TabBar() {
           ) : (
             <Link
               key={item.id}
-              href={item.href}
+              href={carrySeason(item.href, season)}
               className={styles.tab}
               aria-label={count > 0 ? `${label}, ${count} פריטים` : undefined}
               aria-current={item.id === active ? 'page' : undefined}

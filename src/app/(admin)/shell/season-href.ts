@@ -17,6 +17,31 @@ export function seasonHref(pathname: string, search: string, seasonId: string): 
   return query ? `${pathname}?${query}` : pathname;
 }
 
+/**
+ * A link that leaves the route you are standing on keeps the season you
+ * chose. The year changes when somebody picks one in the switcher, and at no
+ * other time: before this, every rail and tab-bar link was a bare path, so
+ * one click on אנשים silently put the reader back on the newest season.
+ *
+ * `season` is the raw `?season=` of the current URL, carried verbatim — the
+ * page it lands on resolves it with the same `pickSeason` as everything else.
+ * With none in the URL the link stays bare, so nothing is invented. A link
+ * that already names a season (a search hit for a row in another year) keeps
+ * its own. The anchor stays last: `/money#budget` → `/money?season=…#budget`.
+ */
+export function carrySeason(href: string, season: string | null | undefined): string {
+  if (!season) return href;
+  const hashAt = href.indexOf('#');
+  const hash = hashAt === -1 ? '' : href.slice(hashAt);
+  const rest = hashAt === -1 ? href : href.slice(0, hashAt);
+  const queryAt = rest.indexOf('?');
+  const path = queryAt === -1 ? rest : rest.slice(0, queryAt);
+  const params = new URLSearchParams(queryAt === -1 ? '' : rest.slice(queryAt + 1));
+  if (params.has('season')) return href;
+  params.set('season', season);
+  return `${path}?${params.toString()}${hash}`;
+}
+
 /** The `act` that opens `SeasonDateDrawer`. Spelled here and nowhere else. */
 export const SEASON_DATE_ACT = 'season-date';
 

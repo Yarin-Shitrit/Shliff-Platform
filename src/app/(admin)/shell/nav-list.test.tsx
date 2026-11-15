@@ -37,6 +37,18 @@ describe('NavList', () => {
     expect(screen.getByRole('link', { name: /סקירה כספית/ }).getAttribute('href')).toBe('/money');
   });
 
+  it('keeps the chosen year on every rail link — only the switcher changes it', () => {
+    route.season = 'b25';
+    render(<NavList />);
+    const links = screen.getAllByRole('link');
+    expect(links.length).toBeGreaterThan(10);
+    for (const link of links) {
+      expect(new URL(link.getAttribute('href')!, 'http://x').searchParams.get('season')).toBe('b25');
+    }
+    expect(screen.getByRole('link', { name: /תקציב/ }).getAttribute('href'))
+      .toBe('/money?season=b25#budget');
+  });
+
   it('keeps a person page inside אנשים (B3)', () => {
     route.pathname = '/members/6f1c0e0e-0000-4000-8000-000000000000';
     render(<NavList />);

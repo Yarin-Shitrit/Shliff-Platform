@@ -1,5 +1,30 @@
 import { describe, it, expect } from 'vitest';
-import { seasonHref, seasonDateHref, SEASON_DATE_ACT } from '@/app/(admin)/shell/season-href';
+import {
+  carrySeason, seasonHref, seasonDateHref, SEASON_DATE_ACT,
+} from '@/app/(admin)/shell/season-href';
+
+describe('carrySeason', () => {
+  it('keeps the chosen season on a link to another route', () => {
+    expect(carrySeason('/members', 'b25')).toBe('/members?season=b25');
+  });
+
+  it('invents nothing when no season was chosen', () => {
+    expect(carrySeason('/members', null)).toBe('/members');
+    expect(carrySeason('/money#budget', '')).toBe('/money#budget');
+  });
+
+  it('keeps the anchor last', () => {
+    expect(carrySeason('/money#budget', 'b25')).toBe('/money?season=b25#budget');
+  });
+
+  it('keeps the rest of a query the link already has', () => {
+    expect(carrySeason('/fees?peek=p1', 'b25')).toBe('/fees?peek=p1&season=b25');
+  });
+
+  it('leaves alone a link that names its own season', () => {
+    expect(carrySeason('/fees?season=b24&peek=p1', 'b25')).toBe('/fees?season=b24&peek=p1');
+  });
+});
 
 describe('seasonHref', () => {
   it('adds ?season= to a route that has no query', () => {
