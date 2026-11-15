@@ -8,14 +8,15 @@ import type { ActionResult } from '@/lib/action-result';
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 /** `vi.mock` factories are hoisted above every other statement. */
-const { issueDueForAction, issueDuesAction } = vi.hoisted(() => ({
+const { issueDueForAction, issueDuesAction, setTrackAction } = vi.hoisted(() => ({
   issueDueForAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
   issueDuesAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
+  setTrackAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
 }));
 /** `./actions` is a `'use server'` module whose graph reaches `@/db`. */
-vi.mock('./actions', () => ({ issueDueForAction, issueDuesAction }));
+vi.mock('./actions', () => ({ issueDueForAction, issueDuesAction, setTrackAction }));
 
-import { IssueDueButton, IssueMissingDuesButton } from './issue-due-button';
+import { IssueDueButton, IssueMissingDuesButton, TrackButton } from './issue-due-button';
 
 const SEASON = '8f2b1c4e-0000-4000-8000-000000000001';
 
@@ -43,6 +44,38 @@ describe('IssueDueButton', () => {
     fireEvent.click(screen.getByRole('button', { name: 'הנפקת חיוב 1,200 ₪' }));
     expect((await screen.findByRole('alert')).textContent)
       .toBe('האדם הזה לא ברשימת החברים של השנה הזאת.');
+  });
+});
+
+describe('TrackButton', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('says the amount the due lands on, and moves that one due', () => {
+    render(<TrackButton personId="p1" seasonId={SEASON} to="burn" amountAgorot={120000} />);
+    fireEvent.click(screen.getByRole('button', { name: 'העברה למידברן — 1,200 ₪' }));
+    expect(setTrackAction).toHaveBeenCalledWith('p1', SEASON, 'burn');
+  });
+
+  it('names the way back to דמי חבר with its own amount', () => {
+    render(<TrackButton personId="p1" seasonId={SEASON} to="membership" amountAgorot={30000} />);
+    fireEvent.click(screen.getByRole('button', { name: 'החזרה לדמי חבר — 300 ₪' }));
+    expect(setTrackAction).toHaveBeenCalledWith('p1', SEASON, 'membership');
+  });
+
+  /** An exception keeps its amount across the move, so no figure is promised. */
+  it('promises no figure when the amount will not change', () => {
+    render(<TrackButton personId="p1" seasonId={SEASON} to="burn" amountAgorot={null} />);
+    expect(screen.getByRole('button', { name: 'העברה למידברן' })).toBeDefined();
+  });
+
+  it('shows a Hebrew refusal rather than pretending the due moved', async () => {
+    setTrackAction.mockResolvedValueOnce({
+      ok: false, error: 'לשנה הזאת לא הוגדרו דמי חבר. מגדירים אותם בחלון התעריף.',
+    });
+    render(<TrackButton personId="p1" seasonId={SEASON} to="membership" amountAgorot={30000} />);
+    fireEvent.click(screen.getByRole('button', { name: 'החזרה לדמי חבר — 300 ₪' }));
+    expect((await screen.findByRole('alert')).textContent)
+      .toBe('לשנה הזאת לא הוגדרו דמי חבר. מגדירים אותם בחלון התעריף.');
   });
 });
 

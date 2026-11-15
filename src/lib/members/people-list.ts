@@ -146,6 +146,7 @@ export async function listPeopleForSeason(
       seasonId: dues.seasonId,
       amount: dues.amount,
       kind: dues.kind,
+      track: dues.track,
       exceptionReason: dues.exceptionReason,
     })
     .from(dues);
@@ -260,7 +261,13 @@ export async function listPeopleForSeason(
           state: duesState(
             amountAgorot, paidAgorot, cashByDue.get(due.dueId) ?? 0, due.kind,
           ),
-          seasonRateAgorot: toAgorot(scope.flatRate),
+          // The rate of the track the due is on — a membership due sitting
+          // on the membership sum is on its rate, not stale against the
+          // Midburn one.
+          seasonRateAgorot: toAgorot(
+            due.track === 'membership' && scope.membershipRate !== null
+              ? scope.membershipRate : scope.flatRate,
+          ),
         };
       }
     }

@@ -1,5 +1,5 @@
 import type { AnyDb } from '@/lib/db-types';
-import type { DueKind } from '@/db/schema/camp';
+import type { DueKind, DueTrack } from '@/db/schema/camp';
 import { listRoster } from '@/lib/members/roster';
 import { listDues } from '@/lib/fees/dues';
 import { listPayments, settlementFor, type PaymentRow } from '@/lib/fees/payments';
@@ -23,6 +23,8 @@ export interface MemberFeeRow {
   dueId: string | null;
   amountAgorot: number | null;
   kind: DueKind | null;
+  /** null with the rest when no due has been issued. */
+  track: DueTrack | null;
   exceptionReason: string | null;
   decidedBy: string | null;
   paidAgorot: number;
@@ -51,6 +53,7 @@ export async function listSeasonFees(db: AnyDb, seasonId: string): Promise<Membe
         dueId: null,
         amountAgorot: null,
         kind: null,
+        track: null,
         exceptionReason: null,
         decidedBy: null,
         paidAgorot: 0,
@@ -70,6 +73,7 @@ export async function listSeasonFees(db: AnyDb, seasonId: string): Promise<Membe
       dueId: due.dueId,
       amountAgorot: due.amountAgorot,
       kind: due.kind,
+      track: due.track,
       exceptionReason: due.exceptionReason,
       decidedBy: due.decidedBy,
       paidAgorot: settlement.paidAgorot,

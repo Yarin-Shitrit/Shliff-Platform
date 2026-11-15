@@ -49,7 +49,7 @@ function payment(over: Partial<PaymentRow> = {}): PaymentRow {
 function row(over: Partial<MemberFeeRow> = {}): MemberFeeRow {
   return {
     personId: 'p1', displayName: 'איתי כהן', role: 'member',
-    dueId: 'd1', amountAgorot: 120000, kind: 'flat',
+    dueId: 'd1', amountAgorot: 120000, kind: 'flat', track: 'burn',
     exceptionReason: null, decidedBy: null,
     paidAgorot: 0, outstandingAgorot: 120000, settled: false, payments: [], ...over,
   };
@@ -274,7 +274,7 @@ describe('PaymentDrawer', () => {
 
   it('refuses to take a payment for a member who has no due yet', () => {
     renderDrawer({ row: row({
-      dueId: null, amountAgorot: null, kind: null, outstandingAgorot: 0,
+      dueId: null, amountAgorot: null, kind: null, track: null, outstandingAgorot: 0,
     }) });
     expect(screen.getByText('אין עדיין חיוב לאיתי כהן. צריך להנפיק חיוב לפני שאפשר לרשום תשלום.'))
       .toBeDefined();

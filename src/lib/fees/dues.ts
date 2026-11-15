@@ -1,7 +1,7 @@
 import { and, asc, eq } from 'drizzle-orm';
 import type { AnyDb } from '@/lib/db-types';
 import { dues, seasons, memberships, persons, payments } from '@/db/schema/camp';
-import type { DueKind } from '@/db/schema/camp';
+import type { DueKind, DueTrack } from '@/db/schema/camp';
 import { toAgorot, fromAgorot } from '@/lib/money';
 import { isBlank } from '@/lib/text/normalize';
 
@@ -11,8 +11,36 @@ export interface DueRow {
   displayName: string;
   amountAgorot: number;
   kind: DueKind;
+  track: DueTrack;
   exceptionReason: string | null;
   decidedBy: string | null;
+}
+
+export interface TrackChange {
+  track: DueTrack;
+  previousAgorot: number;
+  nextAgorot: number;
+}
+
+type SeasonRates = { flatRate: string; membershipRate: string | null };
+
+/**
+ * The track a new due starts on, and its amount. A season with a membership
+ * rate starts everyone as a member: going to Midburn is a later move
+ * (`setTrack`), never something the issue assumes. A season without one has
+ * only the Midburn dues it always had.
+ */
+function issueTerms(season: SeasonRates): { track: DueTrack; amount: string } {
+  return season.membershipRate === null
+    ? { track: 'burn', amount: season.flatRate }
+    : { track: 'membership', amount: season.membershipRate };
+}
+
+/** What a due on `track` costs when it is on the rate and not an exception. */
+function rateOf(season: SeasonRates, track: DueTrack): string {
+  if (track === 'burn') return season.flatRate;
+  if (season.membershipRate === null) throw new Error('this season has no membership rate');
+  return season.membershipRate;
 }
 
 export interface IssuedFlatDues {
@@ -45,15 +73,17 @@ export interface ExceptionInput {
  * applying the new rate to them would do, rather than a checkbox saying
  * "also update" over a number nobody has seen.
  */
-export async function issuedFlatDues(db: AnyDb, seasonId: string): Promise<IssuedFlatDues> {
-  const flat = await db.select({ id: dues.id })
-    .from(dues).where(and(eq(dues.seasonId, seasonId), eq(dues.kind, 'flat')));
+export async function issuedFlatDues(
+  db: AnyDb, seasonId: string, track: DueTrack = 'burn',
+): Promise<IssuedFlatDues> {
+  const onRate = and(eq(dues.seasonId, seasonId), eq(dues.kind, 'flat'), eq(dues.track, track));
+  const flat = await db.select({ id: dues.id }).from(dues).where(onRate);
   if (flat.length === 0) return { count: 0, withPayments: 0 };
 
   const paid = await db.select({ dueId: payments.dueId })
     .from(payments)
     .innerJoin(dues, eq(dues.id, payments.dueId))
-    .where(and(eq(dues.seasonId, seasonId), eq(dues.kind, 'flat')));
+    .where(onRate);
   return { count: flat.length, withPayments: new Set(paid.map((row) => row.dueId)).size };
 }
 
@@ -71,8 +101,10 @@ export async function issuedFlatDues(db: AnyDb, seasonId: string): Promise<Issue
  * makes out loud, never a default, and the drawer states both consequences
  * before the button.
  *
- * Only `flat` dues are ever rewritten. An exception is a recorded decision
- * with a reason and a name beside it, and it was never on the rate.
+ * Only `flat` dues on the `burn` track are ever rewritten. An exception is
+ * a recorded decision with a reason and a name beside it, and it was never on
+ * the rate; a membership due is on the season's other rate
+ * (`setMembershipRate`).
  *
  * Refuses a negative or non-numeric rate the way `setException` refuses a
  * negative amount; zero is allowed, because a season the camp decides to
@@ -89,6 +121,11 @@ export async function setFlatRate(
 
   const nextAgorot = toAgorot(amount);
   const next = fromAgorot(nextAgorot);
+  // The membership sum counts toward the full dues, so the full dues can
+  // never be the smaller of the two.
+  if (season.membershipRate !== null && nextAgorot < toAgorot(season.membershipRate)) {
+    throw new Error('a flat rate may not be below the membership rate');
+  }
 
   await db.update(seasons).set({ flatRate: next }).where(eq(seasons.id, seasonId));
 
@@ -96,7 +133,7 @@ export async function setFlatRate(
   if (options.applyToIssued) {
     const updated = await db.update(dues)
       .set({ amount: next })
-      .where(and(eq(dues.seasonId, seasonId), eq(dues.kind, 'flat')))
+      .where(and(eq(dues.seasonId, seasonId), eq(dues.kind, 'flat'), eq(dues.track, 'burn')))
       .returning();
     updatedDues = updated.length;
   }
@@ -105,7 +142,91 @@ export async function setFlatRate(
 }
 
 /**
- * Gives every roster member without a due the season's flat rate.
+ * Sets what a season charges a member who is not going to Midburn — the sum
+ * everyone starts on, and the part of the full dues it counts toward.
+ *
+ * The mirror of `setFlatRate`, with the same out-loud `applyToIssued`
+ * decision, over the membership dues instead of the Midburn ones.
+ *
+ * `null` takes the track away from the season, which is only honest while
+ * nobody is on it: a membership due with no rate behind it would be an
+ * amount nothing on the page could explain, so that is refused.
+ */
+export async function setMembershipRate(
+  db: AnyDb, seasonId: string, amount: number | null, options: { applyToIssued: boolean },
+): Promise<FlatRateChange> {
+  const [season] = await db.select().from(seasons).where(eq(seasons.id, seasonId));
+  if (!season) throw new Error(`unknown season ${seasonId}`);
+  const previousAgorot = season.membershipRate === null ? 0 : toAgorot(season.membershipRate);
+
+  if (amount === null) {
+    const onTrack = await db.select({ id: dues.id }).from(dues)
+      .where(and(eq(dues.seasonId, seasonId), eq(dues.track, 'membership')));
+    if (onTrack.length > 0) throw new Error('membership dues are still issued in this season');
+    await db.update(seasons).set({ membershipRate: null }).where(eq(seasons.id, seasonId));
+    return { previousAgorot, nextAgorot: 0, updatedDues: 0 };
+  }
+
+  if (!Number.isFinite(amount)) throw new Error('a membership rate must be a number');
+  if (amount < 0) throw new Error('a membership rate may not be negative');
+  const nextAgorot = toAgorot(amount);
+  if (nextAgorot > toAgorot(season.flatRate)) {
+    throw new Error('a membership rate may not exceed the flat rate');
+  }
+  const next = fromAgorot(nextAgorot);
+
+  await db.update(seasons).set({ membershipRate: next }).where(eq(seasons.id, seasonId));
+
+  let updatedDues = 0;
+  if (options.applyToIssued) {
+    const updated = await db.update(dues)
+      .set({ amount: next })
+      .where(and(
+        eq(dues.seasonId, seasonId), eq(dues.kind, 'flat'), eq(dues.track, 'membership'),
+      ))
+      .returning();
+    updatedDues = updated.length;
+  }
+
+  return { previousAgorot, nextAgorot, updatedDues };
+}
+
+/**
+ * Moves one person's due between the season's two tracks.
+ *
+ * To `burn`: the person is going to Midburn, and the due rises from the
+ * membership sum to the full camp dues. To `membership`: they are not, and
+ * it comes back down. Either way it is the *same* due — every payment
+ * recorded on it stays, which is the whole point of the membership sum
+ * counting toward the full one. Coming down after paying more than the
+ * membership sum leaves the due overpaid, and `settlementFor` says so
+ * rather than this function deciding what happens to the difference.
+ *
+ * An exception keeps its amount: it is a decision with a reason, and the
+ * track only changes which rate cancelling it would return to.
+ */
+export async function setTrack(
+  db: AnyDb, personId: string, seasonId: string, track: DueTrack,
+): Promise<TrackChange> {
+  const [season] = await db.select().from(seasons).where(eq(seasons.id, seasonId));
+  if (!season) throw new Error(`unknown season ${seasonId}`);
+
+  const [due] = await db.select().from(dues).where(
+    and(eq(dues.personId, personId), eq(dues.seasonId, seasonId)),
+  );
+  if (!due) throw new Error('no due for that person in that season — nothing to move');
+
+  const amount = due.kind === 'exception' ? due.amount : rateOf(season, track);
+  if (track === 'membership') rateOf(season, track); // refuses a season without the track
+
+  await db.update(dues).set({ track, amount }).where(eq(dues.id, due.id));
+  return { track, previousAgorot: toAgorot(due.amount), nextAgorot: toAgorot(amount) };
+}
+
+/**
+ * Gives every roster member without a due the rate a due starts on: the
+ * membership sum where the season has one, the full camp dues where it does
+ * not (`issueTerms`).
  * Idempotent: an existing due — flat or exception — is left exactly as it is,
  * so re-running after recording exceptions never resets anyone.
  * Returns how many dues were created.
@@ -124,11 +245,13 @@ export async function issueFlatDues(db: AnyDb, seasonId: string): Promise<number
   const missing = roster.filter((row) => !have.has(row.personId));
   if (missing.length === 0) return 0;
 
+  const terms = issueTerms(season);
   await db.insert(dues).values(missing.map((row) => ({
     personId: row.personId,
     seasonId,
-    amount: season.flatRate,
+    amount: terms.amount,
     kind: 'flat' as const,
+    track: terms.track,
   })));
   return missing.length;
 }
@@ -142,7 +265,7 @@ export async function issueFlatDues(db: AnyDb, seasonId: string): Promise<number
  * recorded reason is exactly what the camp lost last year.
  */
 /**
- * Issues the season's flat rate to ONE member.
+ * Issues ONE member's due, on the rate a due starts on (`issueTerms`).
  *
  * Exists because the row-level control in the dues table says "issue this
  * member's due", and wiring it to the season-wide `issueFlatDues` made it
@@ -172,8 +295,9 @@ export async function issueFlatDueFor(
   );
   if (existing) return false;
 
+  const terms = issueTerms(season);
   await db.insert(dues).values({
-    personId, seasonId, amount: season.flatRate, kind: 'flat',
+    personId, seasonId, amount: terms.amount, kind: 'flat', track: terms.track,
   });
   return true;
 }
@@ -212,22 +336,26 @@ export async function setException(db: AnyDb, input: ExceptionInput): Promise<vo
   }
 }
 
-/** Puts a person back on the season's flat rate. */
+/** Puts a person back on the rate of the track their due is on. */
 export async function clearException(
   db: AnyDb, personId: string, seasonId: string,
 ): Promise<void> {
   const [season] = await db.select().from(seasons).where(eq(seasons.id, seasonId));
   if (!season) throw new Error(`unknown season ${seasonId}`);
 
-  const updated = await db.update(dues)
+  const [due] = await db.select({ track: dues.track }).from(dues).where(
+    and(eq(dues.personId, personId), eq(dues.seasonId, seasonId)),
+  );
+
+  const updated = due ? await db.update(dues)
     .set({
-      amount: season.flatRate,
+      amount: rateOf(season, due.track),
       kind: 'flat',
       exceptionReason: null,
       decidedBy: null,
     })
     .where(and(eq(dues.personId, personId), eq(dues.seasonId, seasonId)))
-    .returning();
+    .returning() : [];
 
   // Refuse as loudly as setException does. A mistyped person or season would
   // otherwise report success having changed nothing — the silent-failure shape
@@ -245,6 +373,7 @@ export async function listDues(db: AnyDb, seasonId: string): Promise<DueRow[]> {
       displayName: persons.displayName,
       amount: dues.amount,
       kind: dues.kind,
+      track: dues.track,
       exceptionReason: dues.exceptionReason,
       decidedBy: dues.decidedBy,
     })
@@ -259,6 +388,7 @@ export async function listDues(db: AnyDb, seasonId: string): Promise<DueRow[]> {
     displayName: row.displayName,
     amountAgorot: toAgorot(row.amount),
     kind: row.kind,
+    track: row.track,
     exceptionReason: row.exceptionReason,
     decidedBy: row.decidedBy,
   }));

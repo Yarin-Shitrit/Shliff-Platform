@@ -13,13 +13,16 @@ import type { PaymentRow } from '@/lib/fees/payments';
  * others on purpose. `all` is the default and is left out of generated URLs.
  */
 export type FeeView =
-  | 'all' | 'unpaid' | 'partial' | 'paid' | 'exception' | 'offset' | 'nodue';
+  | 'all' | 'unpaid' | 'partial' | 'paid' | 'burn' | 'membership'
+  | 'exception' | 'offset' | 'nodue';
 
 export const FEE_VIEWS: ReadonlyArray<{ id: FeeView; label: string }> = [
   { id: 'all', label: 'הכול' },
   { id: 'unpaid', label: 'טרם שילמו' },
   { id: 'partial', label: 'שילמו חלקית' },
   { id: 'paid', label: 'שולם' },
+  { id: 'burn', label: 'מגיעים למידברן' },
+  { id: 'membership', label: 'חברי קאמפ בלבד' },
   { id: 'exception', label: 'חריגים' },
   { id: 'offset', label: 'קוזזו' },
   { id: 'nodue', label: 'בלי חיוב' },
@@ -56,6 +59,8 @@ export function matchesView(row: MemberFeeRow, view: FeeView): boolean {
     case 'paid':
       return state === 'paid' || state === 'paid-by-offset'
         || state === 'nothing-to-collect';
+    case 'burn': return row.track === 'burn';
+    case 'membership': return row.track === 'membership';
     case 'exception': return row.kind === 'exception';
     case 'offset': return row.payments.some((entry) => entry.channel === 'קיזוז');
     case 'nodue': return state === 'nodue';

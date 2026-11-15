@@ -3,6 +3,15 @@ import {
 } from 'drizzle-orm/pg-core';
 
 export type DueKind = 'flat' | 'exception';
+/**
+ * Which of the season's two rates a due stands on. Everyone starts as a
+ * `membership` — the small sum that makes a person part of the camp for the
+ * year — and whoever goes to Midburn moves to `burn`, where the same due
+ * rises to the full camp dues and keeps every payment already on it.
+ * Orthogonal to `DueKind`: an exception is still a decision about the
+ * amount, whichever track the person is on.
+ */
+export type DueTrack = 'burn' | 'membership';
 export type TaskKind = 'deliverable' | 'shift' | 'build' | 'event_task';
 export type TaskStatus = 'open' | 'done' | 'cancelled';
 export type AssignmentStatus = 'proposed' | 'accepted' | 'done' | 'dropped';
@@ -68,6 +77,11 @@ export const seasons = pgTable('seasons', {
   year: integer('year').notNull(),
   /** Flat per-person dues. ברן 25: 1500.00, ברן 26: 1200.00. */
   flatRate: numeric('flat_rate', { precision: 12, scale: 2 }).notNull(),
+  /** What a person pays to be a camp member without going to Midburn, and
+   *  what counts toward `flatRate` once they do. Null means the season has
+   *  no such track — every season before the camp introduced it — and then
+   *  every due is a `burn` due on `flatRate`, exactly as before. */
+  membershipRate: numeric('membership_rate', { precision: 12, scale: 2 }),
   /** Camp size the budget assumes. ברן 25: 43, ברן 26: 35. */
   plannedSize: integer('planned_size'),
   startsOn: timestamp('starts_on', { withTimezone: true }),
@@ -95,6 +109,9 @@ export const dues = pgTable('dues', {
     .references(() => seasons.id, { onDelete: 'cascade' }),
   amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
   kind: text('kind').$type<DueKind>().notNull().default('flat'),
+  /** Every due issued before the membership track existed was a Midburn due,
+   *  which is what the default records for them. */
+  track: text('track').$type<DueTrack>().notNull().default('burn'),
   /** Required when kind is 'exception'. `עמירם דהן 0` recorded with no reason
    *  and no decider is the failure this column exists to prevent. */
   exceptionReason: text('exception_reason'),

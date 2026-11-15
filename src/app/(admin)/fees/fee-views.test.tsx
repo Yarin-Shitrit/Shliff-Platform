@@ -9,7 +9,7 @@ import { FeeViews } from './fee-views';
 const SEASON = '8f2b1c4e-0000-4000-8000-000000000001';
 
 const COUNTS = {
-  all: 35, unpaid: 0, partial: 3, paid: 21, exception: 5, offset: 5, nodue: 2,
+  all: 35, unpaid: 0, partial: 3, paid: 21, exception: 5, offset: 5, nodue: 2, burn: 33, membership: 0,
 };
 
 describe('FeeViews', () => {

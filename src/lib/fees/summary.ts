@@ -30,6 +30,12 @@ export interface SeasonFeeSummary {
   seasonId: string;
   seasonName: string;
   flatRateAgorot: number;
+  /** What a member who is not going to Midburn pays, and what a new due is
+   *  issued on. Null when the season has no such track. */
+  membershipRateAgorot: number | null;
+  /** Dues on the Midburn track / on the membership track, exceptions included. */
+  burnCount: number;
+  membershipCount: number;
   memberCount: number;
   flatCount: number;
   exceptionCount: number;
@@ -76,6 +82,7 @@ export async function seasonFeeSummary(
       displayName: persons.displayName,
       amount: dues.amount,
       kind: dues.kind,
+      track: dues.track,
     })
     .from(dues)
     .innerJoin(persons, eq(persons.id, dues.personId))
@@ -103,6 +110,8 @@ export async function seasonFeeSummary(
   let unpaidCount = 0;
   let flatCount = 0;
   let exceptionCount = 0;
+  let burnCount = 0;
+  let membershipCount = 0;
   const unpaid: UnpaidMember[] = [];
 
   for (const due of dueRows) {
@@ -112,6 +121,8 @@ export async function seasonFeeSummary(
     collectedAgorot += paid;
     if (due.kind === 'exception') exceptionCount += 1;
     else flatCount += 1;
+    if (due.track === 'membership') membershipCount += 1;
+    else burnCount += 1;
     if (paid < owed) {
       unpaidCount += 1;
       unpaid.push({
@@ -144,6 +155,9 @@ export async function seasonFeeSummary(
     seasonId,
     seasonName: season.name,
     flatRateAgorot: toAgorot(season.flatRate),
+    membershipRateAgorot: season.membershipRate === null ? null : toAgorot(season.membershipRate),
+    burnCount,
+    membershipCount,
     memberCount: roster.length,
     flatCount,
     exceptionCount,

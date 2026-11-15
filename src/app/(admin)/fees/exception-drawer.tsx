@@ -38,7 +38,7 @@ import styles from './fees.module.css';
 type Refusal = { where: 'amount' | 'reason' | 'form'; message: string };
 
 export function ExceptionDrawer({
-  row, seasonId, seasonName, view, flatRateAgorot, decidedBy,
+  row, seasonId, seasonName, view, flatRateAgorot, decidedBy, onMembership = false,
 }: {
   row: MemberFeeRow;
   seasonId: string;
@@ -47,6 +47,9 @@ export function ExceptionDrawer({
   flatRateAgorot: number;
   /** The signed-in lead, recorded as who decided this. */
   decidedBy: string;
+  /** True when the due is on דמי חבר: `flatRateAgorot` is then that rate,
+   *  and it is named as what it is rather than as the "regular rate". */
+  onMembership?: boolean;
 }) {
   const router = useRouter();
   const [amount, setAmount] = useState(
@@ -135,7 +138,7 @@ export function ExceptionDrawer({
         title={title}
         subtitle={(
           <>
-            {`תעריף רגיל ל${seasonName}: `}
+            {onMembership ? `דמי חבר ל${seasonName}: ` : `תעריף רגיל ל${seasonName}: `}
             <Money agorot={flatRateAgorot} />
           </>
         )}
@@ -212,7 +215,7 @@ export function ExceptionDrawer({
                 Hebrew nouns — ביטול, החיוב, הסיבה — and the member's name is
                 never what a verb agrees with.
               */}
-              {`ביטול החריג מחזיר את החיוב של ${row.displayName} לתעריף הרגיל של ${seasonName} — `}
+              {`ביטול החריג מחזיר את החיוב של ${row.displayName} ${onMembership ? 'לדמי החבר' : 'לתעריף הרגיל'} של ${seasonName} — `}
               <Money agorot={flatRateAgorot} />
               {`. הסיבה שנרשמה (״${row.exceptionReason ?? ''}״) והשם שנרשם לצידה יימחקו.`}
             </>

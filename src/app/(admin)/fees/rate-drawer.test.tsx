@@ -8,11 +8,12 @@ import type { ActionResult } from '@/lib/action-result';
 const { replace, refresh } = vi.hoisted(() => ({ replace: vi.fn(), refresh: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace, refresh }) }));
 
-const { setFlatRateAction } = vi.hoisted(() => ({
+const { setFlatRateAction, setMembershipRateAction } = vi.hoisted(() => ({
   setFlatRateAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
+  setMembershipRateAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
 }));
 /** `./actions` is a `'use server'` module whose graph reaches `@/db`. */
-vi.mock('./actions', () => ({ setFlatRateAction }));
+vi.mock('./actions', () => ({ setFlatRateAction, setMembershipRateAction }));
 
 import { RateDrawer } from './rate-drawer';
 
@@ -103,5 +104,49 @@ describe('RateDrawer', () => {
     expect(await screen.findByRole('alert')).toBeTruthy();
     expect(screen.getByRole('alert').textContent).toBe('השנה הזאת לא נמצאה.');
     expect(replace).not.toHaveBeenCalled();
+  });
+});
+
+describe('RateDrawer — דמי חבר', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('opens with an empty box in a season without the track, and leaves it alone on save', async () => {
+    renderDrawer();
+    expect((screen.getByLabelText('דמי חבר קאמפ לאדם') as HTMLInputElement).value).toBe('');
+    fireEvent.click(screen.getByRole('button', { name: 'שמירת התעריף' }));
+    await vi.waitFor(() => expect(setFlatRateAction).toHaveBeenCalled());
+    expect(setMembershipRateAction).not.toHaveBeenCalled();
+  });
+
+  it('saves a membership sum typed into the empty box', async () => {
+    renderDrawer();
+    fireEvent.change(screen.getByLabelText('דמי חבר קאמפ לאדם'), { target: { value: '300' } });
+    fireEvent.click(screen.getByRole('button', { name: 'שמירת התעריף' }));
+    await vi.waitFor(() => expect(setMembershipRateAction).toHaveBeenCalledWith(SEASON, 300, false));
+  });
+
+  it('refuses a membership sum above the full dues before the round trip', () => {
+    renderDrawer();
+    fireEvent.change(screen.getByLabelText('דמי חבר קאמפ לאדם'), { target: { value: '1300' } });
+    fireEvent.click(screen.getByRole('button', { name: 'שמירת התעריף' }));
+    expect(screen.getByText(/דמי החבר לא יכולים להיות גבוהים/)).toBeTruthy();
+    expect(setFlatRateAction).not.toHaveBeenCalled();
+    expect(setMembershipRateAction).not.toHaveBeenCalled();
+  });
+
+  it('asks about the membership dues already out, separately, with their count', async () => {
+    renderDrawer({ membershipRateAgorot: 30000, issuedMembership: { count: 2, withPayments: 0 } });
+    expect(screen.getByText('2 החיובים שכבר הונפקו על דמי חבר יישארו על 300 ₪.')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('דמי חבר קאמפ לאדם'), { target: { value: '350' } });
+    fireEvent.click(screen.getByLabelText(/שכבר הונפקו על דמי חבר/));
+    fireEvent.click(screen.getByRole('button', { name: 'שמירת התעריף' }));
+    await vi.waitFor(() => expect(setMembershipRateAction).toHaveBeenCalledWith(SEASON, 350, true));
+  });
+
+  it('emptying the box asks to take the track away', async () => {
+    renderDrawer({ membershipRateAgorot: 30000 });
+    fireEvent.change(screen.getByLabelText('דמי חבר קאמפ לאדם'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'שמירת התעריף' }));
+    await vi.waitFor(() => expect(setMembershipRateAction).toHaveBeenCalledWith(SEASON, null, false));
   });
 });

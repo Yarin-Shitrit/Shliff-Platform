@@ -16,7 +16,9 @@ import { Banner } from '@/components/ui/banner';
 import { ButtonLink } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { EmptyState } from '@/components/ui/empty-state';
-import { FeeRollup, feeLeadSentence, missingDuesSentence, staleRateSentence } from './fee-rollup';
+import {
+  FeeRollup, feeLeadSentence, missingDuesSentence, staleRateSentence, staleMembershipSentence,
+} from './fee-rollup';
 import { FeeViews } from './fee-views';
 import { FeeTable } from './fee-table';
 import { IssueMissingDuesButton } from './issue-due-button';
@@ -97,6 +99,7 @@ export default async function FeesPage(
    */
   const settingRate = params.act === 'rate' && !params.peek;
   const issued = settingRate ? await issuedFlatDues(db, season.id) : null;
+  const issuedMembership = settingRate ? await issuedFlatDues(db, season.id, 'membership') : null;
 
   /*
    * The season's closing drawer: `?act=close`, the same shape. Its preview
@@ -110,8 +113,17 @@ export default async function FeesPage(
 
   /* Counted on the whole roster, not the view: a stale due hides in any tab. */
   const staleFlatDues = rows.filter((row) => (
-    row.kind === 'flat' && row.amountAgorot !== null && row.amountAgorot !== summary.flatRateAgorot
+    row.kind === 'flat' && row.track === 'burn'
+    && row.amountAgorot !== null && row.amountAgorot !== summary.flatRateAgorot
   )).length;
+  /* The same gap on the season's other rate. */
+  const membershipRateAgorot = summary.membershipRateAgorot;
+  const staleMembershipDues = membershipRateAgorot === null ? 0 : rows.filter((row) => (
+    row.kind === 'flat' && row.track === 'membership'
+    && row.amountAgorot !== null && row.amountAgorot !== membershipRateAgorot
+  )).length;
+  /* What a new due is issued on: the membership sum where the season has one. */
+  const issueRateAgorot = membershipRateAgorot ?? summary.flatRateAgorot;
 
   return (
     <main className={styles.page}>
@@ -157,7 +169,7 @@ export default async function FeesPage(
           <IssueMissingDuesButton
             seasonId={season.id}
             missingCount={summary.missingDues.length}
-            flatRateAgorot={summary.flatRateAgorot}
+            flatRateAgorot={issueRateAgorot}
           />
         </div>
       )}
@@ -179,6 +191,15 @@ export default async function FeesPage(
         />
       )}
 
+      {staleMembershipDues > 0 && membershipRateAgorot !== null && (
+        <Banner
+          tone="warn"
+          headline={staleMembershipSentence(staleMembershipDues, membershipRateAgorot)}
+          detail="היתרות של החיובים האלה מחושבות מהסכום שהונפק, לא מדמי החבר. בחלון התעריף אפשר לעדכן אותם."
+          action={{ label: 'שינוי התעריף', href: feesHref({ season: season.id, view, rate: true }) }}
+        />
+      )}
+
       {summary.unattributedAgorot > 0 && (
         <Banner
           tone="warn"
@@ -188,7 +209,10 @@ export default async function FeesPage(
         />
       )}
 
-      <FeeViews counts={counts} seasonId={season.id} view={view} />
+      <FeeViews
+        counts={counts} seasonId={season.id} view={view}
+        tracks={membershipRateAgorot !== null}
+      />
 
       {allClear ? (
         <EmptyState kind="all-clear" />
@@ -199,6 +223,7 @@ export default async function FeesPage(
           seasonName={season.name}
           view={view}
           flatRateAgorot={summary.flatRateAgorot}
+          membershipRateAgorot={membershipRateAgorot}
           totals={{
             expectedAgorot: summary.expectedAgorot,
             collectedAgorot: summary.collectedAgorot,
@@ -227,13 +252,15 @@ export default async function FeesPage(
         />
       )}
 
-      {issued !== null && (
+      {issued !== null && issuedMembership !== null && (
         <RateDrawer
           seasonId={season.id}
           seasonName={season.name}
           view={view}
           flatRateAgorot={summary.flatRateAgorot}
           issued={issued}
+          membershipRateAgorot={membershipRateAgorot}
+          issuedMembership={issuedMembership}
         />
       )}
 
@@ -251,7 +278,11 @@ export default async function FeesPage(
           seasonId={season.id}
           seasonName={season.name}
           view={view}
-          flatRateAgorot={summary.flatRateAgorot}
+          /* The rate cancelling the exception returns to: the one of the
+             track this due is on. */
+          flatRateAgorot={exceptionRow.track === 'membership' && membershipRateAgorot !== null
+            ? membershipRateAgorot : summary.flatRateAgorot}
+          onMembership={exceptionRow.track === 'membership' && membershipRateAgorot !== null}
           decidedBy={admin.email}
         />
       )}

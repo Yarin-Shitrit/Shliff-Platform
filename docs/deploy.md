@@ -858,6 +858,44 @@ constraints 2 of 2, `seasons` 3, `persons` 72.
 The local `shliff-pg` still needs it (and `0021` through `0025` before it),
 with the §6 container command.
 
+### Migration `0027` — NOT yet applied to Railway
+
+`0027_dues_membership_track` is the דמי חבר track on `/fees`: two columns,
+`dues.track` (`text NOT NULL DEFAULT 'burn'` — every due issued before the
+track existed was a Midburn due, which is what the default records) and
+`seasons.membership_rate` (`numeric(12, 2)`, nullable — null is a season
+with no such track, which is every season so far). Purely additive; no row
+changes its meaning, and no figure on any page moves until a lead types a
+membership rate into the rate drawer.
+
+**This one has to follow "migration first", and the last five did not.**
+`seasons` is read by the shell on every page, and drizzle names every
+column it selects — so code that knows `membership_rate` against a database
+that does not answers the error screen on **every** screen, not on one. The
+other direction is safe: the code on `main` today names its columns too and
+never sees the two new ones. Apply, then merge and deploy.
+
+Read-only check, before: `0`; after: `2`:
+
+```sh
+docker run --rm postgres:18-alpine psql "$RAILWAY_URL" -tAc "
+select '0027 columns', count(*) from information_schema.columns
+ where table_schema='public'
+   and ((table_name = 'dues' and column_name = 'track')
+     or (table_name = 'seasons' and column_name = 'membership_rate'))"
+```
+
+Then, from a checkout that has the file:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine sh -euc '
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0027_dues_membership_track.sql
+'
+```
+
+The local `shliff-pg` needs it too (and `0021` through `0026` before it),
+with the §6 container command.
+
 ### Copying the laptop's database up
 
 The local container is Postgres **16**; Railway is **18**. Dump with the
