@@ -1,5 +1,6 @@
 import type {
   LogisticsCategory, ItemCondition, AcquisitionSource, AcquisitionStatus, WorkItemStatus,
+  AttendanceKind,
 } from '@/db/schema/logistics';
 import type { MaterialState } from './build';
 
@@ -134,4 +135,19 @@ export const WORK_STATUS_TONES: Record<WorkItemStatus, 'ok' | 'neutral' | 'outli
   open: 'neutral',
   done: 'ok',
   cancelled: 'outline',
+};
+
+/**
+ * What the camp did on a day somebody was marked present for. The kind is
+ * the column header on the נוכחות board when an occasion has no title of
+ * its own, so each one has to read as a heading: ״יום הקמות״, not ״הקמות״.
+ * `other` exists so that a lead is never forced to call a beach clean-up a
+ * work day to record it; the title says what it was.
+ */
+export const ATTENDANCE_KIND_LABELS: Record<AttendanceKind, string> = {
+  work_day: 'יום עבודה',
+  build_day: 'יום הקמות',
+  shopping: 'קניות',
+  meeting: 'פגישה',
+  other: 'אחר',
 };

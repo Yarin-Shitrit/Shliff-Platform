@@ -1,0 +1,434 @@
+/* Structure is drawn with 1px borders and tokens only; shadows are reserved
+   for overlays (A7). Logical properties throughout (A10). */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.sub {
+  margin-block-start: 2px;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.topActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sectionHead h2 {
+  margin: 0;
+  font-size: var(--text-title);
+}
+
+.sectionHint {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+/* ── The board ─────────────────────────────────────────────────────────── */
+
+/* Wide by nature: a column per day. The wrapper scrolls sideways on a laptop
+   when the year has more days than fit; the name column stays put so a row
+   can be read across. On a phone the whole board is hidden (below). */
+.boardWrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+}
+
+.board {
+  border-collapse: separate;
+  border-spacing: 0;
+  inline-size: 100%;
+}
+
+.board th,
+.board td {
+  border-block-end: 1px solid var(--line);
+  padding: 6px 8px;
+  text-align: start;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.board tbody tr:last-child th,
+.board tbody tr:last-child td { border-block-end: 0; }
+
+/* `--sunken`, the kit table's own header surface. */
+.board thead th {
+  background: var(--sunken);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  vertical-align: bottom;
+}
+
+/* The day whose drawer is open: the one column a lead is looking at. */
+.board thead th[aria-current] {
+  background: var(--brand-soft);
+  color: var(--brand-text);
+}
+
+.corner,
+.nameCell {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 1;
+  background: var(--panel);
+  border-inline-end: 1px solid var(--line);
+  min-inline-size: 160px;
+}
+
+.board thead .corner { background: var(--sunken); }
+
+.nameCell {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* The pill beside a name that has left the roster. */
+.nameCell > * + * { margin-inline-start: 8px; }
+
+.nameLink {
+  color: inherit;
+  text-decoration: none;
+}
+
+.nameLink:hover { text-decoration: underline; }
+
+.dayHead { min-inline-size: 72px; }
+
+.dayLink {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.dayLink:hover .dayTitle { text-decoration: underline; }
+
+.dayTitle {
+  max-inline-size: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dayWhen {
+  font-weight: 400;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.dayKind {
+  font-weight: 400;
+  color: var(--ink-4);
+}
+
+.cell { text-align: center; }
+
+.totalHead,
+.totalCell {
+  font-weight: 600;
+  background: var(--sunken);
+  font-variant-numeric: tabular-nums;
+}
+
+.board tfoot th,
+.board tfoot td {
+  border-block-end: 0;
+  border-block-start: 1px solid var(--line-strong);
+  background: var(--sunken);
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+/* Someone with a mark who has since left the roster: the row stays, and
+   reads quieter because nothing in it can be changed here. */
+.rowOff { color: var(--ink-3); }
+
+/* ── The check ─────────────────────────────────────────────────────────── */
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 26px;
+  block-size: 26px;
+  padding: 0;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--panel);
+  color: transparent;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease, transform 120ms ease;
+}
+
+.check:hover {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.check:active { transform: scale(0.9); }
+
+.check:disabled { cursor: progress; opacity: .6; }
+
+.checkOn {
+  border-color: var(--ok);
+  background: var(--ok);
+  color: #FFFFFF;
+}
+
+.checkOn:hover { color: #FFFFFF; }
+
+/* A check that is a fact and not a control, on a row that has left the roster. */
+.checkStill { cursor: default; }
+
+/* ── The drawer ────────────────────────────────────────────────────────── */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+/* The kit ships no `date` control (its TextInput hard-codes type="text"),
+   so this is a plain input drawn to match, inside the kit's Field for the
+   label, hint and aria wiring. R1 forbids a component library. */
+.plainInput {
+  inline-size: 100%;
+  min-block-size: 36px;
+  padding-inline: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.formError {
+  margin: 0;
+  color: var(--bad);
+  font-size: 13px;
+}
+
+.footActions { display: contents; }
+
+.roster {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-block-start: var(--space-4);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--line);
+}
+
+.rosterHeading {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.rosterNote {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.rosterList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.rosterRow {
+  display: flex;
+  align-items: center;
+  min-block-size: var(--tap-min);
+  border-block-end: 1px solid var(--line);
+}
+
+.rosterRow:last-child { border-block-end: 0; }
+
+/* ── Phone drawings ────────────────────────────────────────────────────── */
+
+.phoneOnly { display: none; }
+
+.eventList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.eventCard {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  color: inherit;
+  text-decoration: none;
+}
+
+.eventCard[aria-current] {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.eventCardHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  grid-column: 1;
+}
+
+.eventCardTitle { font-weight: 600; }
+
+.eventCardKind {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.eventCardWhen {
+  grid-column: 1;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.eventCardCount {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-2);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.totalsList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+}
+
+.totalsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-block-size: var(--tap-min);
+  padding-inline: 12px;
+  border-block-end: 1px solid var(--line);
+}
+
+.totalsRow:last-child { border-block-end: 0; }
+
+.totalsFigure { font-weight: 600; }
+
+.totalsZero { color: var(--ink-4); }
+
+.cancelledList {
+  margin: 0;
+  padding-inline-start: 18px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.cancelledList li + li { margin-block-start: 4px; }
+
+/* The page's verb on a phone, fixed above the tab bar — the same bar the
+   shifts and warehouse screens use, for the same reason. */
+.phoneActions { display: none; }
+
+/*
+ * 767.98px — a phone. The fractional value closes the gap a fractional
+ * viewport width opens; every module in the redesign that changes at this
+ * width repeats this comment block.
+ */
+@media (max-width: 767.98px) {
+  /* Room under the page for the fixed action bar, on top of the room the
+     shell already leaves for the tab bar. */
+  .page { padding-block-end: 72px; }
+
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .tiles > :first-child { grid-column: 1 / -1; }
+
+  /* The board does not fit a phone; the days and the per-member list do. */
+  .laptopOnly { display: none; }
+  .phoneOnly {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .pair { grid-template-columns: 1fr; }
+
+  .topActions { display: none; }
+  .phoneActions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    position: fixed;
+    z-index: var(--z-bulk);
+    inset-inline: var(--space-3);
+    inset-block-end: calc(
+      var(--tap-min) + var(--space-2) * 2 + var(--space-3)
+      + max(0px, env(safe-area-inset-bottom) - var(--space-2))
+    );
+  }
+  .phoneActions > :first-child { flex: 1; }
+}

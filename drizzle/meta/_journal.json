@@ -176,6 +176,13 @@
       "when": 1794586628776,
       "tag": "0024_work_item_acquisition",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1794748161650,
+      "tag": "0025_attendance",
+      "breakpoints": true
     }
   ]
 }

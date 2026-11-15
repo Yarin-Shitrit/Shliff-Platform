@@ -1,6 +1,6 @@
 # What is in flight
 
-**updated: 2026-11-13** · if that date is more than a day or two old, **this file
+**updated: 2026-11-15** · if that date is more than a day or two old, **this file
 is fiction**. Read §1 before you act on §3.
 
 This is the only document in `docs/collab/` that goes stale, and it goes stale
@@ -53,6 +53,7 @@ touching `docs/reference-data/`, and pushing or force-pushing shared branches.
 
 | Who | Area | Branch | State | As of |
 |---|---|---|---|---|
+| @josefcohen96 | נוכחות — who was at which work day, build day or shopping run during the year, and how often | `claude/blissful-dijkstra-999rl8` | **in review** — a new screen at `/logistics/attendance`: a season's occasions, the roster against them, a check per cell and a count per member. New files under `src/app/(admin)/logistics/attendance/**` and `src/lib/logistics/attendance*.ts`; `src/db/schema/logistics.ts` gains two tables. Touches shared surfaces: migration **`0025_attendance`** (generated, **not applied to Railway** — the camp lead's step, `docs/deploy.md`), `drizzle/meta/*`, the nav (`shell/nav-data.ts` + its test: a נוכחות entry under הקאמפ beside משמרות), `docs/deploy.md`, this file. Scoped run: 39 files, 1090 tests, 0 failed (logistics lib, the sweeps, the shell, the schema test); `next build` green. Review goes to @Yarin-Shitrit for the nav and the migration | 2026-11-15 |
 | @josefcohen96 | Money — the ledger’s שיוך לחשבון drawer | `fix/ledger-attribute-visible` | **unmerged** — commit `1e6ceec` (the placing happens in a drawer, on every view) was pushed after #51 had merged at `4a83f97`, so it sits on the branch and not on `main`. Three files under `src/app/(admin)/money/ledger/`, no migration, no shared surface. Needs its own PR, or deleting | 2026-10-02 |
 | @Yarin-Shitrit | Phase 4 UI redesign | merged to `main` | **done** — all twelve plans landed; CI green on `main` at 2640 tests in 203 files, 17m21s | 2026-09-19 |
 | @Yarin-Shitrit | Promotion gate + sheet retirement | merged to `main`; migration `0008` pending | **active** | 2026-09-19 |

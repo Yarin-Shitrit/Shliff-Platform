@@ -317,3 +317,64 @@ export const workDependencies = pgTable('work_dependencies', {
 }, (table) => [
   unique('work_dependencies_pair_key').on(table.beforeId, table.afterId),
 ]);
+
+export type AttendanceKind = 'work_day' | 'build_day' | 'shopping' | 'meeting' | 'other';
+
+/**
+ * A day the camp did something together before the burn — a work day, a
+ * build day, a shopping run, a meeting — on which members can be marked
+ * present. It is how the camp sees, at the end of the year, who showed up
+ * and how often.
+ *
+ * Season-scoped: a year's effort is a fact about that year. The day is a
+ * civil `YYYY-MM-DD` in the camp's zone, like `work_items`, because an
+ * occasion has a date and no clock. `title` is optional detail (״קניות
+ * באיקאה״); the kind is what the column header reads when there is none.
+ *
+ * **Not a `tasks` row.** A task is something to be done by someone; an
+ * occasion is something that happened and who was there. The two have
+ * different questions and the shared `tasks` table answers neither of
+ * these.
+ *
+ * No delete. An occasion that did not happen, or was entered twice, is
+ * `cancelled_at`: it leaves the board and its marks stop counting, but the
+ * row and its marks stay, so the cancellation can be undone and nobody's
+ * presence silently vanishes.
+ */
+export const attendanceEvents = pgTable('attendance_events', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  seasonId: uuid('season_id').notNull()
+    .references(() => seasons.id, { onDelete: 'cascade' }),
+  kind: text('kind').$type<AttendanceKind>().notNull(),
+  /** `2026-03-14`. Required: an occasion with no day is not one. */
+  heldOn: text('held_on').notNull(),
+  title: text('title'),
+  notes: text('notes'),
+  cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: text('updated_by'),
+});
+
+/**
+ * One person was at one occasion. Presence is a row and absence is the lack
+ * of one: the board draws a check where a row exists and nothing where none
+ * does, and nothing here says "was absent" — that is not a fact anyone
+ * recorded, so the screen does not claim it.
+ *
+ * `marked_by` is the lead who ticked the box, kept because a check with no
+ * author is a check nobody can ask about. Both links cascade: a mark is
+ * meaningless without its occasion or its person, and neither of those is
+ * deleted by this product anyway.
+ */
+export const attendanceMarks = pgTable('attendance_marks', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  eventId: uuid('event_id').notNull()
+    .references(() => attendanceEvents.id, { onDelete: 'cascade' }),
+  personId: uuid('person_id').notNull()
+    .references(() => persons.id, { onDelete: 'cascade' }),
+  markedBy: text('marked_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  unique('attendance_marks_event_person_key').on(table.eventId, table.personId),
+]);

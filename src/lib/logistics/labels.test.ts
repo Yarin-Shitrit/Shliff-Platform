@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
   CATEGORY_LABELS, CONDITION_LABELS, SOURCE_LABELS, STATUS_LABELS,
-  MATERIAL_STATE_LABELS, PURCHASE_VERBS,
+  MATERIAL_STATE_LABELS, PURCHASE_VERBS, ATTENDANCE_KIND_LABELS,
 } from './labels';
 
 /**
@@ -19,6 +19,7 @@ describe('logistics labels', () => {
   const SOURCES = ['buy_new', 'second_hand', 'borrow_member'] as const;
   const STATUSES = ['to_search', 'in_review', 'ordered', 'arrived'] as const;
   const MATERIAL_STATES = ['in_stock', 'needs_repair', 'obtained', 'missing'] as const;
+  const ATTENDANCE_KINDS = ['work_day', 'build_day', 'shopping', 'meeting', 'other'] as const;
 
   it('names every member of every enum', () => {
     for (const k of CATEGORIES) expect(CATEGORY_LABELS[k]).toBeTruthy();
@@ -27,6 +28,7 @@ describe('logistics labels', () => {
     for (const k of SOURCES) expect(PURCHASE_VERBS[k]).toBeTruthy();
     for (const k of STATUSES) expect(STATUS_LABELS[k]).toBeTruthy();
     for (const k of MATERIAL_STATES) expect(MATERIAL_STATE_LABELS[k]).toBeTruthy();
+    for (const k of ATTENDANCE_KINDS) expect(ATTENDANCE_KIND_LABELS[k]).toBeTruthy();
   });
 
   it('uses the spellings the design and the artboards already agreed', () => {
@@ -51,7 +53,12 @@ describe('logistics labels', () => {
     expect(MATERIAL_STATE_LABELS.needs_repair).toBe('במחסן · דורש תיקון');
   });
 
-  it('says nothing in English, on any of the twenty-three', () => {
+  it('reads each kind of day as a heading, because it is the column header without a title', () => {
+    expect(ATTENDANCE_KIND_LABELS.work_day).toBe('יום עבודה');
+    expect(ATTENDANCE_KIND_LABELS.build_day).toBe('יום הקמות');
+  });
+
+  it('says nothing in English, on any of the twenty-eight', () => {
     const every = [
       ...Object.values(CATEGORY_LABELS),
       ...Object.values(CONDITION_LABELS),
@@ -59,8 +66,9 @@ describe('logistics labels', () => {
       ...Object.values(PURCHASE_VERBS),
       ...Object.values(STATUS_LABELS),
       ...Object.values(MATERIAL_STATE_LABELS),
+      ...Object.values(ATTENDANCE_KIND_LABELS),
     ];
-    expect(every).toHaveLength(23);
+    expect(every).toHaveLength(28);
     for (const label of every) {
       expect(label).not.toMatch(/[A-Za-z]/);
       expect(label.trim()).toBe(label);

@@ -62,6 +62,12 @@ export const NAV_GROUPS: NavGroup[] = [
          board already shows. The route keeps its `/logistics/` prefix so no
          saved link breaks. */
       { id: 'shifts', label: 'משמרות', href: '/logistics/shifts', icon: 'clock' },
+      /* Who was at which work day, build day or shopping run during the
+         year, and how often. Beside משמרות for the same reason it sits
+         there: it is about the camp's people and what they gave, not about
+         what is kept or built. The route keeps the `/logistics/` prefix
+         because the screen is the logistics area's to maintain. */
+      { id: 'attendance', label: 'נוכחות', href: '/logistics/attendance', icon: 'check' },
       /* Not in B1: the camp map came after the twelve plans. It sits with
          the camp's own things — people, dues, tasks — because it is where
          those people and tasks physically land, not a logistics list. */
