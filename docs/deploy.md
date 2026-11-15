@@ -776,6 +776,35 @@ the prompt. Both on PostgreSQL 18.6. Neither followed "migration first":
 The local `shliff-pg` still needs `0021` through `0024` with the §6
 container command once Docker is running.
 
+### Migration `0025` — generated, **not applied to Railway**
+
+`0025_attendance` is נוכחות (`/logistics/attendance`): two new tables,
+`attendance_events` (a day the camp did something together — a work day, a
+build day, a shopping run — one season's) and `attendance_marks` (one person
+present at one of them, unique per pair), with their foreign keys. Purely
+additive; no existing table is touched. **It is read on every load of
+`/logistics/attendance`**, so that page answers the error screen until it
+lands. It references `seasons` and `persons` only, but the journal orders
+it after `0024`: apply in order.
+
+Read-only check, before: `0`; after: `2`:
+
+```sh
+docker run --rm postgres:18-alpine psql "$RAILWAY_URL" -tAc "
+select '0025 tables', count(*) from information_schema.tables
+ where table_schema='public' and table_name in ('attendance_events','attendance_marks')"
+```
+
+Then, from a clean checkout of `main`:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine sh -euc '
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0025_attendance.sql
+'
+```
+
+The local `shliff-pg` needs it too, with the §6 container command.
+
 ### Copying the laptop's database up
 
 The local container is Postgres **16**; Railway is **18**. Dump with the
