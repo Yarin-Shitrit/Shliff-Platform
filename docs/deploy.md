@@ -776,15 +776,15 @@ the prompt. Both on PostgreSQL 18.6. Neither followed "migration first":
 The local `shliff-pg` still needs `0021` through `0024` with the §6
 container command once Docker is running.
 
-### Migration `0025` — generated, **not applied to Railway**
+### Migration `0025` — applied to Railway 2026-11-15
 
 `0025_attendance` is נוכחות (`/logistics/attendance`): two new tables,
 `attendance_events` (a day the camp did something together — a work day, a
 build day, a shopping run — one season's) and `attendance_marks` (one person
 present at one of them, unique per pair), with their foreign keys. Purely
 additive; no existing table is touched. **It is read on every load of
-`/logistics/attendance`**, so that page answers the error screen until it
-lands. It references `seasons` and `persons` only, but the journal orders
+`/logistics/attendance`**, so that page answers the error screen wherever
+it has not landed. It references `seasons` and `persons` only, but the journal orders
 it after `0024`: apply in order.
 
 Read-only check, before: `0`; after: `2`:
@@ -803,7 +803,19 @@ docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine s
 '
 ```
 
-The local `shliff-pg` needs it too, with the §6 container command.
+It went in on 2026-11-15 (about 17:30 UTC) the way `0021` through `0024`
+did: a scratchpad script using the project's `postgres` driver, URL from
+`.env.railway`, check first, refuse anything but a clean state, one
+transaction, run from the prompt. It did not follow "migration first"
+either — #98 had already merged and deployed, and `/logistics/attendance`
+answered the error screen (digest `647492224`) until the apply. Five
+statements. The script refused unless `seasons`, `persons` and `work_items`
+existed and none of the two tables and four constraints did. Measured
+before: tables 0 of 2, constraints 0 of 4, `seasons` 3 rows, `persons` 72
+rows. After: tables 2 of 2, constraints 4 of 4, `seasons` 3, `persons` 72.
+
+The local `shliff-pg` still needs it (and `0021` through `0024` before it),
+with the §6 container command.
 
 ### Copying the laptop's database up
 
