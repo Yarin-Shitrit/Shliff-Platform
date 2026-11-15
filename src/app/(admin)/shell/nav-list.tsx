@@ -7,15 +7,18 @@
  * else about the rail is static.
  */
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { Icon } from '@/components/ui/icon';
 import { NAV_GROUPS, activeItemId, type NavItem } from './nav-data';
+import { carrySeason } from './season-href';
 import { useShellCounts } from './shell-counts';
 import styles from './sidebar.module.css';
 
 export function NavList() {
   const pathname = usePathname();
   const active = activeItemId(pathname);
+  // The year is changed in the switcher and nowhere else: a rail link keeps it.
+  const season = useSearchParams().get('season');
   // counts.ts's own docblock: "a count in the chrome that disagrees with the
   // page it links to is worse than no count." B7's tab bar now carries the
   // same figures, so the fetch and its `season`/`pathname` dependencies moved
@@ -66,7 +69,7 @@ export function NavList() {
           ) : (
             <Link
               key={item.id}
-              href={item.href}
+              href={carrySeason(item.href, season)}
               className={styles.navitem}
               aria-current={item.id === active ? 'page' : undefined}
             >

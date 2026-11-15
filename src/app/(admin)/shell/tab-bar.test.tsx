@@ -34,6 +34,18 @@ describe('TabBar', () => {
     expect(screen.getByRole('button', { name: 'עוד' })).toBeTruthy();
   });
 
+  it('keeps the chosen year on the tabs and behind עוד — only the switcher changes it', () => {
+    route.season = 'b25';
+    render(<TabBar />);
+    const hrefs = screen.getAllByRole('link').map((item) => item.getAttribute('href'));
+    expect(hrefs).toEqual([
+      '/?season=b25', '/members?season=b25', '/money?season=b25', '/inbox?season=b25',
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: 'עוד' }));
+    expect(screen.getByRole('link', { name: /דמי קאמפ/ }).getAttribute('href'))
+      .toBe('/fees?season=b25');
+  });
+
   it('marks the tab the current page belongs to, by prefix', () => {
     route.pathname = '/members/6f1c0e0e-0000-4000-8000-000000000000';
     render(<TabBar />);

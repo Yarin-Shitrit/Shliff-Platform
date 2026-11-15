@@ -16,6 +16,7 @@ import { Icon, type IconName } from '@/components/ui/icon';
 import type { PaletteHit } from '@/lib/search/palette';
 import { searchCommandPalette } from './actions';
 import { BodyPortal } from './body-portal';
+import { carrySeason } from './season-href';
 import styles from './command-palette.module.css';
 
 interface Row {
@@ -147,7 +148,7 @@ export function CommandPalette() {
       if (!row) return;
       event.preventDefault();
       close();
-      router.push(row.href);
+      router.push(carrySeason(row.href, season));
     }
   }
 
@@ -193,7 +194,7 @@ export function CommandPalette() {
                         role="option"
                         aria-selected={ordered[cursor]?.key === row.key}
                         className={styles.row}
-                        onClick={() => { close(); router.push(row.href); }}
+                        onClick={() => { close(); router.push(carrySeason(row.href, season)); }}
                       >
                         <Icon name={row.icon} size={16} />
                         <span>{row.title}</span>
