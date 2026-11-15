@@ -817,7 +817,7 @@ rows. After: tables 2 of 2, constraints 4 of 4, `seasons` 3, `persons` 72.
 The local `shliff-pg` still needs it (and `0021` through `0024` before it),
 with the §6 container command.
 
-### Migration `0026` — generated 2026-11-15, **not yet applied to Railway**
+### Migration `0026` — applied to Railway 2026-11-15
 
 `0026_attendance_personal_marks` is the נוכחות board's personal marks: one
 new table, `attendance_personal_marks` (one person did one thing on their
@@ -844,10 +844,19 @@ docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine s
 '
 ```
 
-Three statements: the table and its two constraints. Apply it **before**
-the branch merges, or accept the error screen on `/logistics/attendance`
-until it goes in. The local `shliff-pg` needs it too, with the §6
-container command, once `0021` through `0025` are on it.
+It went in on 2026-11-15 (about 19:10 UTC) the way `0021` through `0025`
+did: a scratchpad script using the project's `postgres` driver, URL from
+`.env.railway`, check first, refuse anything but a clean state, one
+transaction, run from the prompt. It did not follow "migration first"
+either — #101 had already merged. Three statements: the table and its two
+constraints. The script refused unless `seasons`, `persons`,
+`attendance_events` and `attendance_marks` existed and neither the table
+nor its two constraints did. Measured before: tables 0 of 1, constraints 0
+of 2, `seasons` 3 rows, `persons` 72 rows. After: tables 1 of 1,
+constraints 2 of 2, `seasons` 3, `persons` 72.
+
+The local `shliff-pg` still needs it (and `0021` through `0025` before it),
+with the §6 container command.
 
 ### Copying the laptop's database up
 
