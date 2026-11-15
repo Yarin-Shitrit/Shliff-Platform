@@ -5,7 +5,7 @@ import { ToastProvider } from '@/components/ui/toaster';
 import { createTestDb, type TestDb } from '@/test/db';
 import { persons } from '@/db/schema/camp';
 import { createSeason, addMember } from '@/lib/members/roster';
-import { createEvent, setMark, setEventCancelled } from '@/lib/logistics/attendance';
+import { createEvent, setMark, setEventCancelled, addPersonalMark } from '@/lib/logistics/attendance';
 import { unnamedControls } from '@/test/a11y';
 
 /**
@@ -98,7 +98,8 @@ describe('/logistics/attendance', () => {
     // The board: a row per member, the cancelled day nowhere on it.
     const board = screen.getByRole('table', { name: 'לוח הנוכחות, לפי חבר ויום' });
     expect(within(board).getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
-      'שם', expect.stringContaining('יום עבודה'), expect.stringContaining('קניות באיקאה'), 'סה״כ',
+      'שם', expect.stringContaining('יום עבודה'), expect.stringContaining('קניות באיקאה'),
+      expect.stringContaining('סימונים אישיים'), 'סה״כ',
     ]);
     expect(within(board).queryByText(/פגישה/)).toBeNull();
     const row = within(board).getByRole('row', { name: /דנה/ });
@@ -129,6 +130,54 @@ describe('/logistics/attendance', () => {
     expect((within(dialog).getByLabelText(/באיזה יום/) as HTMLInputElement).value.slice(0, 4)).toBe(today);
     expect(screen.getAllByRole('link', { name: 'יום חדש' })[0].getAttribute('href'))
       .toBe(`/logistics/attendance?season=${season.id}&act=event`);
+  });
+
+  it('counts a personal mark in the figures, draws the board for it with no days at all, and opens the person’s drawer by URL', async () => {
+    const season = await createSeason(db, { name: 'ברן 27', year: 2027, flatRate: 1200 });
+    const dana = await person(db, 'דנה');
+    const avi = await person(db, 'אבי');
+    await addMember(db, dana, season.id);
+    await addMember(db, avi, season.id);
+    await addPersonalMark(db, season.id, { personId: dana, doneOn: '2027-04-01', title: 'הביאה את הגנרטור', notes: 'מחיפה' }, LEAD);
+
+    await renderPage({ season: season.id, person: dana });
+
+    expect(screen.getByText('ימים בלוח').parentElement?.textContent).toMatch(/0/);
+    expect(screen.getByText('סימוני נוכחות').parentElement?.textContent)
+      .toMatch(/1.*0 בימים של כולם · 1 סימונים אישיים · נרשם ידנית/);
+    expect(screen.getByText('חברים בלי אף סימון').parentElement?.textContent).toMatch(/1.*מתוך 2/);
+
+    // No days, but not the empty state: the board has one column to show.
+    expect(screen.queryByText('אין כאן כלום לשנה הזו')).toBeNull();
+    const board = screen.getByRole('table', { name: 'לוח הנוכחות, לפי חבר ויום' });
+    const row = within(board).getByRole('row', { name: /דנה/ });
+    expect(within(row).getByRole('link', { name: 'סימונים אישיים · דנה · 1' }).getAttribute('href'))
+      .toBe(`/logistics/attendance?season=${season.id}&person=${dana}`);
+    expect(within(row).getAllByRole('cell').at(-1)?.textContent).toBe('1');
+
+    // Both verbs in the bar, and the drawer over the person with her mark listed.
+    expect(screen.getAllByRole('link', { name: 'סימון אישי' })[0].getAttribute('href'))
+      .toBe(`/logistics/attendance?season=${season.id}&act=personal`);
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('heading', { name: 'דנה' })).toBeTruthy();
+    expect(within(dialog).getByText('הביאה את הגנרטור')).toBeTruthy();
+    expect(within(dialog).getByText(/מחיפה/)).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'הסרה · הביאה את הגנרטור' })).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'הוספת הסימון' })).toBeTruthy();
+  });
+
+  it('opens the drawer that adds a personal mark with the roster to pick from', async () => {
+    const season = await createSeason(db, { name: 'ברן 27', year: 2027, flatRate: 1200 });
+    await addMember(db, await person(db, 'דנה'), season.id);
+    await createEvent(db, season.id, { kind: 'work_day', heldOn: '2027-03-14', title: null, notes: null }, LEAD);
+
+    await renderPage({ season: season.id, act: 'personal' });
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('heading', { name: 'סימון אישי' })).toBeTruthy();
+    expect(within(dialog).getByRole('option', { name: 'דנה' })).toBeTruthy();
+    expect(unnamedControls(dialog)).toEqual([]);
+    expect(dialog.textContent ?? '').not.toMatch(/[A-Za-z]/);
   });
 
   it('sends a season with days but nobody on its roster to אנשים', async () => {

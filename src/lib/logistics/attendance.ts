@@ -2,7 +2,9 @@ import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { AnyDb } from '@/lib/db-types';
 import { isBlank } from '@/lib/text/normalize';
 import { memberships, persons, seasons } from '@/db/schema/camp';
-import { attendanceEvents, attendanceMarks, type AttendanceKind } from '@/db/schema/logistics';
+import {
+  attendanceEvents, attendanceMarks, attendancePersonalMarks, type AttendanceKind,
+} from '@/db/schema/logistics';
 import { isCivilDay } from './shift-time';
 import { ATTENDANCE_KIND_LABELS } from './labels';
 
@@ -12,9 +14,11 @@ import { ATTENDANCE_KIND_LABELS } from './labels';
  *
  * An occasion is a day with a kind (a work day, a build day, a shopping
  * run, a meeting) and, when the kind is not enough, a title. A mark is one
- * person at one occasion. The board is the roster against the occasions,
- * a check where a mark exists, and a count at the end of every row — which
- * is the question this screen exists to answer: who carried the year, and
+ * person at one occasion. A personal mark is one person who did one thing
+ * on their own, with no occasion to hang it under. The board is the roster
+ * against the occasions, a check where a mark exists, a count of personal
+ * marks beside the days, and a count at the end of every row — which is
+ * the question this screen exists to answer: who carried the year, and
  * how much.
  *
  * Everything here is one season's. Nothing here deletes: a wrong occasion
@@ -246,18 +250,7 @@ export async function setMark(
   const event = await eventById(db, eventId);
   if (!event) throw new Error(`unknown occasion ${eventId}`);
   if (event.cancelledAt !== null) throw new Error('that occasion was cancelled');
-  if (!UUID.test(personId)) throw new Error(`unknown person ${personId}`);
-
-  const [member] = await db
-    .select({ personId: persons.id })
-    .from(memberships)
-    .innerJoin(persons, eq(persons.id, memberships.personId))
-    .where(and(
-      eq(memberships.seasonId, event.seasonId),
-      eq(memberships.personId, personId),
-      isNull(persons.mergedIntoId),
-    ));
-  if (!member) throw new Error('that person is not on this season roster');
+  await requireOnRoster(db, event.seasonId, personId);
 
   if (present) {
     await db.insert(attendanceMarks)
@@ -286,6 +279,118 @@ export async function marksOf(db: AnyDb, eventIds: readonly string[]): Promise<M
     .orderBy(asc(persons.displayName));
 }
 
+// ── Personal marks ──────────────────────────────────────────────────────
+
+/**
+ * One person did one thing on their own: a check with no occasion. It
+ * counts in the person's total beside the days they came to, and draws no
+ * column — a column for one person's errand would show everyone else as
+ * absent from something they were never asked to.
+ */
+export interface PersonalMark {
+  id: string;
+  seasonId: string;
+  personId: string;
+  /** Carried so the board can name a person who has since left the roster. */
+  displayName: string;
+  /** `YYYY-MM-DD`, the day it was done. */
+  doneOn: string;
+  title: string;
+  notes: string | null;
+  markedBy: string;
+  createdAt: Date;
+}
+
+/** What the drawer sends. Every field present every time, as `EventInput`. */
+export interface PersonalMarkInput {
+  personId: string;
+  doneOn: string;
+  title: string;
+  notes: string | null;
+}
+
+function personalMarksQuery(db: AnyDb) {
+  return db
+    .select({
+      id: attendancePersonalMarks.id,
+      seasonId: attendancePersonalMarks.seasonId,
+      personId: attendancePersonalMarks.personId,
+      displayName: persons.displayName,
+      doneOn: attendancePersonalMarks.doneOn,
+      title: attendancePersonalMarks.title,
+      notes: attendancePersonalMarks.notes,
+      markedBy: attendancePersonalMarks.markedBy,
+      createdAt: attendancePersonalMarks.createdAt,
+    })
+    .from(attendancePersonalMarks)
+    .innerJoin(persons, eq(persons.id, attendancePersonalMarks.personId));
+}
+
+/** Every personal mark of the season, oldest day first, entry order within a day. */
+export async function listPersonalMarks(db: AnyDb, seasonId: string): Promise<PersonalMark[]> {
+  return personalMarksQuery(db)
+    .where(eq(attendancePersonalMarks.seasonId, seasonId))
+    .orderBy(asc(attendancePersonalMarks.doneOn), asc(attendancePersonalMarks.createdAt));
+}
+
+/** Null rather than a throw: the id may come from a toast's undo after a refresh. */
+export async function personalMarkById(db: AnyDb, id: string): Promise<PersonalMark | null> {
+  if (!UUID.test(id)) return null;
+  const [row] = await personalMarksQuery(db).where(eq(attendancePersonalMarks.id, id)).limit(1);
+  return row ?? null;
+}
+
+/**
+ * Records one thing one person did. Returns the new id so the toast can
+ * offer the inverse. Refuses, in this order: a day that is not on the
+ * calendar, a blank title (a check with no words is a figure nobody can
+ * ask about), a season that is not there, and a person who is not on the
+ * season's roster — for the same reason `setMark` does.
+ */
+export async function addPersonalMark(
+  db: AnyDb, seasonId: string, input: PersonalMarkInput, actor: string,
+): Promise<string> {
+  if (!isCivilDay(input.doneOn)) throw new Error('a personal mark needs a real day');
+  if (isBlank(input.title)) throw new Error('a personal mark needs a title');
+  await requireSeason(db, seasonId);
+  await requireOnRoster(db, seasonId, input.personId);
+
+  const [row] = await db.insert(attendancePersonalMarks)
+    .values({
+      seasonId,
+      personId: input.personId,
+      doneOn: input.doneOn,
+      title: input.title.trim(),
+      notes: input.notes === null || isBlank(input.notes) ? null : input.notes.trim(),
+      markedBy: actor,
+    })
+    .returning();
+  return row.id;
+}
+
+/**
+ * Takes a personal mark back. A delete, like clearing a mark: nothing hangs
+ * under it, and the toast's undo re-adds it from what the row said.
+ */
+export async function removePersonalMark(db: AnyDb, id: string): Promise<void> {
+  if (!(await personalMarkById(db, id))) throw new Error(`unknown personal mark ${id}`);
+  await db.delete(attendancePersonalMarks).where(eq(attendancePersonalMarks.id, id));
+}
+
+async function requireOnRoster(db: AnyDb, seasonId: string, personId: string): Promise<void> {
+  if (!UUID.test(personId)) throw new Error(`unknown person ${personId}`);
+  const [member] = await db
+    .select({ personId: persons.id })
+    .from(memberships)
+    .innerJoin(persons, eq(persons.id, memberships.personId))
+    .where(and(
+      eq(memberships.seasonId, seasonId),
+      eq(memberships.personId, personId),
+      isNull(persons.mergedIntoId),
+    ));
+  if (!member) throw new Error('that person is not on this season roster');
+}
+
 // ── The board ───────────────────────────────────────────────────────────
 
 export interface BoardRow {
@@ -299,7 +404,12 @@ export interface BoardRow {
   onRoster: boolean;
   /** The occasions this person is marked present at, by occasion id. */
   present: ReadonlySet<string>;
-  /** How many live occasions they were at. The figure the year is read by. */
+  /** The things they did on their own, oldest day first. */
+  personal: PersonalMark[];
+  /**
+   * How many live occasions they were at, plus their personal marks. The
+   * figure the year is read by.
+   */
   total: number;
 }
 
@@ -312,23 +422,28 @@ export interface Board {
   rows: BoardRow[];
   /** Present count per live occasion, by id. */
   perEvent: ReadonlyMap<string, number>;
+  /** Personal marks across every row: the foot of that column. */
+  personalTotal: number;
 }
 
 /**
  * Pure: the roster against the occasions. Marks on a cancelled occasion
  * are kept out of every count — the occasion is out of the board, so its
- * marks are out of the figures, and come back when it does.
+ * marks are out of the figures, and come back when it does. A personal
+ * mark has no occasion to be cancelled with, so every one counts.
  */
 export function buildBoard(
   events: readonly AttendanceEvent[],
   marks: readonly Mark[],
   roster: readonly RosterMember[],
+  personal: readonly PersonalMark[] = [],
 ): Board {
   const live = events.filter((event) => event.cancelledAt === null);
   const cancelled = events.filter((event) => event.cancelledAt !== null);
   const liveIds = new Set(live.map((event) => event.id));
 
   const presentBy = new Map<string, Set<string>>();
+  const personalBy = new Map<string, PersonalMark[]>();
   const namesOff = new Map<string, string>();
   const perEvent = new Map<string, number>(live.map((event) => [event.id, 0]));
   const onRoster = new Set(roster.map((member) => member.personId));
@@ -342,27 +457,45 @@ export function buildBoard(
     if (!onRoster.has(mark.personId)) namesOff.set(mark.personId, mark.displayName);
   }
 
-  const rows: BoardRow[] = roster.map((member) => {
-    const present = presentBy.get(member.personId) ?? new Set<string>();
-    return { ...member, onRoster: true, present, total: present.size };
-  });
+  for (const mark of personal) {
+    const list = personalBy.get(mark.personId) ?? [];
+    list.push(mark);
+    personalBy.set(mark.personId, list);
+    if (!onRoster.has(mark.personId)) namesOff.set(mark.personId, mark.displayName);
+  }
+
+  const row = (personId: string, displayName: string, isOn: boolean): BoardRow => {
+    const present = presentBy.get(personId) ?? new Set<string>();
+    const own = personalBy.get(personId) ?? [];
+    return { personId, displayName, onRoster: isOn, present, personal: own, total: present.size + own.length };
+  };
+
+  const rows = roster.map((member) => row(member.personId, member.displayName, true));
 
   const off = [...namesOff.entries()]
     .sort((a, b) => a[1].localeCompare(b[1], 'he'))
-    .map(([personId, displayName]) => {
-      const present = presentBy.get(personId) ?? new Set<string>();
-      return { personId, displayName, onRoster: false, present, total: present.size };
-    });
+    .map(([personId, displayName]) => row(personId, displayName, false));
 
-  return { events: live, cancelled, rows: [...rows, ...off], perEvent };
+  return {
+    events: live,
+    cancelled,
+    rows: [...rows, ...off],
+    perEvent,
+    personalTotal: personal.length,
+  };
 }
 
 export interface AttendanceSummary {
   /** Live occasions on the board. */
   occasions: number;
-  /** Marks on them — person-days, the camp's total effort as a number. */
+  /**
+   * Every check on the board — marks on live occasions plus personal marks.
+   * Person-days: the camp's total effort as a number.
+   */
   marks: number;
-  /** Roster members at none of them. */
+  /** Of those, the personal marks: things done alone, under no day. */
+  personal: number;
+  /** Roster members with no check of either kind. */
   idle: number;
   /** Live occasions per kind, for the strip. */
   byKind: Record<AttendanceKind, number>;
@@ -376,6 +509,7 @@ export function summarizeBoard(board: Board): AttendanceSummary {
   return {
     occasions: board.events.length,
     marks: board.rows.reduce((sum, row) => sum + row.total, 0),
+    personal: board.personalTotal,
     idle: board.rows.filter((row) => row.onRoster && row.total === 0).length,
     byKind,
   };

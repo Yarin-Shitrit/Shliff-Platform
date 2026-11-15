@@ -5,13 +5,14 @@ import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import { resolveSeason } from '@/lib/seasons/current';
 import {
-  listEvents, listMarks, attendanceRoster, eventById, marksOf, buildBoard, summarizeBoard,
-  ATTENDANCE_KINDS, eventLabel, civilDate,
+  listEvents, listMarks, listPersonalMarks, attendanceRoster, eventById, marksOf,
+  buildBoard, summarizeBoard, ATTENDANCE_KINDS, eventLabel, civilDate,
 } from '@/lib/logistics/attendance';
 import { ATTENDANCE_KIND_LABELS } from '@/lib/logistics/labels';
 import { campDayOf } from '@/lib/logistics/shift-time';
 import {
-  parseAttendanceQuery, attendanceHref, eventHref, newEventHref, type RawParams,
+  parseAttendanceQuery, attendanceHref, eventHref, newEventHref, personHref, newPersonalHref,
+  type RawParams,
 } from '@/lib/logistics/attendance-views';
 import { TopBar, SeasonChip } from '@/components/shell/top-bar';
 import { StatTile } from '@/components/ui/stat-tile';
@@ -21,6 +22,7 @@ import { Icon } from '@/components/ui/icon';
 import { DateText } from '@/components/format';
 import { AttendanceBoard, EventList } from './attendance-board';
 import { EventDrawer } from './event-drawer';
+import { PersonalDrawer } from './personal-drawer';
 import styles from './attendance.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -31,11 +33,12 @@ export const metadata: Metadata = { title: 'נוכחות' };
  * נוכחות — who was at what during the year.
  *
  * A lead adds a day (a work day, a build day, a shopping run, a meeting)
- * and ticks who came. The board is the roster against those days, and the
- * count at the end of every row is what the camp reads at the end of the
- * year: who carried it, and how much. Every figure is one a lead typed —
- * there is no attendance workbook — and every one links to the drawer
- * that changes it.
+ * and ticks who came; or gives one person a check for something they did
+ * on their own, under no day. The board is the roster against those days
+ * plus a column of those personal checks, and the count at the end of
+ * every row is what the camp reads at the end of the year: who carried
+ * it, and how much. Every figure is one a lead typed — there is no
+ * attendance workbook — and every one links to the drawer that changes it.
  *
  * Season-scoped (R5): a year's effort is that year's. The roster is the
  * season's roster, from אנשים; the board adds nobody to it.
@@ -69,22 +72,32 @@ export default async function AttendancePage(
   const here: RawParams = { ...params, season: current.id };
   const today = campDayOf(new Date());
 
-  const [events, marks, roster] = await Promise.all([
+  const [events, marks, roster, personal] = await Promise.all([
     listEvents(db, current.id),
     listMarks(db, current.id),
     attendanceRoster(db, current.id),
+    listPersonalMarks(db, current.id),
   ]);
-  const board = buildBoard(events, marks, roster);
+  const board = buildBoard(events, marks, roster, personal);
   const totals = summarizeBoard(board);
 
   const closeHref = attendanceHref(here, {});
   const addHref = newEventHref(here);
+  const addPersonalHref = newPersonalHref(here);
 
   /* The peeked day is fetched by id rather than found among the list: a
      link to a day the board does not draw (cancelled) must still open
      something that says so. */
   const peeked = query.peekEvent === null ? null : await eventById(db, query.peekEvent);
   const peekedMarks = peeked === null ? [] : await marksOf(db, [peeked.id]);
+
+  /* A person is found on the board rather than fetched: the board already
+     holds everyone who can have a drawer here — the roster, and anyone off
+     it with a check to their name. A link to anyone else opens nothing,
+     the way a link to an occasion that is not there does. */
+  const peekedPerson = query.peekPerson === null
+    ? null
+    : board.rows.find((row) => row.personId === query.peekPerson) ?? null;
 
   const kindsPresent = ATTENDANCE_KINDS.filter((kind) => totals.byKind[kind] > 0);
 
@@ -100,6 +113,10 @@ export default async function AttendancePage(
             <ButtonLink tone="primary" size="sm" href={addHref}>
               <Icon name="plus" size={14} />
               יום חדש
+            </ButtonLink>
+            <ButtonLink size="sm" href={addPersonalHref}>
+              <Icon name="check" size={14} />
+              סימון אישי
             </ButtonLink>
           </span>
         )}
@@ -127,7 +144,9 @@ export default async function AttendancePage(
         <StatTile
           label="סימוני נוכחות"
           value={totals.marks}
-          derivation="ימי־אדם: כל סימון של חבר ביום אחד · נרשם ידנית"
+          derivation={totals.personal === 0
+            ? 'ימי־אדם: כל סימון של חבר ביום אחד · נרשם ידנית'
+            : <bdi>{`${totals.marks - totals.personal} בימים של כולם · ${totals.personal} סימונים אישיים · נרשם ידנית`}</bdi>}
         />
         <StatTile
           label="חברים בלי אף סימון"
@@ -138,7 +157,7 @@ export default async function AttendancePage(
         />
       </div>
 
-      {board.events.length === 0 ? (
+      {board.events.length === 0 && board.personalTotal === 0 ? (
         <EmptyState
           kind="nothing-this-season"
           noun="ימים בלוח הנוכחות"
@@ -167,12 +186,18 @@ export default async function AttendancePage(
           <section className={styles.phoneOnly} aria-label="סיכום לפי חבר">
             <div className={styles.sectionHead}>
               <h2>לפי חבר</h2>
-              <span className={styles.sectionHint}>בכמה ימים כל אחד היה.</span>
+              <span className={styles.sectionHint}>בכמה ימים כל אחד היה, ומה עשה לבד.</span>
             </div>
             <ul className={styles.totalsList}>
               {board.rows.map((row) => (
                 <li key={row.personId} className={styles.totalsRow}>
                   <Link href={`/members/${row.personId}`} className={styles.nameLink}>{row.displayName}</Link>
+                  {row.onRoster || row.personal.length > 0 ? (
+                    <Link href={personHref(here, row.personId)} className={styles.totalsPersonal}>
+                      <Icon name="check" size={14} />
+                      <bdi>{`${row.personal.length} אישיים`}</bdi>
+                    </Link>
+                  ) : null}
                   <span className={cxNum(row.total)}>{row.total}</span>
                 </li>
               ))}
@@ -210,6 +235,10 @@ export default async function AttendancePage(
           <Icon name="plus" size={16} />
           יום חדש
         </ButtonLink>
+        <ButtonLink href={addPersonalHref}>
+          <Icon name="check" size={16} />
+          סימון אישי
+        </ButtonLink>
       </div>
 
       {peeked !== null ? (
@@ -232,6 +261,28 @@ export default async function AttendancePage(
           params={here}
           roster={roster}
           present={[]}
+          presetDay={today}
+        />
+      ) : null}
+      {peekedPerson !== null ? (
+        <PersonalDrawer
+          person={peekedPerson}
+          seasonId={current.id}
+          seasonName={current.name}
+          closeHref={closeHref}
+          params={here}
+          roster={roster}
+          presetDay={today}
+        />
+      ) : null}
+      {query.addingPersonal ? (
+        <PersonalDrawer
+          person={null}
+          seasonId={current.id}
+          seasonName={current.name}
+          closeHref={closeHref}
+          params={here}
+          roster={roster}
           presetDay={today}
         />
       ) : null}

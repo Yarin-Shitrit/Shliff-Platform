@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { HEBREW_FALLBACK } from '@/lib/errors/hebrew';
 import {
-  eventFailureMessage, markFailureMessage, DAY_REQUIRED, KIND_REQUIRED, NOT_ON_ROSTER, EVENT_CANCELLED,
+  eventFailureMessage, markFailureMessage, personalFailureMessage,
+  DAY_REQUIRED, KIND_REQUIRED, NOT_ON_ROSTER, EVENT_CANCELLED, PERSON_REQUIRED, TITLE_REQUIRED,
 } from './failure-messages';
 
 /**
@@ -26,6 +27,15 @@ describe('attendance failure messages', () => {
     expect(markFailureMessage(new Error('unknown occasion abc'))).toMatch(/לא מצאנו/);
   });
 
+  it('asks a personal mark for its day, its words and its person, in the drawer’s own words', () => {
+    expect(personalFailureMessage(new Error('a personal mark needs a real day'))).toBe(DAY_REQUIRED);
+    expect(personalFailureMessage(new Error('a personal mark needs a title'))).toBe(TITLE_REQUIRED);
+    expect(personalFailureMessage(new Error('unknown person garbage'))).toBe(PERSON_REQUIRED);
+    expect(personalFailureMessage(new Error('that person is not on this season roster'))).toBe(NOT_ON_ROSTER);
+    expect(personalFailureMessage(new Error('unknown personal mark abc'))).toMatch(/לא מצאנו את הסימון/);
+    expect(personalFailureMessage(new Error('unknown season abc'))).toMatch(/לא מצאנו את השנה/);
+  });
+
   it('never returns a Latin character, whatever it is handed', () => {
     for (const thrown of [
       new Error('relation "attendance_events" does not exist'),
@@ -36,6 +46,7 @@ describe('attendance failure messages', () => {
     ]) {
       expect(eventFailureMessage(thrown)).not.toMatch(/[A-Za-z]/);
       expect(markFailureMessage(thrown)).not.toMatch(/[A-Za-z]/);
+      expect(personalFailureMessage(thrown)).not.toMatch(/[A-Za-z]/);
     }
     expect(eventFailureMessage(new Error('something new'))).toBe(HEBREW_FALLBACK);
   });

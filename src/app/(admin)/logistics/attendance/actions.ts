@@ -5,10 +5,11 @@ import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import type { ActionResult } from '@/lib/action-result';
 import {
-  createEvent, updateEvent, setEventCancelled, setMark, type EventInput,
+  createEvent, updateEvent, setEventCancelled, setMark, addPersonalMark, removePersonalMark,
+  type EventInput, type PersonalMarkInput,
 } from '@/lib/logistics/attendance';
 import { ATTENDANCE_PATH } from '@/lib/logistics/attendance-views';
-import { eventFailureMessage, markFailureMessage } from './failure-messages';
+import { eventFailureMessage, markFailureMessage, personalFailureMessage } from './failure-messages';
 
 /**
  * This file exports only async functions. A `'use server'` module that
@@ -85,5 +86,39 @@ export async function setMarkAction(
     return { ok: true };
   } catch (error) {
     return { ok: false, error: markFailureMessage(error) };
+  }
+}
+
+/**
+ * A personal mark: one thing one person did on their own, counted beside
+ * the days they came to. Returns the new id so the toast can offer the
+ * inverse, `removePersonalMarkAction(id)` (E2).
+ */
+export async function addPersonalMarkAction(
+  seasonId: string, input: PersonalMarkInput,
+): Promise<ActionResult<string>> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+
+  try {
+    const id = await addPersonalMark(db, seasonId, input, admin.email);
+    revalidatePath(ATTENDANCE_PATH);
+    return { ok: true, value: id };
+  } catch (error) {
+    return { ok: false, error: personalFailureMessage(error) };
+  }
+}
+
+/** Takes a personal mark back. Its undo is `addPersonalMarkAction` with what the row said. */
+export async function removePersonalMarkAction(id: string): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+
+  try {
+    await removePersonalMark(db, id);
+    revalidatePath(ATTENDANCE_PATH);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: personalFailureMessage(error) };
   }
 }

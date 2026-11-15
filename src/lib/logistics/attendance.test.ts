@@ -5,8 +5,9 @@ import { createSeason, addMember } from '@/lib/members/roster';
 import {
   listEvents, eventById, createEvent, updateEvent, setEventCancelled,
   listMarks, marksOf, setMark, attendanceRoster, buildBoard, summarizeBoard,
+  listPersonalMarks, personalMarkById, addPersonalMark, removePersonalMark,
   eventLabel, weekdayOf, civilDate,
-  type AttendanceEvent, type Mark, type RosterMember,
+  type AttendanceEvent, type Mark, type PersonalMark, type RosterMember,
 } from './attendance';
 
 const LEAD = 'lead@shliff.camp';
@@ -202,6 +203,64 @@ describe('a mark is one person at one occasion', () => {
   });
 });
 
+describe('a personal mark is one person who did one thing alone', () => {
+  let db: TestDb;
+  let seasonId: string;
+  let dana: string;
+
+  beforeEach(async () => {
+    db = await createTestDb();
+    seasonId = (await createSeason(db, { name: 'ברן 27', year: 2027, flatRate: 1200 })).id;
+    dana = await person(db, 'דנה');
+    await addMember(db, dana, seasonId);
+  });
+
+  it('records what was done, by whom, on which day, and who wrote it down', async () => {
+    const id = await addPersonalMark(db, seasonId, {
+      personId: dana, doneOn: '2027-03-14', title: '  הביאה את הגנרטור ', notes: ' ',
+    }, LEAD);
+    const mark = await personalMarkById(db, id);
+    expect(mark).toMatchObject({
+      seasonId, personId: dana, displayName: 'דנה', doneOn: '2027-03-14',
+      title: 'הביאה את הגנרטור', notes: null, markedBy: LEAD,
+    });
+  });
+
+  it('refuses a day off the calendar, a blank title, a missing season and a stranger', async () => {
+    const input = { personId: dana, doneOn: '2027-03-14', title: 'הדפסת מדבקות', notes: null };
+    await expect(addPersonalMark(db, seasonId, { ...input, doneOn: '2027-02-30' }, LEAD))
+      .rejects.toThrow(/real day/);
+    await expect(addPersonalMark(db, seasonId, { ...input, title: '   ' }, LEAD))
+      .rejects.toThrow(/needs a title/);
+    await expect(addPersonalMark(db, NOBODY, input, LEAD)).rejects.toThrow(/unknown season/);
+
+    const stranger = await person(db, 'אורח');
+    await expect(addPersonalMark(db, seasonId, { ...input, personId: stranger }, LEAD))
+      .rejects.toThrow(/not on this season roster/);
+    await expect(addPersonalMark(db, seasonId, { ...input, personId: 'garbage' }, LEAD))
+      .rejects.toThrow(/unknown person/);
+    expect(await listPersonalMarks(db, seasonId)).toEqual([]);
+  });
+
+  it('lists the season’s marks oldest day first, and only the season’s', async () => {
+    const other = (await createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1200 })).id;
+    await addMember(db, dana, other);
+    await addPersonalMark(db, seasonId, { personId: dana, doneOn: '2027-05-01', title: 'ב', notes: null }, LEAD);
+    await addPersonalMark(db, seasonId, { personId: dana, doneOn: '2027-03-14', title: 'א', notes: null }, LEAD);
+    await addPersonalMark(db, other, { personId: dana, doneOn: '2026-03-14', title: 'ג', notes: null }, LEAD);
+    expect((await listPersonalMarks(db, seasonId)).map((mark) => mark.title)).toEqual(['א', 'ב']);
+  });
+
+  it('is taken back by id, and refuses an id that is not there', async () => {
+    const id = await addPersonalMark(db, seasonId, { personId: dana, doneOn: '2027-03-14', title: 'א', notes: null }, LEAD);
+    await removePersonalMark(db, id);
+    expect(await personalMarkById(db, id)).toBeNull();
+    expect(await listPersonalMarks(db, seasonId)).toEqual([]);
+    await expect(removePersonalMark(db, id)).rejects.toThrow(/unknown personal mark/);
+    expect(await personalMarkById(db, 'garbage')).toBeNull();
+  });
+});
+
 describe('the board is the roster against the days', () => {
   const day = (id: string, heldOn: string, cancelled = false): AttendanceEvent => ({
     id, seasonId: 's', kind: 'work_day', heldOn, title: null, notes: null,
@@ -217,6 +276,10 @@ describe('the board is the roster against the days', () => {
     { personId: 'p-dana', displayName: 'דנה' },
     { personId: 'p-roni', displayName: 'רוני' },
   ];
+  const own = (id: string, personId: string, displayName: string, title: string): PersonalMark => ({
+    id, seasonId: 's', personId, displayName, doneOn: '2027-04-01', title, notes: null,
+    markedBy: LEAD, createdAt: new Date('2027-04-01T18:00:00Z'),
+  });
 
   it('gives every roster member a row, a check where a mark exists, and the count', () => {
     const board = buildBoard(
@@ -266,6 +329,33 @@ describe('the board is the roster against the days', () => {
     expect(totals.byKind).toEqual({ work_day: 1, build_day: 0, shopping: 1, meeting: 0, other: 0 });
   });
 
+  it('counts a personal mark in the person’s total and in the column’s foot, and never as a day', () => {
+    const board = buildBoard(
+      [day('e1', '2027-03-14')],
+      [mark('e1', 'p-dana', 'דנה')],
+      roster,
+      [own('m1', 'p-dana', 'דנה', 'הביאה את הגנרטור'), own('m2', 'p-roni', 'רוני', 'הדפיס מדבקות')],
+    );
+    expect(board.events.map((event) => event.id)).toEqual(['e1']);
+    expect(board.rows.map((row) => [row.displayName, row.personal.length, row.total]))
+      .toEqual([['אבי', 0, 0], ['דנה', 1, 2], ['רוני', 1, 1]]);
+    expect(board.rows[1].personal[0].title).toBe('הביאה את הגנרטור');
+    expect(board.perEvent.get('e1')).toBe(1);
+    expect(board.personalTotal).toBe(2);
+
+    const totals = summarizeBoard(board);
+    expect(totals.marks).toBe(3);
+    expect(totals.personal).toBe(2);
+    expect(totals.idle).toBe(1);
+  });
+
+  it('keeps a personal mark of someone who left the roster, as a row that says so', () => {
+    const board = buildBoard([], [], roster, [own('m1', 'p-gone', 'יוסי', 'תיקן את המקרר')]);
+    const last = board.rows[board.rows.length - 1];
+    expect(last).toMatchObject({ personId: 'p-gone', displayName: 'יוסי', onRoster: false, total: 1 });
+    expect(summarizeBoard(board).idle).toBe(3);
+  });
+
   it('does not count someone off the roster as idle, because idle is a roster word', () => {
     const board = buildBoard([day('e1', '2027-03-14')], [mark('e1', 'p-gone', 'יוסי')], roster);
     expect(summarizeBoard(board).idle).toBe(3);
@@ -276,7 +366,8 @@ describe('the board is the roster against the days', () => {
     expect(board.events).toEqual([]);
     expect(board.rows.every((row) => row.total === 0)).toBe(true);
     expect(summarizeBoard(board)).toEqual({
-      occasions: 0, marks: 0, idle: 3, byKind: { work_day: 0, build_day: 0, shopping: 0, meeting: 0, other: 0 },
+      occasions: 0, marks: 0, personal: 0, idle: 3,
+      byKind: { work_day: 0, build_day: 0, shopping: 0, meeting: 0, other: 0 },
     });
   });
 });

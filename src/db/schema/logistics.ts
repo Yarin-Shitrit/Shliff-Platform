@@ -378,3 +378,35 @@ export const attendanceMarks = pgTable('attendance_marks', {
 }, (table) => [
   unique('attendance_marks_event_person_key').on(table.eventId, table.personId),
 ]);
+
+/**
+ * A mark with no occasion: one person did one thing for the camp on their
+ * own, on a day — drove the generator over, printed the stickers, sat with
+ * the supplier — and the board counts it beside the days they came to.
+ * Without this, a lead has two bad choices: make a "day" for one person,
+ * which draws a column where everyone else reads as absent, or leave the
+ * effort off the year's figure.
+ *
+ * It is a mark, not an occasion: nothing else hangs under it, so there is
+ * no column and no roster for it, and it is taken back the way a mark is
+ * (deleted by whoever can see it), never cancelled. `title` is required —
+ * a check with no words beside it is a figure nobody can ask about.
+ *
+ * Season-scoped and roster-bound like `attendance_marks`: the library
+ * refuses a person who is not on the season's roster, and the row carries
+ * `season_id` because a personal mark has no occasion to borrow one from.
+ */
+export const attendancePersonalMarks = pgTable('attendance_personal_marks', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  seasonId: uuid('season_id').notNull()
+    .references(() => seasons.id, { onDelete: 'cascade' }),
+  personId: uuid('person_id').notNull()
+    .references(() => persons.id, { onDelete: 'cascade' }),
+  /** `2026-03-14`. The day it was done; a civil day in the camp's zone. */
+  doneOn: text('done_on').notNull(),
+  /** What was done. Required. */
+  title: text('title').notNull(),
+  notes: text('notes'),
+  markedBy: text('marked_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});

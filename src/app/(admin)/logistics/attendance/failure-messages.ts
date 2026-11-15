@@ -46,3 +46,26 @@ export const MARK_ERRORS: HebrewErrors = [
 export function markFailureMessage(error: unknown): string {
   return toHebrewError(error, MARK_ERRORS);
 }
+
+/**
+ * A personal mark — one person, one thing they did alone — is refused for
+ * the same roster reason a mark is, and for two of its own: it needs a day
+ * on the calendar and words that say what was done. The drawer makes the
+ * same three refusals before the round trip, in these words.
+ */
+export const PERSON_REQUIRED = 'צריך לבחור למי הסימון';
+export const TITLE_REQUIRED = 'צריך לכתוב מה נעשה — למשל ״הביא את הגנרטור״';
+const PERSONAL_UNKNOWN = 'לא מצאנו את הסימון הזה. אולי כבר הוסר';
+
+export const PERSONAL_ERRORS: HebrewErrors = [
+  ['a personal mark needs a real day', DAY_REQUIRED],
+  ['a personal mark needs a title', TITLE_REQUIRED],
+  ['unknown personal mark', PERSONAL_UNKNOWN],
+  ['unknown season', SEASON_UNKNOWN],
+  ['that person is not on this season roster', NOT_ON_ROSTER],
+  ['unknown person', PERSON_REQUIRED],
+];
+
+export function personalFailureMessage(error: unknown): string {
+  return toHebrewError(error, PERSONAL_ERRORS);
+}

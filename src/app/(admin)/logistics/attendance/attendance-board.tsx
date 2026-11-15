@@ -8,7 +8,7 @@ import {
   civilDate, eventLabel, weekdayOf, type Board, type AttendanceEvent,
 } from '@/lib/logistics/attendance';
 import { ATTENDANCE_KIND_LABELS } from '@/lib/logistics/labels';
-import { eventHref, type RawParams } from '@/lib/logistics/attendance-views';
+import { eventHref, personHref, type RawParams } from '@/lib/logistics/attendance-views';
 import { MarkToggle } from './mark-toggle';
 import styles from './attendance.module.css';
 
@@ -16,9 +16,10 @@ import styles from './attendance.module.css';
  * R7: no `'use client'`. The board is a table of links and toggles and holds
  * no state of its own; each cell's `MarkToggle` is the one client piece.
  *
- * A row per member, a column per day, a check where the two met, and the
- * count at the end of the row — which is the figure the whole screen is
- * for. The last row counts the other way: how many came each day.
+ * A row per member, a column per day, a check where the two met, a count
+ * of the things they did on their own, and the count at the end of the
+ * row — which is the figure the whole screen is for. The last row counts
+ * the other way: how many came each day.
  *
  * Laptop only. Forty names by twenty days does not fit a phone at any
  * density a thumb can hit, so below 767.98px the sheet hides the table and
@@ -75,6 +76,10 @@ export function AttendanceBoard({
                 </Link>
               </th>
             ))}
+            <th scope="col" className={styles.personalHead}>
+              <span className={styles.dayTitle}>סימונים אישיים</span>
+              <span className={styles.dayKind}>משימות שחבר עשה לבד</span>
+            </th>
             <th scope="col" className={cx(styles.totalHead, 'num')}>סה״כ</th>
           </tr>
         </thead>
@@ -108,6 +113,20 @@ export function AttendanceBoard({
                   ) : null}
                 </td>
               ))}
+              <td className={cx(styles.cell, styles.personalCell, 'num')}>
+                {row.onRoster ? (
+                  /* The count opens the person's drawer, where the marks are
+                     listed and the next one is added. Plus on zero, so a row
+                     with nothing says how to get something. */
+                  <Link
+                    href={personHref(params, row.personId)}
+                    className={styles.personalLink}
+                    aria-label={`סימונים אישיים · ${row.displayName} · ${row.personal.length}`}
+                  >
+                    {row.personal.length === 0 ? <Icon name="plus" size={14} /> : row.personal.length}
+                  </Link>
+                ) : row.personal.length === 0 ? null : row.personal.length}
+              </td>
               <td className={cx(styles.totalCell, 'num')}>{row.total}</td>
             </tr>
           ))}
@@ -120,6 +139,7 @@ export function AttendanceBoard({
                 {board.perEvent.get(event.id) ?? 0}
               </td>
             ))}
+            <td className={cx(styles.cell, styles.personalCell, 'num')}>{board.personalTotal}</td>
             <td className={cx(styles.totalCell, 'num')}>{grand}</td>
           </tr>
         </tfoot>

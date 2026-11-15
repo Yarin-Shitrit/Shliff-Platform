@@ -3,7 +3,9 @@ import { eq } from 'drizzle-orm';
 import { createTestDb, type TestDb } from '@/test/db';
 import { createSeason } from '@/lib/members/roster';
 import { createTask, listTasks } from '@/lib/work/tasks';
-import { inventoryItems, acquisitionItems, taskMaterials } from '@/db/schema/logistics';
+import {
+  inventoryItems, acquisitionItems, taskMaterials, attendancePersonalMarks,
+} from '@/db/schema/logistics';
 
 const LEAD = 'lead@shliff.camp';
 
@@ -36,6 +38,10 @@ describe('logistics schema', () => {
     expect(await db.select().from(inventoryItems)).toEqual([]);
     expect(await db.select().from(acquisitionItems)).toEqual([]);
     expect(await db.select().from(taskMaterials)).toEqual([]);
+  });
+
+  it('applies migration 0026 cleanly', async () => {
+    expect(await db.select().from(attendancePersonalMarks)).toEqual([]);
   });
 
   it('stores a warehouse item with no season, because gear outlives a burn', async () => {

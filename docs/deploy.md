@@ -817,6 +817,38 @@ rows. After: tables 2 of 2, constraints 4 of 4, `seasons` 3, `persons` 72.
 The local `shliff-pg` still needs it (and `0021` through `0024` before it),
 with the §6 container command.
 
+### Migration `0026` — generated 2026-11-15, **not yet applied to Railway**
+
+`0026_attendance_personal_marks` is the נוכחות board's personal marks: one
+new table, `attendance_personal_marks` (one person did one thing on their
+own, on a day — a check with no occasion, counted in that person's total
+beside the days they came to), with foreign keys to `seasons` and
+`persons`. Purely additive; no existing table is touched. **It is read on
+every load of `/logistics/attendance`**, so that page answers the error
+screen wherever it has not landed — the same way `0025` did between #98
+merging and its apply. The journal orders it after `0025`: apply in order.
+
+Read-only check, before: `0`; after: `1`:
+
+```sh
+docker run --rm postgres:18-alpine psql "$RAILWAY_URL" -tAc "
+select '0026 tables', count(*) from information_schema.tables
+ where table_schema='public' and table_name = 'attendance_personal_marks'"
+```
+
+Then, from a clean checkout of `main`:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine sh -euc '
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0026_attendance_personal_marks.sql
+'
+```
+
+Three statements: the table and its two constraints. Apply it **before**
+the branch merges, or accept the error screen on `/logistics/attendance`
+until it goes in. The local `shliff-pg` needs it too, with the §6
+container command, once `0021` through `0025` are on it.
+
 ### Copying the laptop's database up
 
 The local container is Postgres **16**; Railway is **18**. Dump with the
