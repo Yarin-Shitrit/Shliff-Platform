@@ -178,6 +178,41 @@
    reads quieter because nothing in it can be changed here. */
 .rowOff { color: var(--ink-3); }
 
+/* ── Personal marks: the column beside the days ────────────────────────── */
+
+.personalHead,
+.personalCell {
+  min-inline-size: 96px;
+  border-inline-start: 1px solid var(--line);
+}
+
+.personalHead .dayTitle,
+.personalHead .dayKind { display: block; }
+
+/* The count is the control: a link drawn like the check, filled when there
+   is something behind it, a plus when there is not. */
+.personalLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 26px;
+  block-size: 26px;
+  padding-inline: 6px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ink-3);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.personalLink:hover {
+  border-color: var(--brand);
+  color: var(--brand-text);
+}
+
 /* ── The check ─────────────────────────────────────────────────────────── */
 
 .check {
@@ -291,6 +326,41 @@
 
 .rosterRow:last-child { border-block-end: 0; }
 
+/* One person's personal marks, listed under the form that adds the next. */
+.personalList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.personalRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-block-size: var(--tap-min);
+  padding-block: 6px;
+  border-block-end: 1px solid var(--line);
+}
+
+.personalRow:last-child { border-block-end: 0; }
+
+.personalWords {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.personalTitle { font-weight: 600; }
+
+.personalWhen {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
 /* ── Phone drawings ────────────────────────────────────────────────────── */
 
 .phoneOnly { display: none; }
@@ -375,6 +445,21 @@
 .totalsRow:last-child { border-block-end: 0; }
 
 .totalsFigure { font-weight: 600; }
+
+/* The link beside a name on the phone's list: how many things they did
+   alone, and the way to add one. Pushed toward the figure. */
+.totalsPersonal {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-inline-start: auto;
+  color: var(--ink-3);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+}
+
+.totalsPersonal:hover { text-decoration: underline; }
 
 .totalsZero { color: var(--ink-4); }
 
