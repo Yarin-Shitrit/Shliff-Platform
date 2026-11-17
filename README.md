@@ -45,3 +45,10 @@ The password is read from the `ADMIN_PASSWORD` environment variable, never from 
 command-line argument — an argv password would linger in shell history and in
 `ps` output. The script refuses with a usage message if `ADMIN_PASSWORD` (or the
 email) is missing.
+
+That first admin makes every other account from inside the app, on
+**משתמשים והרשאות** (`/users`): an account is either ניהול מלא (sees and
+edits everything, including that page) or לפי הרשאות — for each page, בלי
+גישה, צפייה בלבד or צפייה ועריכה. The rail shows an account only the pages
+it may open, a read-only page says so at the top, and the server refuses
+any write the account was not granted, whatever the screen shows.

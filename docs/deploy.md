@@ -896,6 +896,42 @@ docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine s
 The local `shliff-pg` needs it too (and `0021` through `0026` before it),
 with the §6 container command.
 
+### Migration `0028` — NOT yet applied to Railway
+
+`0028_user_page_access` is the per-page access behind משתמשים והרשאות
+(`/users`): one new table, `user_page_access` (`user_id` → `users.id`,
+cascade; `page`; `level`; primary key on the pair). Nothing on `users`
+changes, and no existing row changes its meaning: every account on Railway
+today carries `role = 'admin'`, which the new guard reads exactly as
+before — every page, every write.
+
+**Order does not matter for this one, but apply it before anyone is made a
+non-admin.** The guard reads `user_page_access` only for an account whose
+role is not `admin`; with every account an admin, code that knows the table
+runs against a database that lacks it without ever naming it. The moment a
+lead saves a granted account on `/users`, the insert needs the table — so
+the migration goes in before that page is used in anger, and the safe way
+to be sure is before the deploy.
+
+Read-only check, before: `0`; after: `1`:
+
+```sh
+docker run --rm postgres:18-alpine psql "$RAILWAY_URL" -tAc "
+select '0028 table', count(*) from information_schema.tables
+ where table_schema='public' and table_name = 'user_page_access'"
+```
+
+Then, from a checkout that has the file:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine sh -euc '
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0028_user_page_access.sql
+'
+```
+
+The local `shliff-pg` needs it too (and `0021` through `0027` before it),
+with the §6 container command.
+
 ### Copying the laptop's database up
 
 The local container is Postgres **16**; Railway is **18**. Dump with the
@@ -927,10 +963,18 @@ DATABASE_URL="<railway url>" ADMIN_PASSWORD="..." npx tsx scripts/create-admin.t
 The password is read from the environment, never from a command-line argument,
 so it stays out of shell history and `ps`.
 
-`scripts/create-admin.ts:15` hardcodes `role: 'admin'`. The schema supports
-`editor` and `viewer` with a default of `viewer`, but nothing in the app creates
-them — so today every account made this way has full write access to members,
-dues and the money ledger. Worth closing if read-only access is ever wanted.
+`scripts/create-admin.ts:15` hardcodes `role: 'admin'`, which is the only
+account the script makes and the one that is needed first: every other
+account is made on **משתמשים והרשאות** (`/users`), by an admin, in the
+browser. That page gives an account either ניהול מלא (the `admin` role —
+every page, every write, and `/users` itself) or לפי הרשאות: a row per page
+in `user_page_access` saying צפייה בלבד or צפייה ועריכה, and nothing at all
+for a page with no row. The guard reads the rows on every request
+(`src/lib/auth/guard.ts`), so a change on that page holds from the next
+click, not the next sign-in. The one thing it refuses is an admin taking
+the admin role off, or deleting, the account they are signed in with — so
+there is always at least one admin, and it is never this script's job to
+recover one.
 
 ## 8. Rotating the Vercel token
 

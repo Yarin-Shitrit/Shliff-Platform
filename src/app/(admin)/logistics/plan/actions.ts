@@ -27,7 +27,7 @@ import { acquisitionFailureMessage } from '../acquisitions/failure-messages';
  */
 
 export async function createTopicAction(seasonId: string, input: TopicInput): Promise<ActionResult<string>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('plan', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     const id = await createTopic(db, seasonId, input, admin.email);
@@ -39,7 +39,7 @@ export async function createTopicAction(seasonId: string, input: TopicInput): Pr
 }
 
 export async function updateTopicAction(id: string, input: TopicInput): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('plan', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await updateTopic(db, id, input, admin.email);
@@ -51,7 +51,7 @@ export async function updateTopicAction(id: string, input: TopicInput): Promise<
 }
 
 export async function setTopicArchivedAction(id: string, archived: boolean): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('plan', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await setTopicArchived(db, id, archived, admin.email);
@@ -63,7 +63,7 @@ export async function setTopicArchivedAction(id: string, archived: boolean): Pro
 }
 
 export async function createItemAction(seasonId: string, input: ItemInput): Promise<ActionResult<string>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('plan', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     const id = await createItem(db, seasonId, input, admin.email);
@@ -75,7 +75,7 @@ export async function createItemAction(seasonId: string, input: ItemInput): Prom
 }
 
 export async function updateItemAction(id: string, input: ItemInput): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('plan', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await updateItem(db, id, input, admin.email);
@@ -88,7 +88,7 @@ export async function updateItemAction(id: string, input: ItemInput): Promise<Ac
 
 /** Only the days. The undo is this action with the days that were there. */
 export async function scheduleItemAction(id: string, schedule: Schedule): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('plan', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await scheduleItem(db, id, schedule, admin.email);
@@ -107,7 +107,7 @@ export async function scheduleItemAction(id: string, schedule: Schedule): Promis
 export async function setItemStatusAction(
   id: string, status: WorkItemStatus,
 ): Promise<ActionResult<WorkItemStatus>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('plan', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     const landed = await setItemStatus(db, id, status, admin.email);
@@ -119,7 +119,7 @@ export async function setItemStatusAction(
 }
 
 export async function addDependencyAction(beforeId: string, afterId: string): Promise<ActionResult<string>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('plan', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     const id = await addDependency(db, beforeId, afterId);
@@ -131,7 +131,7 @@ export async function addDependencyAction(beforeId: string, afterId: string): Pr
 }
 
 export async function removeDependencyAction(id: string): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('plan', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await removeDependency(db, id);
@@ -150,7 +150,7 @@ export async function removeDependencyAction(id: string): Promise<ActionResult> 
 export async function adoptPurchaseItemsAction(
   seasonId: string, itemIds: string[],
 ): Promise<ActionResult<number>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('plan', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     const moved = await adoptPurchaseItems(db, seasonId, itemIds, admin.email);
@@ -170,7 +170,7 @@ export async function adoptPurchaseItemsAction(
 export async function setPurchaseStatusAction(
   acquisitionId: string, status: AcquisitionStatus,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('plan', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await setAcquisitionStatus(db, acquisitionId, status, admin.email);

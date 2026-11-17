@@ -191,7 +191,7 @@ export default async function PersonPage(
     searchParams: Promise<RawParams>;
   },
 ) {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('people');
   if (!admin.ok) notFound();
 
   const { id } = await params;

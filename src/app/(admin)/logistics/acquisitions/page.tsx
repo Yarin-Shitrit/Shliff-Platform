@@ -71,7 +71,7 @@ const SORT_LABELS: Record<AcquisitionSort, string> = {
 export default async function AcquisitionsPage(
   { searchParams }: { searchParams: Promise<RawParams> },
 ) {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('acquisitions');
   if (!admin.ok) notFound();
 
   const params = await searchParams;

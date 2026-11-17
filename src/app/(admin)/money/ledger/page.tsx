@@ -137,7 +137,7 @@ function Nothing(): ReactNode {
 export default async function LedgerPage(
   { searchParams }: { searchParams: Promise<LedgerSearchParams> },
 ) {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('ledger');
   if (!admin.ok) notFound();
 
   const seasons = await listSeasons(db);

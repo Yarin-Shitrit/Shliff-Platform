@@ -41,7 +41,7 @@ export const metadata: Metadata = { title: 'הקמה' };
 export default async function BuildPage(
   { searchParams }: { searchParams: Promise<RawParams> },
 ) {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('build');
   if (!admin.ok) notFound();
 
   const params = await searchParams;

@@ -20,7 +20,7 @@ const { requireAdmin, resolveSeason, seasonOverview } = vi.hoisted(() => ({
   seasonOverview: vi.fn(),
 }));
 vi.mock('@/db', () => ({ db: {} }));
-vi.mock('@/lib/auth/guard', () => ({ requireAdmin }));
+vi.mock('@/lib/auth/guard', () => ({ requireAdmin, currentUser: async () => null }));
 vi.mock('@/lib/seasons/current', () => ({ resolveSeason }));
 vi.mock('@/lib/overview/summary', () => ({ seasonOverview }));
 

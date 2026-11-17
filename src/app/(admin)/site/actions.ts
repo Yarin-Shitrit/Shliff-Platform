@@ -28,7 +28,7 @@ const NO_ACCESS = 'אין הרשאה';
 export async function createPlanAction(
   seasonId: string, input: PlotInput,
 ): Promise<ActionResult<string>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('site', 'edit');
   if (!admin.ok) return { ok: false, error: NO_ACCESS };
   try {
     const id = await createPlan(db, seasonId, input, admin.email);
@@ -41,7 +41,7 @@ export async function createPlanAction(
 
 /** Answers the plan's new version (#25 fix round, Minor 10): the drawer notes it, so the editor knows its own plot save. */
 export async function setPlotAction(planId: string, input: PlotInput): Promise<ActionResult<number>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('site', 'edit');
   if (!admin.ok) return { ok: false, error: NO_ACCESS };
   try {
     const version = await setPlot(db, planId, input, admin.email);
@@ -55,7 +55,7 @@ export async function setPlotAction(planId: string, input: PlotInput): Promise<A
 export async function copyPlanAction(
   fromSeasonId: string, toSeasonId: string,
 ): Promise<ActionResult<string>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('site', 'edit');
   if (!admin.ok) return { ok: false, error: NO_ACCESS };
   try {
     const id = await copyPlan(db, fromSeasonId, toSeasonId, admin.email);
@@ -75,7 +75,7 @@ export async function copyPlanAction(
 export async function saveSiteChangesAction(
   planId: string, baseVersion: number, ops: SiteOp[],
 ): Promise<SaveResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('site', 'edit');
   if (!admin.ok) return { ok: false, reason: 'refused', error: NO_ACCESS };
   try {
     const result = await applySiteOps(db, planId, baseVersion, ops, admin.email);
@@ -92,7 +92,7 @@ export async function saveSiteChangesAction(
 export async function loadSiteDocAction(
   planId: string,
 ): Promise<ActionResult<{ doc: EditorDoc; version: number }>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('site');
   if (!admin.ok) return { ok: false, error: NO_ACCESS };
   try {
     const loaded = await loadDoc(db, planId);
@@ -114,7 +114,7 @@ export async function loadSiteDocAction(
 export async function takeSnapshotAction(
   planId: string, name: string, content: SnapshotContent,
 ): Promise<ActionResult<SnapshotSummary[]>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('site', 'edit');
   if (!admin.ok) return { ok: false, error: NO_ACCESS };
   try {
     await takeSnapshot(db, planId, name, content, admin.email);
@@ -125,7 +125,7 @@ export async function takeSnapshotAction(
 }
 
 export async function listSnapshotsAction(planId: string): Promise<ActionResult<SnapshotSummary[]>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('site');
   if (!admin.ok) return { ok: false, error: NO_ACCESS };
   try {
     return { ok: true, value: await listSnapshots(db, planId) };
@@ -136,7 +136,7 @@ export async function listSnapshotsAction(planId: string): Promise<ActionResult<
 
 /** One saved plan, whole, for the editor to load over the map. Only a plan of this map: another map's arrangement means nothing here. */
 export async function readSnapshotAction(planId: string, id: string): Promise<ActionResult<Snapshot>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('site');
   if (!admin.ok) return { ok: false, error: NO_ACCESS };
   try {
     const found = await readSnapshot(db, id);
@@ -157,7 +157,7 @@ export async function readSnapshotAction(planId: string, id: string): Promise<Ac
 
 /** Forgets a saved plan; answers the list as it then stands. */
 export async function deleteSnapshotAction(planId: string, id: string): Promise<ActionResult<SnapshotSummary[]>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('site', 'edit');
   if (!admin.ok) return { ok: false, error: NO_ACCESS };
   try {
     const found = await readSnapshot(db, id);

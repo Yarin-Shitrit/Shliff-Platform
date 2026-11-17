@@ -57,7 +57,7 @@ export interface SettleInput {
  * and the debt would look paid.
  */
 export async function settleObligationAction(input: SettleInput): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('debts', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   try {
@@ -131,7 +131,7 @@ export interface NameInput {
  * roster with no debts on it.
  */
 export async function nameObligationAction(input: NameInput): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('debts', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   try {
@@ -159,7 +159,7 @@ export async function nameObligationAction(input: NameInput): Promise<ActionResu
  * person's page, and the delete preview reads the same row.
  */
 export async function detachObligationPartyAction(obligationId: string): Promise<ActionResult<string>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('debts', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   let partyName: string;

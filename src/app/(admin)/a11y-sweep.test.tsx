@@ -16,6 +16,8 @@ vi.mock('@/app/(admin)/shell/actions', () => ({
 /** The rail is an async Server Component reaching the database; the shell's
  *  keyboard path is what this file is about, not the rail's contents. */
 vi.mock('@/app/(admin)/shell/sidebar', () => ({ Sidebar: () => <nav aria-label="ראשי" /> }));
+/** The layout's one read — who is signed in — reaches the database the same way. */
+vi.mock('@/lib/auth/guard', () => ({ currentUser: async () => null }));
 
 import AdminLayout from './layout';
 
@@ -36,14 +38,16 @@ function filesUnder(dir: string, found: string[] = []): string[] {
  * screen reaches the content instead of walking fifteen rail links.
  */
 describe('E4: the keyboard reaches the content in one press', () => {
-  function shell() {
+  async function shell() {
     /* The children carry the `<main>`: every page in this section renders its
-       own, and the layout deliberately does not add a second landmark. */
-    return render(<AdminLayout><main>תוכן</main></AdminLayout>);
+       own, and the layout deliberately does not add a second landmark. The
+       layout is an async Server Component, so it is awaited and its output
+       rendered, the way the rail's own test does. */
+    return render(await AdminLayout({ children: <main>תוכן</main> }));
   }
 
-  it('puts a way past the rail first, before anything else can take focus', () => {
-    const { container } = shell();
+  it('puts a way past the rail first, before anything else can take focus', async () => {
+    const { container } = await shell();
     const first = focusableIn(container)[0];
     expect(first.getAttribute('href')).toBe('#main');
     expect(first.textContent).toBe('דילוג לתוכן');
@@ -55,20 +59,20 @@ describe('E4: the keyboard reaches the content in one press', () => {
    * through the rail — which is the failure the link exists to prevent, made
    * invisible by the page appearing to scroll correctly.
    */
-  it('gives the skip link somewhere to land', () => {
-    const { container } = shell();
+  it('gives the skip link somewhere to land', async () => {
+    const { container } = await shell();
     const main = container.querySelector('#main');
     expect(main).toBeTruthy();
     expect(main?.getAttribute('tabindex')).toBe('-1');
   });
 
-  it('keeps the main landmark, so it is reachable by landmark too', () => {
-    shell();
+  it('keeps the main landmark, so it is reachable by landmark too', async () => {
+    await shell();
     expect(screen.getByRole('main')).toBeTruthy();
   });
 
-  it('leaves no anonymous control in the shell itself', () => {
-    const { container } = shell();
+  it('leaves no anonymous control in the shell itself', async () => {
+    const { container } = await shell();
     expect(unnamedControls(container).map((el) => el.outerHTML)).toEqual([]);
   });
 });

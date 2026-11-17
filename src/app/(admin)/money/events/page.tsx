@@ -79,7 +79,7 @@ function partnerNet(party: PartySummary): number {
 export default async function EventsPage(
   { searchParams }: { searchParams: Promise<EventsSearchParams> },
 ) {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('events');
   if (!admin.ok) notFound();
 
   const params = await searchParams;

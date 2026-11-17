@@ -25,7 +25,7 @@ function failed(error: unknown): ActionResult {
 }
 
 export async function issueDuesAction(seasonId: string): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('dues', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await issueFlatDues(db, seasonId);
@@ -41,7 +41,7 @@ export async function issueDuesAction(seasonId: string): Promise<ActionResult> {
 export async function issueDueForAction(
   personId: string, seasonId: string,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('dues', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await issueFlatDueFor(db, personId, seasonId);
@@ -56,7 +56,7 @@ export async function setExceptionAction(input: {
   amount: number;
   reason: string;
 }): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('dues', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     // The reason is mandatory here too. The client check is convenience;
@@ -73,7 +73,7 @@ export async function clearExceptionAction(
   personId: string,
   seasonId: string,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('dues', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await clearException(db, personId, seasonId);
@@ -90,7 +90,7 @@ export async function clearExceptionAction(
  * only repair is SQL.
  */
 export async function deletePaymentAction(paymentId: string): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('dues', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await deletePayment(db, paymentId);
@@ -129,7 +129,7 @@ export async function recordPaymentAction(input: {
    * new id and a new `source_row` (a lie about provenance under R11).
    */
 }): Promise<ActionResult<string>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('dues', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   let paymentId: string;
   try {
@@ -171,7 +171,7 @@ export async function recordPaymentAction(input: {
 export async function setFlatRateAction(
   seasonId: string, amount: number, applyToIssued: boolean,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('dues', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await setFlatRate(db, seasonId, amount, { applyToIssued });
@@ -190,7 +190,7 @@ export async function setFlatRateAction(
 export async function setMembershipRateAction(
   seasonId: string, amount: number | null, applyToIssued: boolean,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('dues', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await setMembershipRate(db, seasonId, amount, { applyToIssued });
@@ -209,7 +209,7 @@ export async function setMembershipRateAction(
 export async function setTrackAction(
   personId: string, seasonId: string, track: DueTrack,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('dues', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     if (track !== 'burn' && track !== 'membership') {
@@ -241,7 +241,7 @@ export async function setTrackAction(
 export async function closeSeasonAction(
   seasonId: string, choice: { dues: boolean; obligations: boolean },
 ): Promise<ActionResult<CloseSeasonResult>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('dues', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   let result: CloseSeasonResult;
   try {

@@ -52,7 +52,7 @@ type LoadRow = { personId: string; displayName: string; shifts: number; minutes:
 export default async function ShiftsPage(
   { searchParams }: { searchParams: Promise<RawParams> },
 ) {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('shifts');
   if (!admin.ok) notFound();
 
   const params = await searchParams;

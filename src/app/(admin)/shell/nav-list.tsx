@@ -12,6 +12,7 @@ import { Icon } from '@/components/ui/icon';
 import { NAV_GROUPS, activeItemId, type NavItem } from './nav-data';
 import { carrySeason } from './season-href';
 import { useShellCounts } from './shell-counts';
+import { useAccess } from './access-context';
 import styles from './sidebar.module.css';
 
 export function NavList() {
@@ -24,6 +25,10 @@ export function NavList() {
   // same figures, so the fetch and its `season`/`pathname` dependencies moved
   // into `shell-counts.tsx` and both surfaces read one value.
   const counts = useShellCounts();
+  // A link the account cannot open is not offered: the page would refuse it,
+  // and a rail full of refusals teaches a reader to stop trusting the rail.
+  // Display only — every page still calls `requireAdmin` on its own.
+  const { visible } = useAccess();
 
   function badge(item: NavItem) {
     const value = item.count ? counts[item.count] : 0;
@@ -49,7 +54,9 @@ export function NavList() {
 
   return (
     <div className={styles.navstack}>
-      {NAV_GROUPS.map((group, index) => (
+      {NAV_GROUPS.map((group) => ({ ...group, items: group.items.filter(visible) }))
+        .filter((group) => group.items.length > 0)
+        .map((group, index) => (
         <nav
           key={group.label ?? 'primary'}
           className={styles.navgroup}
@@ -78,7 +85,7 @@ export function NavList() {
           )))}
           {index === 0 && <span className={styles.groupgap} />}
         </nav>
-      ))}
+        ))}
     </div>
   );
 }

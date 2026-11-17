@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { db } from '@/db';
-import { requireAdmin } from '@/lib/auth/guard';
+import { currentUser, requireAdmin } from '@/lib/auth/guard';
+import { pageByKey, visiblePages } from '@/lib/auth/pages';
 import { resolveSeason } from '@/lib/seasons/current';
 import { seasonOverview } from '@/lib/overview/summary';
 import type { DecisionKind } from '@/lib/overview/summary';
@@ -64,8 +65,15 @@ export const metadata: Metadata = { title: 'בית' };
 export default async function HomePage(
   { searchParams }: { searchParams: Promise<{ season?: string }> },
 ) {
-  const admin = await requireAdmin();
-  if (!admin.ok) notFound();
+  const admin = await requireAdmin('home');
+  if (!admin.ok) {
+    // An account with no grant on בית is not shut out of the app: it opens
+    // on the first page it can read. Only an account with no page at all
+    // reaches the boundary's sentence.
+    const first = visiblePages(await currentUser())[0];
+    if (first !== undefined) redirect(pageByKey(first).href);
+    notFound();
+  }
 
   const { season: requested } = await searchParams;
   const { current: season } = await resolveSeason(db, requested);

@@ -27,7 +27,7 @@ import {
 export async function assignPeopleAction(
   taskId: string, personIds: string[],
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('tasks', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   const failures: string[] = [];
   for (const personId of personIds) {
@@ -45,7 +45,7 @@ export async function assignPeopleAction(
 export async function setAssignmentStatusAction(
   assignmentId: string, status: AssignmentStatus,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('tasks', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await setAssignmentStatus(db, assignmentId, status);
@@ -59,7 +59,7 @@ export async function setAssignmentStatusAction(
 export async function removeAssignmentAction(
   assignmentId: string,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('tasks', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await removeAssignment(db, assignmentId);
@@ -82,7 +82,7 @@ export async function createTaskAction(
     startsAt?: string; endsAt?: string; dueOn?: string;
   },
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('tasks', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await createTask(db, {
@@ -101,7 +101,7 @@ export async function createTaskAction(
 export async function setTaskStatusAction(
   taskId: string, status: TaskStatus,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('tasks', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await setTaskStatus(db, taskId, status);
@@ -118,7 +118,7 @@ export async function setTaskStatusAction(
 export async function setTaskBudgetLineAction(
   taskId: string, budgetLineId: string,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('tasks', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await setTaskBudgetLine(db, taskId, budgetLineId);

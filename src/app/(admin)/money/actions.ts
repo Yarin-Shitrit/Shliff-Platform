@@ -52,7 +52,7 @@ export interface CountAccountInput {
 export async function countAccountAction(
   input: CountAccountInput,
 ): Promise<ActionResult<CountResult>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('money', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   let result: CountResult;
   try {
@@ -91,7 +91,7 @@ const ACCOUNT_KINDS: readonly AccountKind[] = ['cash', 'bank', 'personal', 'even
  * over it, so a bad value from the client would be stored in silence.
  */
 export async function createAccountAction(input: NewAccountInput): Promise<ActionResult<string>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('money', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   const constraints: HebrewConstraints = [
     ['accounts_name_unique', `כבר קיים חשבון בשם "${input.name.trim()}".`],
@@ -132,7 +132,7 @@ export interface SetHolderInput {
  * preview, so the whole layout is revalidated as every balance change is.
  */
 export async function setAccountHolderAction(input: SetHolderInput): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('money', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await setAccountHolder(db, input.accountId, input.holderPersonId === '' ? null : input.holderPersonId);

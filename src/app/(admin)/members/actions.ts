@@ -23,7 +23,7 @@ import { UNMERGE_ERROR_PARAM } from './unmerge-params';
 export async function linkNameAction(
   aliasId: string, personId: string,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('people', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   await linkAlias(db, aliasId, personId, admin.email);
@@ -51,7 +51,7 @@ const PROMOTE_ERRORS: HebrewErrors = [
 ];
 
 export async function promoteNameAction(aliasId: string): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('people', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   try {
@@ -67,7 +67,7 @@ export async function promoteNameAction(aliasId: string): Promise<ActionResult> 
 export async function mergePeopleAction(
   sourceId: string, targetId: string,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('people', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   const result = await mergePersons(db, sourceId, targetId, admin.email);
@@ -93,7 +93,7 @@ export async function mergePeopleAction(
 export async function createPersonAction(
   displayName: string, seasonId?: string,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('people', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   if (isBlank(displayName)) return { ok: false, error: 'שם לא יכול להיות ריק' };
@@ -116,7 +116,7 @@ export async function createPersonAction(
 export async function addMemberAction(
   personId: string, seasonId: string, role: string,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('people', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   await addMember(db, personId, seasonId, role);
@@ -150,7 +150,7 @@ const NOTHING_SELECTED = 'לא נבחרו אנשים.';
 export async function addToSeasonBulkAction(
   personIds: string[], seasonId: string, role: string,
 ): Promise<ActionResult & { added?: number }> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('people', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   if (personIds.length === 0) return { ok: false, error: NOTHING_SELECTED };
 
@@ -175,7 +175,7 @@ export async function addToSeasonBulkAction(
 export async function issueDuesBulkAction(
   personIds: string[], seasonId: string, names: Record<string, string> = {},
 ): Promise<ActionResult & { issued?: number; already?: number; offRoster?: string[] }> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('people', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   if (personIds.length === 0) return { ok: false, error: NOTHING_SELECTED };
 
@@ -215,7 +215,7 @@ export async function issueDuesBulkAction(
  * one of its consequences does not unmake the record of it.
  */
 export async function unlinkAliasAction(aliasId: string): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('people', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   const target = await aliasUnlinkTarget(db, aliasId);
@@ -275,7 +275,7 @@ export async function unlinkAliasAndReturn(
 export async function renamePersonAction(
   personId: string, displayName: string,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('people', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   try {
@@ -322,7 +322,7 @@ export async function renamePersonAndReturn(
  * caller the page is not.
  */
 export async function deletePersonAction(personId: string): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('people', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   let result: Awaited<ReturnType<typeof deletePerson>>;
@@ -371,7 +371,7 @@ export async function deletePersonAndReturn(
  * of it, as the money actions do.
  */
 export async function unmergePersonAction(personId: string): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('people', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   try {

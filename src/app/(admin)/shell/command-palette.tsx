@@ -17,6 +17,8 @@ import type { PaletteHit } from '@/lib/search/palette';
 import { searchCommandPalette } from './actions';
 import { BodyPortal } from './body-portal';
 import { carrySeason } from './season-href';
+import { useAccess } from './access-context';
+import { pageOfHref } from './nav-data';
 import styles from './command-palette.module.css';
 
 interface Row {
@@ -66,6 +68,7 @@ export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<PaletteHit[]>([]);
+  const { levelOf } = useAccess();
   const [cursor, setCursor] = useState(0);
   const box = useRef<HTMLInputElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -122,7 +125,12 @@ export function CommandPalette() {
       href: hit.href,
     })),
     ...ACTIONS.filter((action) => !needle || action.title.includes(needle)),
-  ];
+  // An offer to open a page the account cannot open is a refusal waiting to
+  // happen; the server's own hits arrive already filtered the same way.
+  ].filter((row) => {
+    const page = pageOfHref(row.href);
+    return page !== null && levelOf(page) !== null;
+  });
   const ordered = GROUPS.flatMap((group) => rows.filter((row) => row.group === group));
 
   function close() {

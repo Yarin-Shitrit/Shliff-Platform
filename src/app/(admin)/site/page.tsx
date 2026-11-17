@@ -39,7 +39,7 @@ export const metadata: Metadata = { title: 'מפת הקאמפ' };
 export default async function SitePage(
   { searchParams }: { searchParams: Promise<RawParams> },
 ) {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('site');
   if (!admin.ok) notFound();
 
   const params = await searchParams;

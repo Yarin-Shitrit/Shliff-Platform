@@ -27,7 +27,7 @@ function touched(): void {
 }
 
 export async function createShiftTypeAction(input: ShiftTypeInput): Promise<ActionResult<string>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('shifts', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     const id = await createShiftType(db, input, admin.email);
@@ -39,7 +39,7 @@ export async function createShiftTypeAction(input: ShiftTypeInput): Promise<Acti
 }
 
 export async function updateShiftTypeAction(id: string, input: ShiftTypeInput): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('shifts', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await updateShiftType(db, id, input, admin.email);
@@ -51,7 +51,7 @@ export async function updateShiftTypeAction(id: string, input: ShiftTypeInput): 
 }
 
 export async function setShiftTypeRetiredAction(id: string, retired: boolean): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('shifts', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await setShiftTypeRetired(db, id, retired, admin.email);
@@ -64,7 +64,7 @@ export async function setShiftTypeRetiredAction(id: string, retired: boolean): P
 
 /** Returns the task ids made, first day first, so the screen can open one. */
 export async function scheduleShiftsAction(input: ScheduleInput): Promise<ActionResult<string[]>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('shifts', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     const window = await seasonWindow(db, input.seasonId);
@@ -79,7 +79,7 @@ export async function scheduleShiftsAction(input: ScheduleInput): Promise<Action
 export async function updateShiftSlotAction(
   seasonId: string, taskId: string, input: SlotUpdate,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('shifts', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     const window = await seasonWindow(db, seasonId);
@@ -92,7 +92,7 @@ export async function updateShiftSlotAction(
 }
 
 export async function cancelShiftSlotAction(taskId: string): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('shifts', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await cancelShiftSlot(db, taskId);
@@ -108,7 +108,7 @@ export async function cancelShiftSlotAction(taskId: string): Promise<ActionResul
  * back as one sentence, de-duplicated, as the board's own action does it.
  */
 export async function assignToShiftAction(taskId: string, personIds: string[]): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('shifts', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   let failures: unknown[];
   try {
@@ -122,7 +122,7 @@ export async function assignToShiftAction(taskId: string, personIds: string[]): 
 }
 
 export async function unassignFromShiftAction(assignmentId: string): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('shifts', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await unassignFromShift(db, assignmentId);

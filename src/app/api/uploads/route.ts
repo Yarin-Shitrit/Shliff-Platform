@@ -29,7 +29,7 @@ function looksLikeXlsx(filename: string, buffer: Buffer): boolean {
  * too, leaving the submit button disabled forever with nothing on screen.
  */
 export async function POST(request: Request): Promise<NextResponse> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('upload', 'edit');
   if (!admin.ok) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }

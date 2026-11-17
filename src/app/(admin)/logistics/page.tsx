@@ -17,7 +17,7 @@ export const metadata: Metadata = { title: 'לוגיסטיקה' };
  * exists. Cheap to add, and the net is right to insist.
  */
 export default async function LogisticsPage(): Promise<never> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('warehouse');
   if (!admin.ok) notFound();
   redirect(WAREHOUSE_PATH);
 }

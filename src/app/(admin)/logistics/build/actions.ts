@@ -16,7 +16,7 @@ import { materialFailureMessage } from './failure-messages';
  */
 
 export async function addMaterialAction(input: MaterialInput): Promise<ActionResult<string>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('build', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   try {
@@ -39,7 +39,7 @@ export async function addMaterialAction(input: MaterialInput): Promise<ActionRes
  * state is what is restored, not the identity.
  */
 export async function removeMaterialAction(id: string): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('build', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   try {

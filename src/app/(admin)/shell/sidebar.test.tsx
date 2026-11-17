@@ -22,7 +22,7 @@ vi.mock('@/db', () => ({ db: {} }));
 vi.mock('@/lib/seasons/current', () => ({
   resolveSeason: async () => ({ seasons: seasonsRef.current, current: seasonsRef.current[0] ?? null }),
 }));
-vi.mock('@/lib/auth/guard', () => ({ requireAdmin: async () => ({ ok: false }) }));
+vi.mock('@/lib/auth/guard', () => ({ currentUser: async () => null }));
 vi.mock('./actions', () => ({
   signOutAction: vi.fn(),
   createSeasonAction: vi.fn(),

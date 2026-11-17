@@ -46,7 +46,7 @@ export const metadata: Metadata = { title: 'נוכחות' };
 export default async function AttendancePage(
   { searchParams }: { searchParams: Promise<RawParams> },
 ) {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('attendance');
   if (!admin.ok) notFound();
 
   const params = await searchParams;

@@ -52,7 +52,7 @@ export const metadata: Metadata = { title: 'לוח עבודה' };
 export default async function PlanPage(
   { searchParams }: { searchParams: Promise<RawParams> },
 ) {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('plan');
   if (!admin.ok) notFound();
 
   const params = await searchParams;

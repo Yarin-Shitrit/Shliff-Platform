@@ -21,7 +21,7 @@ import { UNDERLAY_FILE, UNDERLAY_PREFIX, contentTypeOf, isPlanId } from '@/lib/s
 export async function GET(
   _request: Request, context: { params: Promise<{ planId: string; file: string }> },
 ): Promise<Response> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('site');
   if (!admin.ok) return new Response(null, { status: 401 });
 
   const { planId: asked, file } = await context.params;

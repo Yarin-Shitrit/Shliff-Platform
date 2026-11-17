@@ -86,7 +86,7 @@ const COLUMNS: ReadonlyArray<TableColumn<UploadRow>> = [
 ];
 
 export default async function ImportsPage() {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('files');
   if (!admin.ok) notFound();
 
   const rows = await listUploads(db);

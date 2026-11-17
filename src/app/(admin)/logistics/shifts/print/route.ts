@@ -16,7 +16,7 @@ import { schedulePrintHtml } from '@/lib/logistics/shifts-print';
  * disagree about which year is being printed.
  */
 export async function GET(request: Request) {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('shifts');
   if (!admin.ok) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
   const url = new URL(request.url);

@@ -27,7 +27,7 @@ import { eventFailureMessage, markFailureMessage, personalFailureMessage } from 
 export async function createEventAction(
   seasonId: string, input: EventInput,
 ): Promise<ActionResult<string>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('attendance', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   try {
@@ -41,7 +41,7 @@ export async function createEventAction(
 
 /** The drawer's save. Every field travels every time (see `EventInput`). */
 export async function updateEventAction(id: string, input: EventInput): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('attendance', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   try {
@@ -57,7 +57,7 @@ export async function updateEventAction(id: string, input: EventInput): Promise<
 export async function setEventCancelledAction(
   id: string, cancelled: boolean,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('attendance', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   try {
@@ -77,7 +77,7 @@ export async function setEventCancelledAction(
 export async function setMarkAction(
   eventId: string, personId: string, present: boolean,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('attendance', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   try {
@@ -97,7 +97,7 @@ export async function setMarkAction(
 export async function addPersonalMarkAction(
   seasonId: string, input: PersonalMarkInput,
 ): Promise<ActionResult<string>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('attendance', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   try {
@@ -111,7 +111,7 @@ export async function addPersonalMarkAction(
 
 /** Takes a personal mark back. Its undo is `addPersonalMarkAction` with what the row said. */
 export async function removePersonalMarkAction(id: string): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('attendance', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   try {

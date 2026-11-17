@@ -35,7 +35,7 @@ export interface PartyInput {
 
 /** Returns the new party's id, so the form can open its page. */
 export async function createPartyAction(input: PartyInput): Promise<ActionResult<string>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('events', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   let id: string;
   try {
@@ -55,7 +55,7 @@ export async function createPartyAction(input: PartyInput): Promise<ActionResult
 export async function updatePartyAction(
   eventId: string, input: Omit<PartyInput, 'seasonId'>,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('events', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await updateParty(db, eventId, {
@@ -88,7 +88,7 @@ export interface PartyMovementInput {
 export async function recordPartyMovementAction(
   input: PartyMovementInput,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('events', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await recordPartyMovement(db, {
@@ -113,7 +113,7 @@ export async function recordPartyMovementAction(
 export async function deletePartyMovementAction(
   eventId: string, entryId: string,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('events', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await deletePartyMovement(db, eventId, entryId);

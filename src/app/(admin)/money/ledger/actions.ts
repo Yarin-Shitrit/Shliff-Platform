@@ -24,7 +24,7 @@ function failed(error: unknown): ActionResult {
  * invalidation, and nothing else.
  */
 export async function attributeMovementAction(input: AttributeInput): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('ledger', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await attributeMovement(db, input);
@@ -64,7 +64,7 @@ export interface NewMovementInput {
  * come to disagree with the library about what a movement is.
  */
 export async function recordMovementAction(input: NewMovementInput): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('ledger', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await recordEntry(db, {

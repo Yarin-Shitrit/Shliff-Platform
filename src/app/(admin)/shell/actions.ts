@@ -2,7 +2,9 @@
 
 import { revalidatePath } from 'next/cache';
 import { db } from '@/db';
-import { requireAdmin } from '@/lib/auth/guard';
+import { currentUser, requireAdmin } from '@/lib/auth/guard';
+import { levelOf } from '@/lib/auth/pages';
+import { pageOfHref } from './nav-data';
 import { signOut } from '@/lib/auth/config';
 import { resolveSeason } from '@/lib/seasons/current';
 import { shellCounts, type ShellCounts } from '@/lib/shell/counts';
@@ -21,14 +23,15 @@ import type { ActionResult } from '@/lib/action-result';
  * here through the same `resolveSeason` every page uses — otherwise the rail
  * would read 0 members on `/members` with no query string.
  *
- * Returns null rather than throwing when the caller is not an admin. The
- * guard is still the enforcement; this is a badge.
+ * Returns null rather than throwing when nobody is signed in. The guard on
+ * every page is still the enforcement; this is a badge, and the rail only
+ * draws it beside an item the account can open.
  */
 export async function loadShellCounts(
   requested: string | null,
 ): Promise<ShellCounts | null> {
-  const admin = await requireAdmin();
-  if (!admin.ok) return null;
+  const user = await currentUser();
+  if (user === null) return null;
 
   const { current } = await resolveSeason(db, requested ?? undefined);
   return shellCounts(db, current?.id ?? null);
@@ -36,17 +39,23 @@ export async function loadShellCounts(
 
 /**
  * The palette asks per keystroke, so this stays a read with no side effects.
- * A non-admin gets an empty list, never an error: the guard on every page is
- * the enforcement, and this is a search box.
+ * Nobody signed in gets an empty list, never an error, and a hit lands only
+ * on a page the account may open: a name from the roster is not shown to
+ * an account that cannot open אנשים. The guard on every page is the
+ * enforcement; this is a search box.
  */
 export async function searchCommandPalette(
   query: string, requested: string | null,
 ): Promise<PaletteHit[]> {
-  const admin = await requireAdmin();
-  if (!admin.ok) return [];
+  const user = await currentUser();
+  if (user === null) return [];
 
   const { current } = await resolveSeason(db, requested ?? undefined);
-  return searchPalette(db, query, current?.id ?? null);
+  const hits = await searchPalette(db, query, current?.id ?? null);
+  return hits.filter((hit) => {
+    const page = pageOfHref(hit.href);
+    return page !== null && levelOf(user, page) !== null;
+  });
 }
 
 /**
