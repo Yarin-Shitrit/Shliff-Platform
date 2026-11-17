@@ -43,8 +43,8 @@ ADMIN_PASSWORD="..." npx tsx scripts/create-admin.ts <email>
 
 The password is read from the `ADMIN_PASSWORD` environment variable, never from a
 command-line argument — an argv password would linger in shell history and in
-`ps` output. The script refuses with a usage message if `ADMIN_PASSWORD` (or the
-email) is missing.
+`ps` output. Leave it unset and the script generates one and prints it once;
+only the argon2 hash is stored either way.
 
 That first admin makes every other account from inside the app, on
 **משתמשים והרשאות** (`/users`): an account is either ניהול מלא (sees and

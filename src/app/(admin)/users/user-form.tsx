@@ -12,15 +12,23 @@
  * account has no grid, because the role answers before any row is asked
  * (`levelOf`), and showing eighteen ticked rows would suggest they could be
  * unticked one at a time.
+ *
+ * The password is made here, not typed: a new account opens with one
+ * already generated and visible, with a way to draw another or to copy
+ * it, and the same control sits under the replacement on an existing
+ * account. Once saved it is shown one more time, on the panel that
+ * replaces the form, because the drawer closing is the last moment it can
+ * be read — the server keeps only the hash and can never show it again.
  */
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
+import { Button, ButtonLink } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Field, TextInput } from '@/components/ui/field';
 import { useToast } from '@/components/ui/toaster';
 import { isBlank } from '@/lib/text/normalize';
 import { MIN_PASSWORD_LENGTH, type AccessMap } from '@/lib/auth/pages';
+import { generatePassword } from '@/lib/auth/generate-password';
 import {
   createUserAction, deleteUserAction, setUserAccessAction, setUserPasswordAction,
 } from './actions';
@@ -51,13 +59,24 @@ export function UserForm(props: UserFormProps) {
 
   const editing = props.mode === 'edit';
   const [email, setEmail] = useState(editing ? props.email : '');
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState(() => (editing ? '' : generatePassword()));
   const [admin, setAdmin] = useState(editing ? props.admin : false);
   const [pages, setPages] = useState<AccessMap>(editing ? props.pages : {});
   const [newPassword, setNewPassword] = useState('');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** The one showing of a password that was just saved. */
+  const [handover, setHandover] = useState<{ email: string; password: string } | null>(null);
+
+  async function copy(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.show({ message: 'הסיסמה הועתקה' });
+    } catch {
+      toast.show({ message: 'לא הצלחנו להעתיק. סמנו את הסיסמה והעתיקו אותה ידנית.', tone: 'bad' });
+    }
+  }
 
   const granted = !admin && Object.keys(pages).length;
 
@@ -74,11 +93,15 @@ export function UserForm(props: UserFormProps) {
         const result = await createUserAction({ email, password, admin, pages });
         if (!result.ok) { setError(result.error); return; }
         toast.show({ message: `נוצר חשבון ל־${email.trim()}` });
-      } else {
-        const result = await setUserAccessAction(props.userId, { admin, pages });
-        if (!result.ok) { setError(result.error); return; }
-        toast.show({ message: `ההרשאות של ${props.email} נשמרו` });
+        // The drawer stays open on the handover panel: closing now would
+        // take the password with it.
+        setHandover({ email: email.trim(), password });
+        router.refresh();
+        return;
       }
+      const result = await setUserAccessAction(props.userId, { admin, pages });
+      if (!result.ok) { setError(result.error); return; }
+      toast.show({ message: `ההרשאות של ${props.email} נשמרו` });
       router.replace(props.closeHref);
       router.refresh();
     } finally {
@@ -96,8 +119,9 @@ export function UserForm(props: UserFormProps) {
     try {
       const result = await setUserPasswordAction(props.userId, newPassword);
       if (!result.ok) { setError(result.error); return; }
-      setNewPassword('');
       toast.show({ message: `הסיסמה של ${props.email} הוחלפה` });
+      setHandover({ email: props.email, password: newPassword });
+      setNewPassword('');
     } finally {
       setPending(false);
     }
@@ -117,6 +141,31 @@ export function UserForm(props: UserFormProps) {
     }
   }
 
+  if (handover !== null) {
+    return (
+      <div className={styles.form} role="status" aria-label="מסירת הסיסמה">
+        <p className={styles.who}>
+          {props.mode === 'create' ? 'החשבון נוצר.' : 'הסיסמה הוחלפה.'}
+          {' '}
+          זו הסיסמה של <bdi dir="ltr">{handover.email}</bdi> — מסרו אותה עכשיו, בעל פה או
+          בהודעה שנמחקת. היא לא תוצג שוב: המערכת שומרת רק את הגרסה המוצפנת שלה.
+        </p>
+        <PasswordReveal
+          label="הסיסמה"
+          value={handover.password}
+          onCopy={() => copy(handover.password)}
+        />
+        <div className={styles.actions}>
+          {props.mode === 'create' ? (
+            <ButtonLink tone="primary" href={props.closeHref} replace>סיום</ButtonLink>
+          ) : (
+            <Button tone="primary" onClick={() => setHandover(null)}>חזרה לחשבון</Button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.form}>
       {error === null ? null : <p className={styles.error} role="alert">{error}</p>}
@@ -130,14 +179,19 @@ export function UserForm(props: UserFormProps) {
             id={passwordId}
             label="סיסמה ראשונית"
             required
-            hint={`לפחות ${MIN_PASSWORD_LENGTH} תווים. מסרו אותה בעל פה, לא בהודעה.`}
+            hint={`נוצרה עכשיו, ותוצג שוב אחרי השמירה. אפשר להקליד אחרת — לפחות ${MIN_PASSWORD_LENGTH} תווים.`}
           >
             <input
-              id={passwordId} className={styles.input} type="password" autoComplete="new-password"
-              value={password} disabled={pending}
+              id={passwordId} className={styles.input} type="text" autoComplete="off" dir="ltr"
+              spellCheck={false} value={password} disabled={pending}
               onChange={(event) => { setPassword(event.target.value); }}
             />
           </Field>
+          <PasswordTools
+            disabled={pending}
+            onGenerate={() => setPassword(generatePassword())}
+            onCopy={() => copy(password)}
+          />
         </>
       ) : (
         <p className={styles.who}><bdi dir="ltr">{props.email}</bdi></p>
@@ -188,14 +242,19 @@ export function UserForm(props: UserFormProps) {
           <Field
             id={newPasswordId}
             label="סיסמה חדשה"
-            hint={`מחליפה את הסיסמה הנוכחית מיד. לפחות ${MIN_PASSWORD_LENGTH} תווים.`}
+            hint={`מחליפה את הסיסמה הנוכחית מיד, ותוצג פעם אחת אחרי ההחלפה. לפחות ${MIN_PASSWORD_LENGTH} תווים.`}
           >
             <input
-              id={newPasswordId} className={styles.input} type="password" autoComplete="new-password"
-              value={newPassword} disabled={pending}
+              id={newPasswordId} className={styles.input} type="text" autoComplete="off" dir="ltr"
+              spellCheck={false} value={newPassword} disabled={pending}
               onChange={(event) => { setNewPassword(event.target.value); }}
             />
           </Field>
+          <PasswordTools
+            disabled={pending}
+            onGenerate={() => setNewPassword(generatePassword())}
+            onCopy={newPassword === '' ? undefined : () => copy(newPassword)}
+          />
           <div className={styles.actions}>
             <Button disabled={pending || newPassword === ''} onClick={changePassword}>
               החלפת הסיסמה
@@ -224,5 +283,38 @@ export function UserForm(props: UserFormProps) {
         </>
       )}
     </div>
+  );
+}
+
+/** The two verbs beside a password box: draw another, or take this one. */
+function PasswordTools({ disabled, onGenerate, onCopy }: {
+  disabled?: boolean;
+  onGenerate: () => void;
+  onCopy?: () => void;
+}) {
+  return (
+    <div className={styles.actions}>
+      <Button size="sm" disabled={disabled} onClick={onGenerate}>יצירת סיסמה אחרת</Button>
+      <Button size="sm" disabled={disabled || onCopy === undefined} onClick={onCopy}>העתקת הסיסמה</Button>
+    </div>
+  );
+}
+
+/** A saved password, shown once, in a box that can be selected and copied. */
+function PasswordReveal({ label, value, onCopy }: {
+  label: string;
+  value: string;
+  onCopy: () => void;
+}) {
+  const id = useId();
+  return (
+    <>
+      <Field id={id} label={label}>
+        <input id={id} className={styles.input} type="text" readOnly dir="ltr" value={value} />
+      </Field>
+      <div className={styles.actions}>
+        <Button size="sm" onClick={onCopy}>העתקת הסיסמה</Button>
+      </div>
+    </>
   );
 }
