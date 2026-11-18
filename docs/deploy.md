@@ -982,6 +982,57 @@ the migration — either way it is the camp's statement, not a default.
 The local `shliff-pg` needs it too (and `0021` through `0028` before it),
 with the §6 container command.
 
+### Migration `0030` — applied to Railway 2026-11-18
+
+`0030_expense_category_receipt` is what הוצאות (`/money/expenses`) writes
+beside an expense: two nullable columns on `ledger_entries`,
+`expense_category` and `receipt_key`, with no default. No existing row
+changes; every movement already on Railway has both empty, which the ledger
+shows as no category and no receipt.
+
+**Order matters: apply it before the deploy.** `listLedgerRows` selects both
+columns, so `/money/ledger` against a database that lacks them is an error
+screen. The other order is safe, and is the one that was taken: the code on
+`main` that day named neither column, so the migration went in ahead of the
+merge.
+
+Read-only check, before: `0`; after: `2`:
+
+```sh
+docker run --rm postgres:18-alpine psql "$RAILWAY_URL" -tAc "
+select '0030 columns', count(*) from information_schema.columns
+ where table_schema='public' and table_name = 'ledger_entries'
+   and column_name in ('expense_category', 'receipt_key')"
+```
+
+Then, from a checkout that has the file:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine sh -euc '
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0030_expense_category_receipt.sql
+'
+```
+
+It went in on 2026-11-18 the way `0021` through `0029` did: a scratchpad
+script using the project's `postgres` driver, URL from `.env.railway`, check
+first, one transaction, run from the prompt, before #111 had merged. Two
+statements, one per column. The script refused unless neither column was
+there, `accounts.fund` (`0029`) was, and the two statements were the
+feature branch's own file to the character. Measured before: `0030` columns
+0 of 2, `0029` column 1 of 1, `ledger_entries` 46 rows summing 265458.55,
+`accounts` 3, `payments` 45 rows. After: columns 2 of 2, and the same 46
+rows, 265458.55, 3 and 45; no row carries a value in either new column.
+
+That measurement also says `0029` is on Railway, whatever the heading above
+reads on this branch — its own record is in #110.
+
+The receipt photos need `STORAGE_DRIVER=blob` on Vercel, as workbook uploads
+already do. With no driver named, an expense with a photo is refused in
+Hebrew rather than saved without it; an expense with no photo still saves.
+
+The local `shliff-pg` needs it too (and `0021` through `0029` before it),
+with the §6 container command.
+
 ### Copying the laptop's database up
 
 The local container is Postgres **16**; Railway is **18**. Dump with the
