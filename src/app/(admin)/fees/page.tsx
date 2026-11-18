@@ -241,7 +241,7 @@ export default async function FeesPage(
           seasonId={season.id}
           view={view}
           accounts={accounts.map((account) => ({
-            id: account.id, name: account.name, kind: account.kind,
+            id: account.id, name: account.name, kind: account.kind, fund: account.fund,
           }))}
           recordedBy={admin.email}
           /* R6 + ruling N: the run is computed on the server, from the same

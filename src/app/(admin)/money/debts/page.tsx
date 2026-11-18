@@ -395,7 +395,7 @@ export default async function DebtsPage(
                 direction={peeked.direction}
                 displayParty={peeked.displayParty}
                 outstandingAgorot={peeked.outstandingAgorot}
-                accounts={accounts.map((one) => ({ id: one.id, name: one.name }))}
+                accounts={accounts.map((one) => ({ id: one.id, name: one.name, fund: one.fund }))}
                 closeHref={closePeekHref(PATH, asParams(params))}
               />
               {/* Only for a debt that names a record: a bare name has no

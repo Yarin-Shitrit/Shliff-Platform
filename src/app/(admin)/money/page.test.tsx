@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import type { SeasonMoneySummary } from '@/lib/money/summary';
 import type { DuesFundingIdentity } from '@/lib/money/funding';
 import type { ObligationRow } from '@/lib/money/obligations';
@@ -54,6 +54,13 @@ vi.mock('./new-account-drawer', () => ({
     <div data-testid="new-account-drawer" data-close={closeHref} />
   ),
 }));
+vi.mock('./fund-drawer', () => ({
+  FundDrawer: ({ account, closeHref }: {
+    account: { name: string; fund: string | null }; closeHref: string;
+  }) => (
+    <div data-testid="fund-drawer" data-close={closeHref}>{account.name} · {account.fund ?? '—'}</div>
+  ),
+}));
 vi.mock('./holder-drawer', () => ({
   HolderDrawer: ({ account, people, closeHref }: {
     account: { name: string; holderName: string | null }; people: Array<{ displayName: string }>; closeHref: string;
@@ -94,6 +101,16 @@ function summary(overrides: Partial<SeasonMoneySummary> = {}): SeasonMoneySummar
     seasonName: 'ברן 26',
     accounts: [],
     totalBalanceAgorot: 500000,
+    funds: {
+      camp: { balanceAgorot: 412000, accountCount: 1 },
+      gift: { balanceAgorot: 88000, accountCount: 1 },
+      unassigned: { balanceAgorot: 0, accountCount: 0 },
+    },
+    fundFlows: {
+      camp: { inAgorot: 60000, outAgorot: 50000 },
+      gift: { inAgorot: 40000, outAgorot: 0 },
+      unassigned: { inAgorot: 0, outAgorot: 0 },
+    },
     unattributed: { inAgorot: 0, outAgorot: 0, paymentsAgorot: 0 },
     ledger: { inAgorot: 100000, outAgorot: 50000, netAgorot: 50000, count: 3 },
     identity: identity(),
@@ -108,7 +125,7 @@ function summary(overrides: Partial<SeasonMoneySummary> = {}): SeasonMoneySummar
 
 function account(overrides: Partial<AccountBalance> = {}): AccountBalance {
   return {
-    accountId: 'a1', name: 'קופת מזומן', kind: 'cash',
+    accountId: 'a1', name: 'קופת מזומן', kind: 'cash', fund: 'camp',
     holderPersonId: null, holderName: null, balanceAgorot: 412000,
     countedAgorot: 412000, countedOn: null, closed: false,
     ...overrides,
@@ -158,6 +175,12 @@ function overview(overrides: Partial<MoneyOverview> = {}): MoneyOverview {
     sources: new Map(),
     ...overrides,
   };
+}
+
+/** One pot's band in ״איפה הכסף״: its heading, its figure, its cards. */
+function band(headingText: string): HTMLElement {
+  const heading = screen.getByRole('heading', { level: 3, name: headingText });
+  return heading.closest(`.${styles.fundGroup}`) as HTMLElement;
 }
 
 function sectionFor(headingText: string): HTMLElement {
@@ -649,27 +672,77 @@ describe('MoneyPage', () => {
     expect(within(outRow).getByText('לא צוין')).toBeTruthy();
   });
   describe('the tile row', () => {
-    it('shows five tiles, and every one of them is a link onward', async () => {
+    it('shows six tiles, and every one of them is a link onward', async () => {
       render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
       const tiles = screen.getByRole('list', { name: 'סיכום כספי' });
       const links = within(tiles).getAllByRole('link');
-      expect(links).toHaveLength(5);
+      // Six since the balance became two: the camp's and the gift's.
+      expect(links).toHaveLength(6);
       for (const link of links) {
         expect(link.getAttribute('href')).toMatch(/season=s1/);
       }
     });
 
-    it('says the balance is camp-wide rather than implying it belongs to the season', async () => {
+    /*
+     * Two balances and never their sum. The camp's money and the gift's are
+     * different money: 18,912.55 and 42,000 here, and 60,912.55 on no tile.
+     */
+    it("shows the camp's balance and the gift's apart, each camp-wide, and never their sum", async () => {
       moneyOverview.mockResolvedValue(overview({
         summary: summary({
           totalBalanceAgorot: 6091255,
-          accounts: [account(), account({ accountId: 'a2' }), account({ accountId: 'a3' })],
+          funds: {
+            camp: { balanceAgorot: 1891255, accountCount: 2 },
+            gift: { balanceAgorot: 4200000, accountCount: 1 },
+            unassigned: { balanceAgorot: 0, accountCount: 0 },
+          },
+          accounts: [
+            account(), account({ accountId: 'a2', name: 'עו״ש אופק' }),
+            account({ accountId: 'a3', name: 'וייבז קלוז פרינדס', fund: 'gift' }),
+          ],
         }),
       }));
       render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
-      const tile = screen.getByText('יתרה בכל החשבונות').closest('li')!;
-      expect(tile.textContent).toContain('60,912.55');
-      expect(tile.textContent).toContain('3 חשבונות · לא תלוי בשנה');
+      const tiles = screen.getByRole('list', { name: 'סיכום כספי' });
+      const camp = within(tiles).getByText('יתרת הקאמפ').closest('li')!;
+      expect(camp.textContent).toContain('18,912.55');
+      expect(camp.textContent).toContain('2 חשבונות · לא תלוי בשנה');
+      const gift = within(tiles).getByText('יתרת הגיפט').closest('li')!;
+      expect(gift.textContent).toContain('42,000');
+      expect(gift.textContent).toContain('חשבון אחד · לא תלוי בשנה');
+      expect(tiles.textContent).not.toContain('60,912.55');
+      expect(screen.queryByText('יתרה בכל החשבונות')).toBeNull();
+      // Each balance opens the ledger read through its own pot.
+      expect(within(camp).getByRole('link').getAttribute('href'))
+        .toBe('/money/ledger?season=s1&fund=camp');
+      expect(within(gift).getByRole('link').getAttribute('href'))
+        .toBe('/money/ledger?season=s1&fund=gift');
+    });
+
+    /* The reason there are two: summed, -13,412 and 19,042 read as 5,630. */
+    it('says an overdrawn pot is overdrawn, in words and not by colour alone', async () => {
+      moneyOverview.mockResolvedValue(overview({
+        summary: summary({
+          funds: {
+            camp: { balanceAgorot: -1341200, accountCount: 1 },
+            gift: { balanceAgorot: 1904200, accountCount: 1 },
+            unassigned: { balanceAgorot: 0, accountCount: 0 },
+          },
+          accounts: [
+            account({ balanceAgorot: -1341200 }),
+            account({ accountId: 'a3', name: 'וייבז קלוז פרינדס', fund: 'gift', balanceAgorot: 1904200 }),
+          ],
+        }),
+      }));
+      render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+      const tiles = screen.getByRole('list', { name: 'סיכום כספי' });
+      const camp = within(tiles).getByText('יתרת הקאמפ').closest('li')!;
+      expect(camp.textContent).toContain('13,412');
+      expect(camp.textContent).toContain('במינוס');
+      expect(within(tiles).getByText('יתרת הגיפט').closest('li')!.textContent).not.toContain('במינוס');
+      // And on the band over the camp's cards, as a word.
+      expect(within(band('הקאמפ')).getByText('במינוס')).toBeTruthy();
+      expect(within(band('הגיפט')).queryByText('במינוס')).toBeNull();
     });
 
     it('prints how the fundraising remainder was reached, on the tile itself', async () => {
@@ -855,10 +928,133 @@ describe('counting what an account holds', () => {
       '/money?season=s1&account=a1&act=count',
       '/money?season=s1&account=a2&act=count',
     ]);
-    expect(screen.getByRole('link', { name: 'חשבון חדש' }).getAttribute('href'))
+    // The section head's link comes first; a pot with no account yet repeats
+    // the invitation under its own heading.
+    expect(screen.getAllByRole('link', { name: 'חשבון חדש' })[0].getAttribute('href'))
       .toBe('/money?season=s1&act=new-account');
     expect(screen.queryByTestId('count-drawer')).toBeNull();
     expect(screen.queryByTestId('new-account-drawer')).toBeNull();
+  });
+
+  /*
+   * ״איפה הכסף״ is one band per pot. A card sits under the pot it is summed
+   * into, and the figure on the band is that pot's — so the page can never
+   * show a camp account's money as though it were available to the gift.
+   */
+  it("draws each account under its own pot, with the pot's balance and the season's in and out", async () => {
+    moneyOverview.mockResolvedValue(overview({
+      summary: summary({
+        accounts: [
+          account(),
+          account({ accountId: 'a3', name: 'וייבז קלוז פרינדס', fund: 'gift', balanceAgorot: 88000 }),
+        ],
+      }),
+    }));
+    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+
+    const camp = band('הקאמפ');
+    expect(within(camp).getByText('קופת מזומן')).toBeTruthy();
+    expect(within(camp).queryByText('וייבז קלוז פרינדס')).toBeNull();
+    expect(camp.textContent).toContain('דמי הקאמפ וההוצאות של המחנה.');
+    // 600 in and 500 out this season, said with the season's name beside them:
+    // a balance is camp-wide and current, the flow is this year's.
+    expect(camp.textContent).toMatch(/בברן 26: נכנס\s*600 ₪\s*·\s*יצא\s*500 ₪/);
+
+    const gift = band('הגיפט');
+    expect(within(gift).getByText('וייבז קלוז פרינדס')).toBeTruthy();
+    expect(within(gift).queryByText('קופת מזומן')).toBeNull();
+    expect(gift.textContent).toContain('כסף המסיבות, בשביל הגיפט.');
+    expect(gift.textContent).toMatch(/נכנס\s*400 ₪\s*·\s*יצא\s*0 ₪/);
+    // Nothing is unplaced, so there is no third band and no banner.
+    expect(screen.queryByRole('heading', { name: 'לא נקבע של מי הכסף' })).toBeNull();
+    expect(screen.queryByText(/עוד לא שוי/)).toBeNull();
+  });
+
+  /* An empty state is an invitation: a pot with no account offers one. */
+  it('still draws a pot that has no account, and offers to add one', async () => {
+    moneyOverview.mockResolvedValue(overview({
+      summary: summary({
+        accounts: [account()],
+        funds: {
+          camp: { balanceAgorot: 412000, accountCount: 1 },
+          gift: { balanceAgorot: 0, accountCount: 0 },
+          unassigned: { balanceAgorot: 0, accountCount: 0 },
+        },
+      }),
+    }));
+    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+    const gift = band('הגיפט');
+    expect(within(gift).getByRole('link', { name: 'חשבון חדש' }).getAttribute('href'))
+      .toBe('/money?season=s1&act=new-account');
+    const tiles = screen.getByRole('list', { name: 'סיכום כספי' });
+    expect(within(tiles).getByText('יתרת הגיפט').closest('li')!.textContent)
+      .toContain('אין עדיין חשבון');
+  });
+
+  /*
+   * An account made before the two pots were told apart has no pot. Its money
+   * is in neither figure, and the page says so above everything and hands the
+   * lead the drawer — it never files the account under the camp by default.
+   */
+  it('puts an account nobody has placed in a band of its own, with the way to place it', async () => {
+    moneyOverview.mockResolvedValue(overview({
+      summary: summary({
+        accounts: [
+          account(),
+          account({ accountId: 'a7', name: 'קופה ישנה', fund: null, balanceAgorot: 250000 }),
+        ],
+        funds: {
+          camp: { balanceAgorot: 412000, accountCount: 1 },
+          gift: { balanceAgorot: 0, accountCount: 0 },
+          unassigned: { balanceAgorot: 250000, accountCount: 1 },
+        },
+      }),
+    }));
+    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+
+    expect(screen.getByText('חשבון אחד עוד לא שויך לקאמפ או לגיפט.')).toBeTruthy();
+    expect(screen.getByText('היתרה שלהם לא נספרת באף אחת משתי היתרות.')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'לקבוע של מי הכסף' }).getAttribute('href'))
+      .toBe('/money?season=s1&account=a7&act=fund');
+
+    const unplaced = band('לא נקבע של מי הכסף');
+    expect(within(unplaced).getByText('קופה ישנה')).toBeTruthy();
+    expect(unplaced.textContent).toContain('2,500');
+    // In neither pot's band, and in neither pot's tile.
+    expect(within(band('הקאמפ')).queryByText('קופה ישנה')).toBeNull();
+    const tiles = screen.getByRole('list', { name: 'סיכום כספי' });
+    expect(within(tiles).getByText('יתרת הקאמפ').closest('li')!.textContent).toContain('4,120');
+  });
+
+  it('offers the pot drawer on every card, and opens it from the URL over that account', async () => {
+    moneyOverview.mockResolvedValue(overview({
+      summary: summary({
+        accounts: [
+          account(),
+          account({ accountId: 'a3', name: 'וייבז קלוז פרינדס', fund: 'gift' }),
+        ],
+      }),
+    }));
+    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
+    expect(screen.getAllByRole('link', { name: 'של מי הכסף' }).map((one) => one.getAttribute('href')))
+      .toEqual(['/money?season=s1&account=a1&act=fund', '/money?season=s1&account=a3&act=fund']);
+    expect(screen.queryByTestId('fund-drawer')).toBeNull();
+
+    cleanup();
+    render(await MoneyPage({
+      searchParams: Promise.resolve({ season: 's1', act: 'fund', account: 'a3' }),
+    }));
+    const drawer = screen.getByTestId('fund-drawer');
+    expect(drawer.textContent).toBe('וייבז קלוז פרינדס · gift');
+    expect(drawer.getAttribute('data-close')).toBe('/money?season=s1');
+
+    // An account the summary does not know opens no drawer: a form over a
+    // missing record would write to nothing and say it had.
+    cleanup();
+    render(await MoneyPage({
+      searchParams: Promise.resolve({ season: 's1', act: 'fund', account: 'nope' }),
+    }));
+    expect(screen.queryByTestId('fund-drawer')).toBeNull();
   });
 
   it('offers the holder drawer on every card, and opens it from the URL with the people to choose from', async () => {

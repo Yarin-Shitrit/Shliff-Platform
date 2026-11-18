@@ -21,6 +21,8 @@ import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { attributeMovementAction } from './actions';
+import { AccountOptions } from '../account-options';
+import type { AccountChoice } from '../account-options';
 import styles from './ledger.module.css';
 
 /** Never a real account id, and never a value the action could accept. */
@@ -30,7 +32,7 @@ export function AttributeAccount({ origin, movementId, description, accounts }: 
   origin: 'ledger' | 'dues';
   movementId: string;
   description: string;
-  accounts: Array<{ id: string; name: string }>;
+  accounts: AccountChoice[];
 }) {
   const router = useRouter();
   const errorId = useId();
@@ -83,9 +85,7 @@ export function AttributeAccount({ origin, movementId, description, accounts }: 
         onChange={(event) => { setAccountId(event.target.value); }}
       >
         <option value={UNCHOSEN}>בחרו חשבון</option>
-        {accounts.map((account) => (
-          <option key={account.id} value={account.id}>{account.name}</option>
-        ))}
+        <AccountOptions accounts={accounts} />
       </select>
       <Button size="sm" onClick={attribute} disabled={pending}>שיוך</Button>
       {error === null ? null : (

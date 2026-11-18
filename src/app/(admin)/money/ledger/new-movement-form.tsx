@@ -19,6 +19,8 @@ import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { isBlank } from '@/lib/text/normalize';
 import { recordMovementAction, updateMovementAction } from './actions';
+import { AccountOptions } from '../account-options';
+import type { AccountChoice } from '../account-options';
 import styles from './ledger.module.css';
 
 /** Not a real account, and not a value the action would accept. */
@@ -62,7 +64,7 @@ export function NewMovementForm({
 }: {
   seasonId: string | null;
   seasons: Array<{ id: string; name: string }>;
-  accounts: Array<{ id: string; name: string }>;
+  accounts: AccountChoice[];
   budgetLines: Array<{ id: string; label: string }>;
   closeHref: string;
   /** Set to correct an existing movement instead of recording a new one.
@@ -183,9 +185,7 @@ export function NewMovementForm({
           onChange={(event) => { setAccountId(event.target.value); }}
         >
           <option value={NO_ACCOUNT}>לא צוין</option>
-          {accounts.map((account) => (
-            <option key={account.id} value={account.id}>{account.name}</option>
-          ))}
+          <AccountOptions accounts={accounts} />
         </select>
       </Field>
 

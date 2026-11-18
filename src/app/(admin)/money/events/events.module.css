@@ -161,6 +161,8 @@
   outline-offset: 1px;
 }
 
+/* Money of one pot under an account of the other: said, never refused. */
+.formNote { margin: 0; color: var(--warn); font-size: var(--text-meta); }
 .formError {
   margin-block: 0;
   color: var(--bad);

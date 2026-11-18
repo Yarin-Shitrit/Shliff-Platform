@@ -8,7 +8,7 @@ import { AccountCard } from './account-card';
 
 function account(overrides: Partial<AccountBalance> = {}): AccountBalance {
   return {
-    accountId: 'a1', name: 'קופת מזומן', kind: 'cash',
+    accountId: 'a1', name: 'קופת מזומן', kind: 'cash', fund: 'camp',
     holderPersonId: null, holderName: null, balanceAgorot: 412000,
     countedAgorot: 412000, countedOn: null, closed: false,
     ...overrides,
@@ -43,6 +43,56 @@ describe('AccountCard', () => {
     })} />);
     expect(screen.getByText(/חשבון פרטי של חבר מחנה שמחזיק כסף של הקאמפ/)).toBeTruthy();
     expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  /*
+   * The card says whose money it holds wherever it is drawn — including a
+   * person's page, where no heading above it says so.
+   */
+  it('says which pot the account is summed into', () => {
+    const { unmount } = render(<AccountCard account={account({ fund: 'camp' })} />);
+    expect(screen.getByText('קאמפ')).toBeTruthy();
+    unmount();
+    render(<AccountCard account={account({ fund: 'gift' })} />);
+    expect(screen.getByText('גיפט')).toBeTruthy();
+    expect(screen.queryByText('קאמפ')).toBeNull();
+  });
+
+  it('says so, in words, when nobody has placed the account in a pot', () => {
+    render(<AccountCard account={account({ fund: null })} />);
+    expect(screen.getByText('לא נקבע של מי הכסף')).toBeTruthy();
+    expect(screen.queryByText('קאמפ')).toBeNull();
+    expect(screen.queryByText('גיפט')).toBeNull();
+  });
+
+  it('reads a stored pot it does not know as not placed, never as a blank tag', () => {
+    render(<AccountCard account={account({ fund: 'dancefloor' as never })} />);
+    expect(screen.getByText('לא נקבע של מי הכסף')).toBeTruthy();
+  });
+
+  /* Under a heading that already names the pot, the pill would repeat it. */
+  it('leaves the pot off when the screen says it above the card', () => {
+    render(<AccountCard account={account({ fund: 'gift' })} hideFund />);
+    expect(screen.queryByText('גיפט')).toBeNull();
+    expect(screen.getByText('מזומן')).toBeTruthy();
+  });
+
+  it('links to the pot drawer only when the screen can change it', () => {
+    const { unmount } = render(<AccountCard account={account()} />);
+    expect(screen.queryByRole('link', { name: 'של מי הכסף' })).toBeNull();
+    unmount();
+    render(<AccountCard account={account()} fundHref="/money?season=s1&account=a1&act=fund" />);
+    expect(screen.getByRole('link', { name: 'של מי הכסף' }).getAttribute('href'))
+      .toBe('/money?season=s1&account=a1&act=fund');
+  });
+
+  it("names the gift, not the camp, on a personal account that holds the gift's money", () => {
+    render(<AccountCard account={account({
+      kind: 'personal', fund: 'gift', holderPersonId: 'p9', holderName: 'אופק',
+    })} />);
+    expect(screen.getByText(/שמחזיק כסף של הגיפט/).textContent)
+      .toContain('חשבון פרטי של אופק שמחזיק כסף של הגיפט');
+    expect(screen.queryByText(/שמחזיק כסף של הקאמפ/)).toBeNull();
   });
 
   it('labels every kind the schema allows, never a raw enum value', () => {

@@ -10,7 +10,7 @@ import { listSeasonFees } from '@/lib/fees/season-fees';
 import { payments } from '@/db/schema/camp';
 import {
   createAccount, listAccounts, listOpenAccounts, accountBalances, unattributedAgorot,
-  countAccount, setAccountHolder,
+  countAccount, setAccountHolder, setAccountFund,
 } from './accounts';
 
 let db: TestDb;
@@ -251,6 +251,67 @@ describe('countAccount', () => {
     const [balance] = (await accountBalances(db)).filter((row) => row.accountId === open.id);
     expect(balance.countedOn).toBeNull();
     expect(balance.balanceAgorot).toBe(0);
+  });
+});
+
+describe("whose money an account holds", () => {
+  /* No default. An account made without a pot is in neither figure and shows
+     up as a decision — the system does not file it under the camp for want
+     of an answer. */
+  it('keeps an account with no pot as exactly that, and reports it on the balance row', async () => {
+    await createAccount(db, { name: 'קופה ישנה', kind: 'cash', openingBalance: 100 });
+    const [stored] = await listAccounts(db);
+    expect(stored.fund).toBeNull();
+    const [balance] = await accountBalances(db);
+    expect(balance.fund).toBeNull();
+  });
+
+  it('stores the pot an account is made with, and carries it on the balance row', async () => {
+    await createAccount(db, { name: 'וייבז קלוז פרינדס', kind: 'event_float', fund: 'gift' });
+    await createAccount(db, { name: 'עו״ש אופק', kind: 'personal', fund: 'camp' });
+    const balances = await accountBalances(db);
+    expect(balances.map((row) => [row.name, row.fund])).toEqual([
+      ['וייבז קלוז פרינדס', 'gift'],
+      ['עו״ש אופק', 'camp'],
+    ]);
+  });
+
+  it('places an account in a pot, and moves it to the other when corrected', async () => {
+    const account = await createAccount(db, { name: 'קופה ישנה', kind: 'cash' });
+    await setAccountFund(db, account.id, 'camp');
+    expect((await accountBalances(db))[0].fund).toBe('camp');
+    await setAccountFund(db, account.id, 'gift');
+    expect((await accountBalances(db))[0].fund).toBe('gift');
+  });
+
+  /* Placing an account is a label on where it is summed. It moves no money:
+     the balance, the count and the count day are what they were. */
+  it('changes nothing about the money when the pot changes', async () => {
+    const account = await createAccount(db, {
+      name: 'וייבז קלוז פרינדס', kind: 'event_float', openingBalance: 19042,
+      openingOn: new Date('2026-09-27T00:00:00Z'),
+    });
+    await db.insert(ledgerEntries).values({
+      occurredOn: new Date('2026-11-02T00:00:00Z'), direction: 'out', amount: '42.00',
+      description: 'הוצאה', accountId: account.id, recordedBy: 'lead',
+    });
+    const [before] = await accountBalances(db);
+    await setAccountFund(db, account.id, 'gift');
+    const [after] = await accountBalances(db);
+    expect(after).toEqual({ ...before, fund: 'gift' });
+    expect(after.balanceAgorot).toBe(1900000);
+  });
+
+  it('refuses an account that does not exist, in Hebrew', async () => {
+    await expect(setAccountFund(db, '00000000-0000-4000-8000-000000000000', 'camp'))
+      .rejects.toThrow('אין חשבון כזה.');
+  });
+
+  it('refuses a value that is neither pot, and leaves the account as it was', async () => {
+    const account = await createAccount(db, { name: 'קופה', kind: 'cash', fund: 'camp' });
+    await expect(setAccountFund(db, account.id, 'dancefloor' as never))
+      .rejects.toThrow('צריך לבחור של מי הכסף: של הקאמפ או של הגיפט.');
+    expect((await accountBalances(db))[0].fund).toBe('camp');
   });
 });
 

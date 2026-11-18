@@ -22,8 +22,8 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 import { AttributeAccount } from './attribute-account';
 
 const ACCOUNTS = [
-  { id: 'a1', name: 'קופה מזומן' },
-  { id: 'a2', name: 'קופת מסיבות' },
+  { id: 'a1', name: 'קופה מזומן', fund: 'camp' as const },
+  { id: 'a2', name: 'קופת מסיבות', fund: 'gift' as const },
 ];
 
 function renderControl() {

@@ -15,7 +15,7 @@ import { traceRow } from './trace';
 import type { SourceCell } from './trace';
 import {
   listLedgerRows, applyLedgerView, viewCounts, ledgerStrip, groupByMonth,
-  runningBalanceAvailable, runningBalanceFor,
+  runningBalanceAvailable, runningBalanceFor, inFund,
 } from './ledger-view';
 import type { LedgerRow } from './ledger-view';
 
@@ -155,12 +155,76 @@ function row(over: Partial<LedgerRow> = {}): LedgerRow {
   return {
     id: 'r1', origin: 'ledger', occurredOn: new Date('2026-09-15T00:00:00Z'),
     direction: 'in', amountAgorot: 1850000, description: 'הכנסות מסיבת גיוס',
-    accountId: 'a1', accountName: 'קופת מסיבות', counterpartName: null,
+    accountId: 'a1', accountName: 'קופת מסיבות', accountFund: 'gift', counterpartName: null,
     counterpartPersonId: null, isTransfer: false, budgetLineId: null,
     budgetLineLabel: null, seasonId: 's1', source: null, insideCount: false,
     editable: false, ...over,
   };
 }
+
+describe('whose money a movement is', () => {
+  /* The pot is a fact about the account, never about the movement: it is
+     read from there, and a movement with no account has none. */
+  it("reads the pot from the movement's account, and none for a movement with no account", async () => {
+    const season = await createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1200 });
+    const camp = await createAccount(db, { name: 'עו״ש אופק', kind: 'personal', fund: 'camp' });
+    const gift = await createAccount(db, { name: 'וייבז קלוז פרינדס', kind: 'event_float', fund: 'gift' });
+    const old = await createAccount(db, { name: 'קופה ישנה', kind: 'cash' });
+    const entry = (description: string, accountId?: string) => recordEntry(db, {
+      occurredOn: new Date('2026-11-02T00:00:00Z'), direction: 'out', amount: 100,
+      description, seasonId: season.id, accountId, recordedBy: LEAD,
+    });
+    await entry('צילייה', camp.id);
+    await entry('כרטיסי אומנים', gift.id);
+    await entry('קופה בלי שיוך', old.id);
+    await entry('בלי חשבון');
+
+    const rows = await listLedgerRows(db, { seasonId: season.id });
+    const potOf = Object.fromEntries(rows.map((one) => [one.description, one.accountFund]));
+    expect(potOf).toEqual({
+      'צילייה': 'camp', 'כרטיסי אומנים': 'gift', 'קופה בלי שיוך': null, 'בלי חשבון': null,
+    });
+  });
+
+  it("carries the pot on a dues payment too, from the account it was paid into", async () => {
+    const season = await createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1200 });
+    const camp = await createAccount(db, { name: 'עו״ש אופק', kind: 'personal', fund: 'camp' });
+    const personId = await createPerson(db, 'יוסף', LEAD);
+    await addMember(db, personId, season.id);
+    await issueFlatDues(db, season.id);
+    const [fee] = await listSeasonFees(db, season.id);
+    await recordPayment(db, {
+      dueId: fee.dueId!, amount: 1200, channel: 'ביט',
+      paidOn: new Date('2026-10-05T00:00:00Z'), accountId: camp.id, recordedBy: LEAD,
+    });
+
+    const [paid] = await listLedgerRows(db, { seasonId: season.id });
+    expect(paid.origin).toBe('dues');
+    expect(paid.accountFund).toBe('camp');
+  });
+
+  const rows = [
+    row({ id: 'c1', accountFund: 'camp', direction: 'out', amountAgorot: 1357000 }),
+    row({ id: 'g1', accountFund: 'gift', direction: 'in', amountAgorot: 5700000 }),
+    row({ id: 'c2', accountFund: 'camp', direction: 'in', amountAgorot: 120000 }),
+    row({ id: 'u1', accountFund: null, accountId: 'a9' }),
+    row({ id: 'n1', accountFund: null, accountId: null, accountName: null }),
+  ];
+
+  it('reads the ledger through one pot, and through neither when no pot is asked for', () => {
+    expect(inFund(rows, 'camp').map((one) => one.id)).toEqual(['c1', 'c2']);
+    expect(inFund(rows, 'gift').map((one) => one.id)).toEqual(['g1']);
+    expect(inFund(rows, undefined)).toBe(rows);
+  });
+
+  /* What a lead means by "what the camp took in and spent": the strip under
+     the table, over that pot's rows alone. */
+  it("makes the strip that pot's in and out alone", () => {
+    expect(ledgerStrip(inFund(rows, 'camp')))
+      .toMatchObject({ inAgorot: 120000, outAgorot: 1357000, count: 2 });
+    expect(viewCounts(inFund(rows, 'gift')).all).toBe(1);
+  });
+});
 
 describe('the saved views', () => {
   const rows = [

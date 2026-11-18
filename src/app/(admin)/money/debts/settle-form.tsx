@@ -22,6 +22,8 @@ import { fromAgorot } from '@/lib/money';
 import { isBlank } from '@/lib/text/normalize';
 import type { ObligationDirection } from '@/db/schema/money';
 import { settleObligationAction } from './actions';
+import { AccountOptions } from '../account-options';
+import type { AccountChoice } from '../account-options';
 import styles from './debts.module.css';
 
 type SettleKind = 'cash' | 'offset';
@@ -52,7 +54,7 @@ export function SettleForm({
   direction: ObligationDirection;
   displayParty: string;
   outstandingAgorot: number;
-  accounts: Array<{ id: string; name: string }>;
+  accounts: AccountChoice[];
   closeHref: string;
 }) {
   const router = useRouter();
@@ -154,9 +156,7 @@ export function SettleForm({
             onChange={(event) => { setAccountId(event.target.value); }}
           >
             <option value="">בחרו חשבון</option>
-            {accounts.map((account) => (
-              <option key={account.id} value={account.id}>{account.name}</option>
-            ))}
+            <AccountOptions accounts={accounts} />
           </select>
         </Field>
       ) : (

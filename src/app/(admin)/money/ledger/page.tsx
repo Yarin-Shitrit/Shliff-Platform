@@ -6,10 +6,13 @@ import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import { listSeasons } from '@/lib/members/roster';
 import { listAccounts } from '@/lib/money/accounts';
+import {
+  ACCOUNT_FUNDS, ACCOUNT_FUND_NAMES, fundLabel, isAccountFund,
+} from '@/lib/money/labels';
 import { listBudgetLines } from '@/lib/money/budget';
 import {
   listLedgerRows, applyLedgerView, viewCounts, ledgerStrip, groupByMonth,
-  runningBalanceFor,
+  runningBalanceFor, inFund,
 } from '@/lib/money/ledger-view';
 import type {
   LedgerQuery, LedgerRow, LedgerScope, LedgerSort, LedgerView,
@@ -42,7 +45,7 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'תנועות' };
 
 export type LedgerSearchParams = {
-  season?: string; account?: string; view?: string; q?: string;
+  season?: string; account?: string; fund?: string; view?: string; q?: string;
   budget?: string; sort?: string; act?: string; peek?: string;
 };
 
@@ -104,6 +107,7 @@ function ledgerHref(
   const search = new URLSearchParams();
   if (next.season) search.set('season', next.season);
   if (next.account) search.set('account', next.account);
+  if (next.fund) search.set('fund', next.fund);
   if (next.view && next.view !== 'all') search.set('view', next.view);
   if (next.q && next.q.trim() !== '') search.set('q', next.q);
   if (next.budget) search.set('budget', next.budget);
@@ -173,10 +177,15 @@ export default async function LedgerPage(
 
   const creating = params.act === 'movement';
 
-  const [all, accounts] = await Promise.all([
+  const [scoped, accounts] = await Promise.all([
     listLedgerRows(db, scope),
     listAccounts(db),
   ]);
+  // `?fund=camp|gift`: the ledger read through one pot. Anything else in the
+  // param is no filter at all rather than an empty table.
+  const fund = isAccountFund(params.fund) ? params.fund : undefined;
+  const all = inFund(scoped, fund);
+  const accountChoices = accounts.map((one) => ({ id: one.id, name: one.name, fund: one.fund }));
   // The movement the edit drawer is open on. A row the library would refuse
   // to change opens no drawer: a form whose only answer is no is not offered.
   const editing = params.act === 'edit' && params.peek !== undefined
@@ -266,8 +275,16 @@ export default async function LedgerPage(
       key: 'account',
       card: 'meta',
       header: 'חשבון',
+      /* The pot beside the name: the account is the only place it is
+         recorded, and a column of account names does not say whose money
+         each row is. */
       cell: (one) => (one.accountName !== null
-        ? one.accountName
+        ? (
+          <>
+            {one.accountName}{' '}
+            <span className={styles.fundTag}>{fundLabel(one.accountFund)}</span>
+          </>
+        )
         : <Pill tone="warn">לא צוין</Pill>),
     },
     {
@@ -362,7 +379,7 @@ export default async function LedgerPage(
 
   const accountOptions: FilterOption[] = accounts.map((one) => ({
     id: one.id,
-    label: one.name,
+    label: `${one.name} · ${fundLabel(one.fund)}`,
     href: ledgerHref(params, { account: one.id }),
     current: one.id === params.account,
   }));
@@ -388,6 +405,21 @@ export default async function LedgerPage(
       value: chosenAccount ? chosenAccount.name : 'כל החשבונות',
       options: accountOptions,
       clearHref: params.account ? ledgerHref(params, { account: undefined }) : undefined,
+    },
+    /* Whose money: the camp's or the gift's. The in and out under the table
+       then read as that pot's alone — the figure a lead means by "what the
+       camp spent". */
+    {
+      id: 'fund',
+      label: 'של מי',
+      value: fund ? ACCOUNT_FUND_NAMES[fund] : 'הקאמפ והגיפט',
+      options: ACCOUNT_FUNDS.map((one) => ({
+        id: one,
+        label: ACCOUNT_FUND_NAMES[one],
+        href: ledgerHref(params, { fund: one }),
+        current: one === fund,
+      })),
+      clearHref: fund ? ledgerHref(params, { fund: undefined }) : undefined,
     },
   ];
 
@@ -523,7 +555,7 @@ export default async function LedgerPage(
           <NewMovementForm
             seasonId={season?.id ?? null}
             seasons={seasons.map((one) => ({ id: one.id, name: one.name }))}
-            accounts={accounts.map((one) => ({ id: one.id, name: one.name }))}
+            accounts={accountChoices}
             budgetLines={budgetLines.map((one) => ({ id: one.id, label: one.label }))}
             closeHref={closePeekHref(PATH, asParams(params))}
           />
@@ -542,7 +574,7 @@ export default async function LedgerPage(
             key={editing.id}
             seasonId={season?.id ?? null}
             seasons={seasons.map((one) => ({ id: one.id, name: one.name }))}
-            accounts={accounts.map((one) => ({ id: one.id, name: one.name }))}
+            accounts={accountChoices}
             budgetLines={budgetLines.map((one) => ({ id: one.id, label: one.label }))}
             closeHref={closePeekHref(PATH, asParams(params))}
             editing={{
@@ -576,7 +608,7 @@ export default async function LedgerPage(
                 origin={one.origin}
                 movementId={one.id}
                 description={one.description}
-                accounts={accounts.map((account) => ({ id: account.id, name: account.name }))}
+                accounts={accountChoices}
               />
             ) : null}
             {/* Only on a movement a lead typed. A sheet's row, half a

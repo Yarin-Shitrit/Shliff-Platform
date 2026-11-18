@@ -7,15 +7,17 @@ import { listSeasons } from '@/lib/members/roster';
 import { listPersonChoices } from '@/lib/members/dossier';
 import { moneyOverview } from '@/lib/money/overview';
 import { formatShekels } from '@/lib/money';
+import { ACCOUNT_FUNDS, ACCOUNT_FUND_NAMES } from '@/lib/money/labels';
 import { Money } from '@/components/format';
 import { Banner } from '@/components/ui/banner';
 import { StatTile } from '@/components/ui/stat-tile';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StackedBar } from '@/components/charts/stacked-bar';
-import { AccountCard } from './account-card';
 import { CountDrawer } from './count-drawer';
 import { NewAccountDrawer } from './new-account-drawer';
 import { HolderDrawer } from './holder-drawer';
+import { FundDrawer } from './fund-drawer';
+import { FundSections } from './fund-sections';
 import { moneyHref } from './href';
 import { ObligationsTable } from './obligations-table';
 import { BudgetTable } from './budget-table';
@@ -76,6 +78,10 @@ export default async function MoneyPage(
     ? summary.accounts.find((row) => row.accountId === params.account)
     : undefined;
   const people = holding === undefined ? [] : await listPersonChoices(db);
+  /* `?act=fund&account=<id>`: whose money this is — the camp's or the gift's. */
+  const placing = params.act === 'fund'
+    ? summary.accounts.find((row) => row.accountId === params.account)
+    : undefined;
   /* Plus whoever holds it now, as the acquisitions screen does: a merge does
      not refuse a person who holds an account, and the list above leaves
      merged-away records out. A picker that quietly dropped the holder showed
@@ -191,14 +197,26 @@ export default async function MoneyPage(
         * a link to the route.
         */}
       <ul className={styles.tiles} aria-label="סיכום כספי">
-        <li>
-          <StatTile
-            label="יתרה בכל החשבונות"
-            valueAgorot={summary.totalBalanceAgorot}
-            derivation={`${summary.accounts.length} חשבונות · לא תלוי בשנה`}
-            href={`/money/ledger${scope}`}
-          />
-        </li>
+        {/* Two balances, never their sum: the camp's money and the gift's are
+          * different money, and one figure over both hid whichever pot was
+          * overdrawn. Each links to the ledger read through that pot. */}
+        {ACCOUNT_FUNDS.map((fund) => {
+          const pot = summary.funds[fund];
+          const overdrawn = pot.balanceAgorot < 0;
+          const count = pot.accountCount === 0 ? 'אין עדיין חשבון'
+            : pot.accountCount === 1 ? 'חשבון אחד' : `${pot.accountCount} חשבונות`;
+          return (
+            <li key={fund}>
+              <StatTile
+                label={`יתרת ${ACCOUNT_FUND_NAMES[fund]}`}
+                valueAgorot={pot.balanceAgorot}
+                tone={overdrawn ? 'bad' : 'default'}
+                derivation={`${count} · לא תלוי בשנה${overdrawn ? ' · במינוס' : ''}`}
+                href={`/money/ledger${scope}&fund=${fund}`}
+              />
+            </li>
+          );
+        })}
         <li>
           <StatTile
             label="נכנס בשנה הזו"
@@ -246,7 +264,7 @@ export default async function MoneyPage(
         <div className={styles.sectionTitle}>
           <h2 className={styles.sectionHeading}>איפה הכסף</h2>
           <span className={styles.sectionNote}>
-            חשבונות אינם שייכים לשנה — היתרה היא תמיד הנוכחית
+            לקאמפ ולגיפט כסף נפרד · חשבונות אינם שייכים לשנה — היתרה היא תמיד הנוכחית
           </span>
           <Link className={`link ${styles.sectionLink}`} href={moneyHref({ season: season.id, newAccount: true })}>
             חשבון חדש
@@ -265,21 +283,19 @@ export default async function MoneyPage(
         {/* A bar list compared account balances against each other, which is
           * not a question anyone asks — a קופה does not compete with a bank
           * account. A card answers the questions that are asked: how much,
-          * whose, and is anything wrong with it. */}
+          * whose, and is anything wrong with it. The cards are drawn under
+          * the pot they belong to (`FundSections`). */}
         {summary.accounts.length === 0 ? (
           <EmptyState kind="nothing-yet" noun="חשבונות"
                       action={{ href: moneyHref({ season: season.id, newAccount: true }), label: 'חשבון חדש' }} />
         ) : (
-          <div className={styles.accountGrid}>
-            {summary.accounts.map((row) => (
-              <AccountCard
-                key={row.accountId}
-                account={row}
-                countHref={moneyHref({ season: season.id, count: row.accountId })}
-                holderHref={moneyHref({ season: season.id, holder: row.accountId })}
-              />
-            ))}
-          </div>
+          <FundSections
+            accounts={summary.accounts}
+            funds={summary.funds}
+            flows={summary.fundFlows}
+            seasonId={season.id}
+            seasonName={season.name}
+          />
         )}
 
         {counting === undefined ? null : (
@@ -304,6 +320,13 @@ export default async function MoneyPage(
               holderName: holding.holderName,
             }}
             people={people}
+            closeHref={closeHref}
+          />
+        )}
+
+        {placing === undefined ? null : (
+          <FundDrawer
+            account={{ id: placing.accountId, name: placing.name, fund: placing.fund }}
             closeHref={closeHref}
           />
         )}

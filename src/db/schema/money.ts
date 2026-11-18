@@ -7,6 +7,9 @@ import {
 import { blocks } from './source';
 
 export type AccountKind = 'cash' | 'bank' | 'personal' | 'event_float';
+/** Whose money an account holds. The camp keeps two pots that never mix:
+ *  dues pay for the camp, and the parties raise money for the gift. */
+export type AccountFund = 'camp' | 'gift';
 export type LedgerDirection = 'in' | 'out';
 export type ObligationDirection = 'camp_owes' | 'owed_to_camp';
 export type SettlementKind = 'cash' | 'offset';
@@ -28,6 +31,11 @@ export const accounts = pgTable('accounts', {
   id: uuid('id').defaultRandom().primaryKey(),
   name: text('name').notNull().unique(),
   kind: text('kind').$type<AccountKind>().notNull(),
+  /** Whose money sits here: the camp's or the gift's. Nullable with no
+   *  default on purpose — an account nobody has placed is shown as a decision
+   *  to make and is counted in neither pot's balance, never assigned one by
+   *  guessing from its name or its kind. Set by `setAccountFund`. */
+  fund: text('fund').$type<AccountFund>(),
   holderPersonId: uuid('holder_person_id')
     .references(() => persons.id, { onDelete: 'set null' }),
   /** What the ledger cannot derive, because the earlier book is not loaded:

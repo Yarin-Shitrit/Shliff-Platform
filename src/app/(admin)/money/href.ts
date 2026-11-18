@@ -23,6 +23,8 @@ export interface MoneyHrefParts {
   newAccount?: boolean;
   /** The account whose holder is being changed: `?act=holder&account=<id>`. */
   holder?: string;
+  /** The account whose pot is being set: `?act=fund&account=<id>`. */
+  fund?: string;
 }
 
 export function moneyHref(parts: MoneyHrefParts): string {
@@ -33,6 +35,9 @@ export function moneyHref(parts: MoneyHrefParts): string {
   }
   if (parts.holder) {
     return openActHref(MONEY_PATH, [...current, ['account', parts.holder]], 'holder');
+  }
+  if (parts.fund) {
+    return openActHref(MONEY_PATH, [...current, ['account', parts.fund]], 'fund');
   }
   if (parts.newAccount) return openActHref(MONEY_PATH, current, 'new-account');
   return closePeekHref(MONEY_PATH, current);
