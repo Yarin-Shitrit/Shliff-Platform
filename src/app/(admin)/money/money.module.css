@@ -40,17 +40,16 @@
 
 .tiles {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-3);
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-/* Six tiles since the balance became two — the camp's and the gift's. Three
-   across keeps the two balances on one row before the screen is wide enough
-   for all six. */
-@media (max-width: 1399.98px) { .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+/* Six tiles since the balance became two — the camp's and the gift's — in two
+   rows of three. Six across left a five-figure balance no room: the shekel
+   sign wrapped under the number. */
 @media (max-width: 1023.98px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 767.98px)  { .tiles { grid-template-columns: 1fr; } }
 
@@ -73,8 +72,22 @@
 
 /* One band per pot: its name, what it holds, what moved through it this
    year, then its accounts. The figure is the sum of the cards under it. */
+.fundBands {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-block-end: var(--space-3);
+}
 .fundGroup { display: flex; flex-direction: column; gap: var(--space-2); }
-.fundGroup + .fundGroup { margin-block-start: var(--space-4); }
+/* A pot with no account yet: one quiet line and the way to add one. */
+.fundEmpty {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-control);
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
 .fundHead {
   display: flex;
   align-items: baseline;
@@ -110,7 +123,12 @@
   margin-block-end: 0;
 }
 .accountPersonal { border-color: var(--warn-line); }
-.accountHead { display: flex; align-items: center; gap: var(--space-2); }
+.accountHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+}
 .accountName { font-weight: 600; }
 .accountBalance {
   font-size: var(--text-title);

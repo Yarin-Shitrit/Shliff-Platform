@@ -70,6 +70,13 @@ describe('AccountCard', () => {
     expect(screen.getByText('לא נקבע של מי הכסף')).toBeTruthy();
   });
 
+  /* Under a heading that already names the pot, the pill would repeat it. */
+  it('leaves the pot off when the screen says it above the card', () => {
+    render(<AccountCard account={account({ fund: 'gift' })} hideFund />);
+    expect(screen.queryByText('גיפט')).toBeNull();
+    expect(screen.getByText('מזומן')).toBeTruthy();
+  });
+
   it('links to the pot drawer only when the screen can change it', () => {
     const { unmount } = render(<AccountCard account={account()} />);
     expect(screen.queryByRole('link', { name: 'של מי הכסף' })).toBeNull();

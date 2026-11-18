@@ -6,7 +6,7 @@ import {
 } from '@/lib/money/labels';
 import { Money } from '@/components/format';
 import { Banner } from '@/components/ui/banner';
-import { EmptyState } from '@/components/ui/empty-state';
+import Link from 'next/link';
 import { Pill } from '@/components/ui/pill';
 import { AccountCard } from './account-card';
 import { moneyHref } from './href';
@@ -58,11 +58,15 @@ export function FundSections({ accounts, funds, flows, seasonId, seasonName }: {
         </div>
         <p className={styles.fundNote}>{note}</p>
         {rows.length === 0 ? (
-          <EmptyState
-            kind="nothing-yet"
-            noun={`חשבונות של ${heading}`}
-            action={{ href: moneyHref({ season: seasonId, newAccount: true }), label: 'חשבון חדש' }}
-          />
+          /* An invitation, kept to one line: the page's full empty state is
+             for a camp with no accounts at all, and two of those stacked
+             under the headings would bury the one pot that has money. */
+          <p className={styles.fundEmpty}>
+            עדיין אין חשבון של {heading}.{' '}
+            <Link className="link" href={moneyHref({ season: seasonId, newAccount: true })}>
+              חשבון חדש
+            </Link>
+          </p>
         ) : (
           <div className={styles.accountGrid}>
             {rows.map((row) => (
@@ -72,6 +76,8 @@ export function FundSections({ accounts, funds, flows, seasonId, seasonName }: {
                 countHref={moneyHref({ season: seasonId, count: row.accountId })}
                 holderHref={moneyHref({ season: seasonId, holder: row.accountId })}
                 fundHref={moneyHref({ season: seasonId, fund: row.accountId })}
+                /* The heading above the cards already names the pot. */
+                hideFund
               />
             ))}
           </div>
@@ -81,7 +87,7 @@ export function FundSections({ accounts, funds, flows, seasonId, seasonName }: {
   };
 
   return (
-    <>
+    <div className={styles.fundBands}>
       {unplaced.length === 0 ? null : (
         <Banner
           tone="warn"
@@ -103,6 +109,6 @@ export function FundSections({ accounts, funds, flows, seasonId, seasonName }: {
         NO_FUND_GROUP_LABEL,
         'החשבונות האלה לא נספרים ביתרת הקאמפ ולא ביתרת הגיפט, עד שייקבע של מי הכסף.',
       )}
-    </>
+    </div>
   );
 }

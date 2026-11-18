@@ -47,7 +47,7 @@ const KIND_ICONS: Record<AccountKind, IconName> = {
  * in the warn tone, because its balance is in neither pot's figure.
  * `fundHref` is the link that can change it.
  */
-export function AccountCard({ account, countHref, holderHref, fundHref }: {
+export function AccountCard({ account, countHref, holderHref, fundHref, hideFund }: {
   account: AccountBalance;
   /** The count drawer for this account. Absent on a screen that only shows. */
   countHref?: string;
@@ -55,6 +55,9 @@ export function AccountCard({ account, countHref, holderHref, fundHref }: {
   holderHref?: string;
   /** The pot drawer for this account — whose money it holds. */
   fundHref?: string;
+  /** Leaves the pot's pill off: for a card drawn under a heading that
+   *  already names its pot, where the pill would only repeat it. */
+  hideFund?: boolean;
 }) {
   const personal = account.kind === 'personal';
   const holder = account.holderName ?? 'חבר מחנה';
@@ -66,7 +69,7 @@ export function AccountCard({ account, countHref, holderHref, fundHref }: {
         <Icon name={KIND_ICONS[account.kind]} size={14} />
         <b className={styles.accountName}>{account.name}</b>
         <Pill tone={personal ? 'warn' : 'neutral'}>{ACCOUNT_KIND_LABELS[account.kind]}</Pill>
-        {fund === null
+        {hideFund === true ? null : fund === null
           ? <Pill tone="warn">{NO_FUND_GROUP_LABEL}</Pill>
           : <Pill tone="outline">{ACCOUNT_FUND_LABELS[fund]}</Pill>}
       </span>
