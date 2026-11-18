@@ -943,7 +943,7 @@ of 2, `users` 5, not `admin` 0.
 The local `shliff-pg` still needs it (and `0021` through `0027` before it),
 with the §6 container command.
 
-### Migration `0029` — NOT yet applied to Railway
+### Migration `0029` — applied to Railway 2026-11-18
 
 `0029_account_fund` is the two pots behind כספים: one nullable column,
 `accounts.fund` (`'camp'` | `'gift'`, no default). No existing row changes;
@@ -979,7 +979,19 @@ and `קופת מזומן` hold the camp's. That is three clicks on `/money`
 (״של מי הכסף״ on each card) once the code is live, or three `update`s beside
 the migration — either way it is the camp's statement, not a default.
 
-The local `shliff-pg` needs it too (and `0021` through `0028` before it),
+It went in on 2026-11-18 (about 20:20 UTC) the way `0021` through `0028`
+did: a scratchpad script using the project's `postgres` driver, URL from
+`.env.railway`, check first, refuse anything but a clean state, one
+transaction, run from the prompt — and **before** the merge, as the order
+above asks: #108 merged at 20:22 UTC, minutes after. One statement, the column; then, in the same transaction, the
+three `update`s for the camp's answer, each refused unless it changed
+exactly one row whose pot was still unset. Measured before: column 0 of 1,
+3 accounts with no pot, `ledger_entries` 46 rows, `payments` 50. After:
+column 1 of 1, `וייבז קלוז פרינדס` `gift`, `עו״ש אופק` and `קופת מזומן`
+`camp`, 46 and 50 rows, and every counted balance where it was (19,042, 0
+and 0).
+
+The local `shliff-pg` still needs it (and `0021` through `0028` before it),
 with the §6 container command.
 
 ### Copying the laptop's database up
