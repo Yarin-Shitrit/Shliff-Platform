@@ -107,7 +107,7 @@ export default async function ExpensesPage(
   ];
 
   const totals: TableTotalsCell[] = [
-    { key: 'count', content: <bdi>{rows.length} הוצאות</bdi>, colSpan: 5 },
+    { key: 'count', content: rows.length === 1 ? 'הוצאה אחת' : <bdi>{rows.length} הוצאות</bdi>, colSpan: 5 },
     { key: 'sum', content: <Money agorot={totalAgorot} />, numeric: true },
   ];
 
