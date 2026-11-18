@@ -15,6 +15,8 @@ import type {
   LedgerQuery, LedgerRow, LedgerScope, LedgerSort, LedgerView,
 } from '@/lib/money/ledger-view';
 import { Money, DateText } from '@/components/format';
+import { fromAgorot } from '@/lib/money';
+import { campDayKey } from '@/lib/money/counted';
 import { Table } from '@/components/ui/table';
 import type { TableColumn, TableRowModel, TableTotalsCell } from '@/components/ui/table';
 import { Pill } from '@/components/ui/pill';
@@ -23,7 +25,7 @@ import { SourceChip } from '@/components/ui/source-chip';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Banner } from '@/components/ui/banner';
 import { Drawer } from '@/components/ui/drawer';
-import { openActHref, closePeekHref } from '@/components/ui/drawer-url';
+import { openActHref, openPeekHref, closePeekHref } from '@/components/ui/drawer-url';
 import { SavedViews } from '@/components/ui/saved-views';
 import { FilterBar } from '@/components/ui/filter-bar';
 import type { FilterChip, FilterOption } from '@/components/ui/filter-bar';
@@ -32,6 +34,7 @@ import { chipSource } from '../chip-source';
 import { moneyHref } from '../href';
 import { AttributeAccount } from './attribute-account';
 import { NewMovementForm } from './new-movement-form';
+import { MovementTools } from './movement-tools';
 import styles from './ledger.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -40,7 +43,7 @@ export const metadata: Metadata = { title: 'תנועות' };
 
 export type LedgerSearchParams = {
   season?: string; account?: string; view?: string; q?: string;
-  budget?: string; sort?: string; act?: string;
+  budget?: string; sort?: string; act?: string; peek?: string;
 };
 
 const PATH = '/money/ledger';
@@ -170,14 +173,23 @@ export default async function LedgerPage(
 
   const creating = params.act === 'movement';
 
-  const [all, accounts, budgetLines] = await Promise.all([
+  const [all, accounts] = await Promise.all([
     listLedgerRows(db, scope),
     listAccounts(db),
-    // Only for the create drawer's select. The table never shows a budget
-    // line a movement does not already carry, so querying them on every
-    // request would be a round trip for a control that is not on screen.
-    creating && season !== undefined ? listBudgetLines(db, season.id) : Promise.resolve([]),
   ]);
+  // The movement the edit drawer is open on. A row the library would refuse
+  // to change opens no drawer: a form whose only answer is no is not offered.
+  const editing = params.act === 'edit' && params.peek !== undefined
+    ? all.find((one) => one.id === params.peek && one.editable)
+    : undefined;
+  // Only for a drawer's select. The table never shows a budget line a
+  // movement does not already carry, so querying them on every request would
+  // be a round trip for a control that is not on screen. A movement being
+  // corrected gets the lines of its own year, which need not be the page's.
+  const budgetSeasonId = editing !== undefined ? editing.seasonId ?? undefined
+    : creating ? season?.id
+    : undefined;
+  const budgetLines = budgetSeasonId === undefined ? [] : await listBudgetLines(db, budgetSeasonId);
   const rows = applyLedgerView(all, query);
   const strip = ledgerStrip(rows);
   const balance = await runningBalanceFor(db, rows, scope, query);
@@ -518,6 +530,35 @@ export default async function LedgerPage(
         </Drawer>
       )}
 
+      {editing === undefined ? null : (
+        <Drawer
+          title="תיקון תנועה"
+          subtitle={editing.description}
+          closeHref={closePeekHref(PATH, asParams(params))}
+        >
+          <NewMovementForm
+            /* One form instance per movement: opening a second row's drawer
+             * must not show the first row's unsaved values. */
+            key={editing.id}
+            seasonId={season?.id ?? null}
+            seasons={seasons.map((one) => ({ id: one.id, name: one.name }))}
+            accounts={accounts.map((one) => ({ id: one.id, name: one.name }))}
+            budgetLines={budgetLines.map((one) => ({ id: one.id, label: one.label }))}
+            closeHref={closePeekHref(PATH, asParams(params))}
+            editing={{
+              id: editing.id,
+              occurredOn: campDayKey(editing.occurredOn),
+              direction: editing.direction,
+              amount: fromAgorot(editing.amountAgorot),
+              description: editing.description,
+              accountId: editing.accountId,
+              seasonId: editing.seasonId,
+              budgetLineId: editing.budgetLineId,
+            }}
+          />
+        </Drawer>
+      )}
+
       <Table
         caption="תנועות"
         columns={columns}
@@ -527,14 +568,32 @@ export default async function LedgerPage(
          * lead followed `שיוך לחשבון` here, and on a laptop a slot that only
          * shows under a pointer reads as a button that led nowhere. */
         rowActionsVisible
-        rowActionsHeader="שיוך לחשבון"
-        rowActions={(one) => (one.accountId === null ? (
-          <AttributeAccount
-            origin={one.origin}
-            movementId={one.id}
-            description={one.description}
-            accounts={accounts.map((account) => ({ id: account.id, name: account.name }))}
-          />
+        rowActionsHeader="פעולות"
+        rowActions={(one) => (one.accountId === null || one.editable ? (
+          <span className={styles.rowTools}>
+            {one.accountId === null ? (
+              <AttributeAccount
+                origin={one.origin}
+                movementId={one.id}
+                description={one.description}
+                accounts={accounts.map((account) => ({ id: account.id, name: account.name }))}
+              />
+            ) : null}
+            {/* Only on a movement a lead typed. A sheet's row, half a
+              * transfer, a party's line and a dues payment are each corrected
+              * where they are kept, and the library refuses them here. */}
+            {one.editable ? (
+              <MovementTools
+                movementId={one.id}
+                description={one.description}
+                amountAgorot={one.amountAgorot}
+                /* Null when removing it moves no balance: no account, or a
+                 * day the account's count already covers. */
+                balanceOf={one.accountId !== null && !one.insideCount ? one.accountName : null}
+                editHref={openPeekHref(PATH, asParams(params), one.id, 'edit')}
+              />
+            ) : null}
+          </span>
         ) : null)}
         empty={filterSummary !== undefined ? (
           <EmptyState

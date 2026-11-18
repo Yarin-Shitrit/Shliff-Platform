@@ -18,7 +18,7 @@ import { campDayKey } from '@/lib/money/counted';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { isBlank } from '@/lib/text/normalize';
-import { recordMovementAction } from './actions';
+import { recordMovementAction, updateMovementAction } from './actions';
 import styles from './ledger.module.css';
 
 /** Not a real account, and not a value the action would accept. */
@@ -28,6 +28,24 @@ const NO_SEASON = '';
 
 const ACCOUNT_HINT = 'תנועה בלי חשבון לא נספרת ביתרה של אף קופה, ותופיע בהתראה למעלה';
 const SEASON_HINT = 'השנה נקבעת ביד, לא לפי התאריך';
+/** Edit only: the lines on offer are the ones of the year the movement was
+ *  opened with, so a changed year has no lines to choose from yet. */
+const BUDGET_AFTER_SEASON_HINT = 'סעיפי התקציב שייכים לשנה. שמרו את השנה החדשה, ואז בחרו סעיף.';
+
+/** The movement being corrected, as the inputs hold it. Absent when the form
+ *  records a new one. */
+export interface EditingMovement {
+  id: string;
+  /** `YYYY-MM-DD`, the camp day. */
+  occurredOn: string;
+  direction: 'in' | 'out';
+  /** In shekels, as a number input's value. */
+  amount: string;
+  description: string;
+  accountId: string | null;
+  seasonId: string | null;
+  budgetLineId: string | null;
+}
 
 /**
  * Today as the date input wants it — the day it is in the camp, not in UTC.
@@ -40,13 +58,16 @@ function today(): string {
 }
 
 export function NewMovementForm({
-  seasonId, seasons, accounts, budgetLines, closeHref,
+  seasonId, seasons, accounts, budgetLines, closeHref, editing,
 }: {
   seasonId: string | null;
   seasons: Array<{ id: string; name: string }>;
   accounts: Array<{ id: string; name: string }>;
   budgetLines: Array<{ id: string; label: string }>;
   closeHref: string;
+  /** Set to correct an existing movement instead of recording a new one.
+   *  `budgetLines` are then the lines of *its* year, not the page's. */
+  editing?: EditingMovement;
 }) {
   const router = useRouter();
   const dateId = useId();
@@ -56,13 +77,18 @@ export function NewMovementForm({
   const seasonFieldId = useId();
   const budgetFieldId = useId();
 
-  const [occurredOn, setOccurredOn] = useState(today());
-  const [direction, setDirection] = useState<'in' | 'out'>('out');
-  const [amount, setAmount] = useState('');
-  const [description, setDescription] = useState('');
-  const [accountId, setAccountId] = useState(NO_ACCOUNT);
-  const [season, setSeason] = useState(seasonId ?? NO_SEASON);
-  const [budgetLineId, setBudgetLineId] = useState('');
+  const [occurredOn, setOccurredOn] = useState(editing?.occurredOn ?? today());
+  const [direction, setDirection] = useState<'in' | 'out'>(editing?.direction ?? 'out');
+  const [amount, setAmount] = useState(editing?.amount ?? '');
+  const [description, setDescription] = useState(editing?.description ?? '');
+  const [accountId, setAccountId] = useState(editing?.accountId ?? NO_ACCOUNT);
+  const [season, setSeason] = useState(
+    editing !== undefined ? editing.seasonId ?? NO_SEASON : seasonId ?? NO_SEASON,
+  );
+  const [budgetLineId, setBudgetLineId] = useState(editing?.budgetLineId ?? '');
+  // The lines in hand are the opened year's. Under another year they are not
+  // choices, and the library would refuse one anyway.
+  const seasonMoved = editing !== undefined && season !== (editing.seasonId ?? NO_SEASON);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,15 +108,18 @@ export function NewMovementForm({
     setError(null);
     setPending(true);
     try {
-      const result = await recordMovementAction({
+      const movement = {
         occurredOn,
         direction,
         amount: Number(amount),
         description,
         accountId: accountId === NO_ACCOUNT ? undefined : accountId,
         seasonId: season === NO_SEASON ? undefined : season,
-        budgetLineId: budgetLineId === '' ? undefined : budgetLineId,
-      });
+        budgetLineId: budgetLineId === '' || seasonMoved ? undefined : budgetLineId,
+      };
+      const result = editing === undefined
+        ? await recordMovementAction(movement)
+        : await updateMovementAction(editing.id, movement);
       if (result.ok) {
         router.replace(closeHref);
         router.refresh();
@@ -172,9 +201,13 @@ export function NewMovementForm({
         </select>
       </Field>
 
-      <Field id={budgetFieldId} label="סעיף תקציב">
+      <Field
+        id={budgetFieldId} label="סעיף תקציב"
+        hint={seasonMoved ? BUDGET_AFTER_SEASON_HINT : undefined}
+      >
         <select
-          id={budgetFieldId} className={styles.input} value={budgetLineId} disabled={pending}
+          id={budgetFieldId} className={styles.input}
+          value={seasonMoved ? '' : budgetLineId} disabled={pending || seasonMoved}
           onChange={(event) => { setBudgetLineId(event.target.value); }}
         >
           <option value="">ללא סעיף</option>
@@ -184,7 +217,9 @@ export function NewMovementForm({
         </select>
       </Field>
 
-      <Button tone="primary" onClick={record} disabled={pending}>רישום התנועה</Button>
+      <Button tone="primary" onClick={record} disabled={pending}>
+        {editing === undefined ? 'רישום התנועה' : 'שמירת השינויים'}
+      </Button>
       {error === null ? null : <p className={styles.formError} role="alert">{error}</p>}
     </div>
   );

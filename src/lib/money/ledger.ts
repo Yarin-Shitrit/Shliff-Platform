@@ -3,11 +3,14 @@ import {
 } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import type { AnyDb } from '@/lib/db-types';
-import { accounts, ledgerEntries } from '@/db/schema/money';
+import {
+  accounts, budgetLines, ledgerEntries, obligationSettlements,
+} from '@/db/schema/money';
 import type { LedgerDirection, PartyPart } from '@/db/schema/money';
 import { payments, dues, persons } from '@/db/schema/camp';
 import { toAgorot, fromAgorot } from '@/lib/money';
 import { isBlank } from '@/lib/text/normalize';
+import { HebrewRefusal } from '@/lib/errors/hebrew';
 
 export interface NewEntry {
   occurredOn: Date;
@@ -95,6 +98,140 @@ export async function recordEntry(db: AnyDb, input: NewEntry): Promise<string> {
     sourceRow: input.sourceRow ?? null,
   }).returning();
   return row.id;
+}
+
+/** What a lead may change on a movement they typed. Every field is the whole
+ *  new value: an omitted account, season or budget line means "none", never
+ *  "leave it" — the form shows all of them, so what it sends is what it means. */
+export interface EntryEdit {
+  occurredOn: Date;
+  direction: LedgerDirection;
+  /** In shekels. Must be positive — `direction` carries the sign. */
+  amount: number;
+  description: string;
+  accountId?: string;
+  seasonId?: string;
+  budgetLineId?: string;
+}
+
+/** Verbatim on the screen, so the row's missing control and the library's
+ *  refusal cannot come to say different things. */
+export const ENTRY_REFUSALS = {
+  missing: 'התנועה הזו כבר לא קיימת. רעננו את הדף.',
+  fromSheet: 'התנועה הזו נקראה מגיליון, ותחזור בייבוא הבא. מתקנים אותה בקובץ.',
+  transferEdit: 'התנועה הזו היא חצי מהעברה בין חשבונות, ואי אפשר לשנות רק אותה',
+  transferDelete: 'התנועה הזו היא חצי מהעברה בין חשבונות, ואי אפשר למחוק רק אותה',
+  party: 'התנועה הזו שייכת למסיבה. מתקנים אותה בדף המסיבה.',
+  settlesEdit: 'התנועה הזו סוגרת חוב, ולכן אי אפשר לשנות את הסכום או את הכיוון שלה',
+  settlesDelete: 'התנועה הזו סוגרת חוב. בטלו את הסגירה בדף החובות לפני שמוחקים אותה.',
+  noDate: 'לתנועה חייב להיות תאריך',
+  noAccount: 'החשבון שנבחר לא קיים',
+  noBudgetLine: 'סעיף התקציב שנבחר לא קיים',
+  budgetSeason: 'סעיף התקציב שנבחר שייך לשנה אחרת. בחרו סעיף מהשנה של התנועה.',
+} as const;
+
+/**
+ * Whether a movement is one a lead may change or remove from the ledger
+ * screen: typed by hand, not half of a transfer, not a party's line. The one
+ * rule both the row's controls and the two functions below read.
+ *
+ * A sheet's row would come back on the next import (`promote` upserts on its
+ * source key, so an edit is overwritten and a delete is undone). One leg of a
+ * transfer changed alone leaves two accounts disagreeing about one movement.
+ * A party's line has a part that fixes its direction and wording, and its own
+ * page is where that is kept true.
+ */
+export function entryIsOpen(entry: {
+  sourceBlockId: string | null; transferGroupId: string | null; eventId: string | null;
+}): boolean {
+  return entry.sourceBlockId === null && entry.transferGroupId === null
+    && entry.eventId === null;
+}
+
+async function openEntry(db: AnyDb, id: string, change: 'edit' | 'delete') {
+  const [entry] = await db
+    .select({
+      id: ledgerEntries.id,
+      direction: ledgerEntries.direction,
+      amount: ledgerEntries.amount,
+      sourceBlockId: ledgerEntries.sourceBlockId,
+      transferGroupId: ledgerEntries.transferGroupId,
+      eventId: ledgerEntries.eventId,
+    })
+    .from(ledgerEntries)
+    .where(eq(ledgerEntries.id, id));
+  if (entry === undefined) throw new HebrewRefusal(ENTRY_REFUSALS.missing);
+  if (entry.sourceBlockId !== null) throw new HebrewRefusal(ENTRY_REFUSALS.fromSheet);
+  if (entry.transferGroupId !== null) {
+    throw new HebrewRefusal(change === 'edit'
+      ? ENTRY_REFUSALS.transferEdit : ENTRY_REFUSALS.transferDelete);
+  }
+  if (entry.eventId !== null) throw new HebrewRefusal(ENTRY_REFUSALS.party);
+  const [settles] = await db.select({ id: obligationSettlements.id })
+    .from(obligationSettlements)
+    .where(eq(obligationSettlements.ledgerEntryId, id))
+    .limit(1);
+  return { entry, settlesDebt: settles !== undefined };
+}
+
+/**
+ * Corrects a movement a lead typed — the wrong amount, the wrong קופה, a
+ * description that names nobody.
+ *
+ * A movement that closes a debt keeps its amount and direction: the
+ * settlement beside it carries the same figure, and changing one alone would
+ * have the debts page and the ledger disagree about what was paid. Its date,
+ * description, account, season and budget line are its own and may change.
+ *
+ * Who recorded the movement is not rewritten. There is no column for who
+ * corrected it, and stamping the corrector over the recorder would lose the
+ * one name the row does carry.
+ */
+export async function updateEntry(db: AnyDb, id: string, input: EntryEdit): Promise<void> {
+  if (Number.isNaN(input.occurredOn.getTime())) throw new HebrewRefusal(ENTRY_REFUSALS.noDate);
+  validate({ ...input, recordedBy: '' });
+  const { entry, settlesDebt } = await openEntry(db, id, 'edit');
+
+  const amount = fromAgorot(toAgorot(input.amount));
+  if (settlesDebt
+    && (input.direction !== entry.direction || toAgorot(amount) !== toAgorot(entry.amount))) {
+    throw new HebrewRefusal(ENTRY_REFUSALS.settlesEdit);
+  }
+
+  if (input.accountId !== undefined) {
+    const [account] = await db.select({ id: accounts.id }).from(accounts)
+      .where(eq(accounts.id, input.accountId));
+    if (account === undefined) throw new HebrewRefusal(ENTRY_REFUSALS.noAccount);
+  }
+  if (input.budgetLineId !== undefined) {
+    const [line] = await db.select({ seasonId: budgetLines.seasonId }).from(budgetLines)
+      .where(eq(budgetLines.id, input.budgetLineId));
+    if (line === undefined) throw new HebrewRefusal(ENTRY_REFUSALS.noBudgetLine);
+    // A budget line is one season's plan. Spend filed under another year's
+    // line would be counted against a budget the movement is not part of.
+    if (line.seasonId !== input.seasonId) throw new HebrewRefusal(ENTRY_REFUSALS.budgetSeason);
+  }
+
+  await db.update(ledgerEntries).set({
+    occurredOn: input.occurredOn,
+    direction: input.direction,
+    amount,
+    description: input.description,
+    accountId: input.accountId ?? null,
+    seasonId: input.seasonId ?? null,
+    budgetLineId: input.budgetLineId ?? null,
+  }).where(eq(ledgerEntries.id, id));
+}
+
+/**
+ * Removes a movement a lead typed. It leaves the ledger and its account's
+ * balance; nothing else pointed at it, because everything that could — a
+ * sheet, a transfer's other leg, a party, a closed debt — is refused above.
+ */
+export async function deleteEntry(db: AnyDb, id: string): Promise<void> {
+  const { settlesDebt } = await openEntry(db, id, 'delete');
+  if (settlesDebt) throw new HebrewRefusal(ENTRY_REFUSALS.settlesDelete);
+  await db.delete(ledgerEntries).where(eq(ledgerEntries.id, id));
 }
 
 /**
