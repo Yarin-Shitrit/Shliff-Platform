@@ -1,0 +1,278 @@
+/* Phone first: one column, controls a thumb can hit, and the form above the
+ * list because the form is why the page was opened. Logical properties
+ * throughout (A10). */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.title {
+  margin-block: 0;
+  font-size: var(--text-title);
+  line-height: var(--leading-title);
+}
+
+.lead {
+  margin-block: 0;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+  max-inline-size: 40rem;
+}
+
+.card {
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  max-inline-size: 34rem;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* 16px on a phone: below that iOS zooms the page into the field on focus. */
+.input {
+  inline-size: 100%;
+  min-block-size: var(--tap-min);
+  padding-inline: var(--space-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--input-font-phone);
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-3);
+}
+
+.categories {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
+}
+
+.legend {
+  padding: 0;
+  margin-block-end: var(--space-1);
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.chip {
+  display: inline-flex;
+  position: relative;
+}
+
+/* Still a radio to the keyboard and to a screen reader; only the dot is gone. */
+.chipInput {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.chipFace {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--tap-min);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: var(--text-cell);
+}
+
+.chipInput:checked + .chipFace {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand-text);
+  font-weight: 600;
+}
+
+.chipInput:focus-visible + .chipFace {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.chipInput:disabled + .chipFace {
+  opacity: 0.6;
+}
+
+.photo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.photoButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-block-size: 56px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--sunken);
+  color: var(--ink);
+  font-size: var(--text-lead);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.photoButton[aria-disabled='true'] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* The input is visually hidden, so its focus ring is drawn on its label. */
+:global(.sr-only):focus-visible + .photoButton {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.photoHint {
+  margin-block: 0;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.preview {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--sunken);
+}
+
+.thumb {
+  inline-size: 56px;
+  block-size: 56px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+}
+
+.previewText {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-inline-size: 0;
+  font-size: var(--text-cell);
+}
+
+.previewSize {
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.previewLink {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--tap-min);
+  padding-inline: var(--space-2);
+  border: 0;
+  background: none;
+  color: var(--brand-text);
+  font: inherit;
+  font-size: var(--text-cell);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.submit {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The one button the page is for: the full width of the card, a thumb tall. */
+.submit > button {
+  min-block-size: 48px;
+  font-size: var(--text-lead);
+  justify-content: center;
+}
+
+.formError {
+  margin-block: 0;
+  color: var(--bad);
+  font-size: var(--text-cell);
+}
+
+.saved {
+  margin-block: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: var(--text-cell);
+}
+
+.listHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.listTitle {
+  margin-block: 0;
+  font-size: var(--text-lead);
+}
+
+.fundTag {
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+  white-space: nowrap;
+}
+
+.none {
+  color: var(--ink-4);
+}
+
+.tools {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.readOnly {
+  margin-block: 0;
+  padding-block: var(--space-2);
+  padding-inline: var(--space-3);
+  border-inline-start: 3px solid var(--line-strong);
+  background: var(--sunken);
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}

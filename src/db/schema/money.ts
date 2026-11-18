@@ -17,6 +17,12 @@ export type BudgetCategory = 'camp' | 'dancefloor';
 /** What a party's movement was: ticket money, bar money, a cost, or money
  *  that passed between the camp and the camp it made the party with. */
 export type PartyPart = 'tickets' | 'bar' | 'cost' | 'partner';
+/** What an expense typed on /money/expenses was for. A short fixed list, apart
+ *  from the budget: a budget line is one season's plan and changes every year,
+ *  and a phone form needs eight words, not sixty lines. The Hebrew for each is
+ *  in `src/lib/money/expense-categories.ts`. */
+export type ExpenseCategory =
+  | 'food' | 'gear' | 'build' | 'transport' | 'power' | 'sound' | 'storage' | 'other';
 
 /**
  * Where money physically sits. `עו״ש אופק` is a member's *personal* current
@@ -76,6 +82,13 @@ export const ledgerEntries = pgTable('ledger_entries', {
     .references(() => budgetLines.id, { onDelete: 'set null' }),
   /** Two entries sharing this id are one transfer between accounts. */
   transferGroupId: uuid('transfer_group_id'),
+  /** Chosen by whoever typed the expense, or null: nobody chose. Never
+   *  inferred from the description, and null on every imported row. */
+  expenseCategory: text('expense_category').$type<ExpenseCategory>(),
+  /** The storage key of the receipt's photo (`receipts/<uuid>.<ext>`), or
+   *  null when none was attached. The photo is private: it is served only by
+   *  `/money/expenses/receipt/<entry id>`, which asks who is signed in. */
+  receiptKey: text('receipt_key'),
   recordedBy: text('recorded_by').notNull(),
   sourceBlockId: uuid('source_block_id').references(() => blocks.id, { onDelete: 'set null' }),
   sourceRow: integer('source_row'),

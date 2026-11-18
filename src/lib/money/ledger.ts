@@ -6,7 +6,7 @@ import type { AnyDb } from '@/lib/db-types';
 import {
   accounts, budgetLines, ledgerEntries, obligationSettlements,
 } from '@/db/schema/money';
-import type { LedgerDirection, PartyPart } from '@/db/schema/money';
+import type { ExpenseCategory, LedgerDirection, PartyPart } from '@/db/schema/money';
 import { payments, dues, persons } from '@/db/schema/camp';
 import { toAgorot, fromAgorot } from '@/lib/money';
 import { isBlank } from '@/lib/text/normalize';
@@ -25,6 +25,9 @@ export interface NewEntry {
   partyPart?: PartyPart;
   budgetLineId?: string;
   transferGroupId?: string;
+  /** Only from `recordExpense`, which checks both before it calls here. */
+  expenseCategory?: ExpenseCategory;
+  receiptKey?: string;
   recordedBy: string;
   sourceBlockId?: string;
   sourceRow?: number;
@@ -93,6 +96,8 @@ export async function recordEntry(db: AnyDb, input: NewEntry): Promise<string> {
     partyPart: input.partyPart ?? null,
     budgetLineId: input.budgetLineId ?? null,
     transferGroupId: input.transferGroupId ?? null,
+    expenseCategory: input.expenseCategory ?? null,
+    receiptKey: input.receiptKey ?? null,
     recordedBy: input.recordedBy,
     sourceBlockId: input.sourceBlockId ?? null,
     sourceRow: input.sourceRow ?? null,

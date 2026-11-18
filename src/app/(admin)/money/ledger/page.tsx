@@ -10,6 +10,7 @@ import {
   ACCOUNT_FUNDS, ACCOUNT_FUND_NAMES, fundLabel, isAccountFund,
 } from '@/lib/money/labels';
 import { listBudgetLines } from '@/lib/money/budget';
+import { EXPENSE_CATEGORY_LABELS } from '@/lib/money/expense-categories';
 import {
   listLedgerRows, applyLedgerView, viewCounts, ledgerStrip, groupByMonth,
   runningBalanceFor, inFund,
@@ -242,6 +243,20 @@ export default async function LedgerPage(
             * records last year's expense and sees the balance not move needs
             * the reason where they are looking. */}
           {one.insideCount ? <Pill tone="neutral">לפני הספירה</Pill> : null}
+          {/* Set on /money/expenses by whoever typed the expense. */}
+          {one.expenseCategory === null
+            ? null
+            : <Pill tone="neutral">{EXPENSE_CATEGORY_LABELS[one.expenseCategory]}</Pill>}
+          {/* A plain anchor: the target is a picture, not a page. */}
+          {one.hasReceipt ? (
+            <a
+              className="link" href={`/money/expenses/receipt/${one.id}`}
+              target="_blank" rel="noreferrer"
+              aria-label={`הקבלה של ${one.description}`}
+            >
+              קבלה
+            </a>
+          ) : null}
         </span>
       ),
     },

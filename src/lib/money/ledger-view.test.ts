@@ -157,7 +157,8 @@ function row(over: Partial<LedgerRow> = {}): LedgerRow {
     direction: 'in', amountAgorot: 1850000, description: 'הכנסות מסיבת גיוס',
     accountId: 'a1', accountName: 'קופת מסיבות', accountFund: 'gift', counterpartName: null,
     counterpartPersonId: null, isTransfer: false, budgetLineId: null,
-    budgetLineLabel: null, seasonId: 's1', source: null, insideCount: false,
+    budgetLineLabel: null, expenseCategory: null, hasReceipt: false,
+    seasonId: 's1', source: null, insideCount: false,
     editable: false, ...over,
   };
 }

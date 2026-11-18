@@ -88,6 +88,10 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { id: 'money', label: 'סקירה כספית', href: '/money', icon: 'wallet' },
       { id: 'ledger', label: 'תנועות', href: '/money/ledger', icon: 'ledger' },
+      /* Typing one expense from a phone, with the receipt's photo. Its own
+         page and its own grant, so someone who buys for the camp can record
+         what they spent without being shown the whole ledger. */
+      { id: 'expenses', label: 'הוצאות', href: '/money/expenses', icon: 'cash' },
       /* Parties are where the camp's money comes from, so their history sits
          with the money rather than with the camp's tasks. */
       { id: 'events', label: 'מסיבות', href: '/money/events', icon: 'calendar' },

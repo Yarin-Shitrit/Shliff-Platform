@@ -11,7 +11,7 @@ describe('nav data', () => {
     expect(NAV_ITEMS.map((item) => item.label)).toEqual([
       'בית', 'לטיפול',
       'אנשים', 'דמי קאמפ', 'משימות', 'משמרות', 'נוכחות', 'מפת הקאמפ',
-      'סקירה כספית', 'תנועות', 'מסיבות', 'תקציב', 'חובות',
+      'סקירה כספית', 'תנועות', 'הוצאות', 'מסיבות', 'תקציב', 'חובות',
       'מחסן', 'רכש', 'הקמה', 'לוח עבודה',
       'קבצים וייבוא', 'העלאת קובץ',
       'משתמשים והרשאות',
@@ -54,6 +54,9 @@ describe('nav data', () => {
   it('gives the longest matching section the mark, not the first', () => {
     expect(activeItemId('/money')).toBe('money');
     expect(activeItemId('/money/ledger')).toBe('ledger');
+    expect(activeItemId('/money/expenses')).toBe('expenses');
+    // A receipt is a picture under the expenses page, and opens with its grant.
+    expect(activeItemId('/money/expenses/receipt/6f1c0e0e-0000-4000-8000-000000000000')).toBe('expenses');
     expect(activeItemId('/money/debts')).toBe('debts');
     expect(activeItemId('/money/events/6f1c0e0e-0000-4000-8000-000000000000')).toBe('events');
   });
@@ -94,6 +97,7 @@ describe('nav data', () => {
       site: '/site',
       money: '/money',
       ledger: '/money/ledger',
+      expenses: '/money/expenses',
       events: '/money/events',
       budget: '/money#budget',
       debts: '/money/debts',

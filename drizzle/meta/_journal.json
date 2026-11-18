@@ -211,6 +211,13 @@
       "when": 1795027679524,
       "tag": "0029_account_fund",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1795036258766,
+      "tag": "0030_expense_category_receipt",
+      "breakpoints": true
     }
   ]
 }
