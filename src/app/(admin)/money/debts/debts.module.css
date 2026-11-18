@@ -268,3 +268,28 @@
   color: var(--ink-3);
   font-size: var(--text-meta);
 }
+
+/*
+ * 767.98px — a phone, where a debt is a card and the settle slot has the
+ * card's width rather than a table column's. A nameless debt puts two buttons
+ * and a sentence in that slot. On one line the sentence was left a column one
+ * word wide — "אי / אפשר / לסגור / חוב / בלי / שם" down the card — so here
+ * the buttons keep the first line and the reason they are dead takes the
+ * whole of the next.
+ */
+@media (max-width: 767.98px) {
+  .settle {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .refusal {
+    flex-basis: 100%;
+    max-inline-size: none;
+    text-align: end;
+  }
+}
+
+/* A8: a control a thumb has to hit is at least 44px tall. */
+@media (pointer: coarse) {
+  .settleButton { min-block-size: var(--tap-min); }
+}

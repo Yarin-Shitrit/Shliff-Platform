@@ -93,12 +93,41 @@ export function SidebarFrame({ children }: { children: React.ReactNode }) {
           onClick={() => setOpen(false)}
         />
       )}
+      {/*
+        A link inside the panel closes it, whichever page it points at. The
+        pathname check above only fires when the page changes, so tapping the
+        page you are already on — בית, from בית — used to leave the panel open
+        over it. On a phone that was a trap: the panel covers the whole screen,
+        the scrim behind it cannot be reached, and there is no Escape key.
+
+        The handler is delegation, not a control: the links are the controls,
+        and each is already operable from the keyboard.
+      */}
       <div
         ref={panelRef}
         className={styles.rail}
         data-open={open ? 'true' : 'false'}
         tabIndex={-1}
+        onClick={(event) => {
+          if (event.target instanceof Element && event.target.closest('a[href]')) setOpen(false);
+        }}
       >
+        {/*
+          The panel's own way out. Below 768px it is the only one a thumb has:
+          the panel is the full width of the screen, so the scrim that closes
+          it everywhere else is entirely underneath it. Rendered only while
+          open, so a closed panel adds no off-screen stop to the tab order.
+        */}
+        {open && (
+          <button
+            type="button"
+            className={styles.railClose}
+            aria-label="סגירת התפריט"
+            onClick={() => setOpen(false)}
+          >
+            <Icon name="x" size={20} />
+          </button>
+        )}
         {children}
       </div>
     </>

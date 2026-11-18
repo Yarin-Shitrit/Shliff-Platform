@@ -84,10 +84,32 @@
   cursor: not-allowed;
 }
 
+/*
+ * 767.98px — a phone. The bar spans the screen and scrolls sideways when its
+ * actions do not fit, which is what `overflow-x: auto` was always here for.
+ * It never got the chance: the actions are flex items, and a flex item
+ * shrinks before its container scrolls. So five actions were squeezed into
+ * 374px — "נבחר אחד" broken across two lines, each label printed over the
+ * next one's icon — and nothing scrolled. Holding every item at its own width
+ * is what makes the overflow real.
+ *
+ * It also sits above the tab bar rather than on it. `inset-block-end: 20px`
+ * is measured from the bottom of the window, which on a phone is where the
+ * tab bar is: the bar covered it, so selecting a row took the navigation
+ * away. The offset is the tab bar's own height — `tab-bar.module.css` builds
+ * it from the same tokens, home-indicator inset included — plus a gap.
+ */
 @media (max-width: 767.98px) {
   .bar {
     inset-inline: 8px;
+    inset-block-end: calc(
+      var(--tap-min) + var(--space-2) + max(var(--space-2), env(safe-area-inset-bottom)) + var(--space-2)
+    );
     transform: none;
     overflow-x: auto;
+  }
+  .bar > * {
+    flex-shrink: 0;
+    white-space: nowrap;
   }
 }

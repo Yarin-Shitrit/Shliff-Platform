@@ -208,6 +208,23 @@
     border-block-end: 0;
   }
 
+  /*
+   * A row's tone, its selection and its hover are painted on the cells at
+   * laptop width, because a table row has no box of its own to paint. A card
+   * does — and its cells are stacked blocks with a gap between them, so a
+   * cell-by-cell tint drew a flagged debt as a ladder of pink stripes over
+   * white. Here the card carries the colour and the cells let it through.
+   */
+  .table tbody tr[data-tone='warn'] { background: var(--warn-soft); }
+  .table tbody tr[data-tone='bad'] { background: var(--bad-soft); }
+  .table tbody tr.selected { background: var(--selected); }
+  .table tbody tr[data-tone='warn'] td,
+  .table tbody tr[data-tone='bad'] td,
+  .table tbody tr.selected td,
+  .table tbody tr:hover td {
+    background: transparent;
+  }
+
   /* The group heading spans the card it introduces rather than sitting in a
      grid column of its own. */
   .table tbody tr.groupRow {
@@ -255,6 +272,26 @@
     grid-row: auto;
   }
 
+  /*
+   * A figure names itself wherever its place no longer does. Alone beside the
+   * title it reads as the card's headline number and needs no prefix. That
+   * stops being true in two cases, and both shipped unlabelled: a card with
+   * several figures (מסיבות drew כרטיסים, בר, הוצאות and נשאר לקאמפ as four
+   * bare dashes down the edge — and the ledger's נכנס and יצא as one amount
+   * with nothing saying which way it went), and a selectable card, where the
+   * figure is pushed off the title line by the checkbox.
+   *
+   * `:not(:empty)` because a column that renders nothing for this row — the
+   * ledger's other direction — should not leave a label with no figure.
+   */
+  .table tbody tr:has(td[data-card='figure'] ~ td[data-card='figure']) td[data-card='figure'][data-label]:not(:empty)::before,
+  .table tbody tr:has(td[data-card='select']) td[data-card='figure'][data-label]:not(:empty)::before {
+    content: attr(data-label) ': ';
+    color: var(--ink-3);
+    font-size: var(--text-meta);
+    font-weight: 400;
+  }
+
   /* A meta cell names itself, because on a card there is no column above it
      to do that job. `data-label` is absent for a column whose header has no
      text, and then no prefix is drawn at all. */
@@ -272,11 +309,28 @@
      there. */
   .table tbody td[data-card='action'] {
     grid-column: 2;
+    /* `.w0`'s `inline-size: 1%` is how the column shrinks to its content in a
+       table. On a card it is 1% of a grid track — the slot was pinned at its
+       44px minimum, and anything wider than one icon spilled out of it and
+       off the edge of the screen. */
+    inline-size: auto;
     min-block-size: var(--tap-min);
     min-inline-size: var(--tap-min);
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: flex-end;
+    gap: var(--space-1);
+  }
+  /*
+   * After any meta cell or any figure the slot is already alone on its line —
+   * those cells take the lines above it. Spanning that line draws it in the
+   * same place, at the end edge, but gives it the card's whole width instead
+   * of the end column's: חובות's slot holds two buttons and a sentence. A
+   * card that is only a title and a slot is left as it was, slot beside title.
+   */
+  .table tbody tr:has(td[data-card='meta'], td[data-card='figure']) td[data-card='action'] {
+    grid-column: 1 / -1;
   }
   .table tbody td[data-card='action'] > * {
     opacity: 1;
@@ -289,11 +343,34 @@
     justify-self: start;
   }
 
+  /*
+   * The totals row stacks like the cards above it. Its `<tr>` has to be made a
+   * block too: left as a table row inside a block `<tfoot>`, the engine wraps
+   * it in an anonymous table that shrinks to its content, and the totals drew
+   * as a narrow grey box in one corner under a full-width list.
+   */
+  .table tfoot tr {
+    display: block;
+  }
   .table tfoot td {
     display: block;
     position: static;
+    block-size: auto;
     padding-block: var(--space-2);
     padding-inline: var(--space-3);
+    /* A total that is a sentence — "שילמו 5 · חלקית 0 · טרם 0 · בלי חיוב 0" —
+       is wider than a 320px phone, and a cell that cannot wrap takes the page
+       past the screen's edge with it. */
+    white-space: normal;
+  }
+  /* A total names its column for the same reason a meta cell does: stacked,
+     there is no header above it. `table.tsx` writes `data-label` only on a
+     total that sits under exactly one column that has a name to give. */
+  .table tfoot td[data-label]::before {
+    content: attr(data-label) ': ';
+    color: var(--ink-3);
+    font-size: var(--text-meta);
+    font-weight: 400;
   }
 
   /* A totals cell with nothing in it pads out the action column on a laptop.

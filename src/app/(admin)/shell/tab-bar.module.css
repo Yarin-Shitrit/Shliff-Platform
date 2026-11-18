@@ -88,6 +88,17 @@
   position: fixed;
   inset-inline: 0;
   inset-block-end: calc(var(--tap-min) + var(--space-2) * 2);
+  /*
+   * The sheet lists every section the bar does not, which is more rows than a
+   * phone is tall: sixteen 44px rows against a 664px viewport. Left to its
+   * own height it grew upward past the top edge, and the first rows — דמי
+   * קאמפ, משימות, משמרות — sat off-screen with nothing to scroll them back.
+   * So it is capped at the space above the bar and scrolls inside that; `dvh`
+   * because the browser's own chrome comes and goes on a phone.
+   */
+  max-block-size: calc(100dvh - (var(--tap-min) + var(--space-2) * 2));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border-block-start: 1px solid var(--line);
   background: var(--panel);
   box-shadow: var(--shadow-pop);
@@ -111,10 +122,15 @@
  * page behind it is `inert` and there is nothing else left to click.
  */
 .sheetClose {
+  /* Pinned to the sheet's bottom edge, so the way out is on screen wherever
+     the list is scrolled to. Opaque for the same reason: rows pass under it. */
+  position: sticky;
+  inset-block-end: 0;
+  flex-shrink: 0;
   min-block-size: var(--tap-min);
   border: 0;
   border-block-start: 1px solid var(--line);
-  background: transparent;
+  background: var(--panel);
   color: var(--ink-3);
   cursor: pointer;
 }

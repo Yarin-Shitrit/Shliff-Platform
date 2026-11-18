@@ -123,3 +123,10 @@
   font-size: 12px;
 }
 .footnote { margin-inline-start: auto; }
+
+/* iOS zooms the page when a field under 16px takes focus, and this field takes
+   focus the moment the palette opens — so on a phone, opening search zoomed the
+   screen. `--input-font-phone` is the kit's own answer to the same thing. */
+@media (pointer: coarse) {
+  .box { font-size: var(--input-font-phone); }
+}

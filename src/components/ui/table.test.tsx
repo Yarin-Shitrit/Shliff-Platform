@@ -150,6 +150,11 @@ describe('Table — the additive guarantee', () => {
    * the markup equals the previous snapshot byte for byte. No element, class,
    * attribute or text node was removed or altered — the reflow adds and
    * nothing else.
+   *
+   * It fired a second time for the phone totals: a stacked total now carries
+   * the name of the column it sits under. The difference from the snapshot
+   * before it is one attribute — `data-label="יתרה"` on the footer's second
+   * cell — and nothing else in the string moved, which is the same proof.
    */
   it('renders the pre-totalsLabel prop set byte for byte', () => {
     const { container } = render(
@@ -172,7 +177,7 @@ describe('Table — the additive guarantee', () => {
         density="compact"
       />,
     );
-    expect(container.innerHTML).toMatchInlineSnapshot(`"<div class="_wrap_464089 _compact_464089"><table role="table" class="_table_464089"><caption class="sr-only">רשימת אנשים</caption><thead role="rowgroup"><tr role="row"><th role="columnheader" scope="col" class="_w0_464089"><input class="_check_464089" aria-label="בחירת כל השורות" aria-checked="mixed" type="checkbox"></th><th role="columnheader" scope="col" class="">שם</th><th role="columnheader" scope="col" class="">דמי קאמפ</th><th role="columnheader" scope="col" class="_numeric_464089 num">יתרה</th><th role="columnheader" scope="col" class="_w0_464089"></th></tr></thead><tbody role="rowgroup"><tr role="row" class="_groupRow_464089"><th role="rowheader" scope="rowgroup" colspan="5">ספטמבר 2026</th></tr><tr role="row" data-tone="default" class=""><td role="cell" data-card="select" class="_w0_464089"><input class="_check_464089" aria-label="בחירת a" type="checkbox"></td><td role="cell" data-label="שם" data-card="title" class="">רוני אדלר</td><td role="cell" data-label="דמי קאמפ" data-card="meta" class="">שולם</td><td role="cell" data-label="יתרה" data-card="figure" class="_numeric_464089 num"><bdi>—</bdi></td><td role="cell" data-card="action" class="_w0_464089 _actions_464089"><button type="button">אפשרויות לרוני אדלר</button></td></tr><tr role="row" data-tone="bad" class="_selected_464089"><td role="cell" data-card="select" class="_w0_464089"><input class="_check_464089" aria-label="בחירת b" type="checkbox" checked=""></td><td role="cell" data-label="שם" data-card="title" class="">איתי כהן</td><td role="cell" data-label="דמי קאמפ" data-card="meta" class="">טרם שילם</td><td role="cell" data-label="יתרה" data-card="figure" class="_numeric_464089 num"><bdi>1,200 ₪</bdi></td><td role="cell" data-card="action" class="_w0_464089 _actions_464089"><button type="button">אפשרויות לאיתי כהן</button></td></tr></tbody><tfoot><tr><td colspan="3" class=""><bdi>35</bdi> אנשים</td><td class="_numeric_464089 num"><bdi>12,200 ₪</bdi></td></tr></tfoot></table></div>"`);
+    expect(container.innerHTML).toMatchInlineSnapshot(`"<div class="_wrap_464089 _compact_464089"><table role="table" class="_table_464089"><caption class="sr-only">רשימת אנשים</caption><thead role="rowgroup"><tr role="row"><th role="columnheader" scope="col" class="_w0_464089"><input class="_check_464089" aria-label="בחירת כל השורות" aria-checked="mixed" type="checkbox"></th><th role="columnheader" scope="col" class="">שם</th><th role="columnheader" scope="col" class="">דמי קאמפ</th><th role="columnheader" scope="col" class="_numeric_464089 num">יתרה</th><th role="columnheader" scope="col" class="_w0_464089"></th></tr></thead><tbody role="rowgroup"><tr role="row" class="_groupRow_464089"><th role="rowheader" scope="rowgroup" colspan="5">ספטמבר 2026</th></tr><tr role="row" data-tone="default" class=""><td role="cell" data-card="select" class="_w0_464089"><input class="_check_464089" aria-label="בחירת a" type="checkbox"></td><td role="cell" data-label="שם" data-card="title" class="">רוני אדלר</td><td role="cell" data-label="דמי קאמפ" data-card="meta" class="">שולם</td><td role="cell" data-label="יתרה" data-card="figure" class="_numeric_464089 num"><bdi>—</bdi></td><td role="cell" data-card="action" class="_w0_464089 _actions_464089"><button type="button">אפשרויות לרוני אדלר</button></td></tr><tr role="row" data-tone="bad" class="_selected_464089"><td role="cell" data-card="select" class="_w0_464089"><input class="_check_464089" aria-label="בחירת b" type="checkbox" checked=""></td><td role="cell" data-label="שם" data-card="title" class="">איתי כהן</td><td role="cell" data-label="דמי קאמפ" data-card="meta" class="">טרם שילם</td><td role="cell" data-label="יתרה" data-card="figure" class="_numeric_464089 num"><bdi>1,200 ₪</bdi></td><td role="cell" data-card="action" class="_w0_464089 _actions_464089"><button type="button">אפשרויות לאיתי כהן</button></td></tr></tbody><tfoot><tr><td colspan="3" class=""><bdi>35</bdi> אנשים</td><td data-label="יתרה" class="_numeric_464089 num"><bdi>12,200 ₪</bdi></td></tr></tfoot></table></div>"`);
   });
 });
 
@@ -266,6 +271,71 @@ describe('Table — an action slot that is not hidden behind a hover', () => {
  * and not the reflow itself. That gap is closed by hand under the plan's
  * Definition of done, and no assertion here claims more than it proves.
  */
+describe('Table — a stacked total says which column it totals', () => {
+  /**
+   * Below 767.98px the footer is a column of blocks with no header above it,
+   * so "6,000 ₪" over "0 ₪" says nothing about which is שולם and which is
+   * יתרה. The name is borrowed from the column only when that is certain.
+   */
+  const footCells = (container: HTMLElement) => [...container.querySelectorAll('tfoot td')];
+
+  it('names a total that sits under exactly one column', () => {
+    const { container } = render(
+      <Table
+        caption="רשימת אנשים" columns={columns} rows={rows}
+        totals={[
+          { key: 'who', content: '2 אנשים' },
+          { key: 'state', content: '1 שילמו' },
+          { key: 'sum', content: <bdi>1,200 ₪</bdi>, numeric: true },
+        ]}
+      />,
+    );
+    const [who, state, sum] = footCells(container);
+    expect(state.getAttribute('data-label')).toBe('דמי קאמפ');
+    expect(sum.getAttribute('data-label')).toBe('יתרה');
+    // The title column's total is a sentence of its own; "שם: 2 אנשים" would garble it.
+    expect(who.hasAttribute('data-label')).toBe(false);
+  });
+
+  it('leaves a spanning total unnamed — it summarises several columns and belongs to none', () => {
+    const { container } = render(
+      <Table
+        caption="רשימת אנשים" columns={columns} rows={rows}
+        totals={[
+          { key: 'label', content: '2 אנשים', colSpan: 2 },
+          { key: 'sum', content: <bdi>1,200 ₪</bdi>, numeric: true },
+        ]}
+      />,
+    );
+    const [label, sum] = footCells(container);
+    expect(label.hasAttribute('data-label')).toBe(false);
+    // …and the cell after the span is still matched to its own column, not the next one along.
+    expect(sum.getAttribute('data-label')).toBe('יתרה');
+  });
+
+  it('counts the checkbox column, and names nothing under it or under the action slot', () => {
+    const { container } = render(
+      <Table
+        caption="רשימת אנשים" columns={columns} rows={rows}
+        selection={{
+          selectedIds: new Set<string>(), onToggleRow: vi.fn(), onToggleAll: vi.fn(),
+          rowCheckboxLabel: () => 'בחירה', allCheckboxLabel: 'בחירת כל השורות',
+        }}
+        rowActions={() => null}
+        totals={[
+          { key: 'pad', content: null },
+          { key: 'who', content: '2 אנשים' },
+          { key: 'state', content: '1 שילמו' },
+          { key: 'sum', content: <bdi>1,200 ₪</bdi>, numeric: true },
+          { key: 'tail', content: null },
+        ]}
+      />,
+    );
+    expect(footCells(container).map((cell) => cell.getAttribute('data-label')))
+      .toEqual([null, null, 'דמי קאמפ', 'יתרה', null]);
+  });
+});
+
 describe('Table, once it has to fit a phone', () => {
   it('gives every cell the name of its column, so a card can label it', () => {
     const { container } = render(<Table caption="רשימת אנשים" columns={columns} rows={rows} />);
