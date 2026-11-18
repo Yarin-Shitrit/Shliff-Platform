@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { LedgerRow } from '@/lib/money/ledger-view';
 import type { SourceCell } from '@/lib/money/trace';
 
@@ -47,6 +47,7 @@ vi.mock('@/lib/money/ledger-view', async (importOriginal) => ({
 }));
 
 import LedgerPage from './page';
+import ledgerStyles from './ledger.module.css';
 
 const SEASON = {
   id: 's1', name: 'ברן 26', year: 2026, flatRate: '1200.00',
@@ -64,7 +65,7 @@ function row(over: Partial<LedgerRow> = {}): LedgerRow {
   return {
     id: 'r1', origin: 'ledger', occurredOn: new Date('2026-09-15T00:00:00Z'),
     direction: 'in', amountAgorot: 1850000, description: 'הכנסות מסיבת גיוס',
-    accountId: 'a1', accountName: 'קופת מסיבות', counterpartName: null,
+    accountId: 'a1', accountName: 'קופת מסיבות', accountFund: 'gift', counterpartName: null,
     counterpartPersonId: null, isTransfer: false, budgetLineId: null,
     budgetLineLabel: null, seasonId: 's1', source: null, insideCount: false,
     editable: false, ...over,
@@ -84,6 +85,90 @@ beforeEach(() => {
 async function renderPage(params: Record<string, string> = {}) {
   render(await LedgerPage({ searchParams: Promise.resolve({ season: 's1', ...params }) }));
 }
+
+describe('the ledger read through one pot', () => {
+  const ROWS = [
+    row({ id: 'c1', description: 'צילייה', direction: 'out', amountAgorot: 1357000,
+          accountId: 'a1', accountName: 'עו״ש אופק', accountFund: 'camp' }),
+    row({ id: 'g1', description: 'רווח מסיבת פקאנים', direction: 'in', amountAgorot: 5700000,
+          accountId: 'a2', accountName: 'וייבז קלוז פרינדס', accountFund: 'gift' }),
+    row({ id: 'n1', description: 'מים וקרח', direction: 'out', amountAgorot: 40000,
+          accountId: null, accountName: null, accountFund: null }),
+  ];
+  const ACCOUNTS = [
+    { id: 'a1', name: 'עו״ש אופק', fund: 'camp' },
+    { id: 'a2', name: 'וייבז קלוז פרינדס', fund: 'gift' },
+  ];
+
+  beforeEach(() => {
+    listLedgerRows.mockResolvedValue(ROWS);
+    listAccounts.mockResolvedValue(ACCOUNTS);
+  });
+
+  it('shows every movement when no pot is asked for', async () => {
+    await renderPage();
+    for (const description of ['צילייה', 'רווח מסיבת פקאנים', 'מים וקרח']) {
+      expect(screen.getAllByText(description).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("shows only the camp's movements under ?fund=camp, and only the gift's under ?fund=gift", async () => {
+    await renderPage({ fund: 'camp' });
+    expect(screen.getAllByText('צילייה').length).toBeGreaterThan(0);
+    expect(screen.queryByText('רווח מסיבת פקאנים')).toBeNull();
+    // No account is no pot: it is on the unfiltered ledger, under בלי חשבון.
+    expect(screen.queryByText('מים וקרח')).toBeNull();
+
+    cleanup();
+    await renderPage({ fund: 'gift' });
+    expect(screen.getAllByText('רווח מסיבת פקאנים').length).toBeGreaterThan(0);
+    expect(screen.queryByText('צילייה')).toBeNull();
+  });
+
+  /* A param that is neither pot is no filter — never an empty table that
+     reads as "the camp has no movements". */
+  it('treats a pot it does not know as no filter at all', async () => {
+    await renderPage({ fund: 'dancefloor' });
+    for (const description of ['צילייה', 'רווח מסיבת פקאנים', 'מים וקרח']) {
+      expect(screen.getAllByText(description).length).toBeGreaterThan(0);
+    }
+  });
+
+  it('offers both pots as a filter, each keeping the season, and a way off it', async () => {
+    await renderPage({ fund: 'camp' });
+    // The chip says which pot is on, and its menu offers both.
+    fireEvent.click(screen.getByRole('button', { name: 'של מי: הקאמפ' }));
+    expect(screen.getByRole('link', { name: 'הגיפט' }).getAttribute('href'))
+      .toBe('/money/ledger?season=s1&fund=gift');
+    expect(screen.getByRole('link', { name: 'הקאמפ' }).getAttribute('href'))
+      .toBe('/money/ledger?season=s1&fund=camp');
+    // Clearing the pot leaves the season in place (R5).
+    expect(screen.getByRole('link', { name: 'הסרת הסינון של מי' }).getAttribute('href'))
+      .toBe('/money/ledger?season=s1');
+  });
+
+  it('says both pots are on screen when neither is chosen, and offers no way off a filter that is not on', async () => {
+    await renderPage();
+    expect(screen.getByRole('button', { name: 'של מי: הקאמפ והגיפט' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'הסרת הסינון של מי' })).toBeNull();
+  });
+
+  it('keeps the pot on the links to the saved views', async () => {
+    await renderPage({ fund: 'gift' });
+    // Every anchor, not only the accessible links: a chip keeps its options
+    // in a closed menu, and a saved view is a `tab`.
+    const hrefs = [...document.querySelectorAll('a')].map((one) => one.getAttribute('href'));
+    expect(hrefs).toContain('/money/ledger?season=s1&fund=gift&view=in');
+  });
+
+  it("says whose money each row's account holds, beside the account's name", async () => {
+    await renderPage();
+    const tags = [...document.querySelectorAll(`.${ledgerStyles.fundTag}`)]
+      .map((one) => `${one.parentElement!.textContent}`);
+    expect(tags).toContain('עו״ש אופק קאמפ');
+    expect(tags).toContain('וייבז קלוז פרינדס גיפט');
+  });
+});
 
 describe('the movements table', () => {
   it('puts every amount in its own positive column, never a signed one', async () => {

@@ -1,18 +1,21 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { AnyDb } from '@/lib/db-types';
 import { accounts, ledgerEntries } from '@/db/schema/money';
-import type { AccountKind, LedgerDirection } from '@/db/schema/money';
+import type { AccountFund, AccountKind, LedgerDirection } from '@/db/schema/money';
 import { persons, payments, dues } from '@/db/schema/camp';
 import { toAgorot, fromAgorot } from '@/lib/money';
 import { HebrewRefusal } from '@/lib/errors/hebrew';
 import { isBlank } from '@/lib/text/normalize';
 import { insideCount, campDayKey } from './counted';
+import { isAccountFund } from './labels';
 
 export type Account = typeof accounts.$inferSelect;
 
 export interface NewAccount {
   name: string;
   kind: AccountKind;
+  /** Whose money it holds. Omitted means nobody has said yet. */
+  fund?: AccountFund;
   holderPersonId?: string;
   /** In shekels. */
   openingBalance?: number;
@@ -24,6 +27,8 @@ export interface AccountBalance {
   accountId: string;
   name: string;
   kind: AccountKind;
+  /** The camp's money or the gift's; null until a lead says which. */
+  fund: AccountFund | null;
   holderPersonId: string | null;
   holderName: string | null;
   balanceAgorot: number;
@@ -52,6 +57,7 @@ export async function createAccount(db: AnyDb, input: NewAccount): Promise<Accou
   const [row] = await db.insert(accounts).values({
     name: input.name,
     kind: input.kind,
+    fund: input.fund ?? null,
     holderPersonId: input.holderPersonId ?? null,
     openingBalance: fromAgorot(toAgorot(input.openingBalance ?? 0)),
     openingOn: input.openingOn ?? null,
@@ -91,6 +97,7 @@ export async function accountBalances(db: AnyDb): Promise<AccountBalance[]> {
       accountId: accounts.id,
       name: accounts.name,
       kind: accounts.kind,
+      fund: accounts.fund,
       holderPersonId: accounts.holderPersonId,
       holderName: persons.displayName,
       openingBalance: accounts.openingBalance,
@@ -128,6 +135,7 @@ export async function accountBalances(db: AnyDb): Promise<AccountBalance[]> {
     accountId: row.accountId,
     name: row.name,
     kind: row.kind,
+    fund: row.fund,
     holderPersonId: row.holderPersonId,
     holderName: row.holderName ?? null,
     balanceAgorot: toAgorot(row.openingBalance) + (delta.get(row.accountId) ?? 0),
@@ -311,4 +319,32 @@ export async function setAccountHolder(
   }
 
   await db.update(accounts).set({ holderPersonId }).where(eq(accounts.id, accountId));
+}
+
+/**
+ * Says whose money an account holds: the camp's or the gift's.
+ *
+ * The pot is otherwise written once, when the account is made. This is the
+ * way to place an account that existed before the camp kept two pots apart,
+ * and to correct one that was placed wrongly.
+ *
+ * It moves no money and changes no movement. What changes is which pot's
+ * balance the account is summed into, and under which heading its movements
+ * are read — so a wrong answer here is undone by giving the right one.
+ *
+ * The value is checked here as well as in the type: the column is `text`
+ * with a TypeScript type over it, so a bad value from a client would be
+ * stored in silence and then match neither pot on any screen.
+ */
+export async function setAccountFund(
+  db: AnyDb, accountId: string, fund: AccountFund,
+): Promise<void> {
+  if (!isAccountFund(fund)) {
+    throw new HebrewRefusal('צריך לבחור של מי הכסף: של הקאמפ או של הגיפט.');
+  }
+  const [account] = await db.select({ id: accounts.id })
+    .from(accounts).where(eq(accounts.id, accountId));
+  if (!account) throw new HebrewRefusal('אין חשבון כזה.');
+
+  await db.update(accounts).set({ fund }).where(eq(accounts.id, accountId));
 }

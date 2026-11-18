@@ -40,13 +40,17 @@
 
 .tiles {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: var(--space-3);
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
+/* Six tiles since the balance became two — the camp's and the gift's. Three
+   across keeps the two balances on one row before the screen is wide enough
+   for all six. */
+@media (max-width: 1399.98px) { .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 1023.98px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 767.98px)  { .tiles { grid-template-columns: 1fr; } }
 
@@ -66,6 +70,33 @@
   color: var(--ink-3);
   font-size: var(--text-meta);
 }
+
+/* One band per pot: its name, what it holds, what moved through it this
+   year, then its accounts. The figure is the sum of the cards under it. */
+.fundGroup { display: flex; flex-direction: column; gap: var(--space-2); }
+.fundGroup + .fundGroup { margin-block-start: var(--space-4); }
+.fundHead {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  padding-block-end: var(--space-1);
+  border-block-end: 1px solid var(--line);
+}
+.fundName { font-size: var(--text-body); font-weight: 600; margin: 0; }
+.fundBalance {
+  font-size: var(--text-lead);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.fundOverdrawn { color: var(--bad); }
+.fundFlow {
+  margin-inline-start: auto;
+  font-size: var(--text-meta);
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.fundNote { margin: 0; font-size: var(--text-meta); color: var(--ink-3); }
 
 .accountGrid {
   display: grid;
@@ -93,6 +124,12 @@
   justify-content: space-between;
   gap: var(--space-2);
   flex-wrap: wrap;
+  font-size: var(--text-meta);
+}
+.accountLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
   font-size: var(--text-meta);
 }
 .accountWarning {

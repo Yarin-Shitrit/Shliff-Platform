@@ -167,7 +167,14 @@ const FULL: {
     expectedAgorot: 3650000, collectedAgorot: 2430000, outstandingAgorot: 1220000,
     unpaidCount: 9, partlyPaidCount: 3, missingDuesCount: 2, unpaid: [],
   },
-  cash: { totalAgorot: 6091255, accountCount: 3, unattributedInAgorot: 240000 },
+  cash: {
+    totalAgorot: 6091255, accountCount: 3, unattributedInAgorot: 240000,
+    funds: {
+      camp: { balanceAgorot: 1891255, accountCount: 2 },
+      gift: { balanceAgorot: 4200000, accountCount: 1 },
+      unassigned: { balanceAgorot: 0, accountCount: 0 },
+    },
+  },
   debts: { campOwesAgorot: 686400, owedToCampAgorot: 235000, unnamedCount: 2 },
   coverage: {
     tasks: 12, openTasks: 10, uncoveredTasks: 6,
@@ -231,9 +238,16 @@ describe('HomePage figures', () => {
     expect(within(dues).getByText('9 טרם שילמו')).toBeTruthy();
     expect(within(dues).getByText('3 שילמו חלקית')).toBeTruthy();
 
-    const cash = screen.getByRole('link', { name: /כסף בקופות/ });
-    expect(within(cash).getByText('60,912.55 ₪')).toBeTruthy();
-    expect(within(cash).getByText('ב־3 חשבונות')).toBeTruthy();
+    // Cash is two figures, never one: the camp's money and the gift's are
+    // different money. 18,912.55 and 42,000 here; their sum is on no tile.
+    const camp = screen.getByRole('link', { name: /כסף הקאמפ/ });
+    expect(within(camp).getByText('18,912.55 ₪')).toBeTruthy();
+    expect(within(camp).getByText('ב־2 חשבונות')).toBeTruthy();
+    const gift = screen.getByRole('link', { name: /כסף הגיפט/ });
+    expect(within(gift).getByText('42,000 ₪')).toBeTruthy();
+    expect(within(gift).getByText('בחשבון אחד')).toBeTruthy();
+    expect(screen.queryByText('60,912.55 ₪')).toBeNull();
+    expect(screen.queryByText('כסף בקופות')).toBeNull();
 
     const debts = screen.getByRole('link', { name: /חובות פתוחים/ });
     expect(within(debts).getByText('6,864 ₪')).toBeTruthy();
@@ -249,8 +263,9 @@ describe('HomePage figures', () => {
 
     expect(screen.getByRole('link', { name: /נגבה מדמי קאמפ/ }).getAttribute('href'))
       .toBe('/fees?season=s26');
-    expect(screen.getByRole('link', { name: /כסף בקופות/ }).getAttribute('href'))
-      .toBe('/money?season=s26');
+    for (const name of [/כסף הקאמפ/, /כסף הגיפט/]) {
+      expect(screen.getByRole('link', { name }).getAttribute('href')).toBe('/money?season=s26');
+    }
     // D8's /money/debts exists now, but the two obligation tables this figure
     // sums still live on /money itself; retarget when D8 owns both directions.
     expect(screen.getByRole('link', { name: /חובות פתוחים/ }).getAttribute('href'))
@@ -279,13 +294,66 @@ describe('HomePage figures', () => {
   it('says nothing about unplaced money when every shekel is placed', async () => {
     seasonOverview.mockResolvedValue(overview({
       ...FULL,
-      cash: { totalAgorot: 6091255, accountCount: 3, unattributedInAgorot: 0 },
+      cash: {
+        totalAgorot: 6091255, accountCount: 3, unattributedInAgorot: 0,
+        funds: {
+      camp: { balanceAgorot: 1891255, accountCount: 2 },
+      gift: { balanceAgorot: 4200000, accountCount: 1 },
+      unassigned: { balanceAgorot: 0, accountCount: 0 },
+    },
+      },
       debts: { campOwesAgorot: 686400, owedToCampAgorot: 235000, unnamedCount: 0 },
     }));
     render(await HomePage({ searchParams: Promise.resolve({ season: 's26' }) }));
     // A `>= 0` off-by-one would put both warnings on every season forever.
     expect(screen.queryByText(/נרשמו בלי חשבון/)).toBeNull();
     expect(screen.queryByText(/חובות בלי שם/)).toBeNull();
+  });
+
+  /*
+   * The reason there are two tiles. Summed, an overdrawn camp hides behind
+   * the gift: -13,412 and 19,042 read as a comfortable 5,630.
+   */
+  it('shows an overdrawn pot as overdrawn, in words, beside the one that is not', async () => {
+    seasonOverview.mockResolvedValue(overview({
+      ...FULL,
+      cash: {
+        totalAgorot: 563000, accountCount: 3, unattributedInAgorot: 0,
+        funds: {
+          camp: { balanceAgorot: -1341200, accountCount: 2 },
+          gift: { balanceAgorot: 1904200, accountCount: 1 },
+          unassigned: { balanceAgorot: 0, accountCount: 0 },
+        },
+      },
+    }));
+    render(await HomePage({ searchParams: Promise.resolve({ season: 's26' }) }));
+    const camp = screen.getByRole('link', { name: /כסף הקאמפ/ });
+    expect(camp.textContent).toContain('13,412');
+    // R3: the red is never the only carrier.
+    expect(within(camp).getByText('במינוס')).toBeTruthy();
+    const gift = screen.getByRole('link', { name: /כסף הגיפט/ });
+    expect(within(gift).getByText('19,042 ₪')).toBeTruthy();
+    expect(within(gift).queryByText('במינוס')).toBeNull();
+    expect(screen.queryByText('5,630 ₪')).toBeNull();
+  });
+
+  it('says once that some accounts are in neither pot yet', async () => {
+    seasonOverview.mockResolvedValue(overview({
+      ...FULL,
+      cash: {
+        totalAgorot: 6091255, accountCount: 3, unattributedInAgorot: 0,
+        funds: {
+          camp: { balanceAgorot: 0, accountCount: 0 },
+          gift: { balanceAgorot: 1904200, accountCount: 1 },
+          unassigned: { balanceAgorot: 4187055, accountCount: 2 },
+        },
+      },
+    }));
+    render(await HomePage({ searchParams: Promise.resolve({ season: 's26' }) }));
+    expect(screen.getAllByText('2 חשבונות עוד לא שויכו לקאמפ או לגיפט')).toHaveLength(1);
+    // A pot with no account says so instead of reading as an empty zero.
+    expect(within(screen.getByRole('link', { name: /כסף הקאמפ/ })).getByText('אין עדיין חשבון'))
+      .toBeTruthy();
   });
 
   it('draws only the figures that have something to report', async () => {
@@ -298,7 +366,8 @@ describe('HomePage figures', () => {
     // Not "0 ₪ across 0 accounts", not "0 of 0 places" — absent. A card that
     // always reads zero teaches its reader to skip the row that will one day
     // matter.
-    expect(screen.queryByText('כסף בקופות')).toBeNull();
+    expect(screen.queryByText('כסף הקאמפ')).toBeNull();
+    expect(screen.queryByText('כסף הגיפט')).toBeNull();
     expect(screen.queryByText('חובות פתוחים')).toBeNull();
     expect(screen.queryByText('איוש משימות')).toBeNull();
     // One figure is still a screen with content, so the season-wide empty

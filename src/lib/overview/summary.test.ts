@@ -83,8 +83,15 @@ describe('seasonOverview', () => {
     expect(overview.dues!.unpaid).toHaveLength(2);
     // Opening balance 1,000 plus the 1,200 dues payment that landed in it —
     // a dues payment is money that physically arrived somewhere.
+    // The account was made with no pot, so its money is in neither the
+    // camp's figure nor the gift's until a lead says whose it is.
     expect(overview.cash).toEqual({
       totalAgorot: 220000, accountCount: 1, unattributedInAgorot: 0,
+      funds: {
+        camp: { balanceAgorot: 0, accountCount: 0 },
+        gift: { balanceAgorot: 0, accountCount: 0 },
+        unassigned: { balanceAgorot: 220000, accountCount: 1 },
+      },
     });
     expect(overview.debts).toEqual({
       campOwesAgorot: 80000, owedToCampAgorot: 45000, unnamedCount: 0,
@@ -114,6 +121,11 @@ describe('seasonOverview', () => {
     // place. The card appears, reading 0 across 0 accounts, with the warning.
     expect(overview.cash).toEqual({
       totalAgorot: 0, accountCount: 0, unattributedInAgorot: 40000,
+      funds: {
+        camp: { balanceAgorot: 0, accountCount: 0 },
+        gift: { balanceAgorot: 0, accountCount: 0 },
+        unassigned: { balanceAgorot: 0, accountCount: 0 },
+      },
     });
   });
 

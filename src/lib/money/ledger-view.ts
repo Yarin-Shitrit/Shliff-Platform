@@ -3,7 +3,7 @@ import type { AnyDb } from '@/lib/db-types';
 import { formatDateFull } from '@/lib/dates';
 import { toAgorot } from '@/lib/money';
 import { accounts, budgetLines, ledgerEntries } from '@/db/schema/money';
-import type { LedgerDirection } from '@/db/schema/money';
+import type { AccountFund, LedgerDirection } from '@/db/schema/money';
 import { dues, payments, persons } from '@/db/schema/camp';
 import { insideCount } from './counted';
 import { entryIsOpen, listMovements } from './ledger';
@@ -23,6 +23,11 @@ export interface LedgerRow {
   description: string;
   accountId: string | null;
   accountName: string | null;
+  /** Whose money the movement's account holds — the camp's or the gift's.
+   *  Null for a movement with no account, and for one whose account nobody
+   *  has placed. The pot is a fact about the account, never about the
+   *  movement, so it is read from there and not from the description. */
+  accountFund: AccountFund | null;
   /** מ/אל. The dues payer, or the other account of a transfer. Null when the
    *  model knows of no counterpart — never parsed out of the description. */
   counterpartName: string | null;
@@ -116,10 +121,11 @@ export async function listLedgerRows(
     .map((move) => move.accountId)
     .filter((id): id is string => id !== null))];
   const countedRows = accountIds.length === 0 ? [] : await db
-    .select({ id: accounts.id, countedOn: accounts.openingOn })
+    .select({ id: accounts.id, countedOn: accounts.openingOn, fund: accounts.fund })
     .from(accounts)
     .where(inArray(accounts.id, accountIds));
   const countedOnById = new Map(countedRows.map((row) => [row.id, row.countedOn]));
+  const fundById = new Map(countedRows.map((row) => [row.id, row.fund]));
 
   const byEntry = new Map(entryRows.map((row) => [row.id, row]));
   const byPayment = new Map(payerRows.map((row) => [row.id, row]));
@@ -139,6 +145,7 @@ export async function listLedgerRows(
       description: move.description,
       accountId: move.accountId,
       accountName: move.accountName,
+      accountFund: move.accountId === null ? null : fundById.get(move.accountId) ?? null,
       counterpartName: payer?.displayName
         ?? (move.transferGroupId ? opposite(move.transferGroupId, move.direction) : null),
       counterpartPersonId: payer?.personId ?? null,
@@ -153,6 +160,20 @@ export async function listLedgerRows(
       editable: move.source === 'ledger' && entryIsOpen(move),
     };
   });
+}
+
+/**
+ * The ledger read through one pot: the movements whose account holds the
+ * camp's money, or the gift's. With no pot it is every row, unchanged.
+ *
+ * A scope, like the account filter, and not one of the saved views: it is
+ * applied before the views are counted, so the strip, the view counts and
+ * the totals under the table all describe the same pot. A movement with no
+ * account belongs to neither pot and so drops out of both readings — it is
+ * still on the unfiltered ledger, under `בלי חשבון`.
+ */
+export function inFund(rows: LedgerRow[], fund: AccountFund | undefined): LedgerRow[] {
+  return fund === undefined ? rows : rows.filter((row) => row.accountFund === fund);
 }
 
 export type LedgerSort = 'date-asc' | 'date-desc';

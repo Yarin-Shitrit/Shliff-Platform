@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import type { AccountBalance } from '@/lib/money/accounts';
 import type { AccountKind } from '@/db/schema/money';
-import { ACCOUNT_KIND_LABELS } from '@/lib/money/labels';
+import {
+  ACCOUNT_FUND_LABELS, ACCOUNT_FUND_NAMES, ACCOUNT_KIND_LABELS, NO_FUND_GROUP_LABEL, fundOf,
+} from '@/lib/money/labels';
 import { Money, DateText } from '@/components/format';
 import { Pill } from '@/components/ui/pill';
 import { Icon, type IconName } from '@/components/ui/icon';
@@ -37,16 +39,26 @@ const KIND_ICONS: Record<AccountKind, IconName> = {
  *
  * The card's `--warn-line` border is never the only carrier of that meaning
  * (R3): the kind pill says `חשבון פרטי` and the sentence below says the rest.
+ *
+ * The second pill is whose money it is — the camp's or the gift's. The two
+ * pots are kept apart on every screen, so the card says which one this
+ * account is summed into wherever it is drawn, including a person's page,
+ * where no heading says it. An account nobody has placed says that instead,
+ * in the warn tone, because its balance is in neither pot's figure.
+ * `fundHref` is the link that can change it.
  */
-export function AccountCard({ account, countHref, holderHref }: {
+export function AccountCard({ account, countHref, holderHref, fundHref }: {
   account: AccountBalance;
   /** The count drawer for this account. Absent on a screen that only shows. */
   countHref?: string;
   /** The holder drawer for this account — who holds the money now. */
   holderHref?: string;
+  /** The pot drawer for this account — whose money it holds. */
+  fundHref?: string;
 }) {
   const personal = account.kind === 'personal';
   const holder = account.holderName ?? 'חבר מחנה';
+  const fund = fundOf(account.fund);
 
   return (
     <div className={`card ${styles.accountCard} ${personal ? styles.accountPersonal : ''}`}>
@@ -54,6 +66,9 @@ export function AccountCard({ account, countHref, holderHref }: {
         <Icon name={KIND_ICONS[account.kind]} size={14} />
         <b className={styles.accountName}>{account.name}</b>
         <Pill tone={personal ? 'warn' : 'neutral'}>{ACCOUNT_KIND_LABELS[account.kind]}</Pill>
+        {fund === null
+          ? <Pill tone="warn">{NO_FUND_GROUP_LABEL}</Pill>
+          : <Pill tone="outline">{ACCOUNT_FUND_LABELS[fund]}</Pill>}
       </span>
 
       <span className={styles.accountBalance}>
@@ -80,15 +95,20 @@ export function AccountCard({ account, countHref, holderHref }: {
           {account.holderPersonId
             ? <Link className="link" href={`/members/${account.holderPersonId}`}>{holder}</Link>
             : holder}
-          {' '}שמחזיק כסף של הקאמפ
+          {' '}שמחזיק כסף של {fund === 'gift' ? ACCOUNT_FUND_NAMES.gift : ACCOUNT_FUND_NAMES.camp}
         </span>
       ) : account.holderName ? (
         <span className={styles.accountHolder}>אצל <bdi>{account.holderName}</bdi></span>
       ) : null}
 
-      {holderHref === undefined ? null : (
-        <span className={styles.accountHolder}>
-          <Link className="link" href={holderHref}>מי מחזיק/ה</Link>
+      {holderHref === undefined && fundHref === undefined ? null : (
+        <span className={styles.accountLinks}>
+          {holderHref === undefined ? null : (
+            <Link className="link" href={holderHref}>מי מחזיק/ה</Link>
+          )}
+          {fundHref === undefined ? null : (
+            <Link className="link" href={fundHref}>של מי הכסף</Link>
+          )}
         </span>
       )}
     </div>

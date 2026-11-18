@@ -7,9 +7,12 @@ import type { ActionResult } from '@/lib/action-result';
 import { toHebrewError, HebrewRefusal } from '@/lib/errors/hebrew';
 import type { HebrewConstraints } from '@/lib/errors/hebrew';
 import { parseDateInput } from '@/lib/dates';
-import { countAccount, createAccount, setAccountHolder } from '@/lib/money/accounts';
+import {
+  countAccount, createAccount, setAccountFund, setAccountHolder,
+} from '@/lib/money/accounts';
+import { isAccountFund } from '@/lib/money/labels';
 import type { CountResult } from '@/lib/money/accounts';
-import type { AccountKind } from '@/db/schema/money';
+import type { AccountFund, AccountKind } from '@/db/schema/money';
 import { MONEY_ERRORS } from './error-messages';
 
 /** R9: the boundary where an English message stops. */
@@ -73,6 +76,9 @@ export async function countAccountAction(
 export interface NewAccountInput {
   name: string;
   kind: AccountKind;
+  /** Whose money it holds. The drawer makes the lead choose: nothing about a
+   *  new account says which pot it belongs to. */
+  fund: AccountFund;
   /** In shekels. What the account holds, or starts from. */
   balance: number;
   /** `YYYY-MM-DD` when `balance` is a count of that day; omitted when it is
@@ -88,7 +94,10 @@ const ACCOUNT_KINDS: readonly AccountKind[] = ['cash', 'bank', 'personal', 'even
  *
  * `kind` is checked against the schema's four values here, before
  * `createAccount` is called: the column is `text` with a TypeScript type
- * over it, so a bad value from the client would be stored in silence.
+ * over it, so a bad value from the client would be stored in silence. `fund`
+ * is checked the same way, and is required here though the library allows an
+ * account with none: an account made from this screen is made by someone who
+ * knows whose money it is.
  */
 export async function createAccountAction(input: NewAccountInput): Promise<ActionResult<string>> {
   const admin = await requireAdmin('money', 'edit');
@@ -99,6 +108,9 @@ export async function createAccountAction(input: NewAccountInput): Promise<Actio
   let id: string;
   try {
     if (!ACCOUNT_KINDS.includes(input.kind)) throw new HebrewRefusal('סוג החשבון לא מוכר.');
+    if (!isAccountFund(input.fund)) {
+      throw new HebrewRefusal('צריך לבחור של מי הכסף: של הקאמפ או של הגיפט.');
+    }
     let countedOn: Date | undefined;
     if (input.countedOn !== undefined) {
       const parsed = parseDateInput(input.countedOn);
@@ -108,6 +120,7 @@ export async function createAccountAction(input: NewAccountInput): Promise<Actio
     const account = await createAccount(db, {
       name: input.name.trim(),
       kind: input.kind,
+      fund: input.fund,
       openingBalance: input.balance,
       openingOn: countedOn,
     });
@@ -136,6 +149,29 @@ export async function setAccountHolderAction(input: SetHolderInput): Promise<Act
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await setAccountHolder(db, input.accountId, input.holderPersonId === '' ? null : input.holderPersonId);
+  } catch (error) {
+    return failed(error);
+  }
+  revalidateBalances();
+  return { ok: true };
+}
+
+export interface SetFundInput {
+  accountId: string;
+  fund: AccountFund;
+}
+
+/**
+ * Says whose money an account holds. The refusals — no such account, a value
+ * that is neither pot — are `setAccountFund`'s own. The pot decides which
+ * balance the account is summed into on the overview, the home page and every
+ * picker, so the whole layout is revalidated as every balance change is.
+ */
+export async function setAccountFundAction(input: SetFundInput): Promise<ActionResult> {
+  const admin = await requireAdmin('money', 'edit');
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+  try {
+    await setAccountFund(db, input.accountId, input.fund);
   } catch (error) {
     return failed(error);
   }

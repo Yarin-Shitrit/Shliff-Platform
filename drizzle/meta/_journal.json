@@ -204,6 +204,13 @@
       "when": 1794956640706,
       "tag": "0028_user_page_access",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1795027679524,
+      "tag": "0029_account_fund",
+      "breakpoints": true
     }
   ]
 }

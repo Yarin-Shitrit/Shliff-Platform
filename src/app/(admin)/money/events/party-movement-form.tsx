@@ -19,7 +19,10 @@ import { Field } from '@/components/ui/field';
 import { isBlank } from '@/lib/text/normalize';
 import { formatShekels, toAgorot } from '@/lib/money';
 import type { PartyPart } from '@/db/schema/money';
+import { otherPotNote } from '@/lib/money/labels';
 import { recordPartyMovementAction } from './actions';
+import { AccountOptions } from '../account-options';
+import type { AccountChoice } from '../account-options';
 import styles from './events.module.css';
 
 const NO_ACCOUNT = '';
@@ -33,7 +36,7 @@ export function PartyMovementForm({
   partnerName: string | null;
   /** `YYYY-MM-DD` — the party's date, which is when most of its money moved. */
   defaultDate: string;
-  accounts: Array<{ id: string; name: string }>;
+  accounts: AccountChoice[];
 }) {
   const router = useRouter();
   const dateId = useId();
@@ -50,6 +53,11 @@ export function PartyMovementForm({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
+  // A party raises money for the gift. Its money under one of the camp's
+  // accounts is allowed — the lead knows where it went — and is said out loud.
+  const potNote = otherPotNote(
+    accounts.find((account) => account.id === accountId), 'gift', 'כסף של מסיבה הוא כסף של הגיפט',
+  );
 
   const kinds: Array<[PartyPart, string]> = [
     ['tickets', 'כרטיסים'],
@@ -167,11 +175,11 @@ export function PartyMovementForm({
           onChange={(event) => { setAccountId(event.target.value); }}
         >
           <option value={NO_ACCOUNT}>לא צוין</option>
-          {accounts.map((account) => (
-            <option key={account.id} value={account.id}>{account.name}</option>
-          ))}
+          <AccountOptions accounts={accounts} first="gift" />
         </select>
       </Field>
+
+      {potNote === null ? null : <p className={styles.formNote}>{potNote}</p>}
 
       <Button tone="primary" onClick={record} disabled={pending}>רישום</Button>
       {saved === null ? null : <p className={styles.formSaved} role="status">{saved}</p>}

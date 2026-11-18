@@ -27,7 +27,8 @@ import { formatDateShort } from '@/lib/dates';
 import { isBlank } from '@/lib/text/normalize';
 import { PAYMENT_CHANNELS } from '@/db/schema/camp';
 import type { PaymentChannel } from '@/db/schema/camp';
-import type { AccountKind } from '@/db/schema/money';
+import type { AccountFund, AccountKind } from '@/db/schema/money';
+import { fundLabel, groupByFund, otherPotNote } from '@/lib/money/labels';
 import type { MemberFeeRow } from '@/lib/fees/season-fees';
 import type { PaymentRow } from '@/lib/fees/payments';
 import type { FeeView } from '@/lib/fees/views';
@@ -35,7 +36,12 @@ import { recordPaymentAction, deletePaymentAction } from './actions';
 import { feesHref } from './href';
 import styles from './fees.module.css';
 
-export interface AccountOption { id: string; name: string; kind: AccountKind }
+export interface AccountOption {
+  id: string; name: string; kind: AccountKind;
+  /** Whose money the account holds. Dues are the camp's, so the camp's
+   *  accounts are listed first and every option says which pot it is. */
+  fund: AccountFund | null;
+}
 
 /**
  * Today as an `<input type="date">` value, from the viewer's own calendar —
@@ -84,6 +90,9 @@ export function PaymentDrawer({
   const closeHref = feesHref({ season: seasonId, view });
   const isOffset = channel === 'קיזוז';
   const chosen = accounts.find((account) => account.id === accountId) ?? null;
+  // Dues pay for the camp. Filing them under one of the gift's accounts is
+  // allowed — the lead knows where the money went — and is said out loud.
+  const potNote = otherPotNote(chosen, 'camp', 'דמי קאמפ הם כסף של הקאמפ');
 
   function errorFor(where: Refusal['where']): string | undefined {
     return refusal?.where === where ? refusal.message : undefined;
@@ -328,12 +337,15 @@ export function PaymentDrawer({
           <Select
             id="pay-account"
             emptyLabel="בלי קופה"
-            options={accounts.map((account) => ({ value: account.id, label: account.name }))}
+            options={groupByFund(accounts, 'camp').flatMap((group) => group.rows.map((account) => ({
+              value: account.id, label: `${account.name} · ${fundLabel(account.fund)}`,
+            })))}
             value={accountId}
             disabled={isOffset}
             onChange={setAccountId}
           />
         </Field>
+        {potNote !== null && <p className={styles.warnNote}>{potNote}</p>}
         {chosen?.kind === 'personal' && (
           <p className={styles.warnNote}>זה חשבון פרטי של חבר קאמפ, לא קופה של הקאמפ.</p>
         )}

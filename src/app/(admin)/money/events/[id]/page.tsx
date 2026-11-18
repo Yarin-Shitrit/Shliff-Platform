@@ -212,7 +212,7 @@ export default async function PartyPage({ params, searchParams }: {
             partyName={party.name}
             partnerName={party.partnerName}
             defaultDate={isoDay(party.heldOn ?? new Date())}
-            accounts={accounts.map((one) => ({ id: one.id, name: one.name }))}
+            accounts={accounts.map((one) => ({ id: one.id, name: one.name, fund: one.fund }))}
           />
         </Drawer>
       )}

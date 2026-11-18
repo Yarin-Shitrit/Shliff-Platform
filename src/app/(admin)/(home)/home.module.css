@@ -18,9 +18,11 @@
 .sub { color: var(--ink-3); margin-block: var(--space-1) 0; }
 .headActions { margin-inline-start: auto; display: flex; gap: var(--space-2); }
 
+/* As many columns as there are tiles: cash is two tiles (the camp's and the
+   gift's), and a figure with nothing to report is not drawn at all. */
 .figures {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
   gap: var(--space-3);
 }
 

@@ -2,6 +2,7 @@ import { formatShekels } from '@/lib/money';
 import { Icon } from '@/components/ui/icon';
 import { StatTile } from '@/components/ui/stat-tile';
 import type { SeasonOverview } from '@/lib/overview/summary';
+import { ACCOUNT_FUNDS, ACCOUNT_FUND_NAMES } from '@/lib/money/labels';
 import styles from './home.module.css';
 
 /**
@@ -39,7 +40,8 @@ function Warning({ children }: { children: string }) {
 }
 
 /**
- * The four figures, and only the ones that have something to report.
+ * The figures, and only the ones that have something to report. Cash is two
+ * tiles — the camp's and the gift's — so there are up to five.
  *
  * Every tile is a link to the page that can change its number — that is the
  * whole argument for showing a figure on a landing page. Each nullable figure
@@ -83,25 +85,49 @@ export function Figures({ overview }: { overview: SeasonOverview }) {
         />
       ) : null}
 
-      {cash ? (
-        <StatTile
-          label="כסף בקופות"
-          href={`/money?season=${seasonId}`}
-          valueAgorot={cash.totalAgorot}
-          derivation={
-            <>
-              <bdi>
-                {`ב־${cash.accountCount} ${cash.accountCount === 1 ? 'חשבון' : 'חשבונות'}`}
-              </bdi>
-              {cash.unattributedInAgorot > 0 ? (
-                <Warning>
-                  {`${formatShekels(cash.unattributedInAgorot)} נרשמו בלי חשבון`}
-                </Warning>
-              ) : null}
-            </>
-          }
-        />
-      ) : null}
+      {/*
+        * One tile per pot, never one over both. The camp's money and the
+        * gift's are different money: summed, a pot that is overdrawn hides
+        * behind the one that is not. The two warnings are about the cash as a
+        * whole, so they are said once, under the first tile.
+        */}
+      {cash ? ACCOUNT_FUNDS.map((fund, index) => {
+        const pot = cash.funds[fund];
+        const overdrawn = pot.balanceAgorot < 0;
+        const unplaced = cash.funds.unassigned.accountCount;
+        return (
+          <StatTile
+            key={fund}
+            label={`כסף ${ACCOUNT_FUND_NAMES[fund]}`}
+            href={`/money?season=${seasonId}`}
+            valueAgorot={pot.balanceAgorot}
+            tone={overdrawn ? 'bad' : 'default'}
+            derivation={
+              <>
+                <bdi>
+                  {pot.accountCount === 0
+                    ? 'אין עדיין חשבון'
+                    : pot.accountCount === 1 ? 'בחשבון אחד' : `ב־${pot.accountCount} חשבונות`}
+                </bdi>
+                {/* R3: red is never the only carrier — the word says it too. */}
+                {overdrawn ? <>{' · '}<bdi>במינוס</bdi></> : null}
+                {index === 0 && unplaced > 0 ? (
+                  <Warning>
+                    {unplaced === 1
+                      ? 'חשבון אחד עוד לא שויך לקאמפ או לגיפט'
+                      : `${unplaced} חשבונות עוד לא שויכו לקאמפ או לגיפט`}
+                  </Warning>
+                ) : null}
+                {index === 0 && cash.unattributedInAgorot > 0 ? (
+                  <Warning>
+                    {`${formatShekels(cash.unattributedInAgorot)} נרשמו בלי חשבון`}
+                  </Warning>
+                ) : null}
+              </>
+            }
+          />
+        );
+      }) : null}
 
       {debts ? (
         /*

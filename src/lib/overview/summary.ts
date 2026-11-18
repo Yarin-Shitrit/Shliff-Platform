@@ -3,6 +3,8 @@ import type { ObligationDirection } from '@/db/schema/money';
 import { seasonFeeSummary } from '@/lib/fees/summary';
 import type { UnpaidMember } from '@/lib/fees/summary';
 import { accountBalances, unattributedAgorot } from '@/lib/money/accounts';
+import { fundBalances } from '@/lib/money/funds';
+import type { FundBalances } from '@/lib/money/funds';
 import { listObligations, unnamedObligations } from '@/lib/money/obligations';
 import { coverageFor, summarize } from '@/lib/work/coverage';
 import type { SeasonCoverage, TaskCoverage } from '@/lib/work/coverage';
@@ -26,6 +28,11 @@ export interface CashFigure {
    *  never appear to change how much cash the camp holds. */
   totalAgorot: number;
   accountCount: number;
+  /** The same accounts split by pot — the camp's, the gift's, and the ones
+   *  nobody has placed. The home shows these, never `totalAgorot`: the two
+   *  pots are different money, and one figure over both hides whichever is
+   *  overdrawn. */
+  funds: FundBalances;
   /** Money in with no account named, plus dues payments with no account.
    *  Outflow is deliberately excluded: adding "money that left for somewhere
    *  unknown" to "money that arrived from somewhere unknown" produces a number
@@ -223,6 +230,7 @@ export async function seasonOverview(
     cash: accounts.length === 0 && unattributedInAgorot === 0 ? null : {
       totalAgorot: accounts.reduce((total, row) => total + row.balanceAgorot, 0),
       accountCount: accounts.length,
+      funds: fundBalances(accounts),
       unattributedInAgorot,
     },
     debts: campOwesAgorot === 0 && owedToCampAgorot === 0 && unnamed.length === 0

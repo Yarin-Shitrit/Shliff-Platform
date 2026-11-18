@@ -9,6 +9,9 @@
  * the same number in the same box, so the drawer asks, in one checkbox,
  * and says in a sentence what each answer does.
  *
+ * The other thing it cannot know is whose money this is — the camp's or the
+ * gift's — so that is asked too, with nothing chosen in advance.
+ *
  * No holder picker: a personal account's holder is linked from the person's
  * side, and `AccountCard` already copes with a personal account whose
  * holder is not linked yet. The kinds are the schema's four, labelled by
@@ -19,16 +22,21 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Drawer } from '@/components/ui/drawer';
-import { Field, MoneyInput, TextInput, Select, Checkbox } from '@/components/ui/field';
+import {
+  Field, MoneyInput, TextInput, Select, Checkbox, Segmented,
+} from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toaster';
-import type { AccountKind } from '@/db/schema/money';
-import { ACCOUNT_KIND_LABELS } from '@/lib/money/labels';
+import type { AccountFund, AccountKind } from '@/db/schema/money';
+import {
+  ACCOUNT_FUND_PURPOSE, ACCOUNT_KIND_LABELS, isAccountFund,
+} from '@/lib/money/labels';
 import { isBlank } from '@/lib/text/normalize';
 import { createAccountAction } from './actions';
+import { FUND_FIELD_LABEL, FUND_OPTIONS, FUND_REQUIRED } from './fund-drawer';
 import styles from './money.module.css';
 
-type Refusal = { where: 'name' | 'amount' | 'date' | 'form'; message: string };
+type Refusal = { where: 'name' | 'fund' | 'amount' | 'date' | 'form'; message: string };
 
 const KIND_OPTIONS = (Object.keys(ACCOUNT_KIND_LABELS) as AccountKind[])
   .map((kind) => ({ value: kind, label: ACCOUNT_KIND_LABELS[kind] }));
@@ -45,6 +53,7 @@ export function NewAccountDrawer({ closeHref }: { closeHref: string }) {
   const toast = useToast();
   const [name, setName] = useState('');
   const [kind, setKind] = useState<AccountKind>('cash');
+  const [fund, setFund] = useState<AccountFund | null>(null);
   const [amount, setAmount] = useState('');
   const [counted, setCounted] = useState(true);
   const [countedOn, setCountedOn] = useState(todayInput());
@@ -59,6 +68,10 @@ export function NewAccountDrawer({ closeHref }: { closeHref: string }) {
       setRefusal({ where: 'name', message: 'לחשבון חייב להיות שם' });
       return;
     }
+    if (fund === null) {
+      setRefusal({ where: 'fund', message: FUND_REQUIRED });
+      return;
+    }
     if (!Number.isFinite(parsed)) {
       setRefusal({ where: 'amount', message: 'הסכום שהוזן אינו מספר. הקלידו סכום בשקלים.' });
       return;
@@ -71,7 +84,7 @@ export function NewAccountDrawer({ closeHref }: { closeHref: string }) {
     setPending(true);
     try {
       const result = await createAccountAction({
-        name, kind, balance: parsed, countedOn: counted ? countedOn : undefined,
+        name, kind, fund, balance: parsed, countedOn: counted ? countedOn : undefined,
       });
       if (!result.ok) {
         setRefusal({ where: 'form', message: result.error });
@@ -90,7 +103,7 @@ export function NewAccountDrawer({ closeHref }: { closeHref: string }) {
   return (
     <Drawer
       title="חשבון חדש"
-      subtitle="מקום שבו יושב כסף של הקאמפ"
+      subtitle="מקום שבו יושב כסף — של הקאמפ או של הגיפט"
       closeHref={closeHref}
       footer={(
         <Button tone="primary" disabled={pending} onClick={save}>
@@ -111,6 +124,25 @@ export function NewAccountDrawer({ closeHref }: { closeHref: string }) {
           <Select
             id="account-kind" options={KIND_OPTIONS} value={kind} disabled={pending}
             onChange={(value) => { setKind(value as AccountKind); }}
+          />
+        </Field>
+
+        <Field
+          id="account-fund"
+          label={FUND_FIELD_LABEL}
+          as="group"
+          hint={fund === null
+            ? 'לקאמפ ולגיפט יש כסף נפרד, וכל חשבון שייך לאחד מהם.'
+            : `${ACCOUNT_FUND_PURPOSE[fund]}.`}
+          error={refusal?.where === 'fund' ? refusal.message : undefined}
+        >
+          <Segmented
+            id="account-fund"
+            name="account-fund"
+            options={FUND_OPTIONS}
+            value={fund ?? ''}
+            disabled={pending}
+            onChange={(value) => { if (isAccountFund(value)) setFund(value); }}
           />
         </Field>
 

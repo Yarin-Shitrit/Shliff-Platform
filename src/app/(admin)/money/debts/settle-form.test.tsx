@@ -17,8 +17,8 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh, replace }) }));
 import { SettleForm } from './settle-form';
 
 const ACCOUNTS = [
-  { id: 'a1', name: 'קופה מזומן' },
-  { id: 'a2', name: 'קופת מסיבות' },
+  { id: 'a1', name: 'קופה מזומן', fund: 'camp' as const },
+  { id: 'a2', name: 'קופת מסיבות', fund: 'gift' as const },
 ];
 
 /** U+200F, a right-to-left mark: invisible, and truthy to `.trim()`. The

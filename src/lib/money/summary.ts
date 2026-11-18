@@ -9,13 +9,23 @@ import { listObligations, unnamedObligations } from './obligations';
 import type { ObligationRow } from './obligations';
 import { duesFundingIdentity } from './funding';
 import type { DuesFundingIdentity } from './funding';
+import { fundBalances, fundSeasonFlows } from './funds';
+import type { FundBalances, FundFlows } from './funds';
 
 export interface SeasonMoneySummary {
   seasonId: string;
   seasonName: string;
   /** Camp-wide, not season-scoped — a קופה does not reset at the burn. */
   accounts: AccountBalance[];
+  /** Every account summed, whatever pot it is in. Kept for the callers that
+   *  read it; no screen shows it any more, because the camp's money and the
+   *  gift's are not one quantity — see `funds`. */
   totalBalanceAgorot: number;
+  /** What each pot holds, camp-wide like `accounts`: the camp's, the gift's,
+   *  and the accounts nobody has placed in either. */
+  funds: FundBalances;
+  /** What came into and went out of each pot in this season. */
+  fundFlows: FundFlows;
   /** Money the system holds but cannot place. Never folded into an account,
    *  because a guessed account is worse than an admitted gap. Scoped to this
    *  season, unlike `accounts`. */
@@ -73,6 +83,8 @@ export async function seasonMoneySummary(
     seasonName: season.name,
     accounts,
     totalBalanceAgorot: accounts.reduce((total, row) => total + row.balanceAgorot, 0),
+    funds: fundBalances(accounts),
+    fundFlows: await fundSeasonFlows(db, seasonId),
     unattributed: await unattributedAgorot(db, seasonId),
     ledger: await ledgerTotals(db, { seasonId }),
     identity: await duesFundingIdentity(db, seasonId),

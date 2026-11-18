@@ -21,7 +21,10 @@ import { NewMovementForm } from './new-movement-form';
 const RLM = '‏';
 
 const SEASONS = [{ id: 's1', name: 'ברן 26' }, { id: 's0', name: 'ברן 25' }];
-const ACCOUNTS = [{ id: 'a1', name: 'קופה מזומן' }, { id: 'a2', name: 'קופת מסיבות' }];
+const ACCOUNTS = [
+  { id: 'a1', name: 'קופה מזומן', fund: 'camp' as const },
+  { id: 'a2', name: 'קופת מסיבות', fund: 'gift' as const },
+];
 const LINES = [{ id: 'b1', label: 'תשתיות' }];
 
 function renderForm(over: Record<string, unknown> = {}) {

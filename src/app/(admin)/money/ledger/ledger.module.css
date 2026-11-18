@@ -68,6 +68,13 @@
   color: var(--ink-4);
 }
 
+/* Whose money a row's account holds, beside the account's name. */
+.fundTag {
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+  white-space: nowrap;
+}
+
 .stripBlock {
   display: flex;
   flex-direction: column;

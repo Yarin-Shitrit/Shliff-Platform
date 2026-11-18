@@ -1,19 +1,26 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { HEBREW_FALLBACK, HebrewRefusal } from '@/lib/errors/hebrew';
 
-const { requireAdmin, countAccount, createAccount, setAccountHolder, revalidatePath } = vi.hoisted(() => ({
+const {
+  requireAdmin, countAccount, createAccount, setAccountHolder, setAccountFund, revalidatePath,
+} = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   countAccount: vi.fn(),
   createAccount: vi.fn(),
   setAccountHolder: vi.fn(),
+  setAccountFund: vi.fn(),
   revalidatePath: vi.fn(),
 }));
 vi.mock('@/db', () => ({ db: {} }));
 vi.mock('@/lib/auth/guard', () => ({ requireAdmin }));
-vi.mock('@/lib/money/accounts', () => ({ countAccount, createAccount, setAccountHolder }));
+vi.mock('@/lib/money/accounts', () => ({
+  countAccount, createAccount, setAccountHolder, setAccountFund,
+}));
 vi.mock('next/cache', () => ({ revalidatePath }));
 
-import { countAccountAction, createAccountAction, setAccountHolderAction } from './actions';
+import {
+  countAccountAction, createAccountAction, setAccountFundAction, setAccountHolderAction,
+} from './actions';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -63,26 +70,37 @@ describe('countAccountAction', () => {
 describe('createAccountAction', () => {
   it('creates a counted account, trimming the name', async () => {
     const result = await createAccountAction({
-      name: ' בנק הפועלים ', kind: 'bank', balance: 12000, countedOn: '2026-11-01',
+      name: ' בנק הפועלים ', kind: 'bank', fund: 'gift', balance: 12000, countedOn: '2026-11-01',
     });
     expect(result).toEqual({ ok: true, value: 'a9' });
     expect(createAccount).toHaveBeenCalledWith({}, {
-      name: 'בנק הפועלים', kind: 'bank', openingBalance: 12000,
+      name: 'בנק הפועלים', kind: 'bank', fund: 'gift', openingBalance: 12000,
       openingOn: new Date('2026-11-01T00:00:00Z'),
     });
   });
 
   it('creates an opening account with no day', async () => {
-    await createAccountAction({ name: 'קופה', kind: 'cash', balance: 0 });
+    await createAccountAction({ name: 'קופה', kind: 'cash', fund: 'camp', balance: 0 });
     expect(createAccount).toHaveBeenCalledWith({}, {
-      name: 'קופה', kind: 'cash', openingBalance: 0, openingOn: undefined,
+      name: 'קופה', kind: 'cash', fund: 'camp', openingBalance: 0, openingOn: undefined,
     });
   });
 
   it('refuses a kind the schema does not know, before anything is written', async () => {
     expect(await createAccountAction({
-      name: 'קופה', kind: 'crypto' as never, balance: 0,
+      name: 'קופה', kind: 'crypto' as never, fund: 'camp', balance: 0,
     })).toEqual({ ok: false, error: 'סוג החשבון לא מוכר.' });
+    expect(createAccount).not.toHaveBeenCalled();
+  });
+
+  /* The column is `text`: a pot the schema does not know would be stored in
+     silence and then match neither pot on any screen. */
+  it('refuses a pot that is neither the camp nor the gift, before anything is written', async () => {
+    for (const fund of ['dancefloor', '', undefined]) {
+      expect(await createAccountAction({
+        name: 'קופה', kind: 'cash', fund: fund as never, balance: 0,
+      })).toEqual({ ok: false, error: 'צריך לבחור של מי הכסף: של הקאמפ או של הגיפט.' });
+    }
     expect(createAccount).not.toHaveBeenCalled();
   });
 
@@ -91,8 +109,42 @@ describe('createAccountAction', () => {
       constraint: 'accounts_name_unique',
     });
     createAccount.mockRejectedValueOnce(new Error('insert failed', { cause: driver }));
-    expect(await createAccountAction({ name: 'קופת מזומן', kind: 'cash', balance: 0 }))
+    expect(await createAccountAction({ name: 'קופת מזומן', kind: 'cash', fund: 'camp', balance: 0 }))
       .toEqual({ ok: false, error: 'כבר קיים חשבון בשם "קופת מזומן".' });
+  });
+});
+
+describe('setAccountFundAction', () => {
+  it('refuses a caller who is not an admin, and writes nothing', async () => {
+    requireAdmin.mockResolvedValue({ ok: false });
+    expect(await setAccountFundAction({ accountId: 'a1', fund: 'gift' }))
+      .toEqual({ ok: false, error: 'אין הרשאה' });
+    expect(setAccountFund).not.toHaveBeenCalled();
+  });
+
+  it('asks for the right to edit money, not merely to see it', async () => {
+    await setAccountFundAction({ accountId: 'a1', fund: 'gift' });
+    expect(requireAdmin).toHaveBeenCalledWith('money', 'edit');
+  });
+
+  it('hands the library the pot, and refreshes every balance', async () => {
+    expect(await setAccountFundAction({ accountId: 'a1', fund: 'gift' })).toEqual({ ok: true });
+    expect(setAccountFund).toHaveBeenCalledWith({}, 'a1', 'gift');
+    // The pot decides which balance the account is summed into on the
+    // overview and the home page, so the whole layout is revalidated.
+    expect(revalidatePath).toHaveBeenCalledWith('/', 'layout');
+  });
+
+  it("returns the library's refusal verbatim, and never an English message", async () => {
+    setAccountFund.mockRejectedValue(new HebrewRefusal('אין חשבון כזה.'));
+    expect(await setAccountFundAction({ accountId: 'a1', fund: 'camp' }))
+      .toEqual({ ok: false, error: 'אין חשבון כזה.' });
+    expect(revalidatePath).not.toHaveBeenCalled();
+    const logged = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    setAccountFund.mockRejectedValue(new Error('connection refused'));
+    expect(await setAccountFundAction({ accountId: 'a1', fund: 'camp' }))
+      .toEqual({ ok: false, error: HEBREW_FALLBACK });
+    logged.mockRestore();
   });
 });
 

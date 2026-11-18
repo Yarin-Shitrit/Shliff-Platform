@@ -34,8 +34,8 @@ import { PaymentDrawer, type AccountOption } from './payment-drawer';
 const SEASON = '8f2b1c4e-0000-4000-8000-000000000001';
 
 const ACCOUNTS: AccountOption[] = [
-  { id: 'acc-cash', name: 'קופת מזומן', kind: 'cash' },
-  { id: 'acc-ofek', name: 'עו״ש אופק', kind: 'personal' },
+  { id: 'acc-cash', name: 'קופת מזומן', kind: 'cash', fund: 'camp' },
+  { id: 'acc-ofek', name: 'עו״ש אופק', kind: 'personal', fund: 'camp' },
 ];
 
 function payment(over: Partial<PaymentRow> = {}): PaymentRow {
@@ -116,7 +116,45 @@ describe('PaymentDrawer', () => {
     const picker = screen.getByLabelText('לאיזו קופה הכסף נכנס') as HTMLSelectElement;
     expect(picker.value).toBe('');
     expect([...picker.options].map((option) => option.textContent))
-      .toEqual(['בלי קופה', 'קופת מזומן', 'עו״ש אופק']);
+      .toEqual(['בלי קופה', 'קופת מזומן · קאמפ', 'עו״ש אופק · קאמפ']);
+  });
+
+  /*
+   * Dues pay for the camp. The camp's accounts come first whatever order the
+   * page handed them in, every option says whose money the account holds —
+   * and on top is still not chosen.
+   */
+  it("lists the camp's accounts first, then the gift's, then the ones nobody placed", () => {
+    renderDrawer({
+      accounts: [
+        { id: 'acc-old', name: 'קופה ישנה', kind: 'cash', fund: null },
+        { id: 'acc-vibes', name: 'וייבז קלוז פרינדס', kind: 'event_float', fund: 'gift' },
+        ...ACCOUNTS,
+      ],
+    });
+    const picker = screen.getByLabelText('לאיזו קופה הכסף נכנס') as HTMLSelectElement;
+    expect(picker.value).toBe('');
+    expect([...picker.options].map((option) => option.textContent)).toEqual([
+      'בלי קופה', 'קופת מזומן · קאמפ', 'עו״ש אופק · קאמפ',
+      'וייבז קלוז פרינדס · גיפט', 'קופה ישנה · לא נקבע',
+    ]);
+  });
+
+  /* A note, never a refusal: where the money went is the lead's to say. */
+  it("says so when dues are filed under one of the gift's accounts, and only then", () => {
+    renderDrawer({
+      accounts: [
+        ...ACCOUNTS,
+        { id: 'acc-vibes', name: 'וייבז קלוז פרינדס', kind: 'event_float', fund: 'gift' },
+      ],
+    });
+    const note = 'דמי קאמפ הם כסף של הקאמפ, ו־וייבז קלוז פרינדס רשום כחשבון של הגיפט.';
+    const picker = screen.getByLabelText('לאיזו קופה הכסף נכנס');
+    expect(screen.queryByText(note)).toBeNull();
+    fireEvent.change(picker, { target: { value: 'acc-vibes' } });
+    expect(screen.getByText(note)).toBeDefined();
+    fireEvent.change(picker, { target: { value: 'acc-cash' } });
+    expect(screen.queryByText(note)).toBeNull();
   });
 
   it('says what leaving the קופה empty costs', () => {
