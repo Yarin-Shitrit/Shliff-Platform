@@ -943,6 +943,45 @@ of 2, `users` 5, not `admin` 0.
 The local `shliff-pg` still needs it (and `0021` through `0027` before it),
 with the §6 container command.
 
+### Migration `0029` — NOT yet applied to Railway
+
+`0029_account_fund` is the two pots behind כספים: one nullable column,
+`accounts.fund` (`'camp'` | `'gift'`, no default). No existing row changes;
+every account on Railway starts with no pot, which the screens show as a
+decision to make (״לא נקבע של מי הכסף״) and count in neither pot's balance.
+
+**Order matters: apply it before the deploy.** `accountBalances` selects the
+column, and the home page, `/money`, `/money/ledger` and a person's page all
+read it — code that knows the column against a database that lacks it is an
+error screen on each of them. The other order is safe: the code on `main`
+today never names the column, so the migration can sit on Railway for days
+before the merge.
+
+Read-only check, before: `0`; after: `1`:
+
+```sh
+docker run --rm postgres:18-alpine psql "$RAILWAY_URL" -tAc "
+select '0029 column', count(*) from information_schema.columns
+ where table_schema='public' and table_name = 'accounts' and column_name = 'fund'"
+```
+
+Then, from a checkout that has the file:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine sh -euc '
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0029_account_fund.sql
+'
+```
+
+After it is in, each account needs its pot said once. The camp's answer,
+given on 2026-11-18: `וייבז קלוז פרינדס` holds the gift's money; `עו״ש אופק`
+and `קופת מזומן` hold the camp's. That is three clicks on `/money`
+(״של מי הכסף״ on each card) once the code is live, or three `update`s beside
+the migration — either way it is the camp's statement, not a default.
+
+The local `shliff-pg` needs it too (and `0021` through `0028` before it),
+with the §6 container command.
+
 ### Copying the laptop's database up
 
 The local container is Postgres **16**; Railway is **18**. Dump with the
