@@ -36,7 +36,7 @@ function refuse(code: UnderlayUploadCode, status: number): NextResponse {
 export async function POST(
   request: Request, context: { params: Promise<{ planId: string }> },
 ): Promise<NextResponse> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('site', 'edit');
   if (!admin.ok) return refuse('unauthorized', 401);
 
   // Lower case, as Postgres writes a uuid, so one map has one folder; and never a path that could climb out of it.

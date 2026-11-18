@@ -35,7 +35,7 @@ export default async function TasksPage(
     searchParams: Promise<{ season?: string; view?: string; act?: string }>;
   },
 ) {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('tasks');
   if (!admin.ok) notFound();
 
   const seasons = await listSeasons(db);

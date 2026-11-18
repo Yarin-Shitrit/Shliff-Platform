@@ -32,7 +32,7 @@ import { acquisitionFailureMessage, arrivalFailureMessage } from './failure-mess
 export async function createAcquisitionAction(
   input: AcquisitionInput, plan: PlanPlacement,
 ): Promise<ActionResult<string>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('acquisitions', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   try {
@@ -48,7 +48,7 @@ export async function createAcquisitionAction(
 export async function updateAcquisitionAction(
   id: string, input: AcquisitionInput,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('acquisitions', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   try {
@@ -72,7 +72,7 @@ export async function updateAcquisitionAction(
 export async function setAcquisitionStatusAction(
   id: string, status: AcquisitionStatus,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('acquisitions', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   try {
@@ -97,7 +97,7 @@ export async function setAcquisitionStatusAction(
 export async function recordArrivalAction(
   input: ArrivalInput,
 ): Promise<ActionResult<string>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('acquisitions', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   try {

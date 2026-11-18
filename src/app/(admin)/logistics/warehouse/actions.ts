@@ -25,7 +25,7 @@ import { boxFailureMessage, conditionFailureMessage, itemFailureMessage } from '
 export async function setConditionAction(
   id: string, condition: ItemCondition,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('warehouse', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   try {
@@ -58,7 +58,7 @@ export async function setConditionAction(
  * hunt for it.
  */
 export async function createItemAction(input: ItemInput): Promise<ActionResult<string>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('warehouse', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   try {
@@ -78,7 +78,7 @@ export async function createItemAction(input: ItemInput): Promise<ActionResult<s
 export async function updateItemAction(
   id: string, input: ItemInput,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('warehouse', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   try {
@@ -96,7 +96,7 @@ export async function updateItemAction(
  * put something in it.
  */
 export async function createBoxAction(input: BoxInput): Promise<ActionResult<string>> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('warehouse', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   try {
@@ -110,7 +110,7 @@ export async function createBoxAction(input: BoxInput): Promise<ActionResult<str
 
 /** The box drawer's save. Every field travels every time (see `BoxInput`). */
 export async function updateBoxAction(id: string, input: BoxInput): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('warehouse', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
 
   try {

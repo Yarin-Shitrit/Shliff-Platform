@@ -63,7 +63,7 @@ function formatDate(date: Date): string {
 export default async function InboxPage({
   searchParams,
 }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('inbox');
   if (!admin.ok) notFound();
 
   const params = await searchParams;

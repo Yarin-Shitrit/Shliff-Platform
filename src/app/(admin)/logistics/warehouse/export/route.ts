@@ -17,7 +17,7 @@ import { csvDocument, warehouseCsvRows } from '@/lib/logistics/csv';
  * ignored exactly as it is on the page.
  */
 export async function GET(request: Request) {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('warehouse');
   if (!admin.ok) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
   const url = new URL(request.url);

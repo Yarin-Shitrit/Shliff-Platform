@@ -1,0 +1,201 @@
+/* A10: logical properties throughout. The form rules mirror
+ * `events.module.css`, against the same tokens, for the same reason: there
+ * is no kit password input (§5 A28), so the two password boxes are native
+ * controls inside the kit's `Field`. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.titleRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.title {
+  margin-block: 0;
+  font-size: var(--text-title);
+  line-height: var(--leading-title);
+}
+
+.lead {
+  margin-block: 0;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+  max-inline-size: 48rem;
+}
+
+.newLink {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--control-h);
+  padding-inline: var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--brand);
+  color: var(--brand-ink);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.email {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/** The summary of a granted account's pages: `3 לצפייה · 2 לעריכה`. */
+.summary {
+  color: var(--ink-2);
+}
+
+.summaryNone {
+  color: var(--ink-3);
+}
+
+/* ---- the drawer ---- */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.who {
+  margin-block: 0;
+  font-weight: 600;
+}
+
+.input {
+  inline-size: 100%;
+  min-block-size: var(--control-h);
+  padding-inline: var(--space-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.error {
+  margin-block: 0;
+  color: var(--bad);
+  font-size: var(--text-meta);
+}
+
+.note {
+  margin-block: 0;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.rule {
+  border: 0;
+  border-block-start: 1px solid var(--line);
+  margin-block: var(--space-2);
+}
+
+.roles {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.roleChoice,
+.gridChoice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-block-size: var(--tap-min);
+  padding-inline: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.roleChoice[data-on],
+.gridChoice[data-on] {
+  border-color: var(--brand);
+  background: var(--brand-soft, var(--panel-2));
+  font-weight: 600;
+}
+
+/* ---- the grid ---- */
+
+.grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.gridAll {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.gridAllLabel {
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.gridGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-3);
+  margin-inline: 0;
+}
+
+.gridLegend {
+  padding-inline: var(--space-1);
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.gridRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.gridPage {
+  font-weight: 600;
+}
+
+.gridChoices {
+  display: inline-flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.gridChoice {
+  font-size: var(--text-meta);
+}

@@ -35,6 +35,17 @@ const NEXTAUTH_ROUTE = join(API_DIR, 'auth', '[...nextauth]', 'route.ts');
 // route group: pages, route handlers, and server actions.
 const ADMIN_CONVENTIONS = new Set(['page.tsx', 'route.ts', 'actions.ts']);
 
+/**
+ * The two gates `src/lib/auth/guard.ts` exports. `requireAdmin(` — bare for
+ * the admin role, or with a page and a level — is the enforcement on every
+ * page and every write. `currentUser(` is the read behind the chrome: the
+ * rail's counts and the palette's hits ask it who is signed in and answer
+ * nothing to nobody. Both fail closed on a missing session, which is what
+ * makes either one a guard rather than a lookup.
+ */
+const GUARD_CALLS = ['requireAdmin(', 'currentUser('];
+const callsAGuard = (source: string) => GUARD_CALLS.some((call) => source.includes(call));
+
 const adminEntryPoints = walk(ADMIN_DIR).filter((file) => ADMIN_CONVENTIONS.has(basename(file)));
 
 // Outside the admin group, only route handlers are in scope, and the
@@ -55,10 +66,10 @@ describe('every admin entry point calls requireAdmin', () => {
   });
 
   it.each(guardedFiles.map((file) => [relative(process.cwd(), file), file] as const))(
-    '%s calls requireAdmin(',
+    '%s calls a guard',
     (_label, file) => {
       const source = readFileSync(file, 'utf8');
-      expect(source).toContain('requireAdmin(');
+      expect(callsAGuard(source)).toBe(true);
     },
   );
 });
@@ -109,7 +120,7 @@ function exportedActions(source: string): Array<{ name: string; body: string }> 
  */
 function resolveGuarded(actions: Array<{ name: string; body: string }>): Set<string> {
   const guarded = new Set(
-    actions.filter((a) => a.body.includes('requireAdmin(')).map((a) => a.name),
+    actions.filter((a) => callsAGuard(a.body)).map((a) => a.name),
   );
   // Fixpoint: a wrapper of a wrapper is guarded too. Bounded by the action
   // count, so a cycle cannot spin here.

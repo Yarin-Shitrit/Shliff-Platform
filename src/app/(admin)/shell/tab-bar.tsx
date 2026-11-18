@@ -23,6 +23,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { NAV_GROUPS, NAV_ITEMS, activeItemId, type NavItem } from './nav-data';
 import { carrySeason } from './season-href';
 import { useShellCounts } from './shell-counts';
+import { useAccess } from './access-context';
 import styles from './tab-bar.module.css';
 
 /** B7's five, in B7's order. `more` is not a section, so it carries no id. */
@@ -92,8 +93,11 @@ export function TabBar() {
   // The year is changed in the switcher and nowhere else: a tab keeps it.
   const season = useSearchParams().get('season');
 
-  const tabs = PRIMARY_IDS.map((id) => NAV_ITEMS.find((item) => item.id === id)!);
-  const rest = NAV_ITEMS.filter((item) => !PRIMARY_IDS.includes(item.id));
+  // Same rule as the rail: a tab the account cannot open is not drawn. The
+  // bar simply has fewer than five when a primary section is closed.
+  const { visible } = useAccess();
+  const tabs = PRIMARY_IDS.map((id) => NAV_ITEMS.find((item) => item.id === id)!).filter(visible);
+  const rest = NAV_ITEMS.filter((item) => !PRIMARY_IDS.includes(item.id)).filter(visible);
 
   /**
    * B2: a count that would read zero is not shown, and it is not announced

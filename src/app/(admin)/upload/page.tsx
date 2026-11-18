@@ -8,7 +8,7 @@ import styles from './upload.module.css';
 export const metadata: Metadata = { title: 'העלאת קובץ' };
 
 export default async function UploadPage() {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('upload');
   if (!admin.ok) notFound();
 
   return (

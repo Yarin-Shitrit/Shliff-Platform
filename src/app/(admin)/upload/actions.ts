@@ -19,7 +19,7 @@ import { seedCampBaseline, type CampSeedResult } from '@/lib/seed/camp-seed';
  * session lapses between page render and button click) would break it.
  */
 export async function seedAction(): Promise<SeedResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('upload', 'edit');
   if (!admin.ok) throw new Error('unauthorized');
   if (process.env.NODE_ENV === 'production') {
     throw new Error('production');
@@ -36,7 +36,7 @@ export async function seedAction(): Promise<SeedResult> {
  * without thinking about whether it already ran.
  */
 export async function seedCampAction(): Promise<CampSeedResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('upload', 'edit');
   if (!admin.ok) throw new Error('unauthorized');
   return seedCampBaseline(db, admin.email);
 }

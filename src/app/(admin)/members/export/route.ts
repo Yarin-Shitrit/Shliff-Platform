@@ -14,7 +14,7 @@ function cell(value: string): string {
 }
 
 export async function GET(request: Request) {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('people');
   if (!admin.ok) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }

@@ -1,4 +1,5 @@
 import type { IconName } from '@/components/ui/icon';
+import { isPageKey, type PageKey } from '@/lib/auth/pages';
 
 export interface NavItem {
   /** Stable id — the React key, the active mark, and the tab bar's selector. */
@@ -23,6 +24,14 @@ export interface NavItem {
   planned?: boolean;
   /** A screen the redesign retires, kept only while its replacement is planned. */
   transitional?: boolean;
+  /**
+   * The page whose grant opens this item, when it is not the item's own id:
+   * תקציב is an anchor into `/money`, so it opens with סקירה כספית. Every
+   * other item's id is itself a `PageKey` (`src/lib/auth/pages.ts`).
+   */
+  access?: PageKey;
+  /** Shown to the admin role alone, and never granted: משתמשים והרשאות. */
+  adminOnly?: boolean;
 }
 
 export interface NavGroup {
@@ -82,7 +91,7 @@ export const NAV_GROUPS: NavGroup[] = [
       /* Parties are where the camp's money comes from, so their history sits
          with the money rather than with the camp's tasks. */
       { id: 'events', label: 'מסיבות', href: '/money/events', icon: 'calendar' },
-      { id: 'budget', label: 'תקציב', href: '/money#budget', icon: 'pie' },
+      { id: 'budget', label: 'תקציב', href: '/money#budget', icon: 'pie', access: 'money' },
       { id: 'debts', label: 'חובות', href: '/money/debts', icon: 'scale' },
     ],
   },
@@ -117,6 +126,17 @@ export const NAV_GROUPS: NavGroup[] = [
       },
     ],
   },
+  /*
+   * Who may open what. Last, and for the admin role only: it is the page
+   * that hands out every other item's grant, so it is the one page no grant
+   * can name.
+   */
+  {
+    label: 'ניהול',
+    items: [
+      { id: 'users', label: 'משתמשים והרשאות', href: '/users', icon: 'user', adminOnly: true },
+    ],
+  },
 ];
 
 export const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((group) => group.items);
@@ -149,4 +169,27 @@ export function activeItemId(pathname: string): string | null {
   }
 
   return best?.id ?? null;
+}
+
+/**
+ * The grant an item needs: its `access` override, else its own id. `null`
+ * for an item no grant can open (`adminOnly`), and for an id the registry
+ * does not know — which `nav-data.test.ts` keeps from ever being the case.
+ */
+export function pageOfItem(item: NavItem): PageKey | null {
+  if (item.adminOnly) return null;
+  const key = item.access ?? item.id;
+  return isPageKey(key) ? key : null;
+}
+
+/**
+ * The grant a link needs, by the same prefix match that marks the rail — so
+ * a palette hit on `/members/<id>` asks for אנשים. `null` for a path no item
+ * owns, which a caller treats as closed: an unknown destination is not an
+ * open one.
+ */
+export function pageOfHref(href: string): PageKey | null {
+  const id = activeItemId(href.split('#')[0].split('?')[0]);
+  const item = NAV_ITEMS.find((candidate) => candidate.id === id);
+  return item ? pageOfItem(item) : null;
 }

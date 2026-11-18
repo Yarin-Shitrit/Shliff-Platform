@@ -52,7 +52,7 @@ export default async function FeesPage(
     }>;
   },
 ) {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('dues');
   if (!admin.ok) notFound();
 
   const seasons = await listSeasons(db);

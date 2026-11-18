@@ -38,7 +38,7 @@ export async function confirmBlock(
   columnMap: ColumnMapping[],
   budgetCategory?: BudgetCategory,
 ): Promise<void> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('files', 'edit');
   if (!admin.ok) throw new Error('unauthorized');
 
   await applyConfirmation(db, admin.email, blockId, archetype, columnMap, budgetCategory);
@@ -68,7 +68,7 @@ const NO_SHEET_PERMISSION = 'אין לך הרשאה לשנות את פרטי ה�
 export async function setSeasonAction(
   _prev: ActionResult | null, form: FormData,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('files', 'edit');
   if (!admin.ok) return { ok: false, message: NO_SHEET_PERMISSION };
 
   const sheetId = String(form.get('sheetId') ?? '');
@@ -93,7 +93,7 @@ export async function setSeasonAction(
 export async function setAuthorityAction(
   _prev: ActionResult | null, form: FormData,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('files', 'edit');
   if (!admin.ok) return { ok: false, message: NO_SHEET_PERMISSION };
 
   const sheetId = String(form.get('sheetId') ?? '');
@@ -137,7 +137,7 @@ export async function confirmAndPromoteAction(
   columnMap: ColumnMapping[],
   budgetCategory: BudgetCategory | null,
 ): Promise<PromoteOutcome> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('files', 'edit');
   if (!admin.ok) return { ok: false, message: NO_PROMOTE_PERMISSION };
 
   try {
@@ -189,7 +189,7 @@ export async function confirmAndPromoteAction(
  * button that names a count beside a filename has consented to that file.
  */
 export async function promoteUploadAction(uploadId: string): Promise<PromoteOutcome> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('files', 'edit');
   if (!admin.ok) return { ok: false, message: NO_PROMOTE_PERMISSION };
 
   try {

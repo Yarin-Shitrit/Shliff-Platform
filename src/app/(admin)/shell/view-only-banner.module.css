@@ -1,0 +1,5 @@
+/* Sits above the page's own `<main>`, inside the panel's padding, so it
+ * reads as the panel's notice and not as part of any one screen. */
+.notice {
+  margin-block-end: var(--space-4);
+}

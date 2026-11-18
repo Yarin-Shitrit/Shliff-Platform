@@ -38,7 +38,7 @@ export default async function MoneyPage(
     searchParams: Promise<{ season?: string; act?: string; account?: string }>;
   },
 ) {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('money');
   if (!admin.ok) notFound();
 
   const seasons = await listSeasons(db);

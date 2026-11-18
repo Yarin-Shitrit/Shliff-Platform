@@ -16,7 +16,7 @@ import { csvDocument, acquisitionsCsvRows } from '@/lib/logistics/csv';
  * one gets sent to the camp.
  */
 export async function GET(request: Request) {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('acquisitions');
   if (!admin.ok) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
   const url = new URL(request.url);

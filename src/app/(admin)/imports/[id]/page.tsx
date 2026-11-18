@@ -53,7 +53,7 @@ export default async function ImportReviewPage(
     searchParams: Promise<RawSearch>;
   },
 ) {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('files');
   if (!admin.ok) notFound();
 
   const [{ id }, search] = await Promise.all([params, searchParams]);

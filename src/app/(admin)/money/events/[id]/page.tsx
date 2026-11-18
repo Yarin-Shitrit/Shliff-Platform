@@ -63,7 +63,7 @@ export default async function PartyPage({ params, searchParams }: {
   params: Promise<{ id: string }>;
   searchParams: Promise<PartySearchParams>;
 }) {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('events');
   if (!admin.ok) notFound();
 
   const { id } = await params;

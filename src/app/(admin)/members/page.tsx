@@ -60,7 +60,7 @@ function listHref(params: RawParams, changes: Record<string, string | null>): st
 export default async function MembersPage(
   { searchParams }: { searchParams: Promise<RawParams> },
 ) {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('people');
   if (!admin.ok) notFound();
 
   const params = await searchParams;

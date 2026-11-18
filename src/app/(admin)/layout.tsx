@@ -1,4 +1,7 @@
 import { ToastProvider } from '@/components/ui/toaster';
+import { currentUser } from '@/lib/auth/guard';
+import { AccessProvider } from './shell/access-context';
+import { ViewOnlyBanner } from './shell/view-only-banner';
 import { Sidebar } from './shell/sidebar';
 import { SidebarFrame } from './shell/sidebar-frame';
 import { ShellCountsProvider } from './shell/shell-counts';
@@ -8,6 +11,10 @@ import styles from './layout.module.css';
 /**
  * The shell (B1, B6, B7). A Server Component — it holds no state and reads
  * no search params, because the App Router gives a layout none (Ruling S2).
+ * It is `async` for one read: who is signed in and what they may open,
+ * handed to `AccessProvider` so the rail, the tab bar and the צפייה בלבד
+ * banner draw the same account. That is display; every page and action
+ * still calls `requireAdmin` on its own.
  * `SidebarFrame` and `TabBar` are the two client islands B7 needs (the
  * panel that opens below 1024px, the tab bar below 767.98px); the rail they
  * wrap or sit beside stays server-rendered.
@@ -25,8 +32,11 @@ import styles from './layout.module.css';
  * appear on the rail's badges and on B7's tab bar, and a rail saying 12 beside
  * a tab saying 9 is worse than either saying nothing.
  */
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  const user = await currentUser();
+
   return (
+    <AccessProvider admin={user?.admin ?? false} pages={user?.pages ?? {}}>
     <ShellCountsProvider>
       <div className={styles.ground}>
         {/*
@@ -49,11 +59,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </SidebarFrame>
         <div className={styles.column}>
           <div className={styles.main} id="main" tabIndex={-1}>
+            <ViewOnlyBanner />
             <ToastProvider>{children}</ToastProvider>
           </div>
           <TabBar />
         </div>
       </div>
     </ShellCountsProvider>
+    </AccessProvider>
   );
 }

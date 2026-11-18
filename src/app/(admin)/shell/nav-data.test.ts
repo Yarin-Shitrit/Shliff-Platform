@@ -1,18 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { NAV_GROUPS, NAV_ITEMS, activeItemId } from '@/app/(admin)/shell/nav-data';
+import { NAV_GROUPS, NAV_ITEMS, activeItemId, pageOfHref, pageOfItem } from '@/app/(admin)/shell/nav-data';
+import { PAGES } from '@/lib/auth/pages';
 
 describe('nav data', () => {
   it('holds B1 sections in B1 order, grouped as B1 groups them', () => {
     expect(NAV_GROUPS.map((group) => group.label))
-      .toEqual([null, 'הקאמפ', 'כספים', 'לוגיסטיקה', 'נתונים']);
+      .toEqual([null, 'הקאמפ', 'כספים', 'לוגיסטיקה', 'נתונים', 'ניהול']);
     expect(NAV_ITEMS.map((item) => item.label)).toEqual([
       'בית', 'לטיפול',
       'אנשים', 'דמי קאמפ', 'משימות', 'משמרות', 'נוכחות', 'מפת הקאמפ',
       'סקירה כספית', 'תנועות', 'מסיבות', 'תקציב', 'חובות',
       'מחסן', 'רכש', 'הקמה', 'לוח עבודה',
       'קבצים וייבוא', 'העלאת קובץ',
+      'משתמשים והרשאות',
     ]);
   });
 
@@ -103,6 +105,7 @@ describe('nav data', () => {
       plan: '/logistics/plan',
       files: '/imports',
       upload: '/upload',
+      users: '/users',
     });
   });
 
@@ -132,5 +135,43 @@ describe('nav data', () => {
     }
 
     expect(wrong).toEqual([]);
+  });
+});
+
+/**
+ * The grant that opens an item is the item's own id, so the registry in
+ * `src/lib/auth/pages.ts` and the rail must name the same pages: a rail item
+ * no grant can name is a link nobody but an admin can ever use, and a grant
+ * for a page the rail does not show is a decision with no visible effect.
+ */
+describe('the rail and the access registry name the same pages', () => {
+  it('maps every item to a page, except the one page that hands out the grants', () => {
+    const unmapped = NAV_ITEMS.filter((item) => pageOfItem(item) === null).map((item) => item.id);
+    expect(unmapped).toEqual(['users']);
+  });
+
+  it('opens תקציב with the money page it is an anchor into', () => {
+    expect(pageOfItem(NAV_ITEMS.find((item) => item.id === 'budget')!)).toBe('money');
+  });
+
+  it('has a rail item for every page in the registry, at the registry\'s own path and word', () => {
+    for (const page of PAGES) {
+      const item = NAV_ITEMS.find((candidate) => candidate.id === page.key);
+      expect(item, page.key).toBeDefined();
+      expect(item!.href.split('#')[0]).toBe(page.href);
+      expect(item!.label).toBe(page.label);
+    }
+  });
+
+  it('finds the page a link needs by the same prefix match that marks the rail', () => {
+    expect(pageOfHref('/members/6f1c0e0e-0000-4000-8000-000000000000')).toBe('people');
+    expect(pageOfHref('/money/ledger?season=b26#row-1')).toBe('ledger');
+    expect(pageOfHref('/money#budget')).toBe('money');
+    expect(pageOfHref('/')).toBe('home');
+  });
+
+  it('answers closed for a path no item owns, and for the admin-only page', () => {
+    expect(pageOfHref('/nowhere')).toBeNull();
+    expect(pageOfHref('/users')).toBeNull();
   });
 });

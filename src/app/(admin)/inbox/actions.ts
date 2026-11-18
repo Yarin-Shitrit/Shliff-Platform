@@ -54,7 +54,7 @@ import { snoozeItem, unsnoozeItem } from './snooze';
 export async function setSeasonAction(
   sheetId: string, seasonId: string | null,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('inbox', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await setSheetSeason(db, sheetId, seasonId);
@@ -69,7 +69,7 @@ export async function setSeasonAction(
 export async function setAuthorityAction(
   sheetId: string, authoritative: boolean | null,
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('inbox', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await setSheetAuthority(db, sheetId, authoritative);
@@ -103,7 +103,7 @@ function failure(error: unknown): ActionResult {
 }
 
 export async function ignoreNameAction(aliasId: string): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('inbox', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await ignoreName(db, aliasId, admin.email);
@@ -117,7 +117,7 @@ export async function ignoreNameAction(aliasId: string): Promise<ActionResult> {
 
 /** The undo behind the toast on `ignoreNameAction`. */
 export async function unignoreNameAction(aliasId: string): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('inbox', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await unignoreName(db, aliasId);
@@ -132,7 +132,7 @@ export async function unignoreNameAction(aliasId: string): Promise<ActionResult>
 export async function splitNameAction(
   aliasId: string, parts: string[],
 ): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('inbox', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   // The count is not re-checked here. `splitAlias` refuses fewer than two
   // names, in Hebrew, as a marked refusal — and one rule in two places is
@@ -148,7 +148,7 @@ export async function splitNameAction(
 }
 
 export async function snoozeItemAction(itemId: string): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('inbox', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await snoozeItem(itemId, new Date());
@@ -161,7 +161,7 @@ export async function snoozeItemAction(itemId: string): Promise<ActionResult> {
 
 /** The undo behind the toast on `snoozeItemAction`. */
 export async function unsnoozeItemAction(itemId: string): Promise<ActionResult> {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('inbox', 'edit');
   if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
   try {
     await unsnoozeItem(itemId);

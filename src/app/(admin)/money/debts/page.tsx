@@ -115,7 +115,7 @@ function Nothing(): ReactNode {
 export default async function DebtsPage(
   { searchParams }: { searchParams: Promise<DebtsSearchParams> },
 ) {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('debts');
   if (!admin.ok) notFound();
 
   const seasons = await listSeasons(db);

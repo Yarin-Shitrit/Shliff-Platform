@@ -62,7 +62,7 @@ const SORT_LABELS: Record<WarehouseSort, string> = {
 export default async function WarehousePage(
   { searchParams }: { searchParams: Promise<RawParams> },
 ) {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin('warehouse');
   if (!admin.ok) notFound();
 
   const params = await searchParams;
