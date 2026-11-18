@@ -37,6 +37,24 @@
   overflow: hidden;
 }
 /*
+ * A page is as wide as its panel, up to its own cap — never wider.
+ * `globals.css` centres every `<main>` with `margin-inline: auto`, and an auto
+ * margin on a flex item switches off the stretch that would have pinned it to
+ * this panel: the page is sized to its content instead, with its narrowest
+ * unbreakable line as the floor. A table was such a line. Measured in
+ * Chromium at 1024px, חובות laid out 960px wide in a 772px panel, and because
+ * the panel clips, 189px of every row was cut off with no scrollbar to reach
+ * it. The same held from 768px up to the width where the panel finally
+ * outgrows the page's cap.
+ *
+ * A definite width ends that: the page fills the panel and stops at its
+ * `max-inline-size`, whichever page set it, and anything too wide for it
+ * scrolls inside its own frame instead of taking the page with it.
+ */
+.main > main {
+  inline-size: 100%;
+}
+/*
  * B7: below 768px the panel loses its inset and radius — it *is* the
  * screen — and gains room at the block-end for the fixed tab bar. The
  * padding is the bar's own rendered block-size, the same calc tab-bar

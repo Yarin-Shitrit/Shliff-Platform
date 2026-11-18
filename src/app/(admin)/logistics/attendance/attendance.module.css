@@ -107,7 +107,7 @@
   z-index: 1;
   background: var(--panel);
   border-inline-end: 1px solid var(--line);
-  min-inline-size: 160px;
+  min-inline-size: 128px;
 }
 
 .board thead .corner { background: var(--sunken); }
@@ -139,10 +139,14 @@
 
 .dayLink:hover .dayTitle { text-decoration: underline; }
 
+/* A day's name wraps inside a narrow column instead of holding one line. On
+   one line it was cut at 120px with an ellipsis — ״יום עבודה במחסן — מ…״ —
+   and still made each day wide enough that six of them, measured in Chromium
+   at 1366px, pushed the board 83px past its frame. Wrapped, the whole name
+   is readable and a column is three quarters the width. */
 .dayTitle {
-  max-inline-size: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  max-inline-size: 96px;
+  white-space: normal;
 }
 
 .dayWhen {
@@ -188,6 +192,12 @@
 
 .personalHead .dayTitle,
 .personalHead .dayKind { display: block; }
+
+/* Its one-line explanation was the widest thing in the header. */
+.personalHead .dayKind {
+  max-inline-size: 96px;
+  white-space: normal;
+}
 
 /* The count is the control: a link drawn like the check, filled when there
    is something behind it, a plus when there is not. */
