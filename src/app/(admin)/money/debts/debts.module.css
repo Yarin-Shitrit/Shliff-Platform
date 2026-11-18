@@ -121,10 +121,29 @@
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * The two buttons share a line and the refusal takes the one under them.
+ * Laid end to end in a cell that cannot wrap, this slot was 486px wide —
+ * measured in Chromium, more than half of a 926px table — so the table ran
+ * 260px past its frame at every screen width and על מה, the column that says
+ * what the debt *is*, was the one squeezed. `min-inline-size` is what keeps
+ * the buttons side by side: the column shrinks to its content, and without a
+ * floor that content is one button wide.
+ */
 .settle {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
+  justify-content: flex-end;
+  gap: var(--space-1) var(--space-2);
+  min-inline-size: 12rem;
+}
+
+/* In the frame's narrowest range the floor goes and the buttons stack: at a
+   1024px window the slot's 12rem left על מה 67px, one word to a line. Same
+   range as the kit table's tighter gutters (`table.module.css`). */
+@media (min-width: 768px) and (max-width: 1099.98px) {
+  .settle { min-inline-size: 0; }
 }
 
 .settleButton {
@@ -157,9 +176,13 @@
 /* Visible, not sr-only: the reason a control is dead belongs on the screen
  * for everyone, not only for a screen reader. */
 .refusal {
+  flex-basis: 100%;
   color: var(--ink-3);
   font-size: var(--text-meta);
-  max-inline-size: 18rem;
+  /* The slot's cell holds one line (`.w0`); the sentence is the one thing in
+     it that should break. */
+  white-space: normal;
+  text-align: end;
 }
 
 .none {

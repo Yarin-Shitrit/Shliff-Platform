@@ -63,6 +63,17 @@
   gap: 6px;
 }
 
+/* Where the table is at its narrowest and still a table, the two controls
+   stack instead of sitting side by side: the slot was 164px of a 736px frame
+   at a 1024px window, the widest column in it. Same range as the kit table's
+   tighter gutters (`table.module.css`). */
+@media (min-width: 768px) and (max-width: 1099.98px) {
+  .rowActions {
+    flex-direction: column;
+    align-items: flex-end;
+  }
+}
+
 /* The name and, for a camp-wide row, the pill that says so beside it. */
 .name {
   display: inline-flex;

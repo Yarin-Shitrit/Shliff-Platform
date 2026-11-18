@@ -37,12 +37,48 @@
   z-index: 1;
 }
 
+/*
+ * A cell wraps. It used to be `white-space: nowrap`, which made every table
+ * exactly as wide as its longest row: a ledger description of a dozen words
+ * pushed תנועות 394px past its frame, and רכש 511px, at *every* screen width —
+ * a wider window bought nothing, because the line could not break. The
+ * sideways scroll that followed hid the amount, which is the column a lead
+ * opened the page for.
+ *
+ * Words break at spaces only — never `overflow-wrap: anywhere`, which lets the
+ * layout crush a name to one letter per line before it will scroll. What must
+ * stay on one line says so itself: a figure (`.numeric`) and a shrink-to-fit
+ * slot (`.w0`) below, a date or a chip in its own markup.
+ *
+ * `block-size` on a table cell is a minimum, so a one-line row is still
+ * `--row` tall. The block padding is only seen by a row that wrapped, where
+ * it keeps the second line off the rule.
+ */
 .table td {
   block-size: var(--row);
+  padding-block: var(--space-1);
   padding-inline: var(--space-3);
   border-block-end: 1px solid var(--line);
-  white-space: nowrap;
   vertical-align: middle;
+}
+
+.table td.numeric,
+.table td.w0 {
+  white-space: nowrap;
+}
+
+/*
+ * Between the phone's card list and a full laptop the frame is at its
+ * narrowest — 736px at a 1024px window, where the rail is back and has taken
+ * its share — and a nine-column table is still a table. The gutters give
+ * first: a third off each side of every cell is 72px across תנועות, which is
+ * most of what it was short by, and costs nothing a reader can name.
+ */
+@media (min-width: 768px) and (max-width: 1099.98px) {
+  .table th,
+  .table td {
+    padding-inline: var(--space-2);
+  }
 }
 
 /* A8: compact rows share the header's 36px, so the override reuses that
