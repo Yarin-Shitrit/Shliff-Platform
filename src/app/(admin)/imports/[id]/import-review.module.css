@@ -618,3 +618,33 @@
   gap: var(--space-3);
   flex-wrap: wrap;
 }
+
+/*
+ * A8, for a touch screen. Every control on this page was sized for a pointer:
+ * 34px tall, and the three selects set in 14–14.5px type. Two things follow on
+ * a phone. A 34px target is below the 44px a thumb needs — and this is the page
+ * where a wrong tap confirms a table into the camp's data. And iOS zooms the
+ * whole page when a field under 16px takes focus, so choosing a season for a
+ * sheet threw the layout sideways each time. `--input-font-phone` is the same
+ * token the kit's own fields use for the same reason.
+ */
+@media (pointer: coarse) {
+  .secondary,
+  .primary,
+  .sheetSubmit,
+  .sheetSelect,
+  .pickerSelect,
+  .fieldSelect {
+    min-block-size: var(--tap-min);
+  }
+  .sheetSelect,
+  .pickerSelect,
+  .fieldSelect {
+    font-size: var(--input-font-phone);
+  }
+  .segButton {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: var(--tap-min);
+  }
+}

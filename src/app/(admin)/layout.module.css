@@ -4,6 +4,9 @@
  * repeats either.
  */
 .ground {
+  /* The positioned ancestor of the phone's menu button, which is absolute
+     below 768px so it scrolls with the page (`sidebar.module.css`). */
+  position: relative;
   display: flex;
   min-block-size: 100dvh;
   background: var(--canvas);
@@ -61,6 +64,27 @@
     border: 0;
     border-radius: 0;
     padding-block-end: calc(var(--tap-min) + var(--space-2) * 2);
+  }
+  /*
+   * A page is never wider than the phone it is on. `globals.css` centres every
+   * `<main>` with `margin-inline: auto`, and an auto margin on a flex item
+   * switches off the stretch that would have pinned it to this panel's width:
+   * the page is sized to its content instead, with its *narrowest unbreakable
+   * line* as the floor. One row that did not wrap — a top bar with two
+   * actions, a decision with a long button — therefore widened the entire
+   * page, and because this panel clips, everything past the screen's edge was
+   * cut off with no way to scroll to it. בית, הקמה and רכש all shipped that
+   * way.
+   *
+   * The cap keeps a page's own mistakes inside the page. It does not fix the
+   * row that would not wrap — those are fixed where they are — but the next
+   * one costs that row its tail, not the whole screen its edge.
+   *
+   * `.main > main` rather than a bare `main`: a page that sets a width cap of
+   * its own does it with one class, and this has to outrank it.
+   */
+  .main > main {
+    max-inline-size: 100%;
   }
 }
 /* B9's not-found boundary: an access message or a plain "not found", centred

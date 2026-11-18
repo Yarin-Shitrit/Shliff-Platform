@@ -307,6 +307,7 @@
 .rail { display: contents; }
 .menubutton { display: none; }
 .railScrim { display: none; }
+.railClose { display: none; }
 
 /*
  * At 1024px and above the rail is `.ground`'s flex item. Size containment
@@ -382,6 +383,32 @@
    * the element itself.
    */
   .menubutton[data-open='true'] { display: none; }
+
+  /*
+   * The drawer's own close control, in the corner the menu button occupies
+   * while the drawer is shut — so the thumb that opened it closes it without
+   * moving. The brand row it sits beside is a logo and a wordmark at the
+   * inline-start edge, and nothing reaches this corner at any drawer width.
+   */
+  .railClose {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    inset-block-start: 8px;
+    inset-inline-end: 8px;
+    inline-size: var(--tap-min);
+    block-size: var(--tap-min);
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--ink-2);
+    cursor: pointer;
+  }
+  .railClose:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: -2px;
+  }
 }
 :root[data-theme='dark'] .railScrim { background: rgb(0 0 0 / 50%); }
 @media (prefers-color-scheme: dark) {
@@ -392,4 +419,18 @@
 @media (max-width: 767.98px) {
   .rail { inline-size: 100vw; }
   .side { inline-size: 100%; }
+
+  /*
+   * On a phone the menu button scrolls away with the top of the page instead
+   * of staying pinned. Pinned, it rode over whatever was being read — a
+   * 44px tile on a 390px screen is a tenth of the width, on top of the text.
+   * Nothing is lost by letting it go: the tab bar is fixed to the bottom edge
+   * at this width and carries every section, so navigation is never further
+   * away than it was; the year switcher, search and sign-out — the rail's
+   * alone — are one scroll to the top away. From 768px up there is no tab bar, and the button stays
+   * fixed because it is then the only way into the rail.
+   *
+   * `layout.module.css`'s `.ground` is the positioned ancestor.
+   */
+  .menubutton { position: absolute; }
 }

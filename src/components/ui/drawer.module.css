@@ -124,6 +124,21 @@
   .drawer[data-phone='sheet'] .foot {
     padding-block-end: max(12px, env(safe-area-inset-bottom));
   }
+
+  /*
+   * The footer wraps, and its buttons keep their labels. A footer is two
+   * buttons and, on some drawers, a note beside them; at 460px that is one
+   * line, and on a 390px sheet it is not. Unable to wrap, the row took the
+   * difference out of the buttons — the payment drawer's second one read
+   * "שמירה ומעבר לבא" with the end of the word cut off. Now a button is never
+   * narrower than its text, and whatever does not fit beside the buttons
+   * moves to a line under them.
+   */
+  .foot { flex-wrap: wrap; }
+  .foot > button,
+  .foot > a {
+    flex-shrink: 0;
+  }
 }
 
 @keyframes drawer-sheet-in {

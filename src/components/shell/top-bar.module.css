@@ -30,6 +30,25 @@
   }
 }
 
+/*
+ * 767.98px — a phone. The bar is a single 52px line everywhere else, and on a
+ * phone that line is not long enough: רכש's crumbs, year chip, ייצוא and
+ * הוספת פריט לרכש need 526px of a 390px screen, and a bar that cannot break
+ * pushes its last action — the page's primary one — off the edge. So here it
+ * wraps: the crumbs and the chip keep the first line, and the actions drop to
+ * a second when they do not fit. `min-block-size` keeps the one-line bar at
+ * its 52px; the padding is what a second line stands off the rule with.
+ */
+@media (max-width: 767.98px) {
+  .topbar {
+    block-size: auto;
+    min-block-size: 52px;
+    flex-wrap: wrap;
+    row-gap: var(--space-2);
+    padding-block: var(--space-1);
+  }
+}
+
 .crumbs {
   display: flex;
   align-items: center;
@@ -66,4 +85,9 @@
   background: var(--sunken);
   color: var(--ink-2);
   font-size: 12.5px;
+  /* A pill is one line by construction — its 26px height holds exactly one.
+     Squeezed in a narrow bar it broke "ברן 26" across two and overflowed its
+     own shape; it now keeps its width and lets the bar wrap around it. */
+  white-space: nowrap;
+  flex-shrink: 0;
 }

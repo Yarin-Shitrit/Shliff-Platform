@@ -80,6 +80,34 @@ describe('SidebarFrame', () => {
     expect(document.activeElement).toBe(menuButton);
   });
 
+  /**
+   * Below 768px the panel is the full width of the screen. The scrim is then
+   * entirely underneath it and a phone has no Escape key, so before these two
+   * the only way out of an open menu was to navigate somewhere else.
+   */
+  it('has a close button of its own, inside the panel, while it is open', () => {
+    render(<SidebarFrame><nav>rail</nav></SidebarFrame>);
+    const menuButton = screen.getByRole('button', { name: 'תפריט' });
+    expect(screen.queryByRole('button', { name: 'סגירת התפריט' })).toBeNull();
+    fireEvent.click(menuButton);
+    const close = screen.getByRole('button', { name: 'סגירת התפריט' });
+    expect(screen.getByText('rail').parentElement?.contains(close)).toBe(true);
+    fireEvent.click(close);
+    expect(screen.queryByRole('button', { name: 'סגירת התפריט' })).toBeNull();
+    expect(document.activeElement).toBe(menuButton);
+  });
+
+  it('closes when a link inside it is followed, even one to the page already open', () => {
+    // The pathname does not change, so the route-change close never fires.
+    render(<SidebarFrame><nav><a href="#here">בית</a><span>כותרת</span></nav></SidebarFrame>);
+    fireEvent.click(screen.getByRole('button', { name: 'תפריט' }));
+    // Text that is not a link leaves it open: the year switcher and search live in here.
+    fireEvent.click(screen.getByText('כותרת'));
+    expect(screen.getByRole('button', { name: 'סגירת התפריט' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('link', { name: 'בית' }));
+    expect(screen.queryByRole('button', { name: 'סגירת התפריט' })).toBeNull();
+  });
+
   it('makes the page behind the panel inert while it is open', () => {
     render(
       <div>

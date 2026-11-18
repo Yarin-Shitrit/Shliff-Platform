@@ -132,6 +132,29 @@
 }
 @media (max-width: 768px) {
   .figures { grid-template-columns: minmax(0, 1fr); }
+
+  /*
+   * On a phone the head and the rows are too narrow to be one line each.
+   *
+   * The head: beside two actions, the season's own summary was left a column
+   * a few characters wide and broke after every word. The actions now take a
+   * line of their own under it.
+   *
+   * A row: its title shared the line with a button that does not shrink —
+   * "בחירת קופת קאמפ 2026.xlsx כמוסמך" is 233px of a 326px row — so the title
+   * was set one word per line and the row still overflowed, which widened the
+   * whole page past the screen. The row wraps instead: the title keeps most of
+   * a line, and a button that does not fit beside it moves under it, at the
+   * end edge where the thumb is.
+   */
+  .head { flex-direction: column; gap: var(--space-3); }
+  .headActions { margin-inline-start: 0; flex-wrap: wrap; }
+  .row { flex-wrap: wrap; }
+  .rowMain { flex-basis: 60%; }
+  /* The row's action link, when it has one. An auto margin is inert while the
+     title beside it is still absorbing the line's free space, so this only
+     shows once the link has wrapped. */
+  .row > a:last-child { margin-inline-start: auto; }
 }
 
 /* Skeletons. Shapes only — no figure is drawn before its data has arrived. */

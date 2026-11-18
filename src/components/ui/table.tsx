@@ -142,6 +142,34 @@ function labelOf<Row>(column: TableColumn<Row>): string | undefined {
   return undefined;
 }
 
+/**
+ * The name a stacked total draws beside itself, below 767.98px, where the
+ * footer's cells are a column of blocks with no header above them — "6,000 ₪"
+ * and "0 ₪" on consecutive lines, and nothing to say which is שולם and which
+ * is יתרה.
+ *
+ * A total borrows its column's name only when the borrowing is certain: it
+ * sits under exactly one column (a spanning cell summarises several and
+ * belongs to none of them), that column is a real one rather than the
+ * checkbox or the action slot, and it is not the title column, whose total is
+ * a sentence of its own — "5 חברים" — that a "שם: " prefix would only garble.
+ * Everything else is left unnamed rather than guessed at.
+ */
+function totalsLabels<Row>(
+  totals: ReadonlyArray<TableTotalsCell>,
+  columns: ReadonlyArray<TableColumn<Row>>,
+  leading: number,
+): Array<string | undefined> {
+  let at = 0;
+  return totals.map((cell) => {
+    const width = cell.colSpan ?? 1;
+    const column = width === 1 ? columns[at - leading] : undefined;
+    at += width;
+    if (column === undefined || column.card === 'title') return undefined;
+    return labelOf(column);
+  });
+}
+
 function cellClass<Row>(column: TableColumn<Row>): string {
   return cx(
     column.numeric && styles.numeric,
@@ -171,6 +199,8 @@ export function Table<Row>({
     : 0;
   const allChecked = selection !== undefined && rows.length > 0 && selectedCount === rows.length;
   const someChecked = selectedCount > 0 && !allChecked;
+
+  const totalLabels = totals ? totalsLabels(totals, columns, selection ? 1 : 0) : [];
 
   let lastGroup: string | undefined;
 
@@ -295,10 +325,11 @@ export function Table<Row>({
         {totals ? (
           <tfoot aria-label={totalsLabel}>
             <tr>
-              {totals.map((cell) => (
+              {totals.map((cell, index) => (
                 <td
                   key={cell.key}
                   colSpan={cell.colSpan}
+                  data-label={totalLabels[index]}
                   className={cx(cell.numeric && styles.numeric, cell.numeric && 'num')}
                 >
                   {cell.content}
