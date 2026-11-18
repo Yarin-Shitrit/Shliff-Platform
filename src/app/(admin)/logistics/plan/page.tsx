@@ -16,6 +16,7 @@ import { acquisitionsHref } from '@/lib/logistics/acquisitions-views';
 import { adoptOutcomes } from '@/lib/logistics/acquisitions';
 import { eventLabel, listEvents } from '@/lib/logistics/attendance';
 import { newEventHref } from '@/lib/logistics/attendance-views';
+import { workdaysHref } from '@/lib/logistics/workdays-views';
 import { TopBar, SeasonChip } from '@/components/shell/top-bar';
 import { StatTile } from '@/components/ui/stat-tile';
 import { Banner } from '@/components/ui/banner';
@@ -146,6 +147,10 @@ export default async function PlanPage(
         chip={<SeasonChip seasonName={current.name} />}
         actions={(
           <span className={styles.topActions}>
+            <ButtonLink size="sm" tone="ghost" href={workdaysHref({ season: current.id })}>
+              <Icon name="calendar" size={14} />
+              ימי עבודה
+            </ButtonLink>
             <ButtonLink size="sm" href={newTopicHref(here)}>
               <Icon name="plus" size={14} />
               נושא
@@ -369,6 +374,9 @@ export default async function PlanPage(
         </ButtonLink>
         <ButtonLink href={newTopicHref(here)} iconLabel="נושא חדש">
           <Icon name="list" size={16} />
+        </ButtonLink>
+        <ButtonLink href={workdaysHref({ season: current.id })} iconLabel="ימי עבודה">
+          <Icon name="calendar" size={16} />
         </ButtonLink>
       </div>
 
