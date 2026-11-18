@@ -6,7 +6,7 @@ import { accounts, budgetLines, ledgerEntries } from '@/db/schema/money';
 import type { LedgerDirection } from '@/db/schema/money';
 import { dues, payments, persons } from '@/db/schema/camp';
 import { insideCount } from './counted';
-import { listMovements } from './ledger';
+import { entryIsOpen, listMovements } from './ledger';
 import { sourceIndexFor, sourceKey } from './overview';
 import type { SourceCell } from './trace';
 
@@ -39,6 +39,10 @@ export interface LedgerRow {
    *  (`insideCount` in counted.ts). False for a movement with no account,
    *  for one after the count, and for an account never counted. */
   insideCount: boolean;
+  /** Whether the ledger screen may offer to change or remove it: a movement
+   *  a lead typed, per `entryIsOpen`. Always false for a dues payment, which
+   *  is corrected on the fees screen where its due is. */
+  editable: boolean;
 }
 
 /**
@@ -146,6 +150,7 @@ export async function listLedgerRows(
       insideCount: move.accountId === null
         ? false
         : insideCount(move.occurredOn, countedOnById.get(move.accountId) ?? null),
+      editable: move.source === 'ledger' && entryIsOpen(move),
     };
   });
 }

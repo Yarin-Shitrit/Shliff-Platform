@@ -6,7 +6,7 @@ import { requireAdmin } from '@/lib/auth/guard';
 import type { ActionResult } from '@/lib/action-result';
 import { toHebrewError } from '@/lib/errors/hebrew';
 import { attributeMovement } from '@/lib/money/attribution';
-import { recordEntry } from '@/lib/money/ledger';
+import { deleteEntry, recordEntry, updateEntry } from '@/lib/money/ledger';
 import type { AttributeInput } from '@/lib/money/attribution';
 import { MONEY_ERRORS } from '../error-messages';
 
@@ -84,6 +84,51 @@ export async function recordMovementAction(input: NewMovementInput): Promise<Act
       // From the session, never from the client.
       recordedBy: admin.email,
     });
+  } catch (error) {
+    return failed(error);
+  }
+  revalidatePath('/money/ledger');
+  revalidatePath('/money');
+  return { ok: true };
+}
+
+/**
+ * Corrects a movement a lead typed. The same fields the create form sends,
+ * and the same rule about them: nothing is defaulted and nothing is derived.
+ * An omitted account, season or budget line clears it.
+ *
+ * Every refusal is `updateEntry`'s — a sheet's row, half a transfer, a party's
+ * line, the amount of a movement that closes a debt.
+ */
+export async function updateMovementAction(
+  id: string, input: NewMovementInput,
+): Promise<ActionResult> {
+  const admin = await requireAdmin('ledger', 'edit');
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+  try {
+    await updateEntry(db, id, {
+      occurredOn: new Date(input.occurredOn),
+      direction: input.direction,
+      amount: input.amount,
+      description: input.description,
+      accountId: input.accountId,
+      seasonId: input.seasonId,
+      budgetLineId: input.budgetLineId,
+    });
+  } catch (error) {
+    return failed(error);
+  }
+  revalidatePath('/money/ledger');
+  revalidatePath('/money');
+  return { ok: true };
+}
+
+/** Removes a movement a lead typed. Every refusal is `deleteEntry`'s. */
+export async function deleteMovementAction(id: string): Promise<ActionResult> {
+  const admin = await requireAdmin('ledger', 'edit');
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+  try {
+    await deleteEntry(db, id);
   } catch (error) {
     return failed(error);
   }

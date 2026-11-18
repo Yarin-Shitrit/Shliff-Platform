@@ -94,6 +94,21 @@
   flex-wrap: wrap;
 }
 
+/* Everything one row offers: the repair control, then correct and remove. */
+.rowTools {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.tools {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
 /* Mirrors `field.module.css`'s `.box`: there is no kit select (§5 A28) and no
  * way to hide a `Field` label, so the native control is dressed here against
  * the same tokens rather than inventing a second look. */

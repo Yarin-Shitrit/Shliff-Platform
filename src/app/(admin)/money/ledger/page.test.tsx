@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import type { LedgerRow } from '@/lib/money/ledger-view';
 import type { SourceCell } from '@/lib/money/trace';
 
@@ -66,7 +66,8 @@ function row(over: Partial<LedgerRow> = {}): LedgerRow {
     direction: 'in', amountAgorot: 1850000, description: 'הכנסות מסיבת גיוס',
     accountId: 'a1', accountName: 'קופת מסיבות', counterpartName: null,
     counterpartPersonId: null, isTransfer: false, budgetLineId: null,
-    budgetLineLabel: null, seasonId: 's1', source: null, insideCount: false, ...over,
+    budgetLineLabel: null, seasonId: 's1', source: null, insideCount: false,
+    editable: false, ...over,
   };
 }
 
@@ -470,7 +471,9 @@ describe('money with no account', () => {
     const cells = document.querySelectorAll('td[data-card="action"]');
     expect(cells.length).toBe(2);
     cells.forEach((cell) => { expect(cell.className).toMatch(/visible/); });
-    expect(screen.getByRole('columnheader', { name: 'שיוך לחשבון' })).toBeTruthy();
+    // The column now also carries correct and remove, so it is named for
+    // all three rather than for the one repair.
+    expect(screen.getByRole('columnheader', { name: 'פעולות' })).toBeTruthy();
   });
 
   it('drops the banner link on the view it would lead to, so it never reloads the same page', async () => {
@@ -531,5 +534,65 @@ describe('recording a movement by hand', () => {
     await renderPage();
     expect(screen.queryByText('העברה בין חשבונות')).toBeNull();
     expect(screen.queryByText('ייצוא')).toBeNull();
+  });
+});
+
+describe('correcting and removing a movement', () => {
+  const typed = row({
+    id: 'e7', direction: 'out', amountAgorot: 134500, description: 'החזר לאורי — חוב כללי',
+    editable: true, seasonId: 's1',
+  });
+
+  it('offers both on a movement a lead typed, each named after it', async () => {
+    listLedgerRows.mockResolvedValue([typed]);
+    await renderPage({ view: 'out' });
+    const line = screen.getByRole('row', { name: /החזר לאורי — חוב כללי/ });
+    expect(within(line).getByRole('link', { name: 'תיקון החזר לאורי — חוב כללי' }).getAttribute('href'))
+      .toBe('/money/ledger?season=s1&view=out&peek=e7&act=edit');
+    expect(within(line).getByRole('button', { name: 'מחיקת החזר לאורי — חוב כללי' })).toBeTruthy();
+    const cell = document.querySelector('td[data-card="action"]')!;
+    expect(cell.className).toMatch(/visible/);
+  });
+
+  it('offers neither on a row kept somewhere else', async () => {
+    listLedgerRows.mockResolvedValue([
+      row({ id: '1', description: 'רווח מסיבת פקאנים', source: cell() }),
+      row({ id: '2', description: 'דמי קאמפ — יוסף', origin: 'dues' }),
+    ]);
+    await renderPage();
+    expect(screen.queryByRole('link', { name: /^תיקון / })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^מחיקת / })).toBeNull();
+  });
+
+  it('keeps the account repair beside them on an unplaced movement', async () => {
+    listAccounts.mockResolvedValue([{ id: 'a1', name: 'קופה מזומן', kind: 'cash' }]);
+    listLedgerRows.mockResolvedValue([{ ...typed, accountId: null, accountName: null }]);
+    await renderPage();
+    const line = screen.getByRole('row', { name: /החזר לאורי — חוב כללי/ });
+    expect(within(line).getByRole('combobox', { name: /שיוך החזר לאורי/ })).toBeTruthy();
+    expect(within(line).getByRole('link', { name: /^תיקון / })).toBeTruthy();
+  });
+
+  it('opens the form on that movement from the URL, with its own year\'s budget lines', async () => {
+    listLedgerRows.mockResolvedValue([{ ...typed, seasonId: 's0' }]);
+    listBudgetLines.mockResolvedValue([{ id: 'b9', label: 'קרח' }]);
+    await renderPage({ act: 'edit', peek: 'e7' });
+    const drawer = screen.getByRole('dialog');
+    expect(within(drawer).getByRole('button', { name: 'שמירת השינויים' })).toBeTruthy();
+    expect((within(drawer).getByRole('spinbutton', { name: 'סכום בשקלים' }) as HTMLInputElement).value)
+      .toBe('1345.00');
+    expect((within(drawer).getByLabelText('תאריך') as HTMLInputElement).value).toBe('2026-09-15');
+    expect(listBudgetLines).toHaveBeenCalledWith({}, 's0');
+    expect(within(drawer).getByRole('option', { name: 'קרח' })).toBeTruthy();
+  });
+
+  it('opens no form on a movement it would refuse to change, or on one that is gone', async () => {
+    listLedgerRows.mockResolvedValue([row({ id: 'w1', source: cell() })]);
+    await renderPage({ act: 'edit', peek: 'w1' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    cleanup();
+    await renderPage({ act: 'edit', peek: 'nothing' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(listBudgetLines).not.toHaveBeenCalled();
   });
 });

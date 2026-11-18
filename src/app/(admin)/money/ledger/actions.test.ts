@@ -1,19 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { HebrewRefusal, HEBREW_FALLBACK } from '@/lib/errors/hebrew';
 
-const { requireAdmin, attributeMovement, recordEntry, revalidatePath } = vi.hoisted(() => ({
+const {
+  requireAdmin, attributeMovement, recordEntry, updateEntry, deleteEntry, revalidatePath,
+} = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   attributeMovement: vi.fn(),
   recordEntry: vi.fn(),
+  updateEntry: vi.fn(),
+  deleteEntry: vi.fn(),
   revalidatePath: vi.fn(),
 }));
 vi.mock('@/db', () => ({ db: {} }));
 vi.mock('@/lib/auth/guard', () => ({ requireAdmin }));
 vi.mock('@/lib/money/attribution', () => ({ attributeMovement }));
-vi.mock('@/lib/money/ledger', () => ({ recordEntry }));
+vi.mock('@/lib/money/ledger', () => ({ recordEntry, updateEntry, deleteEntry }));
 vi.mock('next/cache', () => ({ revalidatePath }));
 
-import { attributeMovementAction, recordMovementAction } from './actions';
+import {
+  attributeMovementAction, recordMovementAction, updateMovementAction, deleteMovementAction,
+} from './actions';
 
 const INPUT = { origin: 'ledger' as const, id: 'e1', accountId: 'a1' };
 
@@ -22,6 +28,8 @@ beforeEach(() => {
   requireAdmin.mockResolvedValue({ ok: true, email: 'lead@shliff.camp' });
   attributeMovement.mockResolvedValue(undefined);
   recordEntry.mockResolvedValue('e1');
+  updateEntry.mockResolvedValue(undefined);
+  deleteEntry.mockResolvedValue(undefined);
 });
 
 describe('attributeMovementAction', () => {
@@ -142,5 +150,83 @@ describe('recordMovementAction', () => {
       .rejects.toThrow('סכום תנועה חייב להיות חיובי — הכיוון נושא את הסימן');
     await expect(real.recordEntry(null as never, { ...base, amount: 10, description: '‏' }))
       .rejects.toThrow('לתנועה חייב להיות תיאור');
+  });
+});
+
+describe('updateMovementAction', () => {
+  it('refuses a caller who may not edit, and writes nothing', async () => {
+    requireAdmin.mockResolvedValue({ ok: false });
+    expect(await updateMovementAction('e1', MOVEMENT)).toEqual({ ok: false, error: 'אין הרשאה' });
+    expect(requireAdmin).toHaveBeenCalledWith('ledger', 'edit');
+    expect(updateEntry).not.toHaveBeenCalled();
+  });
+
+  it('sends the form as it is, clearing what the form left empty', async () => {
+    expect(await updateMovementAction('e1', { ...MOVEMENT, accountId: 'a1' })).toEqual({ ok: true });
+    const [, id, edit] = updateEntry.mock.calls[0];
+    expect(id).toBe('e1');
+    expect(edit).toEqual({
+      occurredOn: new Date('2026-09-10'), direction: 'out', amount: 3875,
+      description: 'השכרת משאית', accountId: 'a1', seasonId: undefined, budgetLineId: undefined,
+    });
+  });
+
+  /** There is no column for who corrected a movement; the recorder stays. */
+  it('never sends a recorder, from the session or from the client', async () => {
+    await updateMovementAction('e1', { ...MOVEMENT, recordedBy: 'someone@else.example' } as never);
+    expect('recordedBy' in updateEntry.mock.calls[0][2]).toBe(false);
+  });
+
+  it('refreshes both screens that show the movement', async () => {
+    await updateMovementAction('e1', MOVEMENT);
+    const paths = revalidatePath.mock.calls.map(([path]) => path);
+    expect(paths).toContain('/money/ledger');
+    expect(paths).toContain('/money');
+  });
+
+  it('hands the library refusal to the screen unchanged, and refreshes nothing', async () => {
+    updateEntry.mockRejectedValue(new HebrewRefusal('התנועה הזו שייכת למסיבה. מתקנים אותה בדף המסיבה.'));
+    expect(await updateMovementAction('e1', MOVEMENT))
+      .toEqual({ ok: false, error: 'התנועה הזו שייכת למסיבה. מתקנים אותה בדף המסיבה.' });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('never lets an English failure reach a Hebrew screen', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    updateEntry.mockRejectedValue(new Error('violates foreign key constraint'));
+    expect(await updateMovementAction('e1', MOVEMENT)).toEqual({ ok: false, error: HEBREW_FALLBACK });
+    logged.mockRestore();
+  });
+});
+
+describe('deleteMovementAction', () => {
+  it('refuses a caller who may not edit, and removes nothing', async () => {
+    requireAdmin.mockResolvedValue({ ok: false });
+    expect(await deleteMovementAction('e1')).toEqual({ ok: false, error: 'אין הרשאה' });
+    expect(requireAdmin).toHaveBeenCalledWith('ledger', 'edit');
+    expect(deleteEntry).not.toHaveBeenCalled();
+  });
+
+  it('removes the movement and refreshes both screens that showed it', async () => {
+    expect(await deleteMovementAction('e1')).toEqual({ ok: true });
+    expect(deleteEntry).toHaveBeenCalledWith({}, 'e1');
+    const paths = revalidatePath.mock.calls.map(([path]) => path);
+    expect(paths).toContain('/money/ledger');
+    expect(paths).toContain('/money');
+  });
+
+  it('hands the library refusal to the screen unchanged, and refreshes nothing', async () => {
+    deleteEntry.mockRejectedValue(new HebrewRefusal('התנועה הזו סוגרת חוב. בטלו את הסגירה בדף החובות לפני שמוחקים אותה.'));
+    expect(await deleteMovementAction('e1')).toEqual({
+      ok: false, error: 'התנועה הזו סוגרת חוב. בטלו את הסגירה בדף החובות לפני שמוחקים אותה.',
+    });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('never lets an English failure reach a Hebrew screen', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    deleteEntry.mockRejectedValue(new Error('connection terminated'));
+    expect(await deleteMovementAction('e1')).toEqual({ ok: false, error: HEBREW_FALLBACK });
+    logged.mockRestore();
   });
 });

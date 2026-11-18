@@ -9,7 +9,16 @@ import { listSeasonFees } from '@/lib/fees/season-fees';
 import { uploads, sheets, blocks } from '@/db/schema/source';
 import type { BlockArchetype } from '@/lib/classify/types';
 import { createAccount } from './accounts';
-import { recordEntry, recordTransfer, listMovements, ledgerTotals } from './ledger';
+import {
+  recordEntry, recordTransfer, listMovements, ledgerTotals,
+  updateEntry, deleteEntry, ENTRY_REFUSALS,
+} from './ledger';
+import { ledgerEntries } from '@/db/schema/money';
+import { createBudgetLine } from './budget';
+import { createObligation, settleObligation, listObligations } from './obligations';
+import { createParty, recordPartyMovement } from './parties';
+import { accountBalances } from './accounts';
+import { listLedgerRows } from './ledger-view';
 
 let db: TestDb;
 beforeEach(async () => { db = await createTestDb(); });
@@ -248,5 +257,251 @@ describe('a movement knows where it came from', () => {
     // renders it as `נרשם ידנית`.
     expect(paid.sourceBlockId).toBeNull();
     expect(paid.sourceRow).toBeNull();
+  });
+});
+
+describe('correcting and removing a movement a lead typed', () => {
+  const DAY = new Date('2026-11-02T00:00:00Z');
+
+  async function typed(over: Partial<Parameters<typeof recordEntry>[1]> = {}): Promise<string> {
+    return recordEntry(db, {
+      occurredOn: DAY, direction: 'out', amount: 1345,
+      description: 'החזר לאורי — חוב כללי', recordedBy: LEAD, ...over,
+    });
+  }
+
+  async function stored(id: string) {
+    const rows = await db.select().from(ledgerEntries);
+    return rows.find((row) => row.id === id);
+  }
+
+  it('rewrites every field the form sends, and leaves who recorded it alone', async () => {
+    const season = await createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1200 });
+    const account = await createAccount(db, { name: 'קופת מסיבות', kind: 'event_float' });
+    const lineId = await createBudgetLine(db, {
+      seasonId: season.id, label: 'קרח', total: 1140, category: 'camp',
+    });
+    const id = await typed();
+
+    await updateEntry(db, id, {
+      occurredOn: new Date('2026-11-05T00:00:00Z'), direction: 'in', amount: 1300.5,
+      description: 'החזר לאורי מור — חוב כללי',
+      accountId: account.id, seasonId: season.id, budgetLineId: lineId,
+    });
+
+    const row = (await stored(id))!;
+    expect(row.occurredOn).toEqual(new Date('2026-11-05T00:00:00Z'));
+    expect(row.direction).toBe('in');
+    expect(row.amount).toBe('1300.50');
+    expect(row.description).toBe('החזר לאורי מור — חוב כללי');
+    expect(row.accountId).toBe(account.id);
+    expect(row.seasonId).toBe(season.id);
+    expect(row.budgetLineId).toBe(lineId);
+    expect(row.recordedBy).toBe(LEAD);
+  });
+
+  it('reads an omitted account, season and budget line as none, not as unchanged', async () => {
+    const season = await createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1200 });
+    const account = await createAccount(db, { name: 'קופת מסיבות', kind: 'event_float' });
+    const id = await typed({ accountId: account.id, seasonId: season.id });
+
+    await updateEntry(db, id, {
+      occurredOn: DAY, direction: 'out', amount: 1345, description: 'החזר לאורי — חוב כללי',
+    });
+
+    const row = (await stored(id))!;
+    expect(row.accountId).toBeNull();
+    expect(row.seasonId).toBeNull();
+    expect(row.budgetLineId).toBeNull();
+  });
+
+  /** The oracle is the balance the account card shows, not the row itself. */
+  it('moves the account balance by exactly the correction, and by the whole amount on removal', async () => {
+    const account = await createAccount(db, {
+      name: 'קופת מסיבות', kind: 'event_float', openingBalance: 19042,
+      openingOn: new Date('2026-09-27T00:00:00Z'),
+    });
+    const id = await typed({ accountId: account.id });
+    const balance = async () =>
+      (await accountBalances(db)).find((one) => one.accountId === account.id)!.balanceAgorot;
+    expect(await balance()).toBe(1904200 - 134500);
+
+    await updateEntry(db, id, {
+      occurredOn: DAY, direction: 'out', amount: 1000,
+      description: 'החזר לאורי — חוב כללי', accountId: account.id,
+    });
+    expect(await balance()).toBe(1904200 - 100000);
+
+    await deleteEntry(db, id);
+    expect(await balance()).toBe(1904200);
+    expect(await stored(id)).toBeUndefined();
+  });
+
+  it('keeps the two refusals a new movement has', async () => {
+    const id = await typed();
+    const base = { occurredOn: DAY, direction: 'out' as const, description: 'החזר' };
+    await expect(updateEntry(db, id, { ...base, amount: 0 }))
+      .rejects.toThrow('סכום תנועה חייב להיות חיובי — הכיוון נושא את הסימן');
+    await expect(updateEntry(db, id, { ...base, amount: 10, description: '\u200f' }))
+      .rejects.toThrow('לתנועה חייב להיות תיאור');
+    await expect(updateEntry(db, id, { ...base, amount: 10, occurredOn: new Date('') }))
+      .rejects.toThrow(ENTRY_REFUSALS.noDate);
+    expect((await stored(id))!.amount).toBe('1345.00');
+  });
+
+  it('refuses a movement that is no longer there', async () => {
+    const gone = '00000000-0000-4000-8000-000000000000';
+    await expect(deleteEntry(db, gone)).rejects.toThrow(ENTRY_REFUSALS.missing);
+    await expect(updateEntry(db, gone, {
+      occurredOn: DAY, direction: 'out', amount: 1, description: 'x',
+    })).rejects.toThrow(ENTRY_REFUSALS.missing);
+  });
+
+  /** `promote` upserts on the source key: an edit would be overwritten and a
+   *  delete undone by the next import. */
+  it('refuses a row read from a sheet, both ways, and leaves it as it was', async () => {
+    const sheetId = await addSheet(db, '2026.xlsx', 'סיכום כללי');
+    const blockId = await addBlock(db, sheetId, 'ledger');
+    const id = await typed({ sourceBlockId: blockId, sourceRow: 14 });
+
+    await expect(deleteEntry(db, id)).rejects.toThrow(ENTRY_REFUSALS.fromSheet);
+    await expect(updateEntry(db, id, {
+      occurredOn: DAY, direction: 'out', amount: 1, description: 'אחר',
+    })).rejects.toThrow(ENTRY_REFUSALS.fromSheet);
+    expect((await stored(id))!.description).toBe('החזר לאורי — חוב כללי');
+  });
+
+  it('refuses one leg of a transfer, both ways', async () => {
+    const from = await createAccount(db, { name: 'קופה מזומן', kind: 'cash' });
+    const to = await createAccount(db, { name: 'קופת מסיבות', kind: 'event_float' });
+    const [out] = await recordTransfer(db, {
+      fromAccountId: from.id, toAccountId: to.id, amount: 500, occurredOn: DAY,
+      description: 'העברה', recordedBy: LEAD,
+    });
+    await expect(deleteEntry(db, out)).rejects.toThrow(ENTRY_REFUSALS.transferDelete);
+    await expect(updateEntry(db, out, {
+      occurredOn: DAY, direction: 'out', amount: 400, description: 'העברה',
+    })).rejects.toThrow(ENTRY_REFUSALS.transferEdit);
+    expect((await listMovements(db)).length).toBe(2);
+  });
+
+  it('refuses a party line, which its own page keeps', async () => {
+    const season = await createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1200 });
+    const partyId = await createParty(db, {
+      seasonId: season.id, name: 'מסיבת פקאנים', heldOn: new Date('2026-07-18T00:00:00Z'),
+    });
+    const id = await recordPartyMovement(db, {
+      eventId: partyId, part: 'bar', amount: 900, occurredOn: DAY, recordedBy: LEAD,
+    });
+    await expect(deleteEntry(db, id)).rejects.toThrow(ENTRY_REFUSALS.party);
+    await expect(updateEntry(db, id, {
+      occurredOn: DAY, direction: 'in', amount: 800, description: 'בר',
+    })).rejects.toThrow(ENTRY_REFUSALS.party);
+  });
+
+  describe('a movement that closes a debt', () => {
+    async function closing() {
+      const personId = await createPerson(db, 'יוסף כהן', LEAD);
+      const debtId = await createObligation(db, {
+        direction: 'camp_owes', partyPersonId: personId, description: 'חוב יוסף',
+        amount: 910, openedOn: null,
+      });
+      const id = await typed({ amount: 910, description: 'סגירת חוב — יוסף כהן' });
+      await settleObligation(db, {
+        obligationId: debtId, amount: 910, kind: 'cash', ledgerEntryId: id,
+        settledOn: DAY, recordedBy: LEAD,
+      });
+      return { id, debtId };
+    }
+
+    it('cannot be removed, and the debt stays closed', async () => {
+      const { id, debtId } = await closing();
+      await expect(deleteEntry(db, id)).rejects.toThrow(ENTRY_REFUSALS.settlesDelete);
+      expect(await stored(id)).toBeDefined();
+      const debt = (await listObligations(db)).find((one) => one.id === debtId)!;
+      expect(debt.outstandingAgorot).toBe(0);
+    });
+
+    it('keeps its amount and its direction', async () => {
+      const { id } = await closing();
+      const same = { occurredOn: DAY, description: 'סגירת חוב — יוסף כהן' };
+      await expect(updateEntry(db, id, { ...same, direction: 'out', amount: 900 }))
+        .rejects.toThrow(ENTRY_REFUSALS.settlesEdit);
+      await expect(updateEntry(db, id, { ...same, direction: 'in', amount: 910 }))
+        .rejects.toThrow(ENTRY_REFUSALS.settlesEdit);
+      expect((await stored(id))!.amount).toBe('910.00');
+    });
+
+    it('may still have its date, description and account corrected', async () => {
+      const { id } = await closing();
+      const account = await createAccount(db, { name: 'קופת מסיבות', kind: 'event_float' });
+      await updateEntry(db, id, {
+        occurredOn: new Date('2026-11-03T00:00:00Z'), direction: 'out', amount: 910,
+        description: 'סגירת חוב — יוסף', accountId: account.id,
+      });
+      const row = (await stored(id))!;
+      expect(row.description).toBe('סגירת חוב — יוסף');
+      expect(row.accountId).toBe(account.id);
+    });
+  });
+
+  it('refuses an account or a budget line that does not exist', async () => {
+    const id = await typed();
+    const nowhere = '00000000-0000-4000-8000-000000000000';
+    const base = {
+      occurredOn: DAY, direction: 'out' as const, amount: 1345, description: 'החזר',
+    };
+    await expect(updateEntry(db, id, { ...base, accountId: nowhere }))
+      .rejects.toThrow(ENTRY_REFUSALS.noAccount);
+    await expect(updateEntry(db, id, { ...base, budgetLineId: nowhere }))
+      .rejects.toThrow(ENTRY_REFUSALS.noBudgetLine);
+  });
+
+  it('refuses a budget line of another year, or of a year the movement does not name', async () => {
+    const last = await createSeason(db, { name: 'ברן 25', year: 2025, flatRate: 1500 });
+    const now = await createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1200 });
+    const lastLine = await createBudgetLine(db, {
+      seasonId: last.id, label: 'קרח', total: 1140, category: 'camp',
+    });
+    const id = await typed({ seasonId: now.id });
+    const base = {
+      occurredOn: DAY, direction: 'out' as const, amount: 1345, description: 'החזר',
+    };
+    await expect(updateEntry(db, id, { ...base, seasonId: now.id, budgetLineId: lastLine }))
+      .rejects.toThrow(ENTRY_REFUSALS.budgetSeason);
+    await expect(updateEntry(db, id, { ...base, budgetLineId: lastLine }))
+      .rejects.toThrow(ENTRY_REFUSALS.budgetSeason);
+    expect((await stored(id))!.budgetLineId).toBeNull();
+  });
+
+  /** The row's controls and the library read one rule. This pins the flag the
+   *  screen shows to what the library then allows. */
+  it('marks as editable exactly the rows it would let through', async () => {
+    const season = await createSeason(db, { name: 'ברן 26', year: 2026, flatRate: 1200 });
+    const from = await createAccount(db, { name: 'קופה מזומן', kind: 'cash' });
+    const to = await createAccount(db, { name: 'קופת מסיבות', kind: 'event_float' });
+    const sheetId = await addSheet(db, '2026.xlsx', 'סיכום כללי');
+    const blockId = await addBlock(db, sheetId, 'ledger');
+    const partyId = await createParty(db, {
+      seasonId: season.id, name: 'מסיבת פקאנים', heldOn: new Date('2026-07-18T00:00:00Z'),
+    });
+
+    const hand = await typed({ description: 'ביד' });
+    await typed({ description: 'מגיליון', sourceBlockId: blockId, sourceRow: 3 });
+    await recordTransfer(db, {
+      fromAccountId: from.id, toAccountId: to.id, amount: 500, occurredOn: DAY,
+      description: 'העברה', recordedBy: LEAD,
+    });
+    await recordPartyMovement(db, {
+      eventId: partyId, part: 'bar', amount: 900, occurredOn: DAY, recordedBy: LEAD,
+    });
+
+    const rows = await listLedgerRows(db);
+    expect(rows.length).toBe(5);
+    expect(rows.filter((row) => row.editable).map((row) => row.id)).toEqual([hand]);
+    for (const row of rows.filter((one) => !one.editable)) {
+      await expect(deleteEntry(db, row.id)).rejects.toThrow();
+    }
+    expect((await listLedgerRows(db)).length).toBe(5);
   });
 });
