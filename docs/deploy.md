@@ -896,7 +896,7 @@ docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine s
 The local `shliff-pg` needs it too (and `0021` through `0026` before it),
 with the §6 container command.
 
-### Migration `0028` — NOT yet applied to Railway
+### Migration `0028` — applied to Railway 2026-11-18
 
 `0028_user_page_access` is the per-page access behind משתמשים והרשאות
 (`/users`): one new table, `user_page_access` (`user_id` → `users.id`,
@@ -929,7 +929,18 @@ docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine s
 '
 ```
 
-The local `shliff-pg` needs it too (and `0021` through `0027` before it),
+It went in on 2026-11-18 (about 06:40 UTC) the way `0021` through `0026`
+did: a scratchpad script using the project's `postgres` driver, URL from
+`.env.railway`, check first, refuse anything but a clean state, one
+transaction, run from the prompt. #104 had already merged; with every
+account an admin nothing had named the table in between. Two statements:
+the table (with its primary key) and the foreign key to `users`. The script
+refused unless `users` existed and neither the table nor its two
+constraints did. Measured before: tables 0 of 1, constraints 0 of 2,
+`users` 5 rows, of them not `admin` 0. After: tables 1 of 1, constraints 2
+of 2, `users` 5, not `admin` 0.
+
+The local `shliff-pg` still needs it (and `0021` through `0027` before it),
 with the §6 container command.
 
 ### Copying the laptop's database up
