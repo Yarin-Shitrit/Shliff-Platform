@@ -3,7 +3,7 @@ import type { AnyDb } from '@/lib/db-types';
 import { formatDateFull } from '@/lib/dates';
 import { toAgorot } from '@/lib/money';
 import { accounts, budgetLines, ledgerEntries } from '@/db/schema/money';
-import type { AccountFund, LedgerDirection } from '@/db/schema/money';
+import type { AccountFund, ExpenseCategory, LedgerDirection } from '@/db/schema/money';
 import { dues, payments, persons } from '@/db/schema/camp';
 import { insideCount } from './counted';
 import { entryIsOpen, listMovements } from './ledger';
@@ -35,6 +35,12 @@ export interface LedgerRow {
   isTransfer: boolean;
   budgetLineId: string | null;
   budgetLineLabel: string | null;
+  /** What whoever typed the expense filed it under on /money/expenses. Null
+   *  when nobody chose, and on every row that is not such an expense. */
+  expenseCategory: ExpenseCategory | null;
+  /** Whether a receipt's photo is attached. The photo itself is served by
+   *  `/money/expenses/receipt/<id>`; the storage key never leaves the server. */
+  hasReceipt: boolean;
   seasonId: string | null;
   /** Null for a dues payment, which carries no provenance columns, and for a
    *  ledger entry a lead typed. Both render `נרשם ידנית`. */
@@ -83,6 +89,8 @@ export async function listLedgerRows(
       id: ledgerEntries.id,
       budgetLineId: ledgerEntries.budgetLineId,
       budgetLineLabel: budgetLines.label,
+      expenseCategory: ledgerEntries.expenseCategory,
+      receiptKey: ledgerEntries.receiptKey,
     })
     .from(ledgerEntries)
     .leftJoin(budgetLines, eq(budgetLines.id, ledgerEntries.budgetLineId))
@@ -152,6 +160,8 @@ export async function listLedgerRows(
       isTransfer: move.transferGroupId !== null,
       budgetLineId: entry?.budgetLineId ?? null,
       budgetLineLabel: entry?.budgetLineLabel ?? null,
+      expenseCategory: entry?.expenseCategory ?? null,
+      hasReceipt: (entry?.receiptKey ?? null) !== null,
       seasonId: move.seasonId,
       source: sources.get(sourceKey('ledger_entries', move.id)) ?? null,
       insideCount: move.accountId === null

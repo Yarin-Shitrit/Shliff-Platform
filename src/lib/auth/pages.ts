@@ -49,6 +49,7 @@ export const PAGES = [
   { key: 'site', label: 'מפת הקאמפ', href: '/site', group: 'הקאמפ' },
   { key: 'money', label: 'סקירה כספית', href: '/money', group: 'כספים' },
   { key: 'ledger', label: 'תנועות', href: '/money/ledger', group: 'כספים' },
+  { key: 'expenses', label: 'הוצאות', href: '/money/expenses', group: 'כספים' },
   { key: 'events', label: 'מסיבות', href: '/money/events', group: 'כספים' },
   { key: 'debts', label: 'חובות', href: '/money/debts', group: 'כספים' },
   { key: 'warehouse', label: 'מחסן', href: '/logistics/warehouse', group: 'לוגיסטיקה' },
