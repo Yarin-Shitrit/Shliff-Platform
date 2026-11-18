@@ -1112,8 +1112,6 @@
   overscroll-behavior: contain;
 }
 
-.ctxMenu:focus { outline: none; }
-
 .ctxHead {
   display: flex;
   flex-direction: column;
