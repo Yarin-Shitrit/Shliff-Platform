@@ -361,6 +361,8 @@ export function PlanTimeline({
                                     )}
                                     style={{ gridColumn: `${bar.start + 1} / span ${bar.span}` }}
                                     aria-current={item.id === currentItemId ? 'true' : undefined}
+                                    /* What `WorkDayMenu` finds on a right-click. */
+                                    data-plan-item={item.id}
                                     aria-label={barLabel(bar, today)}
                                     title={barLabel(bar, today)}
                                   >

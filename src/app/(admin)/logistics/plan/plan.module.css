@@ -1085,3 +1085,71 @@
   color: var(--ink-3);
   font-size: var(--text-meta);
 }
+
+/*
+ * The right-click menu that puts a task on a work day. The scope is only a
+ * listener: `display: contents` keeps the two sections it wraps as the
+ * page's own flex children. The panel is portaled to `document.body` and
+ * drawn like the kit's popover panel; its `left`/`top` are the pointer's,
+ * set inline, which is why they are physical.
+ */
+.ctxScope { display: contents; }
+
+.ctxMenu {
+  position: fixed;
+  z-index: var(--z-pop);
+  min-inline-size: 240px;
+  max-inline-size: min(360px, calc(100vw - 16px));
+  max-block-size: min(420px, calc(100vh - 16px));
+  padding-block: 6px;
+  background: var(--panel);
+  border-radius: 12px;
+  box-shadow: var(--shadow-pop);
+  display: flex;
+  flex-direction: column;
+  text-align: start;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.ctxMenu:focus { outline: none; }
+
+.ctxHead {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 12px 8px;
+  border-block-end: 1px solid var(--line);
+  margin-block-end: 4px;
+}
+
+.ctxVerb {
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.ctxTask { font-weight: 600; }
+
+.ctxWhen {
+  margin-inline-start: auto;
+  padding-inline-start: 12px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.ctxEmpty {
+  margin: 0;
+  padding: 6px 12px;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.ctxAdd {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 4px;
+  border-block-start: 1px solid var(--line);
+  margin-block-start: 4px;
+  font-size: 13px;
+}
