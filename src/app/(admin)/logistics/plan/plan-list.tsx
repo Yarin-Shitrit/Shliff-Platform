@@ -114,7 +114,11 @@ export function PlanList({
       cell: (line) => {
         const { item, sub } = line;
         return (
-          <span className={cx(sub ? styles.subTitle : styles.itemTitle, item.status !== 'open' && styles.titleClosed)}>
+          <span
+            className={cx(sub ? styles.subTitle : styles.itemTitle, item.status !== 'open' && styles.titleClosed)}
+            /* What `WorkDayMenu` finds on a right-click. */
+            data-plan-item={item.id}
+          >
             {rowLead?.(line)}
             {sub ? <Icon name="enter" size={14} /> : null}
             <Link href={itemHref(params, item.id)} aria-current={item.id === currentItemId ? 'true' : undefined}>

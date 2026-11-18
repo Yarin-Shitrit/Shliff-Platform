@@ -14,6 +14,8 @@ import {
 } from '@/lib/logistics/plan-views';
 import { acquisitionsHref } from '@/lib/logistics/acquisitions-views';
 import { adoptOutcomes } from '@/lib/logistics/acquisitions';
+import { eventLabel, listEvents } from '@/lib/logistics/attendance';
+import { newEventHref } from '@/lib/logistics/attendance-views';
 import { TopBar, SeasonChip } from '@/components/shell/top-bar';
 import { StatTile } from '@/components/ui/stat-tile';
 import { Banner } from '@/components/ui/banner';
@@ -29,6 +31,7 @@ import { DoneToggle } from './done-toggle';
 import { ItemDrawer } from './item-drawer';
 import { TopicDrawer } from './topic-drawer';
 import { AdoptDrawer } from './adopt-drawer';
+import { WorkDayMenu } from './work-day-menu';
 import styles from './plan.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -78,7 +81,23 @@ export default async function PlanPage(
   const here: RawParams = { ...params, season: current.id };
   const today = campDayOf(new Date());
 
-  const [items, topics] = await Promise.all([listPlan(db, current.id), listTopics(db, current.id)]);
+  const [items, topics, occasions, attendance] = await Promise.all([
+    listPlan(db, current.id), listTopics(db, current.id), listEvents(db, current.id), requireAdmin('attendance'),
+  ]);
+  /* The days a right-click can put a task on: the season's work days from
+     לוח הנוכחות, the ones still on that board. Only an account that may
+     write the plan gets the menu, and only one that may open נוכחות gets
+     the link that adds a day there. */
+  const canEdit = admin.level !== 'view';
+  const workDays = occasions
+    .filter((occasion) => occasion.kind === 'work_day' && occasion.cancelledAt === null)
+    .map((occasion) => ({ id: occasion.id, label: eventLabel(occasion), heldOn: occasion.heldOn }));
+  const placeable = canEdit
+    ? items
+      .filter((item) => item.status !== 'cancelled')
+      .map((item) => ({ id: item.id, title: item.title, startsOn: item.startsOn, endsOn: item.endsOn }))
+    : [];
+  const addWorkDayHref = attendance.ok && attendance.level !== 'view' ? newEventHref({ season: current.id }) : null;
   const totals = summarizePlan(items);
   const groups = buildPlanTree(items, topics);
   /* The week or month around the day the URL named, else around today. */
@@ -266,6 +285,7 @@ export default async function PlanPage(
             />
           </div>
 
+          <WorkDayMenu items={placeable} workDays={workDays} addHref={addWorkDayHref}>
           <section className={styles.section} id="timeline" aria-label="ציר זמן">
             <div className={styles.sectionHead}>
               <h2>ציר זמן</h2>
@@ -287,7 +307,7 @@ export default async function PlanPage(
           <section className={styles.section} id="list" aria-label="הרשימה המלאה">
             <div className={styles.sectionHead}>
               <h2>הרשימה המלאה</h2>
-              <span className={styles.sectionHint}>לפי נושא, כל נושא בצבע שלו. משימה כללית, ותחתיה החלקים שלה עם קו מחבר. לחיצה על העיגול מסמנת שהושלמה.</span>
+              <span className={styles.sectionHint}>לפי נושא, כל נושא בצבע שלו. משימה כללית, ותחתיה החלקים שלה עם קו מחבר. לחיצה על העיגול מסמנת שהושלמה.{canEdit ? ' לחיצה ימנית על משימה משייכת אותה ליום עבודה.' : ''}</span>
               {adoptable.length === 0 ? null : (
                 <ButtonLink size="sm" tone="ghost" href={adoptHref(here)}>
                   <Icon name="wallet" size={14} />
@@ -331,6 +351,7 @@ export default async function PlanPage(
               />
             )}
           </section>
+          </WorkDayMenu>
 
           <Banner
             tone="neutral"
