@@ -10,11 +10,12 @@ import type { AcquisitionRow } from '@/lib/logistics/acquisitions';
 const { push, refresh } = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push, refresh, replace: vi.fn() }) }));
 
-const { createAcquisitionAction, updateAcquisitionAction } = vi.hoisted(() => ({
+const { createAcquisitionAction, updateAcquisitionAction, removeAcquisitionAction } = vi.hoisted(() => ({
+  removeAcquisitionAction: vi.fn(async (): Promise<ActionResult<void>> => ({ ok: true, value: undefined })),
   createAcquisitionAction: vi.fn(async (): Promise<ActionResult<string>> => ({ ok: true, value: 'acq-9' })),
   updateAcquisitionAction: vi.fn(async (): Promise<ActionResult<void>> => ({ ok: true, value: undefined })),
 }));
-vi.mock('./actions', () => ({ createAcquisitionAction, updateAcquisitionAction }));
+vi.mock('./actions', () => ({ createAcquisitionAction, updateAcquisitionAction, removeAcquisitionAction }));
 
 import { AcquisitionDrawer } from './acquisition-drawer';
 
@@ -106,5 +107,75 @@ describe('the product of the price and the count', () => {
     const [input] = createAcquisitionAction.mock.calls[0] as unknown as [{ estimatedCost: string; quantityNeeded: number }];
     expect(input.estimatedCost).toBe('150');
     expect(input.quantityNeeded).toBe(12);
+  });
+});
+
+describe('removing a row from the list', () => {
+  const removeButton = () => screen.queryByRole('button', { name: /הסרה מהרכש/ });
+
+  it('is not offered while a row is being added', () => {
+    mount();
+    expect(removeButton()).toBeNull();
+  });
+
+  it('asks first, naming the row and what happens, and removes nothing until the answer', () => {
+    mount(CHAIRS);
+    fireEvent.click(removeButton()!);
+
+    const dialog = screen.getByRole('alertdialog', { name: 'הסרה מרשימת הרכש' });
+    expect(dialog.textContent).toContain('כיסא');
+    expect(dialog.textContent).toContain('אי אפשר יהיה לשחזר');
+    expect(removeAcquisitionAction).not.toHaveBeenCalled();
+  });
+
+  it('removes nothing when the question is answered with ביטול', () => {
+    mount(CHAIRS);
+    fireEvent.click(removeButton()!);
+    const dialog = screen.getByRole('alertdialog');
+    fireEvent.click(Array.from(dialog.querySelectorAll('button')).find((button) => button.textContent === 'ביטול')!);
+
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(removeAcquisitionAction).not.toHaveBeenCalled();
+  });
+
+  it('removes the row on the verb, says so, and closes the drawer', async () => {
+    mount(CHAIRS);
+    fireEvent.click(removeButton()!);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'הסרת הפריט' })); });
+
+    expect(removeAcquisitionAction).toHaveBeenCalledWith('acq-1');
+    expect(screen.getByText('כיסא הוסר מרשימת הרכש')).toBeTruthy();
+    expect(push).toHaveBeenCalledWith('/logistics/acquisitions');
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it('says before and after what happens to the row\'s line on the work plan', async () => {
+    mount({ ...CHAIRS, workItem: { id: 'w1', seasonId: 's26' } as AcquisitionRow['workItem'] });
+    fireEvent.click(removeButton()!);
+    expect(screen.getByRole('alertdialog').textContent).toContain('מסומנת כבוטלה');
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'הסרת הפריט' })); });
+    expect(screen.getByText(/המשימה שלו בלוח העבודה סומנה כבוטלה/)).toBeTruthy();
+  });
+
+  it('shows the server\'s refusal in the drawer and stays open', async () => {
+    removeAcquisitionAction.mockResolvedValueOnce({ ok: false, error: 'לא מצאנו את הפריט הזה ברשימת הרכש' });
+    mount(CHAIRS);
+    fireEvent.click(removeButton()!);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'הסרת הפריט' })); });
+
+    expect(screen.getAllByRole('alert').map((one) => one.textContent)).toContain('לא מצאנו את הפריט הזה ברשימת הרכש');
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('offers no button for a row that arrived, and says why', () => {
+    mount({ ...CHAIRS, status: 'arrived' });
+    expect(removeButton()).toBeNull();
+    expect(screen.getByText(/כבר הגיע, ולכן אי אפשר להסיר אותו/)).toBeTruthy();
+  });
+
+  it('offers no button for a row with an amount paid, and says how to get one', () => {
+    mount({ ...CHAIRS, actualAgorot: 170000 });
+    expect(removeButton()).toBeNull();
+    expect(screen.getByText(/כבר נרשם לפריט הזה סכום ששולם/)).toBeTruthy();
   });
 });

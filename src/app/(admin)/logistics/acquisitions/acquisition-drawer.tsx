@@ -18,6 +18,8 @@ import { Drawer } from '@/components/ui/drawer';
 import { Checkbox, Field, MoneyInput, Select, TextInput } from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
 import { Banner } from '@/components/ui/banner';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Icon } from '@/components/ui/icon';
 import { useToast } from '@/components/ui/toaster';
 import { isBlank } from '@/lib/text/normalize';
 import { formatShekels } from '@/lib/money';
@@ -29,8 +31,10 @@ import { itemHref as planItemHref, PLAN_PATH } from '@/lib/logistics/plan-views'
 import type {
   AcquisitionSource, LogisticsCategory,
 } from '@/db/schema/logistics';
-import { createAcquisitionAction, updateAcquisitionAction } from './actions';
-import { REQUIRED_NAME, REQUIRED_QUANTITY, REQUIRED_LENDER } from './failure-messages';
+import { createAcquisitionAction, removeAcquisitionAction, updateAcquisitionAction } from './actions';
+import {
+  REQUIRED_NAME, REQUIRED_QUANTITY, REQUIRED_LENDER, REMOVE_ARRIVED, REMOVE_PAID,
+} from './failure-messages';
 import styles from './acquisitions.module.css';
 
 export interface PersonOption { id: string; name: string }
@@ -82,6 +86,16 @@ export function AcquisitionDrawer({
   const [campWide, setCampWide] = useState(row !== null && row.seasonId === null);
   const [pending, setPending] = useState(false);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
+  /* The question before a row is removed for good (R8). */
+  const [removing, setRemoving] = useState(false);
+
+  /* Why this row cannot be removed, or null when it can. Read from the row
+     as it was saved, not from the boxes: an amount typed and not yet saved
+     has not been paid as far as the list knows. The server asks again. */
+  const cannotRemove = row === null ? null
+    : row.status === 'arrived' || row.arrivedItemId !== null ? REMOVE_ARRIVED
+      : row.actualAgorot !== null ? REMOVE_PAID
+        : null;
 
   const borrowed = source === 'borrow_member';
   /* The row's estimate, as the two boxes stand right now. Null while either
@@ -135,6 +149,27 @@ export function AcquisitionDrawer({
     }
   }
 
+  async function remove() {
+    if (row === null) return;
+    setRemoving(false);
+    setRefusal(null);
+    setPending(true);
+    try {
+      const result = await removeAcquisitionAction(row.id);
+      if (!result.ok) { setRefusal({ where: 'form', message: result.error }); return; }
+      show({
+        message: row.workItem === null
+          ? `${row.name} הוסר מרשימת הרכש`
+          : `${row.name} הוסר מרשימת הרכש · המשימה שלו בלוח העבודה סומנה כבוטלה`,
+        tone: 'ok',
+      });
+      router.push(closeHref);
+      router.refresh();
+    } finally {
+      setPending(false);
+    }
+  }
+
   const creating = row === null;
 
   return (
@@ -150,6 +185,12 @@ export function AcquisitionDrawer({
             {creating ? 'הוספה לרכש' : 'שמירה'}
           </Button>
           <Button onClick={() => { router.push(closeHref); }} disabled={pending}>ביטול</Button>
+          {creating || cannotRemove !== null ? null : (
+            <Button tone="ghost" onClick={() => { setRemoving(true); }} disabled={pending}>
+              <Icon name="x" size={14} />
+              הסרה מהרכש
+            </Button>
+          )}
         </>
       )}
     >
@@ -339,10 +380,30 @@ export function AcquisitionDrawer({
           />
         )}
 
+        {cannotRemove === null ? null : (
+          <p className={styles.formHint}>{cannotRemove}{'.'}</p>
+        )}
+
         {refusal?.where === 'form' && (
           <p className={styles.formError} role="alert">{refusal.message}</p>
         )}
       </form>
+
+      {removing && row !== null ? (
+        <ConfirmDialog
+          title="הסרה מרשימת הרכש"
+          confirmLabel="הסרת הפריט"
+          onCancel={() => { setRemoving(false); }}
+          onConfirm={() => { void remove(); }}
+          consequence={(
+            <>
+              <bdi>{row.name}</bdi>
+              {' יימחק מרשימת הרכש, ואי אפשר יהיה לשחזר אותו. האומדן שלו יירד מהסכומים שבראש המסך.'}
+              {row.workItem === null ? null : ' המשימה שלו בלוח העבודה תישאר שם, מסומנת כבוטלה.'}
+            </>
+          )}
+        />
+      ) : null}
     </Drawer>
   );
 }
