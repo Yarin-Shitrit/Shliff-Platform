@@ -64,3 +64,14 @@ export function weekdayOf(day: string): string {
 export function shortDate(day: string): string {
   return `${day.slice(8, 10)}/${day.slice(5, 7)}/${day.slice(0, 4)}`;
 }
+
+/**
+ * An item's days in words: `בלי יום`, the one day with its weekday, or the
+ * span `14/03/2026–16/03/2026`. For the pool's rows and the toasts that
+ * name the days a pull or a removal changed.
+ */
+export function daysWords(startsOn: string | null, endsOn: string | null): string {
+  if (startsOn === null) return 'בלי יום';
+  if (endsOn === null || endsOn === startsOn) return `${weekdayOf(startsOn)} ${shortDate(startsOn)}`;
+  return `${shortDate(startsOn)}–${shortDate(endsOn)}`;
+}
