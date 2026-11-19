@@ -1,14 +1,14 @@
 import { SkeletonPage, SkeletonTiles } from '@/components/ui/skeleton';
 
 /**
- * E3. This route only redirects to מחסן, so there is no shape of its own to
- * draw. It borrows the warehouse's tiles rather than showing nothing, because
- * that is where the reader is about to land.
+ * E3. The overview is cards: what needs a hand and the next work day, then
+ * one card per screen. The skeleton draws the two rows of them.
  */
 export default function LogisticsLoading() {
   return (
     <SkeletonPage label="טוען…">
-      <SkeletonTiles count={3} />
+      <SkeletonTiles count={2} />
+      <SkeletonTiles count={4} />
     </SkeletonPage>
   );
 }
