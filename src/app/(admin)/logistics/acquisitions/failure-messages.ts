@@ -16,7 +16,12 @@ export const REQUIRED_QUANTITY = 'הכמות הדרושה חייבת להיות 
 export const REQUIRED_LENDER = 'להשאלה מחבר קאמפ צריך לבחור ממי משאילים, אחרת לא יהיה למי להחזיר';
 export const REQUIRED_LOCATION = 'צריך לרשום מיקום במחסן, אחרת אי אפשר יהיה למצוא את הפריט בשנה הבאה';
 
+export const REMOVE_ARRIVED = 'הפריט הזה כבר הגיע, ולכן אי אפשר להסיר אותו מהרכש: הוא מה שהקאמפ השיג השנה';
+export const REMOVE_PAID = 'כבר נרשם לפריט הזה סכום ששולם, ולכן אי אפשר להסיר אותו. אם הסכום נרשם בטעות, מוחקים אותו ושומרים — ואז אפשר להסיר';
+
 export const ACQUISITION_ERRORS: HebrewErrors = [
+  ['an arrived acquisition cannot be removed', REMOVE_ARRIVED],
+  ['a paid acquisition cannot be removed', REMOVE_PAID],
   ['an acquisition must have a name', REQUIRED_NAME],
   ['an acquisition quantity', REQUIRED_QUANTITY],
   ['a borrowed acquisition must name the lender', REQUIRED_LENDER],

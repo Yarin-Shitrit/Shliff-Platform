@@ -279,8 +279,9 @@ export const workItems = pgTable('work_items', {
    * The purchase this item is the buying of. Set when a lead enters a row on
    * רכש — the item is made from it, under the topic they chose — or when a
    * ״לקנות…״ item already on the board is adopted into the list. Unique, so
-   * one purchase is one line on the board and never two. `set null` is a
-   * safety net only: an acquisition row is never deleted by this product.
+   * one purchase is one line on the board and never two. `set null` is
+   * what happens when a lead removes a row from the list
+   * (`removeAcquisition`): the line stays, marked cancelled, with no link.
    *
    * A linked item's title, person and done/open state follow the purchase
    * (`src/lib/logistics/acquisitions.ts`): the list is where a purchase is

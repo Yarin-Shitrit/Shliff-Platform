@@ -576,6 +576,44 @@ export async function setAcquisitionStatus(
   });
 }
 
+/**
+ * Takes a row out of the list for good: a thing entered by mistake, or one
+ * the camp decided not to get after all.
+ *
+ * The one delete this list has, and it is narrow on purpose. A row that
+ * arrived is refused — it became stock, and it is the record of what the
+ * camp got this year. So is a row with an amount paid: that is money that
+ * left the camp, and the row is what says for what. A lead who typed the
+ * amount by mistake clears it first, which is a decision made in the open
+ * rather than one this function makes for them.
+ *
+ * The line on the work plan is not deleted with it. It is marked cancelled
+ * — the board's own word for work that will not be done — and keeps its
+ * title, so the board still says a purchase was planned and dropped. The
+ * link itself goes with the row (`set null`), as does a build material's.
+ *
+ * One transaction: a row gone whose line stayed open would be work on the
+ * board that nothing can ever complete.
+ */
+export async function removeAcquisition(db: AnyDb, id: string, actor: string): Promise<void> {
+  const row = await acquisitionById(db, id);
+  if (!row) throw new Error(`unknown acquisition ${id}`);
+  if (row.status === 'arrived' || row.arrivedItemId !== null) {
+    throw new Error(`an arrived acquisition cannot be removed: ${id}`);
+  }
+  if (row.actualAgorot !== null) {
+    throw new Error(`a paid acquisition cannot be removed: ${id}`);
+  }
+
+  await (db as Db).transaction(async (tx) => {
+    const scoped = tx as unknown as AnyDb;
+    await scoped.update(workItems)
+      .set({ status: 'cancelled', updatedAt: new Date(), updatedBy: actor })
+      .where(eq(workItems.acquisitionItemId, id));
+    await scoped.delete(acquisitionItems).where(eq(acquisitionItems.id, id));
+  });
+}
+
 export interface ArrivalInput {
   acquisitionId: string;
   /**

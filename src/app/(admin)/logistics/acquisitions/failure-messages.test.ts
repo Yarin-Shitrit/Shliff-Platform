@@ -72,3 +72,29 @@ describe('what the arrival drawer says', () => {
     }
   });
 });
+
+describe('what the screen says when a row cannot be removed', () => {
+  it('says an arrived row stays, and why', () => {
+    expect(acquisitionFailureMessage(new Error('an arrived acquisition cannot be removed: 7f3a')))
+      .toMatch(/כבר הגיע/);
+  });
+
+  it('says a paid row stays, and what would let it go', () => {
+    expect(acquisitionFailureMessage(new Error('a paid acquisition cannot be removed: 7f3a')))
+      .toMatch(/סכום ששולם/);
+  });
+
+  it('does not let the arrival drawer\'s catch-all swallow either sentence', () => {
+    // ARRIVAL_ERRORS ends with a bare prefix that answers "already registered".
+    expect(arrivalFailureMessage(new Error('an arrived acquisition cannot be removed: 7f3a')))
+      .toMatch(/כבר הגיע/);
+    expect(arrivalFailureMessage(new Error('a paid acquisition cannot be removed: 7f3a')))
+      .toMatch(/סכום ששולם/);
+  });
+
+  it('writes both without a Latin character', () => {
+    for (const thrown of ['an arrived acquisition cannot be removed: 7f3a', 'a paid acquisition cannot be removed: 7f3a']) {
+      expect(acquisitionFailureMessage(new Error(thrown))).not.toMatch(/[A-Za-z]/);
+    }
+  });
+});

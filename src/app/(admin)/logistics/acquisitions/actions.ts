@@ -5,7 +5,7 @@ import { db } from '@/db';
 import { requireAdmin } from '@/lib/auth/guard';
 import type { ActionResult } from '@/lib/action-result';
 import {
-  createAcquisition, updateAcquisition, setAcquisitionStatus, recordArrival,
+  createAcquisition, updateAcquisition, setAcquisitionStatus, recordArrival, removeAcquisition,
   type AcquisitionInput, type ArrivalInput, type PlanPlacement,
 } from '@/lib/logistics/acquisitions';
 import type { AcquisitionStatus } from '@/db/schema/logistics';
@@ -77,6 +77,24 @@ export async function setAcquisitionStatusAction(
 
   try {
     await setAcquisitionStatus(db, id, status, admin.email);
+    revalidatePath(ACQUISITIONS_PATH);
+    revalidatePath(PLAN_PATH);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: acquisitionFailureMessage(error) };
+  }
+}
+
+/**
+ * Takes a row out of the list for good. The board is revalidated with it:
+ * the row's line there turns cancelled in the same write.
+ */
+export async function removeAcquisitionAction(id: string): Promise<ActionResult> {
+  const admin = await requireAdmin('acquisitions', 'edit');
+  if (!admin.ok) return { ok: false, error: 'אין הרשאה' };
+
+  try {
+    await removeAcquisition(db, id, admin.email);
     revalidatePath(ACQUISITIONS_PATH);
     revalidatePath(PLAN_PATH);
     return { ok: true };
