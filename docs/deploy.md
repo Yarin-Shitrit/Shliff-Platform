@@ -858,7 +858,7 @@ constraints 2 of 2, `seasons` 3, `persons` 72.
 The local `shliff-pg` still needs it (and `0021` through `0025` before it),
 with the §6 container command.
 
-### Migration `0027` — NOT yet applied to Railway
+### Migration `0027` — applied to Railway 2026-11-15
 
 `0027_dues_membership_track` is the דמי חבר track on `/fees`: two columns,
 `dues.track` (`text NOT NULL DEFAULT 'burn'` — every due issued before the
@@ -868,12 +868,12 @@ with no such track, which is every season so far). Purely additive; no row
 changes its meaning, and no figure on any page moves until a lead types a
 membership rate into the rate drawer.
 
-**This one has to follow "migration first", and the last five did not.**
+**This one had to follow "migration first", and did — the last five did not.**
 `seasons` is read by the shell on every page, and drizzle names every
 column it selects — so code that knows `membership_rate` against a database
 that does not answers the error screen on **every** screen, not on one. The
 other direction is safe: the code on `main` today names its columns too and
-never sees the two new ones. Apply, then merge and deploy.
+never sees the two new ones. Applied first; the merge and deploy follow.
 
 Read-only check, before: `0`; after: `2`:
 
@@ -893,7 +893,19 @@ docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine s
 '
 ```
 
-The local `shliff-pg` needs it too (and `0021` through `0026` before it),
+It went in on 2026-11-15 (about 22:05 UTC) the way `0021` through `0026` did: a
+scratchpad script using the project's `postgres` driver, URL from
+`.env.railway`, check first, refuse anything but a clean state, one
+transaction, run from the prompt — and this time before the merge, with
+#103 still open, the SQL read from the feature branch's worktree. Two
+statements, and the script refused unless both were an `ADD COLUMN` on
+`dues` or `seasons`, unless `seasons`, `dues` and
+`attendance_personal_marks` existed, and unless neither column did.
+Measured before: columns 0 of 2, `seasons` 3 rows, `dues` 76 rows summing
+105855.00. After: columns 2 of 2, `seasons` 3, `dues` 76 summing
+105855.00; dues not on `burn`: 0; seasons with a membership rate: 0.
+
+The local `shliff-pg` still needs it (and `0021` through `0026` before it),
 with the §6 container command.
 
 ### Migration `0028` — applied to Railway 2026-11-18
