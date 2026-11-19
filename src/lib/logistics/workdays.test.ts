@@ -4,7 +4,9 @@ import { createTestDb, type TestDb } from '@/test/db';
 import { persons } from '@/db/schema/camp';
 import { createSeason, addMember } from '@/lib/members/roster';
 import { createItem, createTopic, listPlan, listTopics, planRoster, setItemStatus } from './plan';
-import { buildDay, listCrew, pickDay, setCrewMember, tasksOn, type WorkDay } from './workdays';
+import {
+  buildDay, buildPool, listCrew, pickDay, setCrewMember, tasksOn, type WorkDay,
+} from './workdays';
 
 const LEAD = 'lead@shliff.camp';
 const NOBODY = '00000000-0000-0000-0000-000000000000';
@@ -125,6 +127,42 @@ describe('the crew of a task', () => {
     );
     expect(view.tasks[0].crew).toEqual([{ personId: dana, displayName: 'דנה', onRoster: false, alsoOn: [] }]);
     expect(view.free.map((one) => one.displayName)).toEqual(['עומר']);
+  });
+});
+
+describe('what can be pulled onto a day', () => {
+  let db: TestDb;
+  let seasonId: string;
+
+  beforeEach(async () => {
+    db = await createTestDb();
+    seasonId = (await createSeason(db, { name: 'ברן 27', year: 2027, flatRate: 1200 })).id;
+  });
+
+  it('offers every open item the day does not hold, split by whether it has a day', async () => {
+    const topicId = await createTopic(db, seasonId, { name: 'סלון', notes: null }, LEAD);
+    const lounge = await createItem(db, seasonId, item('להכין סלון', '2027-03-10', '2027-03-20', { topicId }), LEAD);
+    await createItem(db, seasonId, item('לצבוע', '2027-04-04', '2027-04-05', { parentId: lounge }), LEAD);
+    await createItem(db, seasonId, item('בניית ספסלים', '2027-03-14'), LEAD);
+    await createItem(db, seasonId, item('לתקן מקררים', null), LEAD);
+    const done = await createItem(db, seasonId, item('נגמר', null), LEAD);
+    await setItemStatus(db, done, 'done', LEAD);
+    const gone = await createItem(db, seasonId, item('בוטל', '2027-05-01'), LEAD);
+    await setItemStatus(db, gone, 'cancelled', LEAD);
+
+    const pool = buildPool('2027-03-14', await listPlan(db, seasonId), await listTopics(db, seasonId));
+
+    expect(pool.unscheduled.map((entry) => entry.item.title)).toEqual(['לתקן מקררים']);
+    expect(pool.elsewhere.map((entry) => entry.item.title)).toEqual(['לצבוע']);
+    expect(pool.elsewhere[0].topicName).toBe('סלון');
+    expect(pool.elsewhere[0].parentTitle).toBe('להכין סלון');
+    expect(pool.unscheduled[0].topicName).toBeNull();
+  });
+
+  it('is empty when every open item is on the day', async () => {
+    await createItem(db, seasonId, item('בניית ספסלים', '2027-03-14'), LEAD);
+    const pool = buildPool('2027-03-14', await listPlan(db, seasonId), []);
+    expect(pool).toEqual({ unscheduled: [], elsewhere: [] });
   });
 });
 

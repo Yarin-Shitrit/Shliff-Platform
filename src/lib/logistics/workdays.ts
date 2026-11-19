@@ -122,6 +122,48 @@ export function pickDay(days: readonly WorkDay[], wanted: string | null, today: 
   return sorted.find((day) => day.heldOn >= today) ?? sorted[sorted.length - 1] ?? null;
 }
 
+// ── The pool ────────────────────────────────────────────────────────────
+
+export interface PoolEntry {
+  item: PlanItem;
+  topicName: string | null;
+  /** For a part: the general item it belongs to. */
+  parentTitle: string | null;
+}
+
+/** The plan's open items a day does not hold yet, by where they sit now. */
+export interface Pool {
+  /** Items with no day at all, in the plan's order. */
+  unscheduled: PoolEntry[];
+  /** Items on some other day or span, in the plan's order. */
+  elsewhere: PoolEntry[];
+}
+
+/**
+ * Pure: what can be pulled onto a day — every open item whose days do not
+ * include it. A finished item is not offered (its work is done), nor a
+ * cancelled one. An item on another day is offered and says which: pulling
+ * it moves it, and the screen names the days it had.
+ */
+export function buildPool(
+  day: string, items: readonly PlanItem[], topics: readonly Topic[],
+): Pool {
+  const titles = new Map(items.map((item) => [item.id, item.title]));
+  const topicNames = new Map(topics.map((topic) => [topic.id, topic.name]));
+  const held = new Set(tasksOn(items, day).map((item) => item.id));
+  const pool: Pool = { unscheduled: [], elsewhere: [] };
+  for (const item of items) {
+    if (item.status !== 'open' || held.has(item.id)) continue;
+    const entry: PoolEntry = {
+      item,
+      topicName: item.topicId === null ? null : topicNames.get(item.topicId) ?? null,
+      parentTitle: item.parentId === null ? null : titles.get(item.parentId) ?? null,
+    };
+    (item.startsOn === null ? pool.unscheduled : pool.elsewhere).push(entry);
+  }
+  return pool;
+}
+
 export interface CrewPerson {
   personId: string;
   displayName: string;

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  parseWorkdaysQuery, workdaysHref, weekdayOf, shortDate, WORKDAYS_PATH,
+  parseWorkdaysQuery, workdaysHref, weekdayOf, shortDate, daysWords, WORKDAYS_PATH,
 } from './workdays-views';
 
 describe('the ימי עבודה URL', () => {
@@ -26,5 +26,12 @@ describe('the ימי עבודה URL', () => {
   it('reads the weekday from the calendar', () => {
     expect(weekdayOf('2026-03-14')).toBe('יום שבת');
     expect(shortDate('2026-03-14')).toBe('14/03/2026');
+  });
+
+  it('puts an item\'s days into words: none, the one day, or the span', () => {
+    expect(daysWords(null, null)).toBe('בלי יום');
+    expect(daysWords('2026-03-14', null)).toBe('יום שבת 14/03/2026');
+    expect(daysWords('2026-03-14', '2026-03-14')).toBe('יום שבת 14/03/2026');
+    expect(daysWords('2026-03-14', '2026-03-16')).toBe('14/03/2026–16/03/2026');
   });
 });

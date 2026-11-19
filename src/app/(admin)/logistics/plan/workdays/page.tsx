@@ -9,21 +9,19 @@ import { eventLabel, listEvents } from '@/lib/logistics/attendance';
 import { eventHref, newEventHref } from '@/lib/logistics/attendance-views';
 import { itemHref, planHref } from '@/lib/logistics/plan-views';
 import { campDayOf } from '@/lib/logistics/shift-time';
-import { buildDay, listCrew, pickDay, tasksOn, type WorkDay } from '@/lib/logistics/workdays';
+import { buildDay, buildPool, listCrew, pickDay, tasksOn, type WorkDay } from '@/lib/logistics/workdays';
 import {
   parseWorkdaysQuery, workdaysHref, weekdayOf, shortDate, type RawParams,
 } from '@/lib/logistics/workdays-views';
-import { WORK_STATUS_LABELS, WORK_STATUS_TONES } from '@/lib/logistics/labels';
 import { TopBar, SeasonChip } from '@/components/shell/top-bar';
 import { StatTile } from '@/components/ui/stat-tile';
 import { Banner } from '@/components/ui/banner';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ButtonLink } from '@/components/ui/button';
-import { Avatar } from '@/components/ui/avatar';
-import { Pill } from '@/components/ui/pill';
 import { Icon } from '@/components/ui/icon';
 import { cx } from '@/components/ui/cx';
 import { CrewDrawer, type CrewOption } from './crew-drawer';
+import { DayBoard, type BoardTask, type PoolTask } from './day-board';
 import styles from './workdays.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -34,9 +32,11 @@ export const metadata: Metadata = { title: 'ימי עבודה' };
  * ימי עבודה — who works on what, on each work day of the season.
  *
  * The days are the ״יום עבודה״ occasions on לוח הנוכחות; a day's tasks are
- * the plan's items whose days include it (a right-click on לוח עבודה puts a
- * task on a work day). One day is on screen at a time: its tasks as cards,
- * each with the people on it, and the people on none of them underneath.
+ * the plan's items whose days include it. One day is on screen at a time,
+ * as a board: its tasks as cards, each with the people on it, the people on
+ * none of them underneath, and beside them the plan's open tasks the day
+ * does not hold — pulled onto it by a drag or a button, the same write the
+ * board's right-click makes. People land on a task the same two ways.
  *
  * It is the plan's screen and uses the plan's grant. What it plans is not
  * what happened: who actually came is ticked on לוח הנוכחות, which each day
@@ -111,7 +111,35 @@ export default async function WorkdaysPage(
      link name the day on screen even when the URL named none. */
   const here: RawParams = { season: current.id, day: day.id };
   const view = buildDay(day.heldOn, items, topics, crew, roster);
+  const pool = canEdit ? buildPool(day.heldOn, items, topics) : { unscheduled: [], elsewhere: [] };
   const dayWords = `${day.label} · ${weekdayOf(day.heldOn)} ${shortDate(day.heldOn)}`;
+
+  /* The board takes plain records: what each card and chip shows, and the
+     links it offers. The days of a task ride along for the undo of taking
+     it off this one. */
+  const boardTasks: BoardTask[] = view.tasks.map((task) => ({
+    id: task.item.id,
+    title: task.item.title,
+    href: itemHref(seasonParams, task.item.id),
+    crewHref: canEdit ? workdaysHref(here, { task: task.item.id }) : null,
+    topicName: task.topicName,
+    parentTitle: task.parentTitle,
+    assigneeName: task.item.assignee?.displayName ?? null,
+    done: task.item.status === 'done',
+    startsOn: task.item.startsOn ?? day.heldOn,
+    endsOn: task.item.endsOn,
+    crew: task.crew.map((person) => ({
+      personId: person.personId, displayName: person.displayName, onRoster: person.onRoster,
+    })),
+  }));
+  const poolOf = (entries: typeof pool.unscheduled): PoolTask[] => entries.map((entry) => ({
+    id: entry.item.id,
+    title: entry.item.title,
+    topicName: entry.topicName,
+    parentTitle: entry.parentTitle,
+    startsOn: entry.item.startsOn,
+    endsOn: entry.item.endsOn,
+  }));
 
   const peeked = !canEdit || query.task === null
     ? null
@@ -228,103 +256,19 @@ export default async function WorkdaysPage(
         />
       )}
 
-      <section className={styles.section} id="tasks" aria-label="המשימות של היום">
-        <div className={styles.sectionHead}>
-          <h2><bdi>{dayWords}</bdi></h2>
-          <span className={styles.spacer} />
-          {attendance.ok ? (
-            <ButtonLink size="sm" tone="ghost" href={eventHref(seasonParams, day.id)}>
-              <Icon name="check" size={14} />
-              נוכחות ביום הזה
-            </ButtonLink>
-          ) : null}
-        </div>
-
-        {view.tasks.length === 0 ? (
-          <>
-            <EmptyState
-              kind="none-of-this-kind"
-              noun="משימות ביום הזה"
-              action={{ label: 'מעבר ללוח העבודה', href: planLink }}
-            />
-            <p className={styles.note}>
-              בלוח העבודה, לחיצה ימנית על משימה משייכת אותה ליום עבודה, והיא מופיעה כאן.
-            </p>
-          </>
-        ) : (
-          <ul className={styles.cards}>
-            {view.tasks.map((task) => (
-              <li key={task.item.id} className={styles.card}>
-                <div className={styles.cardHead}>
-                  <h3 className={styles.cardTitle}>
-                    <Link href={itemHref(seasonParams, task.item.id)}>{task.item.title}</Link>
-                  </h3>
-                  <span className={styles.cardMeta}>
-                    <bdi>{task.topicName ?? 'בלי נושא'}</bdi>
-                    {task.parentTitle === null ? null : <>{' · '}<bdi>{`חלק של ${task.parentTitle}`}</bdi></>}
-                    {' · '}
-                    <bdi>{task.item.assignee === null ? 'אחראי: לא נקבע' : `אחראי: ${task.item.assignee.displayName}`}</bdi>
-                  </span>
-                  {task.item.status === 'done' ? (
-                    <span><Pill tone={WORK_STATUS_TONES.done} dot>{WORK_STATUS_LABELS.done}</Pill></span>
-                  ) : null}
-                </div>
-
-                {task.crew.length === 0 ? (
-                  <p className={styles.note}>עדיין לא שובץ אף אחד למשימה הזו.</p>
-                ) : (
-                  <ul className={styles.crew} aria-label={`משובצים ל${task.item.title}`}>
-                    {task.crew.map((person) => (
-                      <li key={person.personId} className={cx(styles.person, !person.onRoster && styles.personOff)}>
-                        <Avatar name={person.displayName} size="sm" decorative />
-                        {person.displayName}
-                        {person.onRoster ? null : ' · לא ברשימת השנה'}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                {canEdit ? (
-                  <div className={styles.cardFoot}>
-                    <ButtonLink size="sm" href={workdaysHref(here, { task: task.item.id })}>
-                      <Icon name="plus" size={14} />
-                      {task.crew.length === 0 ? 'שיבוץ אנשים' : `שינוי השיבוץ · ${task.crew.length}`}
-                    </ButtonLink>
-                  </div>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className={styles.section} id="free" aria-label="בלי משימה ביום הזה">
-        <div className={styles.sectionHead}>
-          <h2>בלי משימה ביום הזה</h2>
-          <span className={styles.sectionHint}>
-            <bdi>{`${view.free.length} מתוך ${roster.length} ברשימת ${current.name}`}</bdi>
-          </span>
-        </div>
-        {roster.length === 0 ? (
-          <EmptyState
-            kind="nothing-this-season"
-            noun="חברים ברשימה"
-            seasonName={current.name}
-            action={{ label: 'מעבר לאנשים', href: '/members' }}
-          />
-        ) : view.free.length === 0 ? (
-          <p className={styles.note}>כל מי שברשימה משובץ למשימה כלשהי ביום הזה.</p>
-        ) : (
-          <ul className={styles.crew}>
-            {view.free.map((person) => (
-              <li key={person.personId} className={styles.person}>
-                <Avatar name={person.displayName} size="sm" decorative />
-                <Link href={`/members/${person.personId}`}>{person.displayName}</Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <DayBoard
+        day={{ id: day.id, label: day.label, heldOn: day.heldOn, words: dayWords }}
+        tasks={boardTasks}
+        free={view.free.map((person) => ({
+          personId: person.personId, displayName: person.displayName, href: `/members/${person.personId}`,
+        }))}
+        pool={{ unscheduled: poolOf(pool.unscheduled), elsewhere: poolOf(pool.elsewhere) }}
+        rosterSize={roster.length}
+        seasonName={current.name}
+        canEdit={canEdit}
+        planHref={planLink}
+        attendanceHref={attendance.ok ? eventHref(seasonParams, day.id) : null}
+      />
 
       {peeked === null ? null : (
         <CrewDrawer
