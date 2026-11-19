@@ -367,9 +367,10 @@ describe('MoneyPage', () => {
    * page must not present that 0 as a real per-head cost (the thesis would
    * print "0 ₪ לאדם"), and must not reuse the "no planned size" message,
    * since this season's planned size (35, from `identity()`'s default) is
-   * known — what's missing is the budget itself.
+   * known — what's missing is the budget itself. It says nothing in the lead
+   * card; the budget band below is where the missing budget shows.
    */
-  it('reports the camp budget as not recorded yet, not as a lying zero, when the season has no camp-category budget lines', async () => {
+  it('prints no per-head cost, and no lying zero, when the season has no camp-category budget lines', async () => {
     moneyOverview.mockResolvedValue(overview({
       summary: summary({
         identity: identity({
@@ -379,8 +380,7 @@ describe('MoneyPage', () => {
     }));
     const { container } = render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
 
-    const message = screen.getByText(/עדיין לא נרשם תקציב קאמפ/);
-    expect(message.textContent).toContain(SEASON.name);
+    expect(screen.queryByText(/עדיין לא נרשם תקציב קאמפ/)).toBeNull();
     expect(screen.queryByText(/בלי גודל מחנה מתוכנן/)).toBeNull();
     expect(container.querySelector(`.${styles.thesis}`)).toBeNull();
     expect(screen.queryByText(/לא מסתכמים לתקציב/)).toBeNull();
@@ -672,12 +672,12 @@ describe('MoneyPage', () => {
     expect(within(outRow).getByText('לא צוין')).toBeTruthy();
   });
   describe('the tile row', () => {
-    it('shows six tiles, and every one of them is a link onward', async () => {
+    it('shows four tiles, and every one of them is a link onward', async () => {
       render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
       const tiles = screen.getByRole('list', { name: 'סיכום כספי' });
       const links = within(tiles).getAllByRole('link');
-      // Six since the balance became two: the camp's and the gift's.
-      expect(links).toHaveLength(6);
+      // The two balances, then the season's in and out.
+      expect(links).toHaveLength(4);
       for (const link of links) {
         expect(link.getAttribute('href')).toMatch(/season=s1/);
       }
@@ -745,36 +745,15 @@ describe('MoneyPage', () => {
       expect(within(band('הגיפט')).queryByText('במינוס')).toBeNull();
     });
 
-    it('prints how the fundraising remainder was reached, on the tile itself', async () => {
+    /* The row is the two balances and the season's in and out, and nothing
+       else: what is left to raise and what awaits a decision each have a page
+       of their own, and a tile reading 0 said nothing here. */
+    it('keeps the row to the two balances and the season in and out', async () => {
       render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
-      const tile = screen.getByText('נותר לגייס').closest('li')!;
-      expect(tile.textContent).toContain('3,875.30');
-      expect(tile.textContent).toContain('גויסו 18,500 ₪ מתוך 22,375.30 ₪');
-    });
-
-    it('says a fundraising target was never recorded instead of showing a zero remainder', async () => {
-      moneyOverview.mockResolvedValue(overview({
-        fundraising: { targetAgorot: 0, raisedAgorot: 0, remainingAgorot: 0 },
-      }));
-      render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
-      const tile = screen.getByText('נותר לגייס').closest('li')!;
-      expect(tile.textContent).toContain('לא נרשם יעד גיוס לברן 26');
-    });
-
-    it('counts the decisions this screen cannot make and sends them to לטיפול', async () => {
-      moneyOverview.mockResolvedValue(overview({
-        decisions: { unnamedCount: 2, arithmeticCount: 2, total: 4 },
-      }));
-      render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
-      const tile = screen.getByText('דורש הכרעה').closest('li')!;
-      expect(tile.textContent).toContain('2 חובות בלי שם · 2 סעיפים שלא מסתדרים');
-      expect(within(tile).getByRole('link').getAttribute('href')).toBe('/inbox?season=s1');
-    });
-
-    it('shows the all-clear rather than a zero when nothing needs a decision', async () => {
-      render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
-      const tile = screen.getByText('דורש הכרעה').closest('li')!;
-      expect(tile.textContent).toContain('הכל מטופל');
+      const tiles = screen.getByRole('list', { name: 'סיכום כספי' });
+      expect(within(tiles).getAllByRole('listitem')).toHaveLength(4);
+      expect(screen.queryByText('נותר לגייס')).toBeNull();
+      expect(screen.queryByText('דורש הכרעה')).toBeNull();
     });
   });
   describe('where the money is', () => {
@@ -918,7 +897,7 @@ describe('MoneyPage', () => {
 });
 
 describe('counting what an account holds', () => {
-  it('offers the count drawer on every account card, and a new account in the section head', async () => {
+  it('offers the count drawer on every account card', async () => {
     moneyOverview.mockResolvedValue(overview({
       summary: summary({ accounts: [account(), account({ accountId: 'a2', name: 'עו״ש אופק', kind: 'personal' })] }),
     }));
@@ -928,10 +907,6 @@ describe('counting what an account holds', () => {
       '/money?season=s1&account=a1&act=count',
       '/money?season=s1&account=a2&act=count',
     ]);
-    // The section head's link comes first; a pot with no account yet repeats
-    // the invitation under its own heading.
-    expect(screen.getAllByRole('link', { name: 'חשבון חדש' })[0].getAttribute('href'))
-      .toBe('/money?season=s1&act=new-account');
     expect(screen.queryByTestId('count-drawer')).toBeNull();
     expect(screen.queryByTestId('new-account-drawer')).toBeNull();
   });
@@ -1130,11 +1105,5 @@ describe('counting what an account holds', () => {
     // count is typed, never read off a sheet.
     const invitations = screen.getAllByRole('link', { name: 'חשבון חדש' });
     expect(invitations.some((one) => one.getAttribute('href') === '/money?season=s1&act=new-account')).toBe(true);
-  });
-
-  it('explains the way in when the book was not kept', async () => {
-    render(await MoneyPage({ searchParams: Promise.resolve({ season: 's1' }) }));
-    expect(screen.getByText(/לא עקבתם אחרי כל ההכנסות וההוצאות\?/).textContent)
-      .toContain('מה שנרשם עד יום הספירה, כולל אותו יום, נשמר');
   });
 });
