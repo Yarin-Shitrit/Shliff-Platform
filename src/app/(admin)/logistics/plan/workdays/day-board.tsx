@@ -1,8 +1,10 @@
 'use client';
 
 /**
- * One work day as a board: its tasks with their crews, the people on none
- * of them, and beside them the plan's tasks the day does not hold yet.
+ * One work day as a board: its tasks with their crews in the middle, and on
+ * either side what can land on them — the plan's tasks the day does not hold
+ * yet, and the people on none of its tasks. Both sources sit beside the
+ * tasks on a wide screen, so neither drag has to cross a scroll.
  *
  * Two moves, each made two ways. A task is pulled onto the day by dragging
  * it from the pool onto the day's tasks, or by its ״ליום הזה״ button; a
@@ -41,6 +43,8 @@ export interface BoardCrew {
   displayName: string;
   /** False for someone on the task who has left the season's roster. */
   onRoster: boolean;
+  /** On another of this day's tasks as well. Said on the chip, in a word. */
+  doubled?: boolean;
 }
 
 export interface BoardTask {
@@ -361,20 +365,28 @@ export function DayBoard({
                     </span>
                     {task.done ? (
                       <span><Pill tone={WORK_STATUS_TONES.done} dot>{WORK_STATUS_LABELS.done}</Pill></span>
+                    ) : task.crew.length === 0 ? (
+                      <span><Pill tone="warn">בלי צוות</Pill></span>
                     ) : null}
                   </div>
 
                   {task.crew.length === 0 ? (
                     <p className={styles.note}>
-                      {canEdit ? 'עדיין לא שובץ אף אחד. גוררים שם מהרשימה למטה, או לוחצים ״שיבוץ אנשים״.' : 'עדיין לא שובץ אף אחד למשימה הזו.'}
+                      {canEdit ? 'עדיין לא שובץ אף אחד. גוררים שם מרשימת ״בלי משימה ביום הזה״, או לוחצים ״שיבוץ אנשים״.' : 'עדיין לא שובץ אף אחד למשימה הזו.'}
                     </p>
                   ) : (
                     <ul className={styles.crew} aria-label={`משובצים ל${task.title}`}>
                       {task.crew.map((person) => (
-                        <li key={person.personId} className={cx(styles.person, !person.onRoster && styles.personOff)}>
+                        <li
+                          key={person.personId}
+                          className={cx(
+                            styles.person, !person.onRoster && styles.personOff, person.doubled && styles.personDoubled,
+                          )}
+                        >
                           <Avatar name={person.displayName} size="sm" decorative />
                           {person.displayName}
                           {person.onRoster ? null : ' · לא ברשימת השנה'}
+                          {person.doubled ? <span className={styles.doubledWord}>{' · כפול'}</span> : null}
                           {canEdit ? (
                             <button
                               type="button"
@@ -408,8 +420,9 @@ export function DayBoard({
             </ul>
           )}
         </section>
+      </div>
 
-        <section className={styles.section} id="free" aria-label="בלי משימה ביום הזה">
+      <section className={cx(styles.section, styles.free)} id="free" aria-label="בלי משימה ביום הזה">
           <div className={styles.sectionHead}>
             <h2>בלי משימה ביום הזה</h2>
             <span className={styles.sectionHint}>
@@ -427,7 +440,7 @@ export function DayBoard({
           ) : free.length === 0 ? (
             <p className={styles.note}>כל מי שברשימה משובץ למשימה כלשהי ביום הזה.</p>
           ) : (
-            <ul className={styles.crew}>
+            <ul className={cx(styles.crew, styles.freeList)}>
               {free.map((person) => (
                 <li
                   key={person.personId}
@@ -442,8 +455,7 @@ export function DayBoard({
               ))}
             </ul>
           )}
-        </section>
-      </div>
+      </section>
 
       {canEdit ? (
         <aside className={styles.pool} aria-label="משימות שאפשר למשוך ליום הזה">

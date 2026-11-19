@@ -56,6 +56,25 @@
   font-size: var(--text-meta);
 }
 
+/* How much of the roster is on the day's tasks. The words above it say the
+   same thing, so the bar is decoration and is hidden from a screen reader. */
+.dayBar {
+  display: block;
+  block-size: 4px;
+  margin-block-start: 4px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--viz-track);
+}
+
+.dayBar i {
+  display: block;
+  block-size: 100%;
+  background: var(--brand);
+}
+
+.dayPast .dayBar i { background: var(--line-strong); }
+
 .tiles {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -149,6 +168,18 @@
 
 .personOff { color: var(--ink-3); }
 
+/* On two of the day's tasks. The chip says so in a word; the tint only
+   helps the eye find both chips. */
+.personDoubled {
+  background: var(--warn-soft);
+  box-shadow: inset 0 0 0 1px var(--warn-line);
+}
+
+.doubledWord {
+  color: var(--warn);
+  font-weight: 500;
+}
+
 .note {
   margin: 0;
   color: var(--ink-3);
@@ -173,17 +204,67 @@
 }
 
 /* ── The board ─────────────────────────────────────────────────────────
-   The day on the inline start, the pool beside it. On a phone the pool
-   stacks under the day: a finger has no drag, and the buttons do the work. */
+   The day's tasks, with what can land on them beside: the pool of tasks,
+   and the people on none. The order in the document is tasks, people, pool
+   — the order a phone stacks them in, where a finger has no drag and the
+   buttons do the work — and the grid areas place them.
+
+   Up to a laptop's width the people sit under the tasks and the pool
+   beside both. On a wide screen each source gets a side of its own, so a
+   name is dragged across to a task and never down a scrolled page. */
 
 .board {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  grid-template-areas:
+    'main pool'
+    'free pool';
   gap: 16px;
   align-items: start;
 }
 
-.boardRead { grid-template-columns: minmax(0, 1fr); }
+.boardRead {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'main'
+    'free';
+}
+
+.boardMain { grid-area: main; }
+.free { grid-area: free; min-inline-size: 0; }
+
+@media (min-width: 1280px) {
+  .board {
+    grid-template-columns: minmax(240px, 300px) minmax(0, 1fr) minmax(190px, 230px);
+    grid-template-areas: 'pool main free';
+  }
+
+  .boardRead {
+    grid-template-columns: minmax(0, 1fr) minmax(190px, 230px);
+    grid-template-areas: 'main free';
+  }
+
+  .free {
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--panel);
+    position: sticky;
+    inset-block-start: 12px;
+    max-block-size: calc(100vh - 24px);
+    overflow-y: auto;
+  }
+
+  .free h2 { font-size: var(--text-lead); }
+
+  /* One name to a line: a column is easier to scan for a name than a
+     wrapped cloud of chips, and each is a clear thing to pick up. */
+  .freeList {
+    flex-direction: column;
+    align-items: flex-start;
+    flex-wrap: nowrap;
+  }
+}
 
 .boardMain {
   display: flex;
@@ -261,6 +342,7 @@
   inset-block-start: 12px;
   max-block-size: calc(100vh - 24px);
   overflow-y: auto;
+  grid-area: pool;
 }
 
 .poolGroup {
@@ -365,6 +447,12 @@
   .tiles > :first-child { grid-column: 1 / -1; }
   .day { flex: 1 1 132px; }
   .cards { grid-template-columns: minmax(0, 1fr); }
-  .board { grid-template-columns: minmax(0, 1fr); }
+  .board {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'main'
+      'free'
+      'pool';
+  }
   .pool { position: static; max-block-size: none; }
 }
