@@ -7,7 +7,7 @@ describe('the plan’s query', () => {
   it('reads a bare URL as nothing open', () => {
     expect(parsePlanQuery({})).toEqual({
       season: '', peek: null, peekTopic: null, creatingTopic: false, creatingItem: false,
-      presetTopic: null, presetParent: null, scale: 'day', adopting: false,
+      presetTopic: null, presetParent: null, scale: 'day', adopting: false, filter: 'all',
     });
   });
 

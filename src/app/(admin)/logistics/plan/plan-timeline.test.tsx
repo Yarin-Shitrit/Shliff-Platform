@@ -287,3 +287,61 @@ describe('PlanTimeline', () => {
     expect(bars()[0].textContent).toBe('להכין מכולת מטבח');
   });
 });
+
+describe('work days on the timeline', () => {
+  const items = [
+    item({ id: 'a', title: 'ספסלים', topicId: 'k', startsOn: '2026-05-12', endsOn: '2026-05-21' }),
+  ];
+  const timeline = buildTimeline(items, [KITCHEN])!;
+  const WORK = { id: 'w1', label: 'יום עבודה', heldOn: '2026-05-16' };
+  const OUTSIDE = { id: 'w2', label: 'יום עבודה', heldOn: '2026-08-01' };
+
+  function mountWith(workDays: Array<typeof WORK>, scale: TimelineScale = 'day') {
+    return render(
+      <PlanTimeline
+        timeline={timeline} scale={scale} params={{ season: 's1' }} today="2026-01-01" currentItemId={null}
+        workDays={workDays}
+      />,
+    );
+  }
+
+  it('makes the work day\'s number the link to that day on ימי עבודה, and says what it is', () => {
+    mountWith([WORK]);
+    const link = screen.getByRole('link', { name: /16\/05 · יום עבודה · פתיחה בימי עבודה/ });
+    expect(link.getAttribute('href')).toBe('/logistics/plan/workdays?season=s1&day=w1');
+    expect(link.textContent).toBe('16');
+  });
+
+  it('draws one column through the lane, at the work day\'s own index', () => {
+    const { container } = mountWith([WORK]);
+    const columns = container.querySelectorAll('[class*="workDayColumn"]');
+    expect(columns).toHaveLength(1);
+    const first = timeline.days[0].day;
+    const index = timeline.days.find((day) => day.day === WORK.heldOn)!.index;
+    expect(first <= WORK.heldOn).toBe(true);
+    expect(columns[0].getAttribute('style')).toContain('--at: ' + index);
+    expect(columns[0].getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('keeps the column at the coarser scales, where the header has no days', () => {
+    for (const scale of ['week', 'month'] as const) {
+      const view = mountWith([WORK], scale);
+      expect(view.container.querySelectorAll('[class*="workDayColumn"]')).toHaveLength(1);
+      expect(screen.queryByRole('link', { name: /פתיחה בימי עבודה/ })).toBeNull();
+      view.unmount();
+    }
+  });
+
+  it('draws nothing for a work day outside the span, and names it in no legend', () => {
+    const { container } = mountWith([OUTSIDE]);
+    expect(container.querySelectorAll('[class*="workDayColumn"]')).toHaveLength(0);
+    expect(container.querySelector('[class*="legendWorkDay"]')).toBeNull();
+  });
+
+  it('leaves the header as it was when the season has no work days', () => {
+    mountWith([]);
+    const days = within(screen.getByRole('list', { name: 'ימים' })).getAllByRole('listitem');
+    expect(days.every((cell) => cell.getAttribute('aria-label') !== null)).toBe(true);
+    expect(screen.queryByRole('link', { name: /פתיחה בימי עבודה/ })).toBeNull();
+  });
+});

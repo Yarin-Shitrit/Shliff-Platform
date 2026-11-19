@@ -9,6 +9,7 @@ import {
 import { rosterWorkload } from '@/lib/work/coverage';
 import { addDays, isCivilDay } from './shift-time';
 import { PURCHASE_VERBS } from './labels';
+import type { PlanFilter } from './plan-views';
 
 /**
  * The logistics work plan: topics, the items under them, the smaller items
@@ -907,4 +908,44 @@ export function nowSummary(items: PlanItem[], today: string): NowSummary {
   const upcoming = open.filter((item) => item.startsOn! > today).sort(byStart);
   const overdue = open.filter((item) => isOverdue(item, today)).sort(byStart);
   return { underway, next: upcoming[0] ?? null, overdue };
+}
+
+// ── The list's filter ───────────────────────────────────────────────────
+
+/**
+ * Whether an item answers the question a filter asks. Every filter but
+ * `all` asks about open items only: a finished task with no day is not
+ * waiting for one, and a cancelled one is waiting for nothing.
+ */
+export function matchesFilter(item: PlanItem, filter: PlanFilter, today: string): boolean {
+  if (filter === 'all') return true;
+  if (item.status !== 'open') return false;
+  if (filter === 'unscheduled') return item.startsOn === null;
+  if (filter === 'overdue') return isOverdue(item, today);
+  return item.assignee === null;
+}
+
+/**
+ * The items a narrowed list shows: the ones that match, and the general
+ * item of any part that does. The parent is kept — matching or not — so a
+ * part is still read under what it is a part of; without it `buildPlanTree`
+ * would lift the part to the top of its topic as though it stood alone.
+ */
+export function filterPlan(items: PlanItem[], filter: PlanFilter, today: string): PlanItem[] {
+  if (filter === 'all') return items;
+  const hits = items.filter((item) => matchesFilter(item, filter, today));
+  const keep = new Set(hits.map((item) => item.id));
+  for (const item of hits) if (item.parentId !== null) keep.add(item.parentId);
+  return items.filter((item) => keep.has(item.id));
+}
+
+/** How many items answer each filter — the number on its chip. */
+export function filterCounts(items: PlanItem[], today: string): Record<PlanFilter, number> {
+  const count = (filter: PlanFilter) => items.filter((item) => matchesFilter(item, filter, today)).length;
+  return {
+    all: items.length,
+    unscheduled: count('unscheduled'),
+    overdue: count('overdue'),
+    unassigned: count('unassigned'),
+  };
 }

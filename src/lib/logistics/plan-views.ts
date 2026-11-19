@@ -21,6 +21,10 @@ import { ACT_PARAM, PEEK_PARAM } from '@/components/ui/drawer-url';
  * The timeline's resolution travels too — `?scale=week|month` — so a
  * drawer opened from the months view closes back onto the months view.
  * `day`, the default, is spelled by its absence.
+ *
+ * So does the list's filter — `?show=unscheduled|overdue|unassigned` — for
+ * the same reason: a drawer opened over a narrowed list closes back onto
+ * the narrowed list. `all` is spelled by its absence.
  */
 
 export const PLAN_PATH = '/logistics/plan';
@@ -31,6 +35,7 @@ export const ADOPT_ACT = 'purchases';
 export const TOPIC_PARAM = 'topic';
 export const PARENT_PARAM = 'parent';
 export const SCALE_PARAM = 'scale';
+export const FILTER_PARAM = 'show';
 
 /**
  * What one column of the timeline's header is: a day, a week or a month.
@@ -42,6 +47,23 @@ export const SCALE_PARAM = 'scale';
 export type TimelineScale = 'day' | 'week' | 'month';
 
 export const TIMELINE_SCALES: readonly TimelineScale[] = ['day', 'week', 'month'];
+
+/**
+ * What the full list is narrowed to. Each is a question a lead asks of the
+ * open tasks — which have no day, which are past theirs, which have nobody
+ * responsible — and each is one the tiles above already count. The list
+ * only; the timeline always draws the whole plan.
+ */
+export type PlanFilter = 'all' | 'unscheduled' | 'overdue' | 'unassigned';
+
+export const PLAN_FILTERS: readonly PlanFilter[] = ['all', 'unscheduled', 'overdue', 'unassigned'];
+
+export const PLAN_FILTER_LABELS: Readonly<Record<PlanFilter, string>> = {
+  all: 'הכול',
+  unscheduled: 'בלי יום',
+  overdue: 'עבר התאריך',
+  unassigned: 'בלי אחראי',
+};
 
 export interface PlanQuery {
   /** Empty means "the page picks", which `resolveSeason` does. */
@@ -62,6 +84,8 @@ export interface PlanQuery {
   scale: TimelineScale;
   /** `?act=purchases` with no record named: the move-to-acquisitions drawer. */
   adopting: boolean;
+  /** `?show=`: what the list is narrowed to. `all` when absent or unknown. */
+  filter: PlanFilter;
 }
 
 export type RawParams = Record<string, string | string[] | undefined>;
@@ -78,6 +102,7 @@ export function parsePlanQuery(params: RawParams): PlanQuery {
   const parent = one(params[PARENT_PARAM]) || null;
   const act = one(params[ACT_PARAM]);
   const rawScale = one(params[SCALE_PARAM]) as TimelineScale;
+  const rawFilter = one(params[FILTER_PARAM]) as PlanFilter;
 
   const creatingItem = peek === null && act === NEW_ITEM_ACT;
   const peekTopic = peek === null && !creatingItem ? topic : null;
@@ -92,10 +117,11 @@ export function parsePlanQuery(params: RawParams): PlanQuery {
     presetParent: creatingItem ? parent : null,
     scale: TIMELINE_SCALES.includes(rawScale) ? rawScale : 'day',
     adopting: peek === null && topic === null && act === ADOPT_ACT,
+    filter: PLAN_FILTERS.includes(rawFilter) ? rawFilter : 'all',
   };
 }
 
-const KEYS = ['season', SCALE_PARAM] as const;
+const KEYS = ['season', SCALE_PARAM, FILTER_PARAM] as const;
 type PatchKey =
   | (typeof KEYS)[number] | typeof PEEK_PARAM | typeof ACT_PARAM
   | typeof TOPIC_PARAM | typeof PARENT_PARAM;
@@ -125,6 +151,11 @@ export function planHref(
 /** The timeline at another resolution. `day` is the bare URL. */
 export function scaleHref(params: RawParams, scale: TimelineScale): string {
   return planHref(params, { [SCALE_PARAM]: scale === 'day' ? null : scale });
+}
+
+/** The list narrowed to one question, at its own anchor. `all` is the bare URL. */
+export function filterHref(params: RawParams, filter: PlanFilter): string {
+  return `${planHref(params, { [FILTER_PARAM]: filter === 'all' ? null : filter })}#list`;
 }
 
 /** The drawer over one item (R6: a drawer is a URL). */
