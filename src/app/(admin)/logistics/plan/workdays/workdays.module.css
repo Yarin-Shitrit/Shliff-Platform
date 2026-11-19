@@ -1,0 +1,221 @@
+/* ימי עבודה: a strip of days, then the chosen day's tasks as cards. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
+.sub {
+  margin-block-start: 2px;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+/* The days. A row that wraps: a season has a handful, and none is hidden
+   behind a sideways scroll. */
+.days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.day {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 132px;
+  min-block-size: var(--tap-min);
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  color: inherit;
+  text-decoration: none;
+}
+
+.day:hover { border-color: var(--line-strong); }
+.day:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.dayCurrent {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.dayPast { color: var(--ink-3); }
+
+.dayDate { font-weight: 600; }
+
+.dayMeta {
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sectionHead h2 {
+  margin: 0;
+  font-size: var(--text-title);
+}
+
+.sectionHint {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.spacer { flex: 1; }
+
+/* The tasks. Cards rather than a table: a task is a title and a handful of
+   names, and on a phone a card is already the right shape. */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+}
+
+.cardHead {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.cardTitle a { color: inherit; }
+
+.cardMeta {
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.crew {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.person {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-block: 2px;
+  padding-inline: 4px 10px;
+  border-radius: 999px;
+  background: var(--sunken);
+  font-size: 13px;
+}
+
+.personOff { color: var(--ink-3); }
+
+.note {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.cardFoot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-block-start: auto;
+}
+
+.doubled {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+/* ── The drawer ────────────────────────────────────────────────────────── */
+
+.crewForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.crewHeading {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.crewList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.crewRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  column-gap: 10px;
+  min-block-size: var(--tap-min);
+  border-block-end: 1px solid var(--line);
+}
+
+.crewRow:last-child { border-block-end: 0; }
+
+.rowNote {
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+@media (max-width: 767.98px) {
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .tiles > :first-child { grid-column: 1 / -1; }
+  .day { flex: 1 1 132px; }
+  .cards { grid-template-columns: minmax(0, 1fr); }
+}

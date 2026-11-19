@@ -218,6 +218,13 @@
       "when": 1795036258766,
       "tag": "0030_expense_category_receipt",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1795039168485,
+      "tag": "0031_work_item_people",
+      "breakpoints": true
     }
   ]
 }

@@ -318,6 +318,32 @@ export const workDependencies = pgTable('work_dependencies', {
   unique('work_dependencies_pair_key').on(table.beforeId, table.afterId),
 ]);
 
+/**
+ * One person works on one item of the plan. The crew of a task — everyone
+ * who will be doing it on its day — beside `assignee_person_id`, which stays
+ * the one person responsible for it.
+ *
+ * A row is the fact and its absence is the lack of one, like
+ * `attendance_marks`: nothing here says "not on this task". The crew
+ * belongs to the item, not to a day; the ימי עבודה screen reads it for the
+ * items whose days include a work day. It is a plan, not attendance: who
+ * actually came is a mark on לוח הנוכחות, and neither writes the other.
+ *
+ * `added_by` is the lead who put them there. Both links cascade: a crew
+ * row means nothing without its item or its person.
+ */
+export const workItemPeople = pgTable('work_item_people', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  workItemId: uuid('work_item_id').notNull()
+    .references(() => workItems.id, { onDelete: 'cascade' }),
+  personId: uuid('person_id').notNull()
+    .references(() => persons.id, { onDelete: 'cascade' }),
+  addedBy: text('added_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  unique('work_item_people_item_person_key').on(table.workItemId, table.personId),
+]);
+
 export type AttendanceKind = 'work_day' | 'build_day' | 'shopping' | 'meeting' | 'other';
 
 /**
