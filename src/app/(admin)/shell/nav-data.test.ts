@@ -8,14 +8,21 @@ describe('nav data', () => {
   it('holds B1 sections in B1 order, grouped as B1 groups them', () => {
     expect(NAV_GROUPS.map((group) => group.label))
       .toEqual([null, 'הקאמפ', 'כספים', 'לוגיסטיקה', 'נתונים', 'ניהול']);
-    expect(NAV_ITEMS.map((item) => item.label)).toEqual([
+    expect(NAV_ITEMS.filter((item) => !item.offRail).map((item) => item.label)).toEqual([
       'בית', 'לטיפול',
       'אנשים', 'דמי קאמפ', 'משימות', 'משמרות', 'נוכחות', 'מפת הקאמפ',
       'סקירה כספית', 'תנועות', 'הוצאות', 'מסיבות', 'תקציב', 'חובות',
-      'מחסן', 'רכש', 'הקמה', 'לוח עבודה',
+      'מחסן', 'רכש', 'לוח עבודה', 'ימי עבודה',
       'קבצים וייבוא', 'העלאת קובץ',
       'משתמשים והרשאות',
     ]);
+  });
+
+  it('keeps הקמה off the rail while its route still answers', () => {
+    // ימי עבודה took its place. The route stays until מפת הקאמפ stops
+    // linking to it, so the path must still resolve to its own grant.
+    expect(NAV_ITEMS.filter((item) => item.offRail).map((item) => item.id)).toEqual(['build']);
+    expect(pageOfHref('/logistics/build?season=s26')).toBe('build');
   });
 
   it('carries a count only where a count is actionable (B2)', () => {
@@ -43,6 +50,8 @@ describe('nav data', () => {
     expect(activeItemId('/logistics/shifts')).toBe('shifts');
     expect(activeItemId('/logistics/attendance')).toBe('attendance');
     expect(activeItemId('/logistics/plan')).toBe('plan');
+    // ימי עבודה sits under the plan's route and takes the mark from it.
+    expect(activeItemId('/logistics/plan/workdays')).toBe('workdays');
   });
 
   it('leaves the rail unmarked on the redirect that owns no screen', () => {
@@ -107,6 +116,7 @@ describe('nav data', () => {
       shifts: '/logistics/shifts',
       attendance: '/logistics/attendance',
       plan: '/logistics/plan',
+      workdays: '/logistics/plan/workdays',
       files: '/imports',
       upload: '/upload',
       users: '/users',
@@ -156,6 +166,11 @@ describe('the rail and the access registry name the same pages', () => {
 
   it('opens תקציב with the money page it is an anchor into', () => {
     expect(pageOfItem(NAV_ITEMS.find((item) => item.id === 'budget')!)).toBe('money');
+  });
+
+  it('opens ימי עבודה with the plan it is a screen of', () => {
+    expect(pageOfItem(NAV_ITEMS.find((item) => item.id === 'workdays')!)).toBe('plan');
+    expect(pageOfHref('/logistics/plan/workdays?day=d1')).toBe('plan');
   });
 
   it('has a rail item for every page in the registry, at the registry\'s own path and word', () => {

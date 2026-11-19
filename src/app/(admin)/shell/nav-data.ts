@@ -32,6 +32,15 @@ export interface NavItem {
   access?: PageKey;
   /** Shown to the admin role alone, and never granted: משתמשים והרשאות. */
   adminOnly?: boolean;
+  /**
+   * The screen is leaving: the rail, the tab bar and the "more" sheet no
+   * longer offer it, but its route still answers and its grant still opens
+   * it, because another screen links there. It stays in this list so the
+   * path keeps resolving to its own page — the view-only banner and the
+   * palette's access check both find a page through here — and it goes, with
+   * its route, once nothing links to it.
+   */
+  offRail?: boolean;
 }
 
 export interface NavGroup {
@@ -112,12 +121,25 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { id: 'warehouse', label: 'מחסן', href: '/logistics/warehouse', icon: 'layers' },
       { id: 'acquisitions', label: 'רכש', href: '/logistics/acquisitions', icon: 'list' },
-      { id: 'build', label: 'הקמה', href: '/logistics/build', icon: 'board' },
+      /* הקמה is off the rail and on its way out: ימי עבודה took its place.
+         The route stays until מפת הקאמפ's build-task links point somewhere
+         else (`site-table.tsx` builds them from `BUILD_PATH`), and so does
+         its grant. */
+      { id: 'build', label: 'הקמה', href: '/logistics/build', icon: 'board', offRail: true },
       /* The work plan: what the camp builds before the burn, under which
-         topic, in what order and on which days. Last because the rail reads
-         from what is kept to what is done: the gear, what is bought, what is
-         built, and the calendar that gets the camp to it. */
+         topic, in what order and on which days. The rail reads from what is
+         kept to what is done: the gear, what is bought, and the calendar
+         that gets the camp to it. */
       { id: 'plan', label: 'לוח עבודה', href: '/logistics/plan', icon: 'board' },
+      /* Who works on what on each work day. A screen under the plan's own
+         route, opened by the plan's grant; it has a rail entry because it is
+         the one a lead opens on the morning of a work day, and the only way
+         to it was a button on לוח עבודה. Longest-prefix matching gives it
+         the active mark over לוח עבודה. */
+      {
+        id: 'workdays', label: 'ימי עבודה', href: '/logistics/plan/workdays', icon: 'calendar',
+        access: 'plan',
+      },
     ],
   },
   {

@@ -31,7 +31,7 @@ export interface AccessView {
 const EVERYTHING: AccessView = {
   admin: true,
   levelOf: () => 'edit',
-  visible: () => true,
+  visible: (item) => !item.offRail,
 };
 
 const AccessContext = createContext<AccessView>(EVERYTHING);
@@ -48,6 +48,7 @@ export function AccessProvider({ admin, pages, children }: {
       admin,
       levelOf,
       visible: (item) => {
+        if (item.offRail) return false;
         if (item.adminOnly) return admin;
         const page = pageOfItem(item);
         return page !== null && levelOf(page) !== null;
