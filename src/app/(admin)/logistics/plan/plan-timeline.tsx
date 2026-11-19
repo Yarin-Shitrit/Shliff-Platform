@@ -9,6 +9,7 @@ import {
 import {
   itemHref, scaleHref, topicHref, TIMELINE_SCALES, type RawParams, type TimelineScale,
 } from '@/lib/logistics/plan-views';
+import { workdaysHref } from '@/lib/logistics/workdays-views';
 import { TimelineScroll } from './timeline-scroll';
 import styles from './plan.module.css';
 
@@ -186,8 +187,16 @@ function partsCount(total: number, placed: number): string {
   return placed === 0 ? `${all} · אף אחד לא על הציר` : `${all} · ${placed} על הציר`;
 }
 
+/** A work day as the timeline marks it: the occasion, its words, its day. */
+export interface TimelineWorkDay {
+  id: string;
+  label: string;
+  /** `YYYY-MM-DD`. */
+  heldOn: string;
+}
+
 export function PlanTimeline({
-  timeline, scale, params, today, currentItemId,
+  timeline, scale, params, today, currentItemId, workDays = [],
 }: {
   timeline: Timeline;
   /** What a column of the header is: a day, a week or a month. */
@@ -196,8 +205,17 @@ export function PlanTimeline({
   /** The camp's civil day now, marked when it falls inside the span. */
   today: string;
   currentItemId: string | null;
+  /**
+   * The season's work days. Each one inside the span is a marked column
+   * through every lane, and at ״ימים״ its number in the header is the link
+   * to that day on ימי עבודה. A work day outside the span is not drawn.
+   */
+  workDays?: readonly TimelineWorkDay[];
 }) {
   const todayIndex = timeline.days.find((day) => day.day === today)?.index ?? -1;
+  const indexOfDay = new Map(timeline.days.map((day) => [day.day, day.index]));
+  const workDayOn = new Map(workDays.filter((day) => indexOfDay.has(day.heldOn)).map((day) => [day.heldOn, day]));
+  const workColumns = [...workDayOn.keys()].map((day) => indexOfDay.get(day)!).sort((a, b) => a - b);
   const vars = { '--days': timeline.days.length, '--today': todayIndex } as CSSProperties;
   const room = ROOM[scale];
   const thisMonth = today.slice(0, 7);
@@ -233,6 +251,9 @@ export function PlanTimeline({
           <span className={cx(styles.legendSwatch, styles.legendPart)} /> חלק
           <span className={cx(styles.legendSwatch, styles.legendDone)} /> הושלמה
           <span className={cx(styles.legendSwatch, styles.legendConflict)} /> סותרת סדר
+          {workColumns.length === 0 ? null : (
+            <><span className={cx(styles.legendSwatch, styles.legendWorkDay)} /> יום עבודה</>
+          )}
         </span>
       </div>
       <div className={styles.timelineWrap} id={TIMELINE_WRAP_ID}>
@@ -278,19 +299,34 @@ export function PlanTimeline({
               </div>
               {scale === 'day' ? (
                 <div className={styles.days} role="list" aria-label="ימים">
-                  {timeline.days.map((day) => (
-                    <div
-                      key={day.day}
-                      id={day.day === today ? TODAY_CELL_ID : undefined}
-                      role="listitem"
-                      className={styles.dayHead}
-                      aria-current={day.day === today ? 'date' : undefined}
-                      aria-label={`${WEEKDAYS[day.weekday]}׳ ${shortDay(day.day)}`}
-                    >
-                      <span className={styles.weekday} aria-hidden="true">{WEEKDAYS[day.weekday]}</span>
-                      <span className={styles.dayNumber} aria-hidden="true">{day.dayOfMonth}</span>
-                    </div>
-                  ))}
+                  {timeline.days.map((day) => {
+                    const workDay = workDayOn.get(day.day);
+                    const when = `${WEEKDAYS[day.weekday]}׳ ${shortDay(day.day)}`;
+                    return (
+                      <div
+                        key={day.day}
+                        id={day.day === today ? TODAY_CELL_ID : undefined}
+                        role="listitem"
+                        className={cx(styles.dayHead, workDay !== undefined && styles.workDayHead)}
+                        aria-current={day.day === today ? 'date' : undefined}
+                        aria-label={workDay === undefined ? when : undefined}
+                      >
+                        <span className={styles.weekday} aria-hidden="true">{WEEKDAYS[day.weekday]}</span>
+                        {workDay === undefined ? (
+                          <span className={styles.dayNumber} aria-hidden="true">{day.dayOfMonth}</span>
+                        ) : (
+                          <Link
+                            href={workdaysHref(params, { day: workDay.id })}
+                            className={styles.dayNumber}
+                            aria-label={`${when} · ${workDay.label} · פתיחה בימי עבודה`}
+                            title={`${workDay.label} · פתיחה בימי עבודה`}
+                          >
+                            {day.dayOfMonth}
+                          </Link>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               ) : null}
               {scale === 'week' ? (
@@ -328,6 +364,14 @@ export function PlanTimeline({
                   <span className={styles.laneCount}>{lane.bars.length === 1 ? 'משימה אחת' : `${lane.bars.length} משימות`}</span>
                 </div>
                 <div className={styles.barRows}>
+                  {workColumns.map((column) => (
+                    <i
+                      key={column}
+                      className={styles.workDayColumn}
+                      aria-hidden="true"
+                      style={{ '--at': column } as CSSProperties}
+                    />
+                  ))}
                   {laneBlocks(lane.bars).map((block, blockIndex) => {
                     const rows = block.parent === null ? block.parts : [[block.parent], ...block.parts];
                     const guideAt = block.parent?.start ?? null;

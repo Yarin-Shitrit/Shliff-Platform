@@ -6,11 +6,12 @@ import { requireAdmin } from '@/lib/auth/guard';
 import { resolveSeason } from '@/lib/seasons/current';
 import {
   listPlan, listTopics, topicById, buildPlanTree, buildTimeline, summarizePlan, planRoster,
-  nowSummary, adoptableItems,
+  nowSummary, adoptableItems, filterPlan, filterCounts,
 } from '@/lib/logistics/plan';
 import { campDayOf } from '@/lib/logistics/shift-time';
 import {
-  parsePlanQuery, planHref, itemHref, newItemHref, newTopicHref, adoptHref, itemDrawerKey, type RawParams,
+  parsePlanQuery, planHref, itemHref, newItemHref, newTopicHref, adoptHref, itemDrawerKey, filterHref,
+  PLAN_FILTERS, PLAN_FILTER_LABELS, type RawParams,
 } from '@/lib/logistics/plan-views';
 import { acquisitionsHref } from '@/lib/logistics/acquisitions-views';
 import { adoptOutcomes } from '@/lib/logistics/acquisitions';
@@ -24,6 +25,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { ButtonLink } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { DateText } from '@/components/format';
+import { cx } from '@/components/ui/cx';
 import { PlanList, civil, type PlanLine } from './plan-list';
 import { PlanTimeline } from './plan-timeline';
 import { StatusMenu } from './status-menu';
@@ -100,7 +102,14 @@ export default async function PlanPage(
     : [];
   const addWorkDayHref = attendance.ok && attendance.level !== 'view' ? newEventHref({ season: current.id }) : null;
   const totals = summarizePlan(items);
-  const groups = buildPlanTree(items, topics);
+  /* The list narrowed to one question; the timeline and the tiles always
+     read the whole plan. A topic with nothing left under the filter is left
+     out: its empty heading says ״עדיין אין משימות״, which under a filter
+     would be false. */
+  const counts = filterCounts(items, today);
+  const narrowed = query.filter !== 'all';
+  const groups = buildPlanTree(filterPlan(items, query.filter, today), topics)
+    .filter((group) => !narrowed || group.branches.length > 0);
   /* The week or month around the day the URL named, else around today. */
   const timeline = buildTimeline(items, topics);
   const now = nowSummary(items, today);
@@ -224,22 +233,6 @@ export default async function PlanPage(
                 </span>
               )}
             </div>
-            <div className={styles.nowCol}>
-              <span className={styles.nowLabel}><Icon name="alert" size={14} />עבר התאריך</span>
-              {now.overdue.length === 0 ? (
-                <span className={styles.nowEmpty}>שום משימה פתוחה לא חרגה מהיום האחרון שלה.</span>
-              ) : (
-                <ul className={styles.nowList}>
-                  {now.overdue.slice(0, 4).map((item) => (
-                    <li key={item.id}>
-                      <Link href={itemHref(here, item.id)}>{item.title}</Link>
-                      <span className={styles.nowMeta}>{' · עד '}<DateText at={civil(item.endsOn ?? item.startsOn!)} /></span>
-                    </li>
-                  ))}
-                  {now.overdue.length > 4 ? <li className={styles.nowMeta}>{`ועוד ${now.overdue.length - 4}`}</li> : null}
-                </ul>
-              )}
-            </div>
           </section>
 
           {suggested > 0 ? (
@@ -263,21 +256,21 @@ export default async function PlanPage(
               label="משימות פתוחות"
               value={totals.open}
               derivation={<bdi>{`${totals.done} הושלמו · נרשם ידנית`}</bdi>}
-              href="#list"
+              href={filterHref(here, 'all')}
             />
             <StatTile
               label="עדיין בלי יום"
               value={totals.unscheduled}
               tone={totals.unscheduled > 0 ? 'warn' : 'default'}
-              derivation={<bdi>{`${totals.scheduled} כבר על ציר הזמן`}</bdi>}
-              href="#list"
+              derivation={<bdi>{`${totals.scheduled} כבר על ציר הזמן · לחיצה מסננת את הרשימה`}</bdi>}
+              href={filterHref(here, 'unscheduled')}
             />
             <StatTile
               label="עבר התאריך"
               value={now.overdue.length}
               tone={now.overdue.length > 0 ? 'bad' : 'ok'}
-              derivation={now.overdue.length === 0 ? 'הכול בזמן' : 'פתוחות אחרי היום האחרון שלהן'}
-              href="#list"
+              derivation={now.overdue.length === 0 ? 'הכול בזמן' : 'פתוחות אחרי היום האחרון שלהן · לחיצה מסננת את הרשימה'}
+              href={filterHref(here, 'overdue')}
             />
             <StatTile
               label="סדר שהתאריכים סותרים"
@@ -297,7 +290,7 @@ export default async function PlanPage(
               <span className={styles.sectionHint}>
                 {timeline === null
                   ? 'משימה עולה לציר ברגע שיש לה יום התחלה.'
-                  : `${timeline.placed} משימות על הימים שלהן · כל נושא בצבע שלו · שבוע מתחיל ביום ראשון, שישי ושבת מודגשים`}
+                  : `${timeline.placed} משימות על הימים שלהן · כל נושא בצבע שלו · שבוע מתחיל ביום ראשון, שישי ושבת מודגשים${workDays.length === 0 ? '' : ' · ימי העבודה מסומנים כעמודה'}`}
               </span>
             </div>
             {timeline === null ? (
@@ -305,7 +298,14 @@ export default async function PlanPage(
                 {'עדיין אין משימה עם תאריך. פותחים משימה מהרשימה למטה ובוחרים לה יום התחלה, והיא מופיעה כאן.'}
               </p>
             ) : (
-              <PlanTimeline timeline={timeline} scale={query.scale} params={here} today={today} currentItemId={query.peek} />
+              <PlanTimeline
+                timeline={timeline}
+                scale={query.scale}
+                params={here}
+                today={today}
+                currentItemId={query.peek}
+                workDays={workDays}
+              />
             )}
           </section>
 
@@ -320,7 +320,26 @@ export default async function PlanPage(
                 </ButtonLink>
               )}
             </div>
-            {groups.length === 0 ? (
+            <nav className={styles.filters} aria-label="סינון הרשימה">
+              {PLAN_FILTERS.map((filter) => (
+                <Link
+                  key={filter}
+                  href={filterHref(here, filter)}
+                  className={cx(styles.filterChip, filter === query.filter && styles.filterCurrent)}
+                  aria-current={filter === query.filter ? 'true' : undefined}
+                >
+                  {PLAN_FILTER_LABELS[filter]}
+                  <bdi className={styles.filterCount}>{counts[filter]}</bdi>
+                </Link>
+              ))}
+            </nav>
+            {groups.length === 0 && narrowed ? (
+              <EmptyState
+                kind="no-matches"
+                filterSummary={PLAN_FILTER_LABELS[query.filter]}
+                action={{ label: 'הצגת כל המשימות', href: filterHref(here, 'all') }}
+              />
+            ) : groups.length === 0 ? (
               <EmptyState
                 kind="nothing-this-season"
                 noun="משימות בלוח העבודה"
