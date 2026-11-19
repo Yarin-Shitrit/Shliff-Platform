@@ -42,6 +42,26 @@
 
 /* The source chip under an amount: its own line, so the number keeps the
    tabular alignment its column depends on (A10). */
+/* A link out to where the thing is sold, beside its name. */
+.shopLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-meta);
+  white-space: nowrap;
+}
+
+.shopLinks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shopLinks a { overflow-wrap: anywhere; }
+
 .cellSource {
   display: block;
   margin-block-start: 2px;

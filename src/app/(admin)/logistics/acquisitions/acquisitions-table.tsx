@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Table, type TableColumn } from '@/components/ui/table';
 import { Pill } from '@/components/ui/pill';
 import { Avatar } from '@/components/ui/avatar';
+import { Icon } from '@/components/ui/icon';
 import { SourceChip } from '@/components/ui/source-chip';
 import { Money } from '@/components/format';
 import type { AcquisitionRow } from '@/lib/logistics/acquisitions';
@@ -54,6 +55,21 @@ export function AcquisitionsTable({
           {row.workItem === null ? null : (
             <Link href={planItemHref({ season: row.workItem.seasonId }, row.workItem.id)} className={styles.boardLink}>בלוח העבודה</Link>
           )}
+          {/* Where to buy it: the addresses in its board line's notes. A plain
+              anchor to another site, in a new tab, named by the site. */}
+          {row.links.map((link) => (
+            <a
+              key={link.url}
+              href={link.url}
+              target="_blank"
+              rel="noreferrer noopener"
+              className={styles.shopLink}
+              aria-label={`קישור ל${row.name} · ${link.host}`}
+            >
+              <Icon name="link" size={14} />
+              <bdi dir="ltr">{link.host}</bdi>
+            </a>
+          ))}
         </span>
       ),
     },

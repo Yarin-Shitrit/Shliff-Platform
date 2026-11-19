@@ -468,6 +468,24 @@ describe('a purchase is a line on the work plan', () => {
     expect((await planItemById(db, item!.id))?.purchase).toEqual({ id, status: 'to_search' });
   });
 
+  it('reads the links out of the notes of its board line, and has none without them', async () => {
+    const id = await createAcquisition(db, { ...BLANK_ROW, seasonId, name: 'מקרר' }, LEAD);
+    expect((await acquisitionById(db, id))?.links).toEqual([]);
+
+    const item = await linkedItem(id);
+    await db.update(workItems)
+      .set({ notes: 'ראיתי כאן https://www.ikea.co.il/p/123, וגם www.ace.co.il/fridge' })
+      .where(eq(workItems.id, item!.id));
+
+    const expected = [
+      { url: 'https://www.ikea.co.il/p/123', host: 'ikea.co.il' },
+      { url: 'https://www.ace.co.il/fridge', host: 'ace.co.il' },
+    ];
+    expect((await acquisitionById(db, id))?.links).toEqual(expected);
+    const listed = (await listAcquisitions(db, seasonId, ALL)).find((row) => row.id === id);
+    expect(listed?.links).toEqual(expected);
+  });
+
   it('writes the quantity and the way of getting it into the title', async () => {
     const chairs = await createAcquisition(db, { ...BLANK_ROW, seasonId, name: 'כיסא', quantityNeeded: 12 }, LEAD);
     const fridge = await createAcquisition(db, { ...BLANK_ROW, seasonId, name: 'מקרר', source: 'second_hand' }, LEAD);

@@ -311,6 +311,26 @@ export function AcquisitionDrawer({
           </p>
         )}
 
+        {row !== null && row.links.length > 0 && row.workItem !== null ? (
+          <section aria-labelledby="acq-links" className={styles.shopLinks}>
+            <h3 id="acq-links" className={styles.formHint}>קישורים</h3>
+            <ul className={styles.shopLinks}>
+              {row.links.map((link) => (
+                <li key={link.url}>
+                  <a href={link.url} target="_blank" rel="noreferrer noopener" className="link">
+                    <bdi dir="ltr">{link.url}</bdi>
+                  </a>
+                </li>
+              ))}
+            </ul>
+            <p className={styles.formHint}>
+              {'הקישורים נקראים מההערות של המשימה בלוח העבודה. מוסיפים, משנים או מוחקים אותם '}
+              <Link href={planItemHref({ season: row.workItem.seasonId }, row.workItem.id)}>שם</Link>
+              {'.'}
+            </p>
+          </section>
+        ) : null}
+
         {row !== null && row.arrivedItemId !== null && (
           <Banner
             tone="info"
