@@ -6,7 +6,6 @@ import { requireAdmin } from '@/lib/auth/guard';
 import { listSeasons } from '@/lib/members/roster';
 import { listPersonChoices } from '@/lib/members/dossier';
 import { moneyOverview } from '@/lib/money/overview';
-import { formatShekels } from '@/lib/money';
 import { ACCOUNT_FUNDS, ACCOUNT_FUND_NAMES } from '@/lib/money/labels';
 import { Money } from '@/components/format';
 import { Banner } from '@/components/ui/banner';
@@ -140,12 +139,9 @@ export default async function MoneyPage(
               אי אפשר לחשב עלות לאדם ל<bdi>{season.name}</bdi> בלי גודל מחנה
               מתוכנן. אם חיפשתם שנה אחרת, בחרו אותה בבורר השנה בסרגל הצד.
             </p>
-          ) : (
-            <p className="muted">
-              ל<bdi>{season.name}</bdi> עדיין לא נרשם תקציב קאמפ, ולכן אי אפשר
-              לחשב עלות לאדם. אם חיפשתם שנה אחרת, בחרו אותה בבורר השנה בסרגל הצד.
-            </p>
-          )}
+          ) : null /* A season with a planned size and no camp budget line says
+                    * nothing here: the budget band below is where its absence
+                    * shows, with the way to fill it. */}
 
           {/*
             * R3: gold, an icon and a sentence, in place of a bare `⚠` in a red
@@ -179,9 +175,6 @@ export default async function MoneyPage(
               totalAgorot={identity.budgetTotalAgorot}
             />
           ) : null}
-          <p className={styles.provenanceNote}>
-            כל מספר כאן נגזר משורות אמיתיות. אין כאן שום סכום שנכתב ביד.
-          </p>
         </div>
       </section>
 
@@ -232,53 +225,13 @@ export default async function MoneyPage(
             href={`/money/ledger${scope}`}
           />
         </li>
-        <li>
-          <StatTile
-            label="נותר לגייס"
-            valueAgorot={view.fundraising.remainingAgorot}
-            /* The one figure on this page whose definition is a choice — the
-             * season's ledger inflow, dues excluded — so the choice is printed
-             * where a reader can check it rather than left to be inferred. */
-            derivation={view.fundraising.targetAgorot > 0
-              ? `גויסו ${formatShekels(view.fundraising.raisedAgorot)} מתוך ${formatShekels(view.fundraising.targetAgorot)}`
-              : `לא נרשם יעד גיוס ל${season.name}`}
-            href={`/money/ledger${scope}`}
-          />
-        </li>
-        <li>
-          <StatTile
-            label="דורש הכרעה"
-            value={<bdi>{view.decisions.total}</bdi>}
-            derivation={view.decisions.total === 0
-              ? 'הכל מטופל'
-              : `${view.decisions.unnamedCount} חובות בלי שם · ${view.decisions.arithmeticCount} סעיפים שלא מסתדרים`}
-            href={`/inbox${scope}`}
-          />
-        </li>
       </ul>
 
       <section>
-        {/* The note sits beside the heading, not inside it: an `<h2>` whose
-          * accessible name carries a whole caveat is a heading nobody can
-          * navigate to by name. */}
-        <div className={styles.sectionTitle}>
-          <h2 className={styles.sectionHeading}>איפה הכסף</h2>
-          <span className={styles.sectionNote}>
-            לקאמפ ולגיפט כסף נפרד · חשבונות אינם שייכים לשנה — היתרה היא תמיד הנוכחית
-          </span>
-          <Link className={`link ${styles.sectionLink}`} href={moneyHref({ season: season.id, newAccount: true })}>
-            חשבון חדש
-          </Link>
-        </div>
-        {/* The way in when the book was not kept: count what there is, say
-          * when, and go on from there. Said here, once, above the cards that
-          * each carry the link — a lead who has never counted needs the
-          * sentence more than the link. */}
-        <p className={styles.sectionLead}>
-          לא עקבתם אחרי כל ההכנסות וההוצאות? ספרו כמה כסף יש בכל חשבון, ותנועות שתאריכן
-          אחרי יום הספירה יעדכנו את היתרה. מה שנרשם עד יום הספירה, כולל אותו יום, נשמר
-          כהיסטוריה.
-        </p>
+        {/* The heading is kept for whoever navigates by headings, and drawn for
+          * nobody: the two pots under it each carry their own name, and the
+          * tiles above already say whose money is whose. */}
+        <h2 className="sr-only">איפה הכסף</h2>
 
         {/* A bar list compared account balances against each other, which is
           * not a question anyone asks — a קופה does not compete with a bank

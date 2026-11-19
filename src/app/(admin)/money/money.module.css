@@ -27,29 +27,22 @@
   margin-block: 0 var(--space-3);
 }
 
-.provenanceNote {
-  font-size: var(--text-meta);
-  color: var(--ink-3);
-  margin-block-start: var(--space-2);
-  margin-block-end: 0;
-}
-
 @media (max-width: 767.98px) {
   .lead { flex-direction: column; align-items: start; gap: var(--space-4); }
 }
 
 .tiles {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-3);
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-/* Six tiles since the balance became two — the camp's and the gift's — in two
-   rows of three. Six across left a five-figure balance no room: the shekel
-   sign wrapped under the number. */
+/* Four tiles in one row: the two balances, then the season's in and out.
+   Six across left a five-figure balance no room — the shekel sign wrapped
+   under the number — so narrower screens fall to two and then one. */
 @media (max-width: 1023.98px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 767.98px)  { .tiles { grid-template-columns: 1fr; } }
 
@@ -63,13 +56,6 @@
 .sectionHeading { font-size: inherit; margin: 0; }
 .sectionNote { font-weight: 400; font-size: var(--text-meta); color: var(--ink-3); }
 .sectionLink { margin-inline-start: auto; font-size: var(--text-dense); font-weight: 400; }
-.sectionLead {
-  margin-block: 0 var(--space-3);
-  max-inline-size: 48rem;
-  color: var(--ink-3);
-  font-size: var(--text-meta);
-}
-
 /* One band per pot: its name, what it holds, what moved through it this
    year, then its accounts. The figure is the sum of the cards under it. */
 .fundBands {
