@@ -1045,6 +1045,47 @@ Hebrew rather than saved without it; an expense with no photo still saves.
 The local `shliff-pg` needs it too (and `0021` through `0029` before it),
 with the §6 container command.
 
+### Migration `0031` — applied to Railway 2026-11-19
+
+`0031_work_item_people` is the crew of a plan task, behind ימי עבודה
+(`/logistics/plan/workdays`): one new table, `work_item_people`, with a
+foreign key to `work_items`, one to `persons` (both cascade) and a unique
+pair. Nothing existing is altered and the table starts empty.
+
+**Order matters: apply it before the deploy.** The ימי עבודה page selects
+from the table, so against a database that lacks it that page is an error
+screen. No other page reads it. The order that was taken is the safe one: it
+went in while #115 was still open.
+
+Read-only check, before: `0`; after: `1`:
+
+```sh
+docker run --rm postgres:18-alpine psql "$RAILWAY_URL" -tAc "
+select '0031 table', count(*) from information_schema.tables
+ where table_schema='public' and table_name = 'work_item_people'"
+```
+
+Then, from a checkout that has the file:
+
+```sh
+docker run --rm -e R="$RAILWAY_URL" -v "$PWD/drizzle:/m:ro" postgres:18-alpine sh -euc '
+  psql "$R" -v ON_ERROR_STOP=1 -1 -f /m/0031_work_item_people.sql
+'
+```
+
+It went in on 2026-11-19 the way `0021` through `0030` did: a scratchpad
+script using the project's `postgres` driver, URL from `.env.railway`, check
+first, one transaction, run from the prompt. Three statements: the table and
+its two foreign keys, read from the feature branch's own file. The script
+refused unless the table and its constraints were all absent and the `0030`
+columns were there. Measured before: `0031` table 0 of 1, its constraints 0
+of 3, `0030` columns 2 of 2, `work_items` 37, `persons` 74,
+`attendance_events` 2. After: table 1 of 1, constraints 3 of 3, and the same
+37, 74 and 2; the new table holds no rows.
+
+The local `shliff-pg` needs it too (and `0021` through `0030` before it),
+with the §6 container command.
+
 ### Copying the laptop's database up
 
 The local container is Postgres **16**; Railway is **18**. Dump with the
