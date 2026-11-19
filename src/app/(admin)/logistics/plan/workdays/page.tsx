@@ -130,6 +130,7 @@ export default async function WorkdaysPage(
     endsOn: task.item.endsOn,
     crew: task.crew.map((person) => ({
       personId: person.personId, displayName: person.displayName, onRoster: person.onRoster,
+      doubled: person.alsoOn.length > 0,
     })),
   }));
   const poolOf = (entries: typeof pool.unscheduled): PoolTask[] => entries.map((entry) => ({
@@ -198,6 +199,13 @@ export default async function WorkdaysPage(
         <ul className={styles.days}>
           {days.map((one) => {
             const count = tasksOn(items, one.heldOn).length;
+            /* How staffed each day is, on the day itself: a lead choosing
+               which day to open should not have to open each to find the
+               one with nobody on it. The same `buildDay` the board reads. */
+            const staffing = buildDay(one.heldOn, items, topics, crew, roster);
+            const uncrewed = staffing.tasks
+              .filter((task) => task.item.status === 'open' && task.crew.length === 0).length;
+            const share = roster.length === 0 ? 0 : Math.min(100, (staffing.assigned / roster.length) * 100);
             return (
               <li key={one.id}>
                 <Link
@@ -211,6 +219,19 @@ export default async function WorkdaysPage(
                     {' · '}
                     <bdi>{count === 0 ? 'בלי משימות' : count === 1 ? 'משימה אחת' : `${count} משימות`}</bdi>
                   </span>
+                  {count === 0 ? null : (
+                    <>
+                      <span className={styles.dayMeta}>
+                        <bdi>{`${staffing.assigned} מתוך ${roster.length} משובצים`}</bdi>
+                        {uncrewed === 0 ? null : (
+                          <>{' · '}<bdi>{uncrewed === 1 ? 'משימה אחת בלי צוות' : `${uncrewed} משימות בלי צוות`}</bdi></>
+                        )}
+                      </span>
+                      <span className={styles.dayBar} aria-hidden="true">
+                        <i style={{ inlineSize: `${share}%` }} />
+                      </span>
+                    </>
+                  )}
                 </Link>
               </li>
             );

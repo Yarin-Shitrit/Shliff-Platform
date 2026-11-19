@@ -96,6 +96,36 @@ describe('the day as a board', () => {
     expect(within(pool).getByText('חלק של להכין סלון')).toBeTruthy();
   });
 
+  it('says in a word which open task has nobody on it, and not on one that has', () => {
+    mount();
+    expect(within(card('להכין סלון')).getByText('בלי צוות')).toBeTruthy();
+    expect(within(card('בניית ספסלים')).queryByText('בלי צוות')).toBeNull();
+  });
+
+  it('does not call a finished task with nobody on it short of a crew', () => {
+    mount({ tasks: [{ ...LOUNGE, done: true }] });
+    expect(within(card('להכין סלון')).queryByText('בלי צוות')).toBeNull();
+  });
+
+  it('marks a person on two of the day\'s tasks on both chips, in a word', () => {
+    const doubled = { personId: 'd', displayName: 'דנה', onRoster: true, doubled: true };
+    mount({ tasks: [{ ...BENCHES, crew: [doubled] }, { ...LOUNGE, crew: [doubled] }] });
+    expect(within(card('בניית ספסלים')).getByText(/כפול/)).toBeTruthy();
+    expect(within(card('להכין סלון')).getByText(/כפול/)).toBeTruthy();
+  });
+
+  it('writes no such word on a chip that is on one task only', () => {
+    mount();
+    expect(screen.queryByText(/כפול/)).toBeNull();
+  });
+
+  it('keeps the people on no task a region of their own, outside the pool', () => {
+    mount();
+    const free = screen.getByRole('region', { name: 'בלי משימה ביום הזה' });
+    expect(within(free).getByRole('link', { name: 'עומר' })).toBeTruthy();
+    expect(within(free).queryByText('לתקן מקררים')).toBeNull();
+  });
+
   it('names every control (E4)', () => {
     const { container } = mount();
     expect(unnamedControls(container)).toEqual([]);
