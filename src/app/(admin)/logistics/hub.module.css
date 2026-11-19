@@ -1,0 +1,309 @@
+/* The logistics overview. Structure is 1px borders and tokens only (A7),
+   logical properties throughout (A10). No colour is declared here. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 0;
+  min-inline-size: 0;
+}
+
+.sub {
+  margin-block-start: 2px;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+/* What needs a hand, beside the next work day. */
+.top {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  min-inline-size: 0;
+}
+
+.panelHead {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px 16px;
+}
+
+.panelHead h2,
+.sectionHead h2 {
+  margin: 0;
+  font-size: var(--text-lead);
+  line-height: 24px;
+  font-weight: 600;
+}
+
+.hint {
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-block-size: 56px;
+  padding: 10px 16px;
+  border-block-start: 1px solid var(--line);
+  color: inherit;
+  text-decoration: none;
+}
+
+.row:hover { background: var(--hover); }
+.row:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+
+.rowWord {
+  flex: none;
+  min-inline-size: 96px;
+}
+
+.rowWords {
+  flex: 1;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.rowHeadline { font-weight: 600; }
+
+.rowDetail,
+.rowScreen {
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.rowScreen {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.clear { padding: 0 16px 16px; }
+
+/* The next work day. */
+.next {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+}
+
+.nextHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.nextWhen { flex: 1; min-inline-size: 0; }
+
+.label {
+  color: var(--ink-3);
+  font-size: var(--text-label);
+  font-weight: 500;
+}
+
+.nextDate {
+  font-size: var(--text-title);
+  line-height: var(--leading-title);
+  font-weight: 600;
+}
+
+.meterHead {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-block-end: 6px;
+}
+
+.meterLead { font-weight: 500; }
+
+.bar {
+  display: flex;
+  gap: 2px;
+  block-size: 8px;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  background: var(--viz-track);
+}
+
+.bar i { display: block; block-size: 100%; }
+
+.ok { background: var(--ok); }
+.info { background: var(--info); }
+.warn { background: var(--warn); }
+.bad { background: var(--bad); }
+.muted { background: var(--line-strong); }
+.brand { background: var(--brand); }
+
+.lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lineTitle {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.lineCrew {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.nextActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* The screens, one card each. */
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block-end: 12px;
+}
+
+.spacer { flex: 1; }
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  color: inherit;
+  text-decoration: none;
+  min-inline-size: 0;
+}
+
+.card:hover { border-color: var(--line-strong); }
+.card:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.cardValue {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cardFigure {
+  font-size: var(--text-display-lg);
+  line-height: 44px;
+  font-weight: 600;
+}
+
+.cardUnit { color: var(--ink-2); }
+
+.legend {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.swatch {
+  flex: none;
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: 2px;
+}
+
+.derivation {
+  margin-block-start: auto;
+  padding-block-start: 8px;
+  border-block-start: 1px solid var(--line);
+  color: var(--ink-3);
+  font-size: var(--text-meta);
+}
+
+/* The work days ahead. */
+.dayCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  color: inherit;
+  text-decoration: none;
+  min-inline-size: 0;
+}
+
+.dayCard:hover { border-color: var(--line-strong); }
+.dayCard:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.dayNext {
+  border-color: var(--brand);
+  background: var(--selected);
+}
+
+.dayHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.dayDate { font-weight: 600; }
+
+@media (max-width: 767.98px) {
+  .page { padding-block-end: 72px; }
+  .top { grid-template-columns: minmax(0, 1fr); }
+  .row { flex-wrap: wrap; }
+  .rowScreen { margin-inline-start: auto; }
+}
