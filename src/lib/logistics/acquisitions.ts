@@ -1,3 +1,4 @@
+import { extractLinks, type NoteLink } from './links';
 import { and, asc, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
 import type { Db } from '@/db';
 import type { AnyDb } from '@/lib/db-types';
@@ -59,6 +60,12 @@ export interface AcquisitionRow {
   arrivedItemId: string | null;
   /** The row's line on the work plan, when it has one, and whose board it is on. */
   workItem: { id: string; seasonId: string } | null;
+  /**
+   * The web addresses written in that line's notes on the work plan — where
+   * to buy it, usually. Read out of the note, never stored a second time:
+   * the note on the board is where a link is added, changed or removed.
+   */
+  links: NoteLink[];
   status: AcquisitionStatus;
   updatedAt: Date;
   updatedBy: string | null;
@@ -143,6 +150,7 @@ function selection(db: AnyDb) {
       lenderName: sql<string | null>`${lenderTable}.display_name`,
       workItemId: workItems.id,
       workItemSeasonId: workItems.seasonId,
+      workItemNotes: workItems.notes,
     })
     .from(acquisitionItems)
     .leftJoin(
@@ -163,9 +171,10 @@ type SelectedRow = {
   lenderName: string | null;
   workItemId: string | null;
   workItemSeasonId: string | null;
+  workItemNotes: string | null;
 };
 
-function toRow({ row, assigneeName, lenderName, workItemId, workItemSeasonId }: SelectedRow): AcquisitionRow {
+function toRow({ row, assigneeName, lenderName, workItemId, workItemSeasonId, workItemNotes }: SelectedRow): AcquisitionRow {
   const unitEstimateAgorot = row.estimatedCost === null ? null : toAgorot(row.estimatedCost);
   return {
     id: row.id,
@@ -184,6 +193,7 @@ function toRow({ row, assigneeName, lenderName, workItemId, workItemSeasonId }: 
     budgetLineId: row.budgetLineId,
     arrivedItemId: row.arrivedItemId,
     workItem: workItemId !== null && workItemSeasonId !== null ? { id: workItemId, seasonId: workItemSeasonId } : null,
+    links: extractLinks(workItemNotes),
     status: row.status,
     updatedAt: row.updatedAt as Date,
     updatedBy: row.updatedBy,

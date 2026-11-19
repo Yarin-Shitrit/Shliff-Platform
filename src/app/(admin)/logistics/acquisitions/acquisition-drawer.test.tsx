@@ -21,7 +21,7 @@ import { AcquisitionDrawer } from './acquisition-drawer';
 const CHAIRS: AcquisitionRow = {
   seasonId: 's26', id: 'acq-1', name: 'כיסא', category: 'living', quantityNeeded: 12,
   source: 'buy_new', unitEstimateAgorot: 15000, estimatedAgorot: 180000, actualAgorot: null,
-  assignee: null, lender: null, budgetLineId: null, arrivedItemId: null, workItem: null,
+  assignee: null, lender: null, budgetLineId: null, arrivedItemId: null, workItem: null, links: [],
   status: 'to_search', updatedAt: new Date('2026-09-14T10:00:00Z'), updatedBy: null,
 };
 

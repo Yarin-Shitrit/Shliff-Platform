@@ -9,7 +9,7 @@ function row(over: Partial<AcquisitionRow> = {}): AcquisitionRow {
     seasonId: 's26', id: 'a1', name: 'מקדחה רוטטת', category: 'build', quantityNeeded: 1,
     source: 'buy_new', unitEstimateAgorot: 40000, estimatedAgorot: 40000, actualAgorot: 38000,
     assignee: { id: 'p1', name: 'איתי כהן' }, lender: null,
-    budgetLineId: null, arrivedItemId: null, workItem: null, status: 'ordered',
+    budgetLineId: null, arrivedItemId: null, workItem: null, links: [], status: 'ordered',
     updatedAt: new Date('2026-09-14T10:00:00Z'), updatedBy: null,
     ...over,
   };
@@ -111,5 +111,27 @@ describe('a row with a line on the work plan', () => {
     mount([row({ workItem: { id: 'wi-1', seasonId: 's25' } })]);
     expect(screen.getByRole('link', { name: 'בלוח העבודה' }).getAttribute('href'))
       .toBe('/logistics/plan?season=s25&peek=wi-1');
+  });
+});
+
+describe('a row whose board line has links in its notes', () => {
+  it('shows each one beside the name, named by its site, opening in a new tab', () => {
+    mount([row({
+      workItem: { id: 'wi-1', seasonId: 's25' },
+      links: [
+        { url: 'https://www.ikea.co.il/p/123', host: 'ikea.co.il' },
+        { url: 'https://ace.co.il/drill', host: 'ace.co.il' },
+      ],
+    })]);
+    const ikea = screen.getByRole('link', { name: 'קישור למקדחה רוטטת · ikea.co.il' });
+    expect(ikea.getAttribute('href')).toBe('https://www.ikea.co.il/p/123');
+    expect(ikea.getAttribute('target')).toBe('_blank');
+    expect(ikea.getAttribute('rel')).toContain('noopener');
+    expect(screen.getByRole('link', { name: 'קישור למקדחה רוטטת · ace.co.il' })).toBeTruthy();
+  });
+
+  it('draws nothing for a row with none', () => {
+    mount([row()]);
+    expect(screen.queryByRole('link', { name: /^קישור ל/ })).toBeNull();
   });
 });
