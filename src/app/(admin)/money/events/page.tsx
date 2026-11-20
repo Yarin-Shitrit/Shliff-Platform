@@ -12,6 +12,7 @@ import { Table } from '@/components/ui/table';
 import type { TableColumn, TableRowModel, TableTotalsCell } from '@/components/ui/table';
 import { Pill } from '@/components/ui/pill';
 import { EmptyState } from '@/components/ui/empty-state';
+import { InfoTip } from '@/components/ui/info-tip';
 import { Drawer } from '@/components/ui/drawer';
 import { openActHref, closePeekHref } from '@/components/ui/drawer-url';
 import { SavedViews } from '@/components/ui/saved-views';
@@ -201,13 +202,14 @@ export default async function EventsPage(
     <main className={styles.page}>
       <div className={styles.head}>
         <div className={styles.titleRow}>
-          <h1 className={styles.title}>מסיבות</h1>
+          <span className={styles.titleInfo}>
+            <h1 className={styles.title}>מסיבות</h1>
+            <InfoTip id="events-about" label="מה מוצג על כל מסיבה">
+              כל מסיבה שעשינו: כמה נכנס מכרטיסים ומהבר, כמה היא עלתה, וכמה נשאר לקאמפ אחרי ההתחשבנות עם קאמפ שותף.
+            </InfoTip>
+          </span>
           <Link className={styles.newLink} href={newHref}>מסיבה חדשה</Link>
         </div>
-        <p className={styles.lead}>
-          כל מסיבה שעשינו: כמה נכנס מכרטיסים ומהבר, כמה היא עלתה, וכמה נשאר לקאמפ
-          אחרי ההתחשבנות עם קאמפ שותף.
-        </p>
       </div>
 
       {all.length === 0 ? null : (

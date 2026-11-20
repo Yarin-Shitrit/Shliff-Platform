@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { EMPTY_TITLES } from '@/components/ui/empty-state';
 import type { InboxItem } from '@/lib/inbox/items';
 
@@ -90,6 +90,8 @@ describe('InboxPage', () => {
 
   it('says it is camp-wide, because a name does not belong to a season', async () => {
     await renderPage();
+    // Behind the ⓘ beside the title, not a line of its own.
+    fireEvent.click(screen.getByRole('button', { name: 'למה הרשימה לא לפי שנה' }));
     expect(screen.getByText(/הרשימה הזו חוצה שנים/)).toBeTruthy();
   });
 

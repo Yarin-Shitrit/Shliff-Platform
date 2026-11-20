@@ -9,6 +9,7 @@ import {
 import { resolvedItems, clearedToday } from '@/lib/inbox/resolved';
 import { listSeasons } from '@/lib/members/roster';
 import { EmptyState } from '@/components/ui/empty-state';
+import { InfoTip } from '@/components/ui/info-tip';
 import { readSnoozes } from './snooze';
 import { ItemRail } from './item-rail';
 import { ItemDetail } from './item-detail';
@@ -124,12 +125,14 @@ export default async function InboxPage({
     <main className={styles.page}>
       <header className={styles.head}>
         <div>
-          <h1>לטיפול</h1>
+          <span className={styles.titleInfo}>
+            <h1>לטיפול</h1>
+            <InfoTip id="inbox-scope" label="למה הרשימה לא לפי שנה">
+              הרשימה הזו חוצה שנים — שם, גיליון או חוב לא שייכים לעונה אחת.
+            </InfoTip>
+          </span>
           <p className={styles.lead}>
             המערכת לא מנחשת. כאן כל מה שהיא סירבה להכריע לבד — אתם מכריעים, היא כותבת.
-          </p>
-          <p className={styles.scope}>
-            הרשימה הזו חוצה שנים — שם, גיליון או חוב לא שייכים לעונה אחת.
           </p>
         </div>
         <div className={styles.headActions}>

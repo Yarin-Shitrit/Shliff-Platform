@@ -8,6 +8,7 @@ import { formatDateShort } from '@/lib/dates';
 import { Table, type TableColumn } from '@/components/ui/table';
 import { Pill } from '@/components/ui/pill';
 import { EmptyState } from '@/components/ui/empty-state';
+import { InfoTip } from '@/components/ui/info-tip';
 import { Icon } from '@/components/ui/icon';
 import { FileRowMenu } from './file-row-menu';
 import styles from './imports.module.css';
@@ -95,10 +96,12 @@ export default async function ImportsPage() {
     <main className={styles.page}>
       <div className={styles.head}>
         <div>
-          <h1 className={styles.title}>קבצים וייבוא</h1>
-          <p className={styles.lead}>
-            כל קובץ שהועלה, מה זוהה בו, ומה כבר נכתב לנתוני הקאמפ.
-          </p>
+          <span className={styles.titleInfo}>
+            <h1 className={styles.title}>קבצים וייבוא</h1>
+            <InfoTip id="imports-about" label="מה מוצג כאן">
+              כל קובץ שהועלה, מה זוהה בו, ומה כבר נכתב לנתוני הקאמפ.
+            </InfoTip>
+          </span>
         </div>
         <Link className={styles.primary} href="/upload">
           <Icon name="upload" size={14} /> העלאת קובץ

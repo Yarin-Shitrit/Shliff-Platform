@@ -174,3 +174,10 @@
   color: var(--ok);
   font-size: var(--text-meta);
 }
+
+/* A page title with the ⓘ that explains the page. */
+.titleInfo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

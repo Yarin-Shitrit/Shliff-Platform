@@ -15,6 +15,7 @@ import { Pill } from '@/components/ui/pill';
 import { Avatar } from '@/components/ui/avatar';
 import { SourceChip } from '@/components/ui/source-chip';
 import { EmptyState } from '@/components/ui/empty-state';
+import { InfoTip } from '@/components/ui/info-tip';
 import { StatTile } from '@/components/ui/stat-tile';
 import { Banner } from '@/components/ui/banner';
 import { Drawer } from '@/components/ui/drawer';
@@ -274,10 +275,12 @@ export default async function DebtsPage(
   return (
     <main className={styles.page}>
       <div className={styles.head}>
-        <h1 className={styles.title}>חובות</h1>
-        <p className={styles.lead}>
-          מה הקאמפ חייב, ומה חייבים לו. חוב נסגר במזומן או בקיזוז מול דמי קאמפ.
-        </p>
+        <span className={styles.titleInfo}>
+          <h1 className={styles.title}>חובות</h1>
+          <InfoTip id="debts-about" label="איך נסגר חוב">
+            מה הקאמפ חייב, ומה חייבים לו. חוב נסגר במזומן או בקיזוז מול דמי קאמפ.
+          </InfoTip>
+        </span>
       </div>
 
       <ul className={styles.tiles} aria-label="סיכום החובות">

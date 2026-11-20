@@ -20,13 +20,6 @@
   line-height: var(--leading-title);
 }
 
-.lead {
-  margin-block: 0;
-  color: var(--ink-3);
-  font-size: var(--text-meta);
-  max-inline-size: 40rem;
-}
-
 .card {
   padding: var(--space-4);
   border: 1px solid var(--line);
@@ -275,4 +268,11 @@
   background: var(--sunken);
   color: var(--ink-3);
   font-size: var(--text-meta);
+}
+
+/* A page title with the ⓘ that explains the page. */
+.titleInfo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }

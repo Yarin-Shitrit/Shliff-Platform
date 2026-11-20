@@ -23,13 +23,6 @@
   max-inline-size: 60ch;
 }
 
-.scope {
-  margin-block: 4px 0;
-  color: var(--ink-3);
-  font-size: 13px;
-  max-inline-size: 60ch;
-}
-
 .headActions {
   display: flex;
   align-items: center;
@@ -526,4 +519,11 @@
 .previewList a:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
+}
+
+/* A page title with the ⓘ that explains the page. */
+.titleInfo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }

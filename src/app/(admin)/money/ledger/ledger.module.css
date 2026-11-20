@@ -213,3 +213,10 @@
   font-size: var(--text-dense);
   font-weight: 600;
 }
+
+/* A page title with the ⓘ that explains the page. */
+.titleInfo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

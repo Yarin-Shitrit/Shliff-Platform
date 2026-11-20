@@ -15,6 +15,7 @@ import { Money, DateText } from '@/components/format';
 import { Table } from '@/components/ui/table';
 import type { TableColumn, TableTotalsCell } from '@/components/ui/table';
 import { EmptyState } from '@/components/ui/empty-state';
+import { InfoTip } from '@/components/ui/info-tip';
 import { ExpenseForm } from './expense-form';
 import { ExpenseTools } from './expense-tools';
 import styles from './expenses.module.css';
@@ -114,11 +115,12 @@ export default async function ExpensesPage(
   return (
     <main className={styles.page}>
       <div className={styles.head}>
-        <h1 className={styles.title}>הוצאות</h1>
-        <p className={styles.lead}>
-          רושמים כאן הוצאה ששולמה מכספי הקאמפ: כמה, על מה, מאיזה חשבון, וצילום של הקבלה.
-          ההוצאה נכנסת מיד לתנועות.
-        </p>
+        <span className={styles.titleInfo}>
+          <h1 className={styles.title}>הוצאות</h1>
+          <InfoTip id="expenses-about" label="על רישום הוצאות">
+            רושמים כאן הוצאה ששולמה מכספי הקאמפ: כמה, על מה, מאיזה חשבון, וצילום של הקבלה. ההוצאה נכנסת מיד לתנועות.
+          </InfoTip>
+        </span>
       </div>
 
       {canRecord ? (

@@ -27,6 +27,7 @@ import { Pill } from '@/components/ui/pill';
 import { Avatar } from '@/components/ui/avatar';
 import { SourceChip } from '@/components/ui/source-chip';
 import { EmptyState } from '@/components/ui/empty-state';
+import { InfoTip } from '@/components/ui/info-tip';
 import { Banner } from '@/components/ui/banner';
 import { Drawer } from '@/components/ui/drawer';
 import { openActHref, openPeekHref, closePeekHref } from '@/components/ui/drawer-url';
@@ -442,7 +443,12 @@ export default async function LedgerPage(
     <main className={styles.page}>
       <div className={styles.head}>
         <div className={styles.titleRow}>
-          <h1 className={styles.title}>תנועות</h1>
+          <span className={styles.titleInfo}>
+            <h1 className={styles.title}>תנועות</h1>
+            <InfoTip id="ledger-about" label="מה מוצג בתנועות">
+              כל שקל שנכנס ויצא, משורות הגיליון ומדמי הקאמפ גם יחד.
+            </InfoTip>
+          </span>
           {/*
             * `העברה בין חשבונות` and `ייצוא` are on the artboard beside this
             * link and are deliberately absent. The spec's out-of-scope list
@@ -456,10 +462,7 @@ export default async function LedgerPage(
             תנועה חדשה
           </Link>
         </div>
-        <p className={styles.lead}>
-          כל שקל שנכנס ויצא, משורות הגיליון ומדמי הקאמפ גם יחד.
-          {campWide ? ' כרגע מוצגות כל השנים.' : null}
-        </p>
+        {campWide ? <p className={styles.lead}>כרגע מוצגות כל השנים.</p> : null}
         {campWide ? (
           <Link className="link" href={ledgerHref(params, { season: seasons[0].id })}>
             חזרה ל<bdi>{seasons[0].name}</bdi>

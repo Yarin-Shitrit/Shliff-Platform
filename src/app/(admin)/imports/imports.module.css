@@ -23,12 +23,6 @@
   color: var(--ink);
 }
 
-.lead {
-  font: var(--text-lead);
-  color: var(--ink-2);
-  margin-block-start: var(--space-2);
-}
-
 .fileLink {
   display: flex;
   align-items: center;
@@ -144,4 +138,11 @@
 .primary:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
+}
+
+/* A page title with the ⓘ that explains the page. */
+.titleInfo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
