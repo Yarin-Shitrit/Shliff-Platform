@@ -36,6 +36,8 @@ export const TOPIC_PARAM = 'topic';
 export const PARENT_PARAM = 'parent';
 export const SCALE_PARAM = 'scale';
 export const FILTER_PARAM = 'show';
+export const SPAN_PARAM = 'span';
+export const AT_PARAM = 'at';
 
 /**
  * What one column of the timeline's header is: a day, a week or a month.
@@ -47,6 +49,39 @@ export const FILTER_PARAM = 'show';
 export type TimelineScale = 'day' | 'week' | 'month';
 
 export const TIMELINE_SCALES: readonly TimelineScale[] = ['day', 'week', 'month'];
+
+/**
+ * How much of the plan the timeline shows: one week, four weeks, or the
+ * whole season. The first two are a window — a column a day, wide enough to
+ * read a bar's words — that a lead pages through; the third is the whole
+ * plan at once, a month to a column, for seeing its shape. Four weeks is
+ * the default and is spelled by its absence.
+ */
+export type TimelineSpan = 'week' | 'weeks4' | 'season';
+
+export const TIMELINE_SPANS: readonly TimelineSpan[] = ['week', 'weeks4', 'season'];
+
+export const SPAN_LABELS: Readonly<Record<TimelineSpan, string>> = {
+  week: 'שבוע',
+  weeks4: '4 שבועות',
+  season: 'עונה',
+};
+
+/** Day-columns in a window; null for the season, which is as long as the plan. */
+export const SPAN_DAYS: Readonly<Record<TimelineSpan, number | null>> = {
+  week: 7,
+  weeks4: 28,
+  season: null,
+};
+
+const CIVIL_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** A real `YYYY-MM-DD`; a mangled or impossible one is no day at all. */
+function civilDay(value: string): string | null {
+  if (!CIVIL_DAY.test(value)) return null;
+  const at = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(at.getTime()) && at.toISOString().slice(0, 10) === value ? value : null;
+}
 
 /**
  * What the full list is narrowed to. Each is a question a lead asks of the
@@ -86,6 +121,13 @@ export interface PlanQuery {
   adopting: boolean;
   /** `?show=`: what the list is narrowed to. `all` when absent or unknown. */
   filter: PlanFilter;
+  /** `?span=`: how much of the plan the timeline shows. Four weeks when absent or unknown. */
+  span: TimelineSpan;
+  /**
+   * `?at=<day>`: a day inside the window the timeline is paged to. Null is
+   * "around today", which is where the window opens. Not a real day, null.
+   */
+  windowAt: string | null;
 }
 
 export type RawParams = Record<string, string | string[] | undefined>;
@@ -103,6 +145,7 @@ export function parsePlanQuery(params: RawParams): PlanQuery {
   const act = one(params[ACT_PARAM]);
   const rawScale = one(params[SCALE_PARAM]) as TimelineScale;
   const rawFilter = one(params[FILTER_PARAM]) as PlanFilter;
+  const rawSpan = one(params[SPAN_PARAM]) as TimelineSpan;
 
   const creatingItem = peek === null && act === NEW_ITEM_ACT;
   const peekTopic = peek === null && !creatingItem ? topic : null;
@@ -118,10 +161,12 @@ export function parsePlanQuery(params: RawParams): PlanQuery {
     scale: TIMELINE_SCALES.includes(rawScale) ? rawScale : 'day',
     adopting: peek === null && topic === null && act === ADOPT_ACT,
     filter: PLAN_FILTERS.includes(rawFilter) ? rawFilter : 'all',
+    span: TIMELINE_SPANS.includes(rawSpan) ? rawSpan : 'weeks4',
+    windowAt: civilDay(one(params[AT_PARAM])),
   };
 }
 
-const KEYS = ['season', SCALE_PARAM, FILTER_PARAM] as const;
+const KEYS = ['season', SCALE_PARAM, FILTER_PARAM, SPAN_PARAM, AT_PARAM] as const;
 type PatchKey =
   | (typeof KEYS)[number] | typeof PEEK_PARAM | typeof ACT_PARAM
   | typeof TOPIC_PARAM | typeof PARENT_PARAM;
@@ -151,6 +196,22 @@ export function planHref(
 /** The timeline at another resolution. `day` is the bare URL. */
 export function scaleHref(params: RawParams, scale: TimelineScale): string {
   return planHref(params, { [SCALE_PARAM]: scale === 'day' ? null : scale });
+}
+
+/**
+ * The timeline at another span. Four weeks is the bare URL. The season has
+ * no window, so the day a window was paged to is dropped with it.
+ */
+export function spanHref(params: RawParams, span: TimelineSpan): string {
+  return planHref(params, {
+    [SPAN_PARAM]: span === 'weeks4' ? null : span,
+    ...(span === 'season' ? { [AT_PARAM]: null } : {}),
+  });
+}
+
+/** The window paged to the one holding `day`; null goes back to today's. */
+export function windowHref(params: RawParams, day: string | null): string {
+  return planHref(params, { [AT_PARAM]: day });
 }
 
 /** The list narrowed to one question, at its own anchor. `all` is the bare URL. */

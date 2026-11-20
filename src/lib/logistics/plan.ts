@@ -733,6 +733,10 @@ export interface TimelineDay {
 
 export interface TimelineBar {
   item: PlanItem;
+  /** In a window: the item began before the first column drawn. */
+  cutStart?: boolean;
+  /** In a window: the item runs on past the last column drawn. */
+  cutEnd?: boolean;
   /** 0-based column of the first day. */
   start: number;
   /** Columns the bar spans, at least 1. */
@@ -837,6 +841,55 @@ export function buildTimeline(items: PlanItem[], topics: Topic[]): Timeline | nu
   }
 
   return { days, lanes, placed: scheduled.length };
+}
+
+/** The Sunday of the week a day is in: where a window's first column sits. */
+export function windowStart(day: string): string {
+  return addDays(day, -dayParts(day).weekday);
+}
+
+/**
+ * A stretch of the plan's timeline: `length` days from `from`, which the
+ * caller gives as a Sunday (`windowStart`) so the columns are whole weeks.
+ *
+ * The days are the window's own, made here rather than cut from the plan's
+ * — a window may reach before the plan's first day or past its last, and a
+ * lead paging there should see empty weeks, not a shorter grid. A bar is
+ * clipped to the columns it has in the window and says which ends were cut;
+ * an item with no day inside it is left off. Every lane is kept, bars or
+ * not, so the topics hold their places from one window to the next.
+ *
+ * `placed` is the number of bars drawn here, which is what the screen says
+ * beside the window.
+ */
+export function windowTimeline(timeline: Timeline, from: string, length: number): Timeline {
+  const to = addDays(from, length - 1);
+  const days: TimelineDay[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const day = addDays(from, index);
+    const parts = dayParts(day);
+    days.push({ day, index, ...parts, monthStart: parts.dayOfMonth === 1 || index === 0 });
+  }
+
+  let placed = 0;
+  const lanes = timeline.lanes.map((lane) => {
+    const bars: TimelineBar[] = [];
+    for (const bar of lane.bars) {
+      const first = bar.item.startsOn!;
+      const last = lastDayOf(bar.item)!;
+      if (last < from || first > to) continue;
+      const start = Math.max(0, dayDiff(from, first));
+      const end = Math.min(length - 1, dayDiff(from, last));
+      const clipped: TimelineBar = { ...bar, start, span: end - start + 1 };
+      if (first < from) clipped.cutStart = true;
+      if (last > to) clipped.cutEnd = true;
+      bars.push(clipped);
+    }
+    placed += bars.length;
+    return { ...lane, bars };
+  });
+
+  return { days, lanes, placed };
 }
 
 export interface PlanTotals {
