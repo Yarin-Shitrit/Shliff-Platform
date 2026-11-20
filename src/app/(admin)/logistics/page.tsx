@@ -25,6 +25,7 @@ import {
 } from '@/lib/logistics/hub';
 import { TopBar, SeasonChip } from '@/components/shell/top-bar';
 import { EmptyState } from '@/components/ui/empty-state';
+import { InfoTip } from '@/components/ui/info-tip';
 import { ButtonLink } from '@/components/ui/button';
 import { Avatar } from '@/components/ui/avatar';
 import { Pill } from '@/components/ui/pill';
@@ -198,19 +199,17 @@ export default async function LogisticsPage(
 
       <div>
         <h1>לוגיסטיקה</h1>
-        <p className={styles.sub}>
-          מה דורש יד עכשיו, בכל מסכי הלוגיסטיקה
-          {nextDay === null ? null : (
-            <>{' · '}<bdi>{`יום העבודה הבא ${daysAway(today, nextDay.day.heldOn)}`}</bdi></>
-          )}
-        </p>
+        {nextDay === null ? null : (
+          <p className={styles.sub}>
+            <bdi>{`יום העבודה הבא ${daysAway(today, nextDay.day.heldOn)}`}</bdi>
+          </p>
+        )}
       </div>
 
       <div className={styles.top}>
         <section className={styles.panel} aria-label="דורש טיפול">
           <div className={styles.panelHead}>
             <h2>דורש טיפול</h2>
-            <span className={styles.hint}>כל שורה פותחת את המסך שמשנה אותה</span>
           </div>
           {attention.length === 0 ? (
             <div className={styles.clear}><EmptyState kind="all-clear" /></div>
@@ -317,7 +316,6 @@ export default async function LogisticsPage(
       <section aria-label="המסכים">
         <div className={styles.sectionHead}>
           <h2>המסכים</h2>
-          <span className={styles.hint}>מה שנשמר, מה שנקנה, מי עובד באיזה יום, והלוח שמביא לשם</span>
         </div>
         <div className={styles.cards}>
           {gear === null ? null : (
@@ -391,7 +389,9 @@ export default async function LogisticsPage(
         <section aria-label="ימי העבודה הקרובים">
           <div className={styles.sectionHead}>
             <h2>ימי העבודה הקרובים</h2>
-            <span className={styles.hint}>הימים מגיעים מלוח הנוכחות · השיבוץ מימי עבודה</span>
+            <InfoTip id="hub-days" label="מאיפה ימי העבודה">
+              הימים מגיעים מלוח הנוכחות, והשיבוץ מימי עבודה.
+            </InfoTip>
             <span className={styles.spacer} />
             <Link href={workdaysHref(season)}>כל ימי העבודה</Link>
           </div>

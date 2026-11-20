@@ -50,11 +50,6 @@
   font-size: var(--text-title);
 }
 
-.sectionHint {
-  color: var(--ink-3);
-  font-size: 13px;
-}
-
 /* ── The board ─────────────────────────────────────────────────────────── */
 
 /* Wide by nature: a column per day. The wrapper scrolls sideways on a laptop

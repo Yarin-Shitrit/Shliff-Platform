@@ -9,6 +9,7 @@ import { Table } from '@/components/ui/table';
 import type { TableColumn, TableRowModel } from '@/components/ui/table';
 import { Pill } from '@/components/ui/pill';
 import { EmptyState } from '@/components/ui/empty-state';
+import { InfoTip } from '@/components/ui/info-tip';
 import { Drawer } from '@/components/ui/drawer';
 import { openActHref, openPeekHref, closePeekHref } from '@/components/ui/drawer-url';
 import { UserForm } from './user-form';
@@ -96,15 +97,17 @@ export default async function UsersPage(
     <main className={styles.page}>
       <div className={styles.head}>
         <div className={styles.titleRow}>
-          <h1 className={styles.title}>משתמשים והרשאות</h1>
+          <span className={styles.titleInfo}>
+            <h1 className={styles.title}>משתמשים והרשאות</h1>
+            <InfoTip id="users-about" label="איך עובדות ההרשאות">
+              חשבון עם ניהול מלא רואה ועורך הכול; לכל חשבון אחר בוחרים עמוד־עמוד — בלי
+              גישה, צפייה בלבד, או צפייה ועריכה. ההרשאות נאכפות בשרת: עמוד שסומן
+              לצפייה בלבד מציג את הכפתורים שלו, אבל כל שינוי ממנו נדחה.
+            </InfoTip>
+          </span>
           <Link className={styles.newLink} href={newHref}>חשבון חדש</Link>
         </div>
-        <p className={styles.lead}>
-          מי יכול להיכנס למערכת, ואילו עמודים כל חשבון רואה או משנה. חשבון עם
-          ניהול מלא רואה ועורך הכול; לכל חשבון אחר בוחרים עמוד־עמוד — בלי
-          גישה, צפייה בלבד, או צפייה ועריכה. ההרשאות נאכפות בשרת: עמוד שסומן
-          לצפייה בלבד מציג את הכפתורים שלו, אבל כל שינוי ממנו נדחה.
-        </p>
+        <p className={styles.lead}>מי יכול להיכנס למערכת, ואילו עמודים כל חשבון רואה או משנה.</p>
       </div>
 
       {!creating ? null : (

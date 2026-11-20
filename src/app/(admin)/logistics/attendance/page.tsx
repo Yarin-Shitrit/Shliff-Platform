@@ -17,6 +17,7 @@ import {
 import { TopBar, SeasonChip } from '@/components/shell/top-bar';
 import { StatTile } from '@/components/ui/stat-tile';
 import { EmptyState } from '@/components/ui/empty-state';
+import { InfoTip } from '@/components/ui/info-tip';
 import { ButtonLink } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { DateText } from '@/components/format';
@@ -126,8 +127,6 @@ export default async function AttendancePage(
         <div>
           <h1>נוכחות</h1>
           <p className={styles.sub}>
-            <bdi>{`מי היה באיזה יום במהלך השנה של ${current.name}, וכמה פעמים`}</bdi>
-            {' · '}
             <bdi>{`${roster.length} ברשימת השנה`}</bdi>
           </p>
         </div>
@@ -179,14 +178,12 @@ export default async function AttendancePage(
           <section className={styles.phoneOnly} aria-label="ימים">
             <div className={styles.sectionHead}>
               <h2>ימים</h2>
-              <span className={styles.sectionHint}>פותחים יום ומסמנים מי היה.</span>
             </div>
             <EventList board={board} params={here} currentEventId={query.peekEvent} />
           </section>
           <section className={styles.phoneOnly} aria-label="סיכום לפי חבר">
             <div className={styles.sectionHead}>
               <h2>לפי חבר</h2>
-              <span className={styles.sectionHint}>בכמה ימים כל אחד היה, ומה עשה לבד.</span>
             </div>
             <ul className={styles.totalsList}>
               {board.rows.map((row) => (
@@ -210,7 +207,9 @@ export default async function AttendancePage(
         <section className={styles.section} aria-label="ימים שבוטלו">
           <div className={styles.sectionHead}>
             <h2>ימים שבוטלו</h2>
-            <span className={styles.sectionHint}>לא נספרים בלוח. הסימונים שלהם נשמרו, ואפשר להחזיר אותם.</span>
+            <InfoTip id="attendance-cancelled" label="על ימים שבוטלו">
+              לא נספרים בלוח. הסימונים שלהם נשמרו, ואפשר להחזיר אותם.
+            </InfoTip>
           </div>
           <ul className={styles.cancelledList}>
             {board.cancelled.map((event) => (

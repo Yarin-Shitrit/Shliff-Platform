@@ -17,6 +17,7 @@ import { TopBar, SeasonChip } from '@/components/shell/top-bar';
 import { StatTile } from '@/components/ui/stat-tile';
 import { Banner } from '@/components/ui/banner';
 import { EmptyState } from '@/components/ui/empty-state';
+import { InfoTip } from '@/components/ui/info-tip';
 import { ButtonLink } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { cx } from '@/components/ui/cx';
@@ -187,10 +188,13 @@ export default async function WorkdaysPage(
       />
 
       <div>
-        <h1>ימי עבודה</h1>
+        <div className={styles.titleRow}>
+          <h1>ימי עבודה</h1>
+          <InfoTip id="workdays-about" label="מאיפה ימי העבודה">
+            ימי העבודה מגיעים מלוח הנוכחות: כל יום מסוג ״יום עבודה״ שם מופיע כאן.
+          </InfoTip>
+        </div>
         <p className={styles.sub}>
-          <bdi>{`מי עובד על מה בכל יום עבודה של ${current.name}`}</bdi>
-          {' · '}
           <bdi>{days.length === 1 ? 'יום עבודה אחד' : `${days.length} ימי עבודה`}</bdi>
         </p>
       </div>

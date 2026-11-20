@@ -22,6 +22,7 @@ import { TopBar, SeasonChip } from '@/components/shell/top-bar';
 import { StatTile } from '@/components/ui/stat-tile';
 import { Banner } from '@/components/ui/banner';
 import { EmptyState } from '@/components/ui/empty-state';
+import { InfoTip } from '@/components/ui/info-tip';
 import { ButtonLink } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { DateText } from '@/components/format';
@@ -287,11 +288,14 @@ export default async function PlanPage(
           <section className={styles.section} id="timeline" aria-label="ציר זמן">
             <div className={styles.sectionHead}>
               <h2>ציר זמן</h2>
-              <span className={styles.sectionHint}>
-                {timeline === null
-                  ? 'משימה עולה לציר ברגע שיש לה יום התחלה.'
-                  : `${timeline.placed} משימות על הימים שלהן · כל נושא בצבע שלו · שבוע מתחיל ביום ראשון, שישי ושבת מודגשים${workDays.length === 0 ? '' : ' · ימי העבודה מסומנים כעמודה'}`}
-              </span>
+              {timeline === null ? null : (
+                <>
+                  <span className={styles.sectionHint}>{`${timeline.placed} משימות על הימים שלהן`}</span>
+                  <InfoTip id="plan-timeline-about" label="איך לקרוא את ציר הזמן">
+                    {`כל נושא בצבע שלו. שבוע מתחיל ביום ראשון, שישי ושבת מודגשים.${workDays.length === 0 ? '' : ' ימי העבודה מסומנים כעמודה.'}`}
+                  </InfoTip>
+                </>
+              )}
             </div>
             {timeline === null ? (
               <p className={styles.topicEmpty}>
@@ -312,7 +316,9 @@ export default async function PlanPage(
           <section className={styles.section} id="list" aria-label="הרשימה המלאה">
             <div className={styles.sectionHead}>
               <h2>הרשימה המלאה</h2>
-              <span className={styles.sectionHint}>לפי נושא, כל נושא בצבע שלו. משימה כללית, ותחתיה החלקים שלה עם קו מחבר. לחיצה על העיגול מסמנת שהושלמה.{canEdit ? ' לחיצה ימנית על משימה משייכת אותה ליום עבודה.' : ''}</span>
+              <InfoTip id="plan-list-about" label="איך עובדת הרשימה">
+                לפי נושא, כל נושא בצבע שלו. משימה כללית, ותחתיה החלקים שלה עם קו מחבר. לחיצה על העיגול מסמנת שהושלמה.{canEdit ? ' לחיצה ימנית על משימה משייכת אותה ליום עבודה.' : ''}
+              </InfoTip>
               {adoptable.length === 0 ? null : (
                 <ButtonLink size="sm" tone="ghost" href={adoptHref(here)}>
                   <Icon name="wallet" size={14} />

@@ -170,6 +170,13 @@
   font-size: 13px;
 }
 
+/* A hint's heading with the ⓘ that explains it. */
+.hintRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 /* The product of the count and the unit price, live under the two amounts. */
 .formTotal {
   margin: 0;

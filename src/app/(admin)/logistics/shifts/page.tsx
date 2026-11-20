@@ -18,6 +18,7 @@ import { TopBar, SeasonChip } from '@/components/shell/top-bar';
 import { StatTile } from '@/components/ui/stat-tile';
 import { Banner } from '@/components/ui/banner';
 import { EmptyState } from '@/components/ui/empty-state';
+import { InfoTip } from '@/components/ui/info-tip';
 import { ButtonLink } from '@/components/ui/button';
 import { Table, type TableRowModel } from '@/components/ui/table';
 import { Icon } from '@/components/ui/icon';
@@ -246,7 +247,9 @@ export default async function ShiftsPage(
         <section className={styles.section} aria-label="משמרות מחוץ לימי האירוע">
           <div className={styles.sectionHead}>
             <h2>מחוץ לימי האירוע</h2>
-            <span className={styles.sectionHint}>משמרות שנוצרו במסך המשימות ביום שאינו בלוח. הן נשארות שם.</span>
+            <InfoTip id="shifts-outside" label="על משמרות מחוץ לימי האירוע">
+              משמרות שנוצרו במסך המשימות ביום שאינו בלוח. הן נשארות שם.
+            </InfoTip>
           </div>
           <ul className={styles.outside}>
             {board.outside.map((slot) => (
@@ -263,7 +266,9 @@ export default async function ShiftsPage(
       <section className={styles.section} id="load" aria-label="עומס לפי חבר">
         <div className={styles.sectionHead}>
           <h2>עומס לפי חבר</h2>
-          <span className={styles.sectionHint}>כל מי שברשימת השנה, גם מי שעדיין בלי משמרת.</span>
+          <InfoTip id="shifts-load" label="מי מופיע בעומס">
+            כל מי שברשימת השנה, גם מי שעדיין בלי משמרת.
+          </InfoTip>
         </div>
         <Table<LoadRow>
           caption={`עומס משמרות ${current.name}`}

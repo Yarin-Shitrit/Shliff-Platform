@@ -15,6 +15,7 @@ import type { FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Drawer } from '@/components/ui/drawer';
+import { InfoTip } from '@/components/ui/info-tip';
 import { Checkbox, Field, MoneyInput, Select, TextInput } from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
 import { Banner } from '@/components/ui/banner';
@@ -346,15 +347,25 @@ export function AcquisitionDrawer({
           />
         ) : (
           <p className={styles.formHint}>
-            {'לפריט הזה אין משימה בלוח העבודה — הוא נכנס לפני שהשניים חוברו. אפשר '}
-            <Link href={PLAN_PATH}>להוסיף משימה בלוח</Link>
-            {' כרגיל.'}
+            {'לפריט הזה אין משימה בלוח העבודה.'}
+            <InfoTip id="acq-no-task" label="למה אין משימה">
+              {'הפריט נכנס לפני שהרכש והלוח חוברו. אפשר '}
+              <Link href={PLAN_PATH}>להוסיף משימה בלוח</Link>
+              {' כרגיל.'}
+            </InfoTip>
           </p>
         )}
 
         {row !== null && row.links.length > 0 && row.workItem !== null ? (
           <section aria-labelledby="acq-links" className={styles.shopLinks}>
-            <h3 id="acq-links" className={styles.formHint}>קישורים</h3>
+            <div className={styles.hintRow}>
+              <h3 id="acq-links" className={styles.formHint}>קישורים</h3>
+              <InfoTip id="acq-links-about" label="מאיפה הקישורים">
+                {'הקישורים נקראים מההערות של המשימה בלוח העבודה. מוסיפים, משנים או מוחקים אותם '}
+                <Link href={planItemHref({ season: row.workItem.seasonId }, row.workItem.id)}>שם</Link>
+                {'.'}
+              </InfoTip>
+            </div>
             <ul className={styles.shopLinks}>
               {row.links.map((link) => (
                 <li key={link.url}>
@@ -364,11 +375,6 @@ export function AcquisitionDrawer({
                 </li>
               ))}
             </ul>
-            <p className={styles.formHint}>
-              {'הקישורים נקראים מההערות של המשימה בלוח העבודה. מוסיפים, משנים או מוחקים אותם '}
-              <Link href={planItemHref({ season: row.workItem.seasonId }, row.workItem.id)}>שם</Link>
-              {'.'}
-            </p>
           </section>
         ) : null}
 

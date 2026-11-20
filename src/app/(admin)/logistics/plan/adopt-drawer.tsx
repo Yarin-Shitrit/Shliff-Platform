@@ -17,6 +17,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Drawer } from '@/components/ui/drawer';
+import { InfoTip } from '@/components/ui/info-tip';
 import { Checkbox } from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toaster';
@@ -143,7 +144,10 @@ export function AdoptDrawer({ seasonId, seasonName, candidates, closeHref, listH
         <p className={styles.adoptLead}>
           {'כל משימה שתסומן תיכנס ל'}
           <Link href={listHref}>רשימת הרכש</Link>
-          {' כפריט בכמות 1 — ותישאר בלוח, מקושרת לפריט. פריט חדש מקבל את האחריות שרשומה על המשימה; משימה שהפריט שלה כבר ברשימה מקושרת אליו, והאחריות שרשומה ברשימה היא שנשארת. מתחת לכל משימה כתוב איך היא תיכנס. מעכשיו רכש נכנס מרשימת הרכש ומופיע בלוח לבד.'}
+          {' כפריט בכמות 1 — ותישאר בלוח, מקושרת לפריט. פריט חדש מקבל את האחריות שרשומה על המשימה; משימה שהפריט שלה כבר ברשימה מקושרת אליו, והאחריות שרשומה ברשימה היא שנשארת.'}
+          <InfoTip id="adopt-about" label="עוד על ההעברה לרכש">
+            מתחת לכל משימה כתוב איך היא תיכנס. מעכשיו רכש נכנס מרשימת הרכש ומופיע בלוח לבד.
+          </InfoTip>
         </p>
 
         {candidates.length === 0 ? (

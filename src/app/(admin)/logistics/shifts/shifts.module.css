@@ -261,11 +261,6 @@
   font-size: var(--text-title);
 }
 
-.sectionHint {
-  color: var(--ink-3);
-  font-size: 13px;
-}
-
 /* The drawers' forms. */
 
 .form {

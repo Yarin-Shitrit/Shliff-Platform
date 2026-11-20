@@ -29,6 +29,12 @@
   line-height: var(--leading-title);
 }
 
+.titleInfo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .lead {
   margin-block: 0;
   color: var(--ink-3);
