@@ -38,11 +38,18 @@ export async function shellCounts(
 
   // A sheet can be both seasonless and contested. It is one decision either
   // way, so the ids go through a set rather than two additions.
+  //
+  // A sheet marked as history is not a decision (R44). לטיפול drops it —
+  // `sheetsNeedingSeason` and `collisionGroups` both filter on `retiredAt` —
+  // so the badge must too: counting one here put a "1" on the rail over a
+  // page that had nothing on it, for a retired sheet that never had a season.
+  const live = new Set(sheets.filter((sheet) => sheet.retiredAt === null).map((sheet) => sheet.id));
   const undecidedSheets = new Set<string>();
   for (const sheet of sheets) {
-    if (sheet.seasonId === null) undecidedSheets.add(sheet.id);
+    if (sheet.seasonId === null && live.has(sheet.id)) undecidedSheets.add(sheet.id);
   }
   for (const [sheetId, state] of eligibility) {
+    if (!live.has(sheetId)) continue;
     if (state.state === 'undecided' || state.state === 'ambiguous') {
       undecidedSheets.add(sheetId);
     }

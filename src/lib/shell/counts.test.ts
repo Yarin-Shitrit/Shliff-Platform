@@ -7,6 +7,9 @@ import { createObligation } from '@/lib/money/obligations';
 import { createTask, listTasks } from '@/lib/work/tasks';
 import { assignPerson, setAssignmentStatus } from '@/lib/work/coverage';
 import { shellCounts } from '@/lib/shell/counts';
+import { uploads, sheets } from '@/db/schema/source';
+import { retireSheet } from '@/lib/import/sheets';
+import { loadInboxItems, openDecisionCount } from '@/lib/inbox/items';
 
 const LEAD = 'lead@shliff.camp';
 
@@ -33,6 +36,22 @@ describe('shellCounts', () => {
       openedOn: null,
     });
     expect((await shellCounts(db, seasonId)).openDecisions).toBe(2);
+  });
+
+  it('stops counting a sheet with no season once it is marked as history, as לטיפול does', async () => {
+    const [upload] = await db.insert(uploads).values({
+      filename: 'קופת קאמפ 23-24.xlsx', sha256: 'x', storageKey: 'x', sizeBytes: 1, uploadedBy: LEAD,
+    }).returning();
+    const [sheet] = await db.insert(sheets).values({
+      uploadId: upload.id, name: 'Shliff Collabo #3', index: 0, rowCount: 1, colCount: 1,
+    }).returning();
+    expect((await shellCounts(db, seasonId)).openDecisions).toBe(1);
+
+    await retireSheet(db, sheet.id, LEAD);
+
+    expect((await shellCounts(db, seasonId)).openDecisions).toBe(0);
+    // The badge and the page it links to answer the same question.
+    expect(openDecisionCount(await loadInboxItems(db, seasonId))).toBe(0);
   });
 
   it('counts the roster of the season it was asked about', async () => {
