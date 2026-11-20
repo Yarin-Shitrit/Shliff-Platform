@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { cx } from '@/components/ui/cx';
 import { Icon } from '@/components/ui/icon';
 import { Avatar } from '@/components/ui/avatar';
+import { ButtonLink } from '@/components/ui/button';
 import {
   isOverdue, type Timeline, type TimelineBar, type TimelineDay,
 } from '@/lib/logistics/plan';
@@ -195,8 +196,25 @@ export interface TimelineWorkDay {
   heldOn: string;
 }
 
+/** One choice of how much of the plan to show, as a link. */
+export interface TimelineSpanOption {
+  label: string;
+  href: string;
+  current: boolean;
+}
+
+/** Paging through a window: the one before, the one after, and back to today's. */
+export interface TimelinePager {
+  /** `15/11/2026–12/12/2026`: the days on screen. */
+  words: string;
+  prevHref: string;
+  nextHref: string;
+  /** Null when the window on screen is already today's. */
+  todayHref: string | null;
+}
+
 export function PlanTimeline({
-  timeline, scale, params, today, currentItemId, workDays = [],
+  timeline, scale, params, today, currentItemId, workDays = [], spans, pager, fit = false,
 }: {
   timeline: Timeline;
   /** What a column of the header is: a day, a week or a month. */
@@ -211,6 +229,19 @@ export function PlanTimeline({
    * to that day on ימי עבודה. A work day outside the span is not drawn.
    */
   workDays?: readonly TimelineWorkDay[];
+  /**
+   * The spans to choose between, in place of the three resolutions. The
+   * page passes these; without them the switch is the resolutions, as it
+   * was.
+   */
+  spans?: readonly TimelineSpanOption[];
+  /** Given for a window, which is paged; absent for the whole plan. */
+  pager?: TimelinePager;
+  /**
+   * The days are a window that should fill the width rather than scroll: a
+   * day is as wide as the screen allows, and never narrower than at ״ימים״.
+   */
+  fit?: boolean;
 }) {
   const todayIndex = timeline.days.find((day) => day.day === today)?.index ?? -1;
   const indexOfDay = new Map(timeline.days.map((day) => [day.day, day.index]));
@@ -227,25 +258,53 @@ export function PlanTimeline({
   return (
     <>
       <div className={styles.timelineTools}>
-        <span className={styles.scaleSwitch} role="group" aria-label="רזולוציה">
-          {TIMELINE_SCALES.map((option) => (
-            <Link
-              key={option}
-              href={scaleHref(params, option)}
-              className={cx(styles.scaleOption, option === scale && styles.scaleCurrent)}
-              aria-current={option === scale ? 'true' : undefined}
-            >
-              {SCALE_LABELS[option]}
-            </Link>
-          ))}
-        </span>
+        {spans === undefined ? (
+          <span className={styles.scaleSwitch} role="group" aria-label="רזולוציה">
+            {TIMELINE_SCALES.map((option) => (
+              <Link
+                key={option}
+                href={scaleHref(params, option)}
+                className={cx(styles.scaleOption, option === scale && styles.scaleCurrent)}
+                aria-current={option === scale ? 'true' : undefined}
+              >
+                {SCALE_LABELS[option]}
+              </Link>
+            ))}
+          </span>
+        ) : (
+          <span className={styles.scaleSwitch} role="group" aria-label="טווח">
+            {spans.map((option) => (
+              <Link
+                key={option.label}
+                href={option.href}
+                className={cx(styles.scaleOption, option.current && styles.scaleCurrent)}
+                aria-current={option.current ? 'true' : undefined}
+              >
+                {option.label}
+              </Link>
+            ))}
+          </span>
+        )}
+        {pager === undefined ? null : (
+          <nav className={styles.pager} aria-label="דפדוף בציר הזמן">
+            <ButtonLink size="sm" tone="ghost" href={pager.prevHref}>הקודם</ButtonLink>
+            <bdi className={styles.pagerWords}>{pager.words}</bdi>
+            <ButtonLink size="sm" tone="ghost" href={pager.nextHref}>הבא</ButtonLink>
+            {pager.todayHref === null ? null : (
+              <ButtonLink size="sm" tone="ghost" href={pager.todayHref}>
+                <Icon name="calendar" size={14} />
+                היום
+              </ButtonLink>
+            )}
+          </nav>
+        )}
         {/*
           Keyed by the scale: a scale link changes only the query string, so
           the page re-renders in place and this would stay mounted, its
           centring already spent — leaving the scroll offset of the old
           column width, and today off the screen. A new key centres again.
         */}
-        {todayIndex >= 0 ? <TimelineScroll key={scale} wrapperId={TIMELINE_WRAP_ID} todayId={TODAY_CELL_ID} /> : null}
+        {todayIndex >= 0 && !fit ? <TimelineScroll key={scale} wrapperId={TIMELINE_WRAP_ID} todayId={TODAY_CELL_ID} /> : null}
         <span className={styles.legend} aria-hidden="true">
           <span className={cx(styles.legendSwatch, styles.legendParent)} /> משימה כללית
           <span className={cx(styles.legendSwatch, styles.legendPart)} /> חלק
@@ -263,6 +322,7 @@ export function PlanTimeline({
             todayIndex >= 0 && styles.hasToday,
             scale === 'week' && styles.scaleWeek,
             scale === 'month' && styles.scaleMonth,
+            fit && styles.fit,
           )}
           style={vars}
         >
@@ -402,6 +462,8 @@ export function PlanTimeline({
                                       done && styles.barDone,
                                       conflict && styles.barConflict,
                                       overdue && styles.barOverdue,
+                                      bar.cutStart && styles.barCutStart,
+                                      bar.cutEnd && styles.barCutEnd,
                                     )}
                                     style={{ gridColumn: `${bar.start + 1} / span ${bar.span}` }}
                                     aria-current={item.id === currentItemId ? 'true' : undefined}

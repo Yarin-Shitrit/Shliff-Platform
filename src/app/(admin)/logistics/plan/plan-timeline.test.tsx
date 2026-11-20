@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
-import { buildPlanTree, buildTimeline, type PlanItem, type Topic, type TimelineBar } from '@/lib/logistics/plan';
+import { buildPlanTree, buildTimeline, windowTimeline, type PlanItem, type Topic, type TimelineBar } from '@/lib/logistics/plan';
 import type { TimelineScale } from '@/lib/logistics/plan-views';
 import { PlanTimeline, packBars, laneRows, laneBlocks, monthBands, weekCells } from './plan-timeline';
 
@@ -343,5 +343,95 @@ describe('work days on the timeline', () => {
     const days = within(screen.getByRole('list', { name: 'ימים' })).getAllByRole('listitem');
     expect(days.every((cell) => cell.getAttribute('aria-label') !== null)).toBe(true);
     expect(screen.queryByRole('link', { name: /פתיחה בימי עבודה/ })).toBeNull();
+  });
+});
+
+describe('the timeline as a window', () => {
+  const items = [
+    item({ id: 'a', title: 'ספסלים', topicId: 'k', startsOn: '2026-05-12', endsOn: '2026-05-14' }),
+    item({ id: 'b', title: 'ארוכה', topicId: 'k', startsOn: '2026-04-01', endsOn: '2026-07-01', position: 1 }),
+  ];
+  const whole = buildTimeline(items, [KITCHEN])!;
+  const view = windowTimeline(whole, '2026-05-10', 28);
+  const SPANS = [
+    { label: 'שבוע', href: '/logistics/plan?season=s1&span=week', current: false },
+    { label: '4 שבועות', href: '/logistics/plan?season=s1', current: true },
+    { label: 'עונה', href: '/logistics/plan?season=s1&span=season', current: false },
+  ];
+  const PAGER = {
+    words: '10/05/2026–06/06/2026',
+    prevHref: '/logistics/plan?season=s1&at=2026-04-12',
+    nextHref: '/logistics/plan?season=s1&at=2026-06-07',
+    todayHref: '/logistics/plan?season=s1',
+  };
+
+  function mountWindow(over: Partial<Parameters<typeof PlanTimeline>[0]> = {}) {
+    return render(
+      <PlanTimeline
+        timeline={view} scale="day" params={{ season: 's1' }} today="2026-05-13" currentItemId={null}
+        spans={SPANS} pager={PAGER} fit
+        {...over}
+      />,
+    );
+  }
+
+  it('offers the three spans in place of the three resolutions, and marks the one on screen', () => {
+    mountWindow();
+    const group = screen.getByRole('group', { name: 'טווח' });
+    expect(within(group).getAllByRole('link').map((a) => [a.textContent, a.getAttribute('href'), a.getAttribute('aria-current')])).toEqual([
+      ['שבוע', '/logistics/plan?season=s1&span=week', null],
+      ['4 שבועות', '/logistics/plan?season=s1', 'true'],
+      ['עונה', '/logistics/plan?season=s1&span=season', null],
+    ]);
+    expect(screen.queryByRole('group', { name: 'רזולוציה' })).toBeNull();
+  });
+
+  it('pages before and after, names the days on screen, and offers the way back to today', () => {
+    mountWindow();
+    const pager = screen.getByRole('navigation', { name: 'דפדוף בציר הזמן' });
+    expect(within(pager).getByText('10/05/2026–06/06/2026')).toBeTruthy();
+    expect(within(pager).getByRole('link', { name: 'הקודם' }).getAttribute('href')).toBe('/logistics/plan?season=s1&at=2026-04-12');
+    expect(within(pager).getByRole('link', { name: 'הבא' }).getAttribute('href')).toBe('/logistics/plan?season=s1&at=2026-06-07');
+    expect(within(pager).getByRole('link', { name: 'היום' }).getAttribute('href')).toBe('/logistics/plan?season=s1');
+  });
+
+  it('offers no way back to today when today\'s window is the one on screen', () => {
+    mountWindow({ pager: { ...PAGER, todayHref: null } });
+    const pager = screen.getByRole('navigation', { name: 'דפדוף בציר הזמן' });
+    expect(within(pager).queryByRole('link', { name: 'היום' })).toBeNull();
+  });
+
+  it('fills the width instead of scrolling to today, so it draws no scroll button', () => {
+    const { container } = mountWindow();
+    expect(container.querySelector('[class*="fit"]')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'היום' })).toBeNull();
+  });
+
+  it('heads the window with its own twenty-eight days', () => {
+    mountWindow();
+    const days = within(screen.getByRole('list', { name: 'ימים' })).getAllByRole('listitem');
+    expect(days).toHaveLength(28);
+    expect(days[0].getAttribute('aria-label')).toBe('א׳ 10/05');
+    expect(days[3].getAttribute('aria-current')).toBe('date');
+  });
+
+  it('squares the ends of a bar the window cuts, and keeps its real days in its name', () => {
+    mountWindow();
+    const long = screen.getByRole('link', { name: /ארוכה/ });
+    expect(long.className).toMatch(/barCutStart/);
+    expect(long.className).toMatch(/barCutEnd/);
+    expect(long.getAttribute('style')).toContain('grid-column: 1 / span 28');
+    expect(long.getAttribute('aria-label')).toContain('01/04–01/07');
+
+    const short = screen.getByRole('link', { name: /ספסלים/ });
+    expect(short.className).not.toMatch(/barCut/);
+    expect(short.getAttribute('style')).toContain('grid-column: 3 / span 3');
+  });
+
+  it('keeps the resolutions and the scroll button when the page passes no spans', () => {
+    render(<PlanTimeline timeline={whole} scale="day" params={{ season: 's1' }} today="2026-05-13" currentItemId={null} />);
+    expect(screen.getByRole('group', { name: 'רזולוציה' })).toBeTruthy();
+    expect(screen.queryByRole('navigation', { name: 'דפדוף בציר הזמן' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'היום' })).toBeTruthy();
   });
 });

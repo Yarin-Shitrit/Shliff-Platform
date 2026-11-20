@@ -7,7 +7,7 @@ describe('the plan’s query', () => {
   it('reads a bare URL as nothing open', () => {
     expect(parsePlanQuery({})).toEqual({
       season: '', peek: null, peekTopic: null, creatingTopic: false, creatingItem: false,
-      presetTopic: null, presetParent: null, scale: 'day', adopting: false, filter: 'all',
+      presetTopic: null, presetParent: null, scale: 'day', adopting: false, filter: 'all', span: 'weeks4', windowAt: null,
     });
   });
 
@@ -63,8 +63,9 @@ describe('the plan’s links', () => {
     const months = { season: 's1', scale: 'month' };
     expect(itemHref(months, 'i2')).toBe(`${PLAN_PATH}?season=s1&scale=month&peek=i2`);
     expect(planHref(months, {})).toBe(`${PLAN_PATH}?season=s1&scale=month`);
-    // The day of an old window link is not carried on.
-    expect(planHref({ season: 's1', scale: 'week', at: '2026-05-13' }, {})).toBe(`${PLAN_PATH}?season=s1&scale=week`);
+    // The window is back: the day it is paged to travels like the season, so
+    // a drawer closes onto the weeks it was opened over.
+    expect(planHref({ season: 's1', scale: 'week', at: '2026-05-13' }, {})).toBe(`${PLAN_PATH}?season=s1&scale=week&at=2026-05-13`);
   });
 
   it('spells the resolution links, and spells ״ימים״ by leaving the param out', () => {

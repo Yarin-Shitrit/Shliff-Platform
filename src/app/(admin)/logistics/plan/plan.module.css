@@ -591,6 +591,32 @@
  * when it is longer.
  */
 .scaleWeek { --day-w: max(14px, calc((100cqi - var(--label-w)) / var(--days))); }
+
+/* A window of one or four weeks: its days share the whole width, so four
+   weeks sit on a laptop with nothing to scroll and a week's days are wide
+   enough for a bar's words. Never narrower than a day at ״ימים״ — on a
+   phone four weeks scroll sideways rather than squeeze. */
+.fit { --day-w: max(30px, calc((100cqi - var(--label-w)) / var(--days))); }
+
+/* A bar the window cuts: square on the side where the item goes on, so the
+   edge of the window does not read as the item's first or last day. */
+.bar.barCutStart { border-start-start-radius: 0; border-end-start-radius: 0; }
+.bar.barCutEnd { border-start-end-radius: 0; border-end-end-radius: 0; }
+
+/* Paging a window: before, the days on screen, after, and back to today. */
+.pager {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pagerWords {
+  padding-inline: 4px;
+  color: var(--ink-2);
+  font-size: var(--text-dense);
+  font-variant-numeric: tabular-nums;
+}
 .scaleMonth { --day-w: max(5px, calc((100cqi - var(--label-w)) / var(--days))); }
 
 /* A bar on a narrow day keeps every pixel for its title. */

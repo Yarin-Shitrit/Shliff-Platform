@@ -6,18 +6,19 @@ import { requireAdmin } from '@/lib/auth/guard';
 import { resolveSeason } from '@/lib/seasons/current';
 import {
   listPlan, listTopics, topicById, buildPlanTree, buildTimeline, summarizePlan, planRoster,
-  nowSummary, adoptableItems, filterPlan, filterCounts,
+  nowSummary, adoptableItems, filterPlan, filterCounts, windowStart, windowTimeline,
 } from '@/lib/logistics/plan';
-import { campDayOf } from '@/lib/logistics/shift-time';
+import { addDays, campDayOf } from '@/lib/logistics/shift-time';
 import {
   parsePlanQuery, planHref, itemHref, newItemHref, newTopicHref, adoptHref, itemDrawerKey, filterHref,
-  PLAN_FILTERS, PLAN_FILTER_LABELS, type RawParams,
+  PLAN_FILTERS, PLAN_FILTER_LABELS, TIMELINE_SPANS, SPAN_LABELS, SPAN_DAYS, spanHref, windowHref,
+  type RawParams,
 } from '@/lib/logistics/plan-views';
 import { acquisitionsHref } from '@/lib/logistics/acquisitions-views';
 import { adoptOutcomes } from '@/lib/logistics/acquisitions';
 import { eventLabel, listEvents } from '@/lib/logistics/attendance';
 import { newEventHref } from '@/lib/logistics/attendance-views';
-import { workdaysHref } from '@/lib/logistics/workdays-views';
+import { workdaysHref, shortDate } from '@/lib/logistics/workdays-views';
 import { TopBar, SeasonChip } from '@/components/shell/top-bar';
 import { StatTile } from '@/components/ui/stat-tile';
 import { Banner } from '@/components/ui/banner';
@@ -110,8 +111,16 @@ export default async function PlanPage(
   const narrowed = query.filter !== 'all';
   const groups = buildPlanTree(filterPlan(items, query.filter, today), topics)
     .filter((group) => !narrowed || group.branches.length > 0);
-  /* The week or month around the day the URL named, else around today. */
-  const timeline = buildTimeline(items, topics);
+  /* The whole plan on its days, and then the stretch of it on screen: a
+     window of one or four weeks around the day the URL named — else around
+     today — or, at ״עונה״, all of it. `whole` is null when nothing has a
+     day, and then there is no timeline at any span. */
+  const whole = buildTimeline(items, topics);
+  const windowDays = SPAN_DAYS[query.span];
+  const windowFrom = windowStart(query.windowAt ?? today);
+  const timeline = whole === null || windowDays === null
+    ? whole
+    : windowTimeline(whole, windowFrom, windowDays);
   const now = nowSummary(items, today);
   const activeTopics = topics.filter((topic) => topic.archivedAt === null);
 
@@ -290,6 +299,8 @@ export default async function PlanPage(
               <span className={styles.sectionHint}>
                 {timeline === null
                   ? 'משימה עולה לציר ברגע שיש לה יום התחלה.'
+                  : windowDays !== null && timeline.placed === 0
+                    ? 'אין משימה שהימים שלה נוגעים בימים האלה · אפשר לדפדף, או לעבור ל״עונה״ ולראות את כל הלוח'
                   : `${timeline.placed} משימות על הימים שלהן · כל נושא בצבע שלו · שבוע מתחיל ביום ראשון, שישי ושבת מודגשים${workDays.length === 0 ? '' : ' · ימי העבודה מסומנים כעמודה'}`}
               </span>
             </div>
@@ -300,7 +311,19 @@ export default async function PlanPage(
             ) : (
               <PlanTimeline
                 timeline={timeline}
-                scale={query.scale}
+                /* A window is a column a day; the season is the whole plan,
+                   a month to a column, as ״חודשים״ drew it. */
+                scale={windowDays === null ? 'month' : 'day'}
+                fit={windowDays !== null}
+                spans={TIMELINE_SPANS.map((span) => ({
+                  label: SPAN_LABELS[span], href: spanHref(here, span), current: span === query.span,
+                }))}
+                pager={windowDays === null ? undefined : {
+                  words: `${shortDate(windowFrom)}–${shortDate(addDays(windowFrom, windowDays - 1))}`,
+                  prevHref: windowHref(here, addDays(windowFrom, -windowDays)),
+                  nextHref: windowHref(here, addDays(windowFrom, windowDays)),
+                  todayHref: windowFrom === windowStart(today) ? null : windowHref(here, null),
+                }}
                 params={here}
                 today={today}
                 currentItemId={query.peek}
